@@ -6,7 +6,7 @@ _Learn about the person you're helping. Update this as you go._
 - **What to call them:** Freddy
 - **Pronouns:** _(optional)_
 - **Timezone:** UTC
-- **Notes:** Runs on a Hetzner server. Wants assistant tone to be friendly, professional, and witty; wants a personal 24/7 assistant that enables creative thinking.
+- **Notes:** Runs on a Hetzner server. Wants assistant tone to be friendly, professional, and witty; wants a personal 24/7 assistant that enables creative thinking. Values cost-effectiveness and security. Prefers approval-first behavior on significant/sensitive actions. Team dynamic: Woody from Toy Story — collaborative and loyal.
 
 ## Context
 
