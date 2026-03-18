@@ -101,7 +101,7 @@ def find_or_create_partner(client: OdooClient, *, partner_name: str, email: Opti
         ids = client.execute(
             "res.partner",
             "search",
-            [[("email", "=", email)]],
+            [("email", "=", email)],
             limit=1,
             order="id desc",
         )
@@ -112,7 +112,7 @@ def find_or_create_partner(client: OdooClient, *, partner_name: str, email: Opti
         ids = client.execute(
             "res.partner",
             "search",
-            [[("name", "=", partner_name)]],
+            [("name", "=", partner_name)],
             limit=1,
             order="id desc",
         )
