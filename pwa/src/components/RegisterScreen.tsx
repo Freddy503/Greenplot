@@ -1,3 +1,4 @@
+import { API_BASE } from '../config';
 import { useState } from 'react';
 
 interface RegisterScreenProps {
@@ -21,7 +22,7 @@ export function RegisterScreen({ onRegister, onSwitchToLogin }: RegisterScreenPr
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/register', {
+      const res = await fetch(`${API_BASE}/api/v1/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
