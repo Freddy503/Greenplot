@@ -1,3 +1,4 @@
+import { API_BASE } from '../config';
 import { useState } from 'react';
 
 interface LoginScreenProps {
@@ -16,7 +17,7 @@ export function LoginScreen({ onLogin, onSwitchToRegister }: LoginScreenProps) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/login', {
+      const res = await fetch(`${API_BASE}/api/v1/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

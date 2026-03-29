@@ -1,3 +1,4 @@
+import { API_BASE } from '../config';
 import { useState, useRef, useEffect } from 'react';
 import { Message, Attachment } from '../types';
 import { MessageBubble } from './MessageBubble';
@@ -47,7 +48,7 @@ export function ChatInterface() {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch('/api/v1/chat', {
+      const response = await fetch(`${API_BASE}/api/v1/spark`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ messages: [...messages, userMsg], attachments }),
