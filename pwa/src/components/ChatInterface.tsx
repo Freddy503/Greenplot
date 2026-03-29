@@ -1,15 +1,25 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Message, Attachment } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { VoiceRecorder } from './VoiceRecorder';
+import { LoginScreen } from './LoginScreen';
+import { RegisterScreen } from './RegisterScreen';
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token') || null);
+  const [showRegister, setShowRegister] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem('token', token);
+    }
+  }, [token]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -33,13 +43,24 @@ export function ChatInterface() {
     setMessages((msgs) => [...msgs, { id: assistantId, role: 'assistant', content: '', toolStatus: 'Thinking…' }]);
 
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch('/api/v1/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ messages: [...messages, userMsg], attachments }),
       });
 
-      if (!response.ok) throw new Error('API error');
+      if (!response.ok) {
+        if (response.status === 401) {
+          setToken(null);
+          localStorage.removeItem('token');
+          throw new Error('Session expired. Please log in again.');
+        }
+        throw new Error(`API error ${response.status}`);
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No reader');
@@ -80,6 +101,21 @@ export function ChatInterface() {
     });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setMessages([]);
+  };
+
+  // Not logged in: show auth screens
+  if (!token) {
+    if (showRegister) {
+      return <RegisterScreen onRegister={setToken} onSwitchToLogin={() => setShowRegister(false)} />;
+    }
+    return <LoginScreen onLogin={setToken} onSwitchToRegister={() => setShowRegister(true)} />;
+  }
+
+  // Logged in: show chat
   return (
     <div className="flex flex-col h-full bg-background text-on-surface">
       <header className="px-4 py-3 border-b border-outline-variant/20 flex items-center justify-between">
@@ -87,7 +123,12 @@ export function ChatInterface() {
           <span className="material-symbols-outlined text-primary">psychology</span>
           <h1 className="font-headline font-bold text-lg">Second Brain</h1>
         </div>
-        <div className="text-xs font-label text-on-surface-variant">Step 1/7 • Initialization</div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-label text-on-surface-variant">Step 1/7 • Initialization</span>
+          <button onClick={handleLogout} className="text-xs text-primary" title="Log out">
+            Log out
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
