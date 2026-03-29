@@ -1,0 +1,35 @@
+version: "3.8"
+services:
+  neo4j:
+    image: neo4j:5.23.0-enterprise
+    container_name: secondbrain-neo4j
+    hostname: neo4j
+    ports:
+      - "7474:7474"   # HTTP
+      - "7687:7687"   # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/StrongPasswordHere123!  # Change this
+      - NEO4J_dbms_memory_pagecache__size=10G     # 10GB page cache for graph data
+      - NEO4J_dbms_memory_heap__initial__size=4G  # 4GB heap for query processing
+      - NEO4J_dbms_memory_heap__max__size=4G
+      - NEO4J_dbms_memory_transaction__total__max=2G
+      - NEO4J_metrics__enabled=true
+      - NEO4J_metrics__graphite__enabled=false
+      - NEO4J_logs__debug=false
+      - NEO4J_dbms_connector_http_advertised__address=localhost:7474
+      - NEO4J_dbms_connector_bolt_advertised__address=localhost:7687
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/import:/import
+      - ./neo4j/plugins:/plugins
+      - ./neo4j/logs:/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  default:
+    name: secondbrain-network

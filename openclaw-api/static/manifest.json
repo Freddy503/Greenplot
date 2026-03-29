@@ -1,0 +1,20 @@
+{
+  "name": "OpenClaw Brain",
+  "short_name": "Brain",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#007AFF",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192.png?text=🧠",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512.png?text=🧠",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

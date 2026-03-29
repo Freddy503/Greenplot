@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Seedify - Welcome to your creativity Brain</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-high": "#09241b",
+              "on-secondary-fixed": "#4c2e00",
+              "inverse-primary": "#006d4a",
+              "surface-dim": "#01120b",
+              "surface-bright": "#123227",
+              "on-tertiary-fixed": "#004b33",
+              "secondary-container": "#855300",
+              "primary-dim": "#58e7ab",
+              "tertiary-fixed": "#6bffc1",
+              "surface": "#01120b",
+              "secondary-fixed-dim": "#ffb554",
+              "on-tertiary-container": "#006042",
+              "inverse-surface": "#e7fff2",
+              "secondary-fixed": "#ffc885",
+              "tertiary-fixed-dim": "#5af0b4",
+              "surface-variant": "#0d2b21",
+              "primary-fixed": "#69f6b8",
+              "on-tertiary": "#006948",
+              "on-primary-container": "#002919",
+              "on-secondary-fixed-variant": "#724700",
+              "error": "#ff716c",
+              "error-dim": "#d7383b",
+              "surface-container-highest": "#0d2b21",
+              "on-primary": "#005a3c",
+              "on-error": "#490006",
+              "on-error-container": "#ffa8a3",
+              "on-secondary": "#4a2c00",
+              "tertiary-dim": "#5af0b4",
+              "secondary": "#f8a010",
+              "surface-container-lowest": "#000000",
+              "on-background": "#e4fcf0",
+              "surface-tint": "#69f6b8",
+              "surface-container-low": "#021710",
+              "outline": "#657a70",
+              "on-surface": "#e4fcf0",
+              "on-primary-fixed": "#00452d",
+              "outline-variant": "#384c43",
+              "tertiary-container": "#6bffc1",
+              "surface-container": "#051e15",
+              "primary": "#69f6b8",
+              "primary-fixed-dim": "#58e7ab",
+              "background": "#01120b",
+              "on-tertiary-fixed-variant": "#006b4a",
+              "primary-container": "#06b77f",
+              "error-container": "#9f0519",
+              "inverse-on-surface": "#455950",
+              "on-surface-variant": "#9ab0a5",
+              "secondary-dim": "#e79400",
+              "on-secondary-container": "#fff6f0",
+              "tertiary": "#cdffe3",
+              "on-primary-fixed-variant": "#006544"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-surface {
+            background: rgba(18, 50, 39, 0.6);
+            backdrop-filter: blur(40px);
+        }
+        .seed-glow {
+            filter: drop-shadow(0 0 30px rgba(105, 246, 184, 0.3));
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface selection:bg-primary selection:text-on-primary-container overflow-hidden h-screen flex flex-col">
+<!-- Top Navigation Suppression (As per Shell Visibility Rule for Onboarding) -->
+<main class="flex-1 relative flex flex-col items-center justify-center px-6 pt-12 pb-24 overflow-hidden">
+<!-- Abstract Background Elements -->
+<div class="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-primary-container/10 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-5%] left-[-5%] w-[40%] h-[40%] bg-secondary/5 blur-[100px] rounded-full"></div>
+<!-- Hero Section -->
+<div class="relative w-full max-w-lg z-10 flex flex-col items-center">
+<!-- Branding Moment -->
+<div class="mb-12 flex flex-col items-center">
+<div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-6 outline outline-1 outline-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-4xl" data-weight="fill">psychology</span>
+</div>
+<h1 class="text-on-surface font-headline text-[2.75rem] leading-[1.1] font-extrabold tracking-tight text-center mb-4">
+                    Welcome to your <span class="text-primary italic">creativity Brain</span>
+</h1>
+<p class="text-on-surface-variant font-body text-lg text-center max-w-[280px] leading-relaxed">
+                    Your personal, self-improving AI for creative thinking
+                </p>
+</div>
+<!-- Central Visual Anchor (The Seed) -->
+<div class="relative w-full aspect-square max-w-[340px] mb-12 flex items-center justify-center">
+<!-- Decorative Rings -->
+<div class="absolute inset-0 border border-outline-variant/10 rounded-full animate-pulse"></div>
+<div class="absolute inset-8 border border-outline-variant/20 rounded-full"></div>
+<!-- Main Image -->
+<div class="relative z-20 w-[85%] h-[85%] rounded-full overflow-hidden seed-glow ring-4 ring-surface-container-highest">
+<img alt="Digital seed growth" class="w-full h-full object-cover" data-alt="Close-up of a bioluminescent glass seed with neural network patterns inside, glowing emerald green in a dark ethereal garden setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuTivNaOMy-skiWJknoebGQXi8nj8doNOu2znvZVbvpam5Hxv_RisE_QAFww-3MWQK70Z7txLtGWu6uFXlPPCeEaiHtoLMgBV268cNubjI-jkeTHXjjCkwQrl6Vv8kuks8CNA8xWm7ad5sHZIIPauxa0LFujtfixD9Z8Vot96homDIuRkLT7i2-7vkRkcAP8szi5r-_UmA_ZOxEZJNv3VoR5ZtjTHfrsq5A09nOBRhQHIMIH8QUoYiH8gXjsGBfN0NK9P_0QbHZ7Ha"/>
+<!-- Tonal Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
+</div>
+<!-- Floating Data Points (Atmospheric Detail) -->
+<div class="absolute top-4 left-4 glass-surface p-3 rounded-full flex items-center gap-2 ring-1 ring-outline-variant/30">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">eco</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface">Growth Active</span>
+</div>
+<div class="absolute bottom-10 right-0 glass-surface p-3 rounded-full flex items-center gap-2 ring-1 ring-outline-variant/30">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface">AI Synced</span>
+</div>
+</div>
+<!-- CTA Section -->
+<div class="w-full space-y-4 px-4">
+<button class="w-full h-16 bg-secondary text-on-secondary font-headline font-bold text-lg rounded-full shadow-[0_12px_30px_-10px_rgba(248,160,16,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3">
+                    Get Started
+                    <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<p class="text-on-surface-variant font-label text-[10px] uppercase tracking-[0.2em] text-center">
+                    Already a grower? <span class="text-primary font-bold">Sign In</span>
+</p>
+</div>
+</div>
+</main>
+<!-- Footer Progress Shell -->
+<footer class="fixed bottom-0 left-0 w-full px-8 pb-10 pt-6">
+<div class="max-w-md mx-auto flex flex-col items-center gap-4">
+<!-- Progress Text -->
+<div class="flex justify-between w-full items-end">
+<span class="text-on-surface font-label text-[10px] font-bold uppercase tracking-widest">Initialization</span>
+<span class="text-primary font-headline font-black text-xl tracking-tighter">Step 1/7</span>
+</div>
+<!-- Progress Bar (Botanical Path Style) -->
+<div class="w-full h-[6px] bg-surface-container rounded-full overflow-hidden relative">
+<!-- Active Segment -->
+<div class="absolute top-0 left-0 h-full w-[14.28%] bg-gradient-to-r from-primary to-primary-container rounded-full shadow-[0_0_15px_rgba(105,246,184,0.5)]"></div>
+</div>
+<!-- Metadata/Help -->
+<div class="flex items-center gap-1 opacity-40">
+<span class="material-symbols-outlined text-xs">info</span>
+<span class="text-[9px] font-medium tracking-wide">Secure encrypted neural architecture</span>
+</div>
+</div>
+</footer>
+<!-- Suppressed BottomNavBar for Onboarding context as per "The Destination Rule" -->
+</body></html>

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@striderlabs/mcp-opentable": "^0.1.0"
+  }
+}

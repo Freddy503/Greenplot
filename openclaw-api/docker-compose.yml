@@ -1,0 +1,71 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15
+    container_name: openclaw-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: openclaw
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  weaviate:
+    image: semitechnologies/weaviate:1.23.0
+    container_name: openclaw-weaviate
+    environment:
+      QUERY_DEFAULTS_LIMIT: 20
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      ENABLE_MODULES: "text2vec-openai,text2vec-huggingface,ref2vec-centroid,generative-openai,qna-openai"
+      CLUSTER_HOSTNAME: "node1"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: redis:7
+    container_name: openclaw-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api:
+    build: .
+    container_name: openclaw-api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+      - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+      - WEAVIATE_URL=http://weaviate:8080
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      weaviate:
+        condition: service_started
+      redis:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  weaviate_data:
+  redis_data:
