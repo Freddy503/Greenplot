@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Welcome to Seedify</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-dim": "#5af0b4",
+              "tertiary-container": "#6bffc1",
+              "surface": "#01120b",
+              "tertiary-fixed": "#6bffc1",
+              "surface-tint": "#69f6b8",
+              "primary-fixed-dim": "#58e7ab",
+              "surface-container": "#051e15",
+              "error": "#ff716c",
+              "error-dim": "#d7383b",
+              "on-secondary-fixed": "#4c2e00",
+              "inverse-on-surface": "#455950",
+              "secondary-fixed": "#ffc885",
+              "on-background": "#e4fcf0",
+              "primary-container": "#06b77f",
+              "surface-container-high": "#09241b",
+              "secondary-container": "#855300",
+              "on-error-container": "#ffa8a3",
+              "on-secondary-fixed-variant": "#724700",
+              "on-tertiary-fixed-variant": "#006b4a",
+              "on-primary-container": "#002919",
+              "on-tertiary": "#006948",
+              "surface-variant": "#0d2b21",
+              "inverse-surface": "#e7fff2",
+              "secondary": "#f8a010",
+              "on-surface": "#e4fcf0",
+              "tertiary": "#cdffe3",
+              "secondary-dim": "#e79400",
+              "on-primary-fixed": "#00452d",
+              "on-error": "#490006",
+              "primary-fixed": "#69f6b8",
+              "surface-bright": "#123227",
+              "primary": "#69f6b8",
+              "surface-dim": "#01120b",
+              "inverse-primary": "#006d4a",
+              "on-secondary": "#4a2c00",
+              "on-tertiary-container": "#006042",
+              "on-primary": "#005a3c",
+              "background": "#01120b",
+              "on-tertiary-fixed": "#004b33",
+              "error-container": "#9f0519",
+              "secondary-fixed-dim": "#ffb554",
+              "on-primary-fixed-variant": "#006544",
+              "surface-container-lowest": "#000000",
+              "primary-dim": "#58e7ab",
+              "outline": "#657a70",
+              "surface-container-highest": "#0d2b21",
+              "surface-container-low": "#021710",
+              "on-surface-variant": "#9ab0a5",
+              "outline-variant": "#384c43",
+              "tertiary-fixed-dim": "#5af0b4"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #01120b; color: #e4fcf0; margin: 0; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-card {
+            background: rgba(18, 50, 39, 0.6);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+        }
+        .text-glow { text-shadow: 0 0 20px rgba(105, 246, 184, 0.3); }
+        .botanical-mask {
+            mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
+            -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
+        }
+    </style>
+</head>
+<body class="bg-surface overflow-hidden">
+<!-- Top Navigation Shell -->
+<nav class="flex justify-between items-center w-full px-8 py-4 sticky top-0 z-50 bg-[#01120b] font-['Plus_Jakarta_Sans'] tracking-tight text-sm">
+<div class="text-2xl font-black tracking-tighter text-[#69f6b8]">Seedify</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-[#69f6b8] border-b-2 border-[#69f6b8] pb-1 font-bold" href="#">Dashboard</a>
+<a class="text-[#9ab0a5] hover:text-[#e4fcf0] transition-colors" href="#">Inventory</a>
+<a class="text-[#9ab0a5] hover:text-[#e4fcf0] transition-colors" href="#">Growth</a>
+<a class="text-[#9ab0a5] hover:text-[#e4fcf0] transition-colors" href="#">Vault</a>
+<a class="text-[#9ab0a5] hover:text-[#e4fcf0] transition-colors" href="#">Analytics</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-[#051e15] rounded-full transition-all duration-300">
+<span class="material-symbols-outlined text-[#69f6b8]">notifications</span>
+</button>
+<button class="p-2 hover:bg-[#051e15] rounded-full transition-all duration-300">
+<span class="material-symbols-outlined text-[#69f6b8]">settings</span>
+</button>
+<div class="w-10 h-10 rounded-full border-2 border-primary overflow-hidden">
+<img alt="User profile avatar in the Digital Greenhouse" data-alt="close-up portrait of a modern digital artist with soft emerald rim lighting and a high-tech laboratory background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBDyAcxwyMdIvGMOnyhBHdmD-Qqc2bu7Z8DU6N04g9z57VN3kUcqmCUkGsdqCJDSyoiHgwL8s9UTVGBmYlpOJ5CXk02TFn_v7YY0WoRqdvX4ZcQ11ZeXFbTOJ5JWTFMcvCJ3qPa6_mQ7alkZPFOS1VqXj3KL2mF_rzsuDu-a4bYxRW6kWbOOHTxDevmJSVj8i2ooHd8fPDQ6ZjmhC33oswvRcrT5IGDBQqu9dkK7Jz5HVNoMWWV6Ux1DdLzLlEO4dLQL_SrT9zUzBb"/>
+</div>
+</div>
+</nav>
+<!-- Hero Content -->
+<main class="relative h-[calc(100vh-80px)] w-full flex items-center justify-center overflow-hidden">
+<!-- Background Imagery (The Living Laboratory) -->
+<div class="absolute inset-0 z-0">
+<div class="absolute inset-0 bg-gradient-to-b from-surface via-transparent to-surface z-10"></div>
+<img alt="Botanical background" class="w-full h-full object-cover opacity-40 botanical-mask" data-alt="Macro photography of glowing bioluminescent seeds floating in a dark, high-tech greenhouse with emerald green light refraction and soft bokeh" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzgy_GOzG72goEYRaA3Bw16JgBPYGRCosUxSpBGwKLcdfDKAmG2IF3nuHTb38ZSyTSUiIulIqjaCvQ-Myo-PadxVI1poPgluXo8N_d9b2gnL5PuDkDc_i8Nkf6bCPbaznVPFYOKyAJIAJvFo9qhfXlzOCEuodlrm59BKQ-WT4ibX4tW56-VAMlL4flEQ66IcdlpwSa_n-fe7D4zXorXrjXpx-UBOtgGqzjUAjju7UlxBEPpZWhsC0T3zE4by78L_Z6D0ro0ga5223K"/>
+<!-- Atmospheric Glows -->
+<div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px]"></div>
+</div>
+<!-- Central Content Canvas -->
+<section class="relative z-20 max-w-5xl mx-auto px-6 text-center">
+<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card border border-outline-variant/15 mb-8">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">science</span>
+<span class="text-xs font-bold tracking-[0.15em] uppercase text-on-surface-variant">Growth Phase v2.1 Initialized</span>
+</div>
+<h1 class="text-[5rem] md:text-[6rem] leading-[0.9] font-extrabold tracking-tighter text-on-surface mb-6 text-glow">
+                Welcome to your <br/>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-tertiary-dim">creativity Brain</span>
+</h1>
+<p class="text-xl md:text-2xl text-on-surface-variant max-w-2xl mx-auto mb-12 font-medium leading-relaxed">
+                Your personal, self-improving AI for creative thinking. Harness the power of the Digital Greenhouse to cultivate ideas.
+            </p>
+<div class="flex flex-col md:flex-row items-center justify-center gap-6">
+<!-- Primary Action (The Bloom) -->
+<button class="group relative px-10 py-5 rounded-full bg-secondary text-on-secondary font-bold text-lg transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_20px_40px_-10px_rgba(248,160,16,0.3)] overflow-hidden">
+<span class="relative z-10 flex items-center gap-3">
+                        Get Started
+                        <span class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+</span>
+<div class="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</button>
+<!-- Secondary Action -->
+<button class="px-10 py-5 rounded-full glass-card border border-outline-variant/20 text-on-surface font-semibold text-lg hover:bg-surface-bright transition-all duration-300">
+                    Explore Laboratory
+                </button>
+</div>
+<!-- Dashboard Preview / Bento Elements -->
+<div class="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+<div class="glass-card p-6 rounded-lg border border-outline-variant/10 text-left hover:border-primary/30 transition-colors">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">psychology</span>
+</div>
+<h3 class="text-on-surface font-bold text-lg mb-2">Neural Synthesis</h3>
+<p class="text-on-surface-variant text-sm">AI-driven ideation that learns from your creative patterns and grows with you.</p>
+</div>
+<div class="glass-card p-6 rounded-lg border border-outline-variant/10 text-left hover:border-primary/30 transition-colors translate-y-4">
+<div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<h3 class="text-on-surface font-bold text-lg mb-2">Organic Vault</h3>
+<p class="text-on-surface-variant text-sm">Secure storage for your intellectual seeds, optimized for instant retrieval.</p>
+</div>
+<div class="glass-card p-6 rounded-lg border border-outline-variant/10 text-left hover:border-primary/30 transition-colors">
+<div class="w-12 h-12 rounded-full bg-tertiary-container/10 flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-tertiary-dim" style="font-variation-settings: 'FILL' 1;">monitoring</span>
+</div>
+<h3 class="text-on-surface font-bold text-lg mb-2">Growth Analytics</h3>
+<p class="text-on-surface-variant text-sm">Visualize your creative output with precision botanical metrics.</p>
+</div>
+</div>
+</section>
+</main>
+<!-- Side Navigation Anchor (Hidden on Welcome but available as blueprint) -->
+<aside class="hidden h-screen w-64 fixed left-0 top-0 bg-[#021710] flex-col py-8 border-r border-[#384c43]/15 shadow-[40px_0_60px_-10px_rgba(0,0,0,0.4)] z-[60]">
+<div class="px-6 mb-10">
+<div class="text-lg font-bold text-[#e4fcf0]">Seedify Lab</div>
+<div class="text-[10px] text-primary tracking-widest uppercase">Growth Phase v2.1</div>
+</div>
+<nav class="flex-1">
+<div class="flex items-center gap-3 bg-gradient-to-r from-[#69f6b8]/10 to-transparent text-[#69f6b8] border-l-4 border-[#f8a010] px-6 py-3 font-['Plus_Jakarta_Sans'] font-medium text-[13px] uppercase tracking-widest">
+<span class="material-symbols-outlined">dashboard</span>
+                Overview
+            </div>
+<div class="flex items-center gap-3 text-[#9ab0a5] px-6 py-3 hover:text-[#69f6b8] hover:bg-[#051e15] transition-all duration-300 font-['Plus_Jakarta_Sans'] font-medium text-[13px] uppercase tracking-widest">
+<span class="material-symbols-outlined">science</span>
+                Lab
+            </div>
+<div class="flex items-center gap-3 text-[#9ab0a5] px-6 py-3 hover:text-[#69f6b8] hover:bg-[#051e15] transition-all duration-300 font-['Plus_Jakarta_Sans'] font-medium text-[13px] uppercase tracking-widest">
+<span class="material-symbols-outlined">eco</span>
+                Ecosystem
+            </div>
+</nav>
+<div class="px-6 mt-auto">
+<button class="w-full py-3 rounded-full bg-primary text-on-primary font-bold text-xs uppercase tracking-widest mb-6">
+                New Experiment
+            </button>
+<div class="flex items-center gap-3 text-[#9ab0a5] px-6 py-3 hover:text-[#69f6b8] transition-colors cursor-pointer">
+<span class="material-symbols-outlined">logout</span>
+                Logout
+            </div>
+</div>
+</aside>
+<!-- Decorative Corner Element -->
+<div class="fixed bottom-0 right-0 p-12 opacity-20 pointer-events-none">
+<span class="material-symbols-outlined text-[12rem] text-primary/30 rotate-12">spa</span>
+</div>
+</body></html>

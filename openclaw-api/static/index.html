@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenClaw Brain</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
+    button { background: #007AFF; color: white; border: none; cursor: pointer; }
+    button:active { background: #0056CC; }
+    #thought-input { height: 80px; resize: none; }
+    #seeds-list { list-style: none; padding: 0; }
+    .seed-card { background: #f9f9f9; padding: 12px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #007AFF; }
+    .seed-title { font-weight: bold; margin-bottom: 4px; }
+    .seed-content { font-size: 14px; color: #555; }
+    .hidden { display: none; }
+    .nav { display: flex; gap: 10px; margin-bottom: 20px; }
+    .nav button { flex: 1; background: #e5e5e5; color: #333; }
+    .nav button.active { background: #007AFF; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Login Screen -->
+    <div id="login-screen" class="card">
+      <h2>OpenClaw Brain</h2>
+      <p>Sign in to your Second Brain</p>
+      <input id="email" type="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password" />
+      <button onclick="login()">Log In</button>
+      <p style="font-size:12px; color:#888; text-align:center;">PWA Demo — use admin@example.com / changeme</p>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="hidden">
+      <div class="nav">
+        <button id="btn-thoughts" class="active" onclick="showTab('thoughts')">Thoughts</button>
+        <button id="btn-seeds" onclick="showTab('seeds')">Seeds</button>
+        <button id="btn-spark" onclick="showTab('spark')">Spark</button>
+        <button id="btn-settings" onclick="showTab('settings')">Settings</button>
+      </div>
+
+      <!-- Thoughts Tab -->
+      <div id="tab-thoughts" class="card">
+        <h3>Add Thought</h3>
+        <textarea id="thought-input" placeholder="What's on your mind?"></textarea>
+        <button onclick="submitThought()">Process Thought</button>
+      </div>
+
+      <!-- Seeds Tab -->
+      <div id="tab-seeds" class="card hidden">
+        <h3>Your Seeds</h3>
+        <button onclick="searchSeeds()" style="width:auto; margin-bottom:10px;">Refresh</button>
+        <div id="seeds-list"></div>
+      </div>
+
+      <!-- Spark Tab -->
+      <div id="tab-spark" class="card hidden">
+        <h3>Morning Spark</h3>
+        <button onclick="getSpark()" style="width:auto;">Generate</button>
+        <div id="spark-text" style="margin-top:10px; line-height:1.6;"></div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="tab-settings" class="card hidden">
+        <h3>Settings</h3>
+        <p>Token usage this month: <span id="usage-llm">0</span> LLM tokens, <span id="usage-embed">0</span> embeddings</p>
+        <button onclick="logout()" style="background:#FF3B30;">Log Out</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:8001/api/v1';
+    let token = localStorage.getItem('token') || '';
+    let tenantId = localStorage.getItem('tenant_id') || '';
+
+    function showTab(name) {
+      document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+      document.getElementById('tab-' + name).classList.remove('hidden');
+      document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+      document.getElementById('btn-' + name).classList.add('active');
+      if (name === 'seeds') searchSeeds();
+      if (name === 'settings') loadUsage();
+    }
+
+    async function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      try {
+        const res = await fetch(`${API_URL}/login`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({email, password})
+        });
+        if (res.ok) {
+          const data = await res.json();
+          token = data.access_token;
+          tenantId = data.tenant_id;
+          localStorage.setItem('token', token);
+          localStorage.setItem('tenant_id', tenantId);
+          document.getElementById('login-screen').classList.add('hidden');
+          document.getElementById('dashboard').classList.remove('hidden');
+        } else {
+          alert('Login failed');
+        }
+      } catch (e) {
+        alert('Network error');
+      }
+    }
+
+    function logout() {
+      token = ''; tenantId = '';
+      localStorage.removeItem('token'); localStorage.removeItem('tenant_id');
+      document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('login-screen').classList.remove('hidden');
+    }
+
+    async function submitThought() {
+      const content = document.getElementById('thought-input').value.trim();
+      if (!content) return;
+      try {
+        const res = await fetch(`${API_URL}/thoughts`, {
+          method: 'POST',
+          headers: {'Authorization': `Bearer ${token}`, 'Content-Type':'application/json'},
+          body: JSON.stringify({content, source:'pwa'})
+        });
+        const data = await res.json();
+        alert('Thought submitted! Seed created: ' + data.title);
+        document.getElementById('thought-input').value = '';
+      } catch (e) {
+        alert('Error: ' + e);
+      }
+    }
+
+    async function searchSeeds() {
+      try {
+        const res = await fetch(`${API_URL}/seeds?limit=10`, {
+          headers: {'Authorization': `Bearer ${token}`}
+        });
+        const data = await res.json();
+        const list = document.getElementById('seeds-list');
+        list.innerHTML = '';
+        data.seeds.forEach(seed => {
+          const div = document.createElement('div');
+          div.className = 'seed-card';
+          div.innerHTML = `<div class="seed-title">${seed.title}</div><div class="seed-content">${seed.content.substring(0,150)}...</div>`;
+          list.appendChild(div);
+        });
+      } catch (e) {
+        alert('Error loading seeds');
+      }
+    }
+
+    async function getSpark() {
+      try {
+        const res = await fetch(`${API_URL}/spark`, {
+          method: 'POST',
+          headers: {'Authorization': `Bearer ${token}`}
+        });
+        const data = await res.json();
+        document.getElementById('spark-text').innerText = data.text;
+      } catch (e) {
+        alert('Error generating spark');
+      }
+    }
+
+    async function loadUsage() {
+      try {
+        const res = await fetch(`${API_URL}/usage/month`, {
+          headers: {'Authorization': `Bearer ${token}`}
+        });
+        const data = await res.json();
+        document.getElementById('usage-llm').innerText = data.llm_tokens;
+        document.getElementById('usage-embed').innerText = data.embedding_tokens;
+      } catch (e) {
+        // no-op
+      }
+    }
+
+    // Auto-login if token present
+    if (token) {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+    }
+
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/service-worker.js').catch(console.error);
+    }
+  </script>
+</body>
+</html>

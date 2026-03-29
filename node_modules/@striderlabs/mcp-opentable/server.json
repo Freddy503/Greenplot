@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.markswendsen-code/opentable",
+  "description": "OpenTable MCP server — search restaurants, check availability, and book reservations. By Strider Labs.",
+  "repository": {
+    "url": "https://github.com/markswendsen-code/mcp-opentable",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@striderlabs/mcp-opentable",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

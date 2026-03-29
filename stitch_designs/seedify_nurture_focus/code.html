@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Seedify - Digest Frequency</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#10B981",
+              "primary-content": "#000000",
+              "secondary": "#065f46",
+              "tertiary": "#fea619",
+              "background-dark": "#10221c",
+              "surface-dark": "#162c24",
+              "surface-container": "#1c352d",
+              "outline": "#2d4a3e"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans", "sans-serif"],
+              "body": ["Plus Jakarta Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .seed-shape {
+        border-radius: 3rem 9999px 3rem 9999px;
+      }
+      .time-input {
+        background: transparent;
+        border: none;
+        padding: 0;
+        font-family: inherit;
+        font-weight: 600;
+        color: inherit;
+        width: fit-content;
+      }
+      .time-input:focus {
+        outline: none;
+        ring: none;
+      }
+    </style>
+</head>
+<body class="bg-background-dark text-white font-body min-h-screen flex flex-col">
+<div class="fixed top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/10 blur-[120px] -z-10 rounded-full"></div>
+<div class="fixed bottom-[-5%] left-[-10%] w-[600px] h-[600px] bg-tertiary/5 blur-[150px] -z-10 rounded-full"></div><main class="flex-grow flex flex-col px-6 md:px-12 pt-12 pb-24 max-w-2xl mx-auto w-full">
+<!-- Header Section -->
+<header class="mb-12">
+<div class="flex items-center gap-4 mb-8">
+<div class="h-2 flex-grow bg-surface-container rounded-full overflow-hidden">
+<div class="h-full w-4/5 bg-primary rounded-full"></div>
+</div>
+<span class="text-sm text-primary font-bold">5/6</span>
+</div>
+<h1 class="font-headline text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
+                Nurture your <span class="text-primary italic">focus.</span>
+</h1>
+<p class="text-lg text-slate-400 leading-relaxed">
+                Choose how often you'd like your Seedify digest to arrive in your garden.
+            </p>
+</header>
+<!-- Frequency Selection List -->
+<div class="space-y-4 mb-8"><!-- Twice a Day Card -->
+<div class="w-full p-6 rounded-3xl transition-all duration-300 bg-surface-dark border border-outline hover:border-primary/50 group">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 flex items-center justify-center bg-primary/10 text-primary rounded-full">
+<span class="material-symbols-outlined">wb_twilight</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg">Twice a day</h3>
+<p class="text-sm text-slate-400">Morning insight and evening reflection.</p>
+</div>
+</div>
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center">
+<div class="w-3 h-3 rounded-full bg-primary opacity-0 transition-opacity"></div>
+</div>
+</div>
+<div class="flex flex-wrap gap-4 mt-2 ml-[68px]">
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full text-sm text-slate-300">
+<span class="opacity-60">Morning:</span>
+<input class="time-input bg-transparent border-none p-0 focus:ring-0 w-20 font-bold" type="time" value="08:00"/>
+</div>
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full text-sm text-slate-300">
+<span class="opacity-60">Evening:</span>
+<input class="time-input bg-transparent border-none p-0 focus:ring-0 w-20 font-bold" type="time" value="20:00"/>
+</div>
+</div>
+</div>
+<!-- Once a Day Card (Selected State - Orange Accent) -->
+<div class="w-full p-6 rounded-3xl transition-all duration-300 bg-tertiary/5 border-2 border-tertiary flex flex-col">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 flex items-center justify-center bg-tertiary text-black rounded-full">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">light_mode</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg">Once a day</h3>
+<p class="text-sm text-tertiary/80">A daily summary at your preferred time.</p>
+</div>
+</div>
+<div class="w-6 h-6 rounded-full border-2 border-tertiary flex items-center justify-center">
+<div class="w-3 h-3 rounded-full bg-tertiary"></div>
+</div>
+</div>
+<div class="mt-2 ml-[68px]">
+<div class="inline-flex items-center gap-2 bg-tertiary/20 px-4 py-2 rounded-full text-sm text-tertiary font-bold">
+<span class="opacity-80">Time:</span>
+<input class="time-input bg-transparent border-none p-0 focus:ring-0 w-20 font-bold" type="time" value="09:00"/>
+</div>
+</div>
+</div>
+<!-- Bi-Weekly Card -->
+<div class="w-full p-6 rounded-3xl transition-all duration-300 bg-surface-dark border border-outline hover:border-primary/50 group">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 flex items-center justify-center bg-surface-container text-slate-400 rounded-full">
+<span class="material-symbols-outlined">calendar_view_week</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg">Bi-Weekly</h3>
+<p class="text-sm text-slate-400">Twice a week for deeper synthesis.</p>
+</div>
+</div>
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center">
+<div class="w-3 h-3 rounded-full bg-primary opacity-0 transition-opacity"></div>
+</div>
+</div>
+<div class="mt-2 ml-[68px]">
+<div class="inline-flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full text-sm text-slate-300">
+<span class="opacity-60">Time:</span>
+<input class="time-input bg-transparent border-none p-0 focus:ring-0 w-20 font-bold" type="time" value="09:00"/>
+</div>
+</div>
+</div></div>
+<!-- Intelligent Toggle (Show state where it is OFF) -->
+<div class="bg-surface-dark p-6 rounded-full flex items-center justify-between mb-12 border border-outline hover:border-tertiary/30 transition-colors group">
+<div class="flex gap-4">
+<div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-tertiary border border-tertiary/20">
+<span class="material-symbols-outlined text-xl">event_repeat</span>
+</div>
+<div>
+<h4 class="font-headline font-bold">Based on Calendar</h4>
+<p class="text-[10px] text-tertiary uppercase tracking-widest font-bold">Smart Scheduling</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-14 h-8 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-tertiary"></div>
+</label>
+</div>
+<!-- Sticky Bottom Action -->
+<div class="mt-auto pt-8">
+<button class="w-full py-5 bg-primary text-on-primary font-headline font-bold text-xl rounded-xl shadow-lg hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
+                Next
+                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</main>
+<!-- Visual Decor -->
+<div class="fixed top-[-10%] right-[-10%] w-64 h-64 bg-primary-container/20 blur-[100px] -z-10 rounded-full"></div>
+<div class="fixed bottom-[5%] left-[-5%] w-96 h-96 bg-secondary-container/10 blur-[120px] -z-10 rounded-full"></div>
+<div class="fixed bottom-12 right-12 w-32 h-32 opacity-20 -z-10 overflow-hidden rounded-full border-2 border-primary/30">
+<img alt="Monstera leaf" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAC_i4gF43lY73jsJE-_WUcds3aUIhqZkqexxKbRlhCT4p8FAB0aoXmPQxRfNw9ztvKj1d68toXWgb1vE1qFGzvojDt8vecZ5ZquaIVh6Q577vONZeTOlf-QRS8UPaoY7IuYLDj4faHOHDDyrNW9i-6dWtgMDBiekM4Ii_YHb9II-Iwb-RI4AfwRPWUQoPNmMHoL7P50r8NTKE-Zp38CTIJbMIQEUTbZvALR3TBi6XKP1z1mov6lSKblTCn5XzjnsaH6vAr5PRvf5wU"/>
+</div>
+</body></html>

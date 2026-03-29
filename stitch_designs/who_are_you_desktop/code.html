@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Seedify - Profile Setup</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-dim": "#5af0b4",
+              "tertiary-container": "#6bffc1",
+              "surface": "#01120b",
+              "tertiary-fixed": "#6bffc1",
+              "surface-tint": "#69f6b8",
+              "primary-fixed-dim": "#58e7ab",
+              "surface-container": "#051e15",
+              "error": "#ff716c",
+              "error-dim": "#d7383b",
+              "on-secondary-fixed": "#4c2e00",
+              "inverse-on-surface": "#455950",
+              "secondary-fixed": "#ffc885",
+              "on-background": "#e4fcf0",
+              "primary-container": "#06b77f",
+              "surface-container-high": "#09241b",
+              "secondary-container": "#855300",
+              "on-error-container": "#ffa8a3",
+              "on-secondary-fixed-variant": "#724700",
+              "on-tertiary-fixed-variant": "#006b4a",
+              "on-primary-container": "#002919",
+              "on-tertiary": "#006948",
+              "surface-variant": "#0d2b21",
+              "inverse-surface": "#e7fff2",
+              "secondary": "#f8a010",
+              "on-surface": "#e4fcf0",
+              "tertiary": "#cdffe3",
+              "secondary-dim": "#e79400",
+              "on-primary-fixed": "#00452d",
+              "on-error": "#490006",
+              "primary-fixed": "#69f6b8",
+              "surface-bright": "#123227",
+              "primary": "#69f6b8",
+              "surface-dim": "#01120b",
+              "inverse-primary": "#006d4a",
+              "on-secondary": "#4a2c00",
+              "on-tertiary-container": "#006042",
+              "on-primary": "#005a3c",
+              "background": "#01120b",
+              "on-tertiary-fixed": "#004b33",
+              "error-container": "#9f0519",
+              "secondary-fixed-dim": "#ffb554",
+              "on-primary-fixed-variant": "#006544",
+              "surface-container-lowest": "#000000",
+              "primary-dim": "#58e7ab",
+              "outline": "#657a70",
+              "surface-container-highest": "#0d2b21",
+              "surface-container-low": "#021710",
+              "on-surface-variant": "#9ab0a5",
+              "outline-variant": "#384c43",
+              "tertiary-fixed-dim": "#5af0b4"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: #01120b;
+        color: #e4fcf0;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(13, 43, 33, 0.6);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+      }
+      .botanical-shadow {
+        box-shadow: 0 40px 60px -10px rgba(0, 0, 0, 0.4);
+      }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen selection:bg-primary selection:text-on-primary">
+<!-- Top Navigation Suppression (Transactional Page) -->
+<main class="flex min-h-screen items-center justify-center px-6 py-12 relative overflow-hidden">
+<!-- Background Organic Glows -->
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-secondary/5 blur-[100px] rounded-full"></div>
+<div class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+<!-- Left Side: Editorial Context -->
+<div class="lg:col-span-5 space-y-8">
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="w-12 h-[2px] bg-secondary"></span>
+<span class="text-secondary font-label tracking-widest text-xs uppercase font-bold">Phase 01: Identification</span>
+</div>
+<h1 class="text-5xl lg:text-7xl font-extrabold tracking-tighter leading-tight text-on-surface">
+                        Tell us about <br/><span class="text-primary italic">your roots.</span>
+</h1>
+<p class="text-on-surface-variant text-lg leading-relaxed max-w-md">
+                        Every great growth cycle begins with a strong foundation. Define your identity within the Seedify ecosystem to start your journey.
+                    </p>
+</div>
+<!-- Step Indicator -->
+<div class="flex items-center gap-4">
+<div class="flex flex-col gap-1">
+<div class="h-1.5 w-16 rounded-full bg-primary"></div>
+<span class="text-[10px] font-bold text-primary font-label uppercase tracking-widest">Active</span>
+</div>
+<div class="h-1.5 w-16 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 w-16 rounded-full bg-surface-container-highest"></div>
+</div>
+</div>
+<!-- Right Side: The Form Canvas -->
+<div class="lg:col-span-7">
+<div class="glass-card rounded-xl p-8 lg:p-12 botanical-shadow border border-outline-variant/10">
+<form class="space-y-10">
+<!-- Avatar Section -->
+<div class="flex flex-col sm:flex-row items-center gap-8">
+<div class="relative group">
+<div class="w-32 h-32 rounded-full overflow-hidden bg-surface-container-highest border-4 border-surface-container flex items-center justify-center relative">
+<img alt="Profile placeholder" class="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" data-alt="Abstract bioluminescent organic textures with soft emerald and deep forest green gradients, macro view" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZK2-L5ZCmd5eMg02mZ6jVNmxzrZIAIyY3ewa4wuSGfGSd99bmHPL0inLXA0K8EgiiJp74Ng69tK_lYD-0YyTeNvWrywoOEapyv7_nLQh4wsgxs8wpKjD-jOPBqkW_5sUZPR_uO2P5YAUh3YcSKXL6otln6wNNmV0hnXfZxUX1wKt1hMsEYmx9SpSysJRkwu7gyvl47-302ZX2Ic3frfZogI9Dko4ufyWLeW6E3_jJ9bJkFyyo0BaKiv3VTXt9D8rXXufsJyniyMX9"/>
+<div class="absolute inset-0 flex items-center justify-center cursor-pointer">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="add_a_photo">add_a_photo</span>
+</div>
+</div>
+<div class="absolute -bottom-1 -right-1 bg-secondary w-8 h-8 rounded-full flex items-center justify-center botanical-shadow">
+<span class="material-symbols-outlined text-on-secondary text-sm" data-icon="edit">edit</span>
+</div>
+</div>
+<div class="text-center sm:text-left space-y-2">
+<h3 class="text-xl font-bold text-on-surface">Growth Avatar</h3>
+<p class="text-on-surface-variant text-sm max-w-xs">Upload a photo to represent your digital footprint. High contrast recommended.</p>
+<button class="text-primary text-xs font-bold font-label uppercase tracking-wider hover:text-white transition-colors" type="button">Choose File</button>
+</div>
+</div>
+<!-- Form Fields -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-[0.15em] ml-1">Nickname</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border-none rounded-md px-5 py-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/50 transition-all outline-none" placeholder="e.g. FloraTech_01" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 text-lg" data-icon="id_card">id_card</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-[0.15em] ml-1 flex justify-between">
+                                    City <span class="text-on-surface-variant/40 font-normal normal-case italic">(Optional)</span>
+</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border-none rounded-md px-5 py-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/50 transition-all outline-none" placeholder="Current Laboratory" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 text-lg" data-icon="location_on">location_on</span>
+</div>
+</div>
+</div>
+<!-- Secondary Info Field -->
+<div class="space-y-2">
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-[0.15em] ml-1">Laboratory Bio</label>
+<textarea class="w-full bg-surface-container-highest border-none rounded-md px-5 py-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/50 transition-all outline-none resize-none" placeholder="Briefly describe your specialization or growth goals..." rows="3"></textarea>
+</div>
+<!-- Actions -->
+<div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6">
+<button class="text-on-surface-variant hover:text-on-surface font-label text-sm font-bold uppercase tracking-widest transition-colors" type="button">
+                                Skip for now
+                            </button>
+<button class="w-full sm:w-auto px-12 py-4 rounded-full bg-secondary text-on-secondary font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all botanical-shadow" type="submit">
+                                Next Step
+                                <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Micro-copy -->
+<p class="text-center mt-8 text-[11px] text-on-surface-variant/50 uppercase tracking-[0.2em] font-medium">
+                    Secured by Seedify Greenhouse Protocol v2.1
+                </p>
+</div>
+</div>
+<!-- Floating Decorative Element -->
+<div class="absolute top-20 right-[15%] opacity-20 hidden xl:block">
+<span class="material-symbols-outlined text-[120px] text-primary select-none" data-icon="eco" style="font-variation-settings: 'FILL' 0, 'wght' 100;">eco</span>
+</div>
+</main>
+<!-- Footer Identity -->
+<footer class="fixed bottom-8 left-8 z-20">
+<div class="flex flex-col">
+<span class="text-2xl font-black tracking-tighter text-primary">Seedify</span>
+<span class="text-[10px] uppercase tracking-[0.3em] text-on-surface-variant font-bold">Digital Greenhouse</span>
+</div>
+</footer>
+</body></html>
