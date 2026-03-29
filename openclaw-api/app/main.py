@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import os
 from app.database import engine, get_db
@@ -21,6 +21,15 @@ import httpx
 import json
 from datetime import datetime, date
 import uuid
+
+def extract_text(msg: dict) -> str:
+    if "content" in msg and msg["content"]:
+        return msg["content"]
+    parts = []
+    for part in msg.get("parts", []):
+        if part.get("type") == "text":
+            parts.append(part.get("text", ""))
+    return "".join(parts)
 
 # Create tables (in production use Alembic)
 Base.metadata.create_all(bind=engine)
@@ -230,6 +239,59 @@ def admin_list_tenants(db: Session = Depends(get_db)):
     tenants = db.query(User).with_entities(User.id, User.email, User.created_at, User.subscription_status).all()
     info = [TenantsListResponse.TenantInfo(id=t.id, email=t.email, created_at=t.created_at, subscription_status=t.subscription_status) for t in tenants]
     return TenantsListResponse(tenants=info, total=len(info))
+
+# --- Chat (Vercel AI SDK compatible: text stream) ---
+
+@app.post("/api/v1/chat")
+async def chat_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    body = await request.json()
+    messages = body.get("messages", [])
+    attachments = body.get("attachments", [])
+    # Build OpenAI-compatible messages
+    openai_messages = []
+    for msg in messages:
+        role = msg.get("role")
+        content = extract_text(msg)
+        # For attachments, in MVP we just add placeholder note
+        # Later: convert images to data URLs and include as image_url parts
+        if attachments and role == "user":
+            # naive: note there were attachments
+            content += f"\n[Attachments: {len(attachments)} file(s)]"
+        openai_messages.append({"role": role, "content": content})
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": settings.APP_URL or "https://your-domain.com",
+        "X-Title": settings.APP_NAME or "Second Brain",
+    }
+    payload = {
+        "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+        "messages": openai_messages,
+        "stream": True,
+    }
+    async with httpx.AsyncClient() as client:
+        async with client.stream("POST", "https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60.0) as resp:
+            if resp.status_code != 200:
+                error_text = await resp.aread()
+                raise HTTPException(status_code=resp.status_code, detail=f"OpenRouter error: {error_text.decode()}")
+            async def generate():
+                async for line in resp.aiter_lines():
+                    if line.startswith("data: "):
+                        data = line[6:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                            delta = chunk["choices"][0]["delta"].get("content", "")
+                            if delta:
+                                yield delta
+                        except Exception:
+                            continue
+            return StreamingResponse(generate(), media_type="text/plain")
 
 # Root endpoint
 @app.get("/")
