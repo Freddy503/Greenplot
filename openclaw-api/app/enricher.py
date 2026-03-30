@@ -13,18 +13,19 @@ openai_client = openai.OpenAI(
 )
 
 def embed_text(text: str) -> list:
-    # Use NVIDIA NIM embeddings
-    if not settings.NVIDIA_API_KEY:
-        raise RuntimeError("NVIDIA_API_KEY not set")
+    """Embed text using OpenRouter (1536-dim ada-002)."""
+    if not settings.OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY not set")
     resp = httpx.post(
-        "https://integrate.api.nvidia.com/v1/embeddings",
+        "https://openrouter.ai/api/v1/embeddings",
         json={
             "input": text,
-            "model": "nvidia/nv-embedqa-e5-v5",
-            "input_type": "passage",
-            "encoding_format": "float"
+            "model": settings.EMBEDDING_MODEL,
         },
-        headers={"Authorization": f"Bearer {settings.NVIDIA_API_KEY}"},
+        headers={
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
         timeout=30
     )
     resp.raise_for_status()

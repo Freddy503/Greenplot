@@ -2,7 +2,7 @@
 """
 sync_and_fetch_weaviate.py
 Syncs the Notion Idea Garden + Parking Lot into Weaviate,
-generates embeddings via NVIDIA NIM (Nemotron/nv-embedqa),
+generates embeddings via OpenRouter (Nemotron/nv-embedqa),
 and returns related seeds for a given query text.
 
 Usage:
@@ -27,11 +27,11 @@ import datetime
 # ── Config ──────────────────────────────────────────────────────────────────
 NOTION_API_KEY   = open(os.path.expanduser("~/.config/notion/api_key")).read().strip()
 NOTION_VERSION   = "2022-06-28"
-NVIDIA_API_KEY   = os.environ.get("NVIDIA_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 WEAVIATE_URL     = os.environ.get("WEAVIATE_URL", "http://localhost:8080")
-EMBED_MODEL      = "nvidia/nv-embedqa-e5-v5"   # NIM endpoint, 1024-dim
-NVIDIA_BASE_URL  = "https://integrate.api.nvidia.com/v1"
+EMBED_MODEL      = "openai/text-embedding-ada-002"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 IDEA_GARDEN_DB_ID    = "331fbc8d-40a5-816b-80e0-ea68ff4ba64d"  # Idea Garden tabular DB
 SEEDS_DB_ID          = "331fbc8d-40a5-8119-bff8-fa81e339ed97"  # Seeds DB (raw entries, formerly Parking Lot)
@@ -160,22 +160,21 @@ def chunk_text(text, size=CHUNK_SIZE):
     return chunks or ["(empty)"]
 
 
-# ── Embeddings via NVIDIA NIM ────────────────────────────────────────────────
+# ── Embeddings via OpenRouter ────────────────────────────────────────────────
 def embed(texts):
-    """Generate embeddings for a list of texts via NVIDIA NIM."""
-    if not NVIDIA_API_KEY:
-        raise RuntimeError("NVIDIA_API_KEY not set")
+    """Generate embeddings for a list of texts via OpenRouter."""
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY not set")
     payload = {
         "input": texts,
         "model": EMBED_MODEL,
-        "input_type": "passage",
-        "encoding_format": "float",
+        
         "truncate": "END"
     }
     req = urllib.request.Request(
-        f"{NVIDIA_BASE_URL}/embeddings",
+        f"{OPENROUTER_BASE_URL}/embeddings",
         data=json.dumps(payload).encode(),
-        headers={"Authorization": f"Bearer {NVIDIA_API_KEY}",
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}",
                  "Content-Type": "application/json"}
     )
     with urllib.request.urlopen(req) as r:
@@ -188,14 +187,13 @@ def embed_query(text):
     payload = {
         "input": [text],
         "model": EMBED_MODEL,
-        "input_type": "query",
-        "encoding_format": "float",
+        
         "truncate": "END"
     }
     req = urllib.request.Request(
-        f"{NVIDIA_BASE_URL}/embeddings",
+        f"{OPENROUTER_BASE_URL}/embeddings",
         data=json.dumps(payload).encode(),
-        headers={"Authorization": f"Bearer {NVIDIA_API_KEY}",
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}",
                  "Content-Type": "application/json"}
     )
     with urllib.request.urlopen(req) as r:

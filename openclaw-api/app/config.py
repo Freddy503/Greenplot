@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Weaviate
     WEAVIATE_URL: str = "http://weaviate:8080"
-    WEAVIATE_CLASS: str = "AppSeed"
+    WEAVIATE_CLASS: str = "IdeaSeed"
 
     # LLM & APIs
     OPENROUTER_API_KEY: Optional[str] = None

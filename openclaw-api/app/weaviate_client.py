@@ -61,16 +61,22 @@ class WeaviateClient:
 
     def search_seeds(self, tenant_id: str, embedding: list, limit: int = 10):
         nearVector = {"vector": embedding}
+        # Search IdeaSeed class — properties: title, text (not content)
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
-            ["title", "content", "metadata", "image_url", "created_at", "thought_id"]
-        ).with_near_vector(nearVector).with_where({
-            "path": ["tenant_id"],
-            "operator": "Equal",
-            "valueText": tenant_id
-        }).with_limit(limit)
+            ["title", "text", "source", "url", "created", "notion_id"]
+        ).with_near_vector(nearVector).with_limit(limit)
         result = query.do()
-        return result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, [])
+        objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, [])
+        # Normalize to expected format
+        return [
+            {
+                "title": o.get("title", ""),
+                "content": o.get("text", ""),
+                "created_at": o.get("created", ""),
+            }
+            for o in objects
+        ]
 
     def delete_tenant_seeds(self, tenant_id: str):
         # Delete all objects for a tenant (for account deletion)
