@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # LLM & APIs
     OPENROUTER_API_KEY: Optional[str] = None
     # Model for enrichment (LLM)
-    ENRICH_MODEL: str = "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
+    ENRICH_MODEL: str = "nvidia/nemotron-3-super-120b-a12b:free"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
     BFL_API_KEY: Optional[str] = None
@@ -31,6 +31,9 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    FRONTEND_URL: str = "http://localhost:3000"
+    APP_URL: str = "https://seedify-six.vercel.app"
+    APP_NAME: str = "Seedify"
 
     # Attachments
     MAX_ATTACHMENT_SIZE_MB: int = 10

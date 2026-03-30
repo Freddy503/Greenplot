@@ -16,7 +16,7 @@ from app.schemas import (
 )
 from app.auth import (
     get_password_hash, verify_password, create_access_token,
-    get_current_user, get_tenant_id
+    get_current_user, get_tenant_id, get_optional_user
 )
 from app.config import settings
 from app.weaviate_client import weaviate_client
@@ -320,7 +320,7 @@ def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
 @app.post("/api/v1/chat")
 async def chat_endpoint(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
     from app.tools import TOOLS
@@ -369,7 +369,7 @@ async def chat_endpoint(
 
                 # Request: with tools (except final round, force content)
                 payload = {
-                    "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+                    "model": settings.ENRICH_MODEL,
                     "messages": openai_messages,
                     "stream": True,
                 }
