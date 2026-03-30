@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #01120b;
+  --surface: #01120b;
+  --surface-container: #051e15;
+  --surface-container-high: #09241b;
+  --surface-container-highest: #0d2b21;
+  --on-surface: #e4fcf0;
+  --on-surface-variant: #9ab0a5;
+  --primary: #69f6b8;
+  --on-primary: #005a3c;
+  --primary-container: #06b77f;
+  --secondary: #f8a010;
+  --outline: #657a70;
+  --outline-variant: #384c43;
+  --error: #ff716c;
+}
+
+body {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  background-color: var(--bg);
+  color: var(--on-surface);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 3px;
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
