@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { RatingStars } from '../components/Rating';
+import type { Attachment } from '../types';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  attachments?: File[];
+  attachments?: { name: string; type: string }[];
 }
 
 export function ChatStep(props: any) {
@@ -14,7 +15,7 @@ export function ChatStep(props: any) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -22,21 +23,42 @@ export function ChatStep(props: any) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setAttachments(Array.from(e.target.files));
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const newAttachments: Attachment[] = [];
+    for (const file of Array.from(e.target.files)) {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          // Strip data URL prefix — backend expects raw base64
+          const result = reader.result as string;
+          resolve(result.split(',')[1] || '');
+        };
+        reader.readAsDataURL(file);
+      });
+      newAttachments.push({ name: file.name, type: file.type, base64 });
     }
+    setAttachments(prev => [...prev, ...newAttachments]);
   };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!input.trim() && attachments.length === 0) || isLoading) return;
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content: input,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: attachments.length > 0 ? attachments.map(a => ({ name: a.name, type: a.type })) : undefined,
     };
+
+    // Build API attachments (base64 format the backend expects)
+    const apiAttachments = attachments.map(a => ({
+      name: a.name,
+      mimeType: a.type,
+      data: a.base64 || a.dataUrl?.split(',')[1] || '',
+    })).filter(a => a.data);
+
     setMessages(msgs => [...msgs, userMsg]);
     setInput('');
     setAttachments([]);
@@ -47,22 +69,38 @@ export function ChatStep(props: any) {
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+      const body: Record<string, unknown> = { messages: [...messages, userMsg] };
+      if (apiAttachments.length > 0) {
+        body.attachments = apiAttachments;
+      }
       const response = await fetch('/api/v1/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ messages: [...messages, userMsg] }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) throw new Error(`API error ${response.status}`);
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No reader');
       const decoder = new TextDecoder();
       let content = '';
+      let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        content += chunk;
-        setMessages(msgs => msgs.map(m => m.id === assistantId ? { ...m, content } : m));
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            if (event.type === 'content') {
+              content += event.text;
+              setMessages(msgs => msgs.map(m => m.id === assistantId ? { ...m, content } : m));
+            }
+            // status, tool_call, tool_result events are handled silently for now
+          } catch { /* skip malformed lines */ }
+        }
       }
     } catch (err) {
       setMessages(msgs => msgs.map(m => m.id === assistantId ? { ...m, content: 'Error: ' + (err as Error).message } : m));
@@ -71,8 +109,17 @@ export function ChatStep(props: any) {
     }
   };
 
-  const handleRate = (messageId: string, score: number) => {
-    // TODO: POST rating to backend
+  const handleRate = async (messageId: string, score: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/v1/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message_id: messageId, score, consent: true }),
+      });
+    } catch (err) {
+      console.error('Rating failed:', err);
+    }
   };
 
   return (
@@ -164,7 +211,7 @@ export function ChatStep(props: any) {
                 />
               </div>
               <button type="button" className="p-3 text-on-surface-variant hover:text-primary transition-colors active:scale-90 rounded-full" title="Voice input">
-                <VoiceRecorder onAttachment={() => {}} />
+                <VoiceRecorder onAttachment={(att) => setAttachments(prev => [...prev, att])} />
               </button>
               <button type="submit" disabled={isLoading || (!input.trim() && attachments.length === 0)} className="bg-primary text-on-primary p-4 rounded-full shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all active:scale-95 flex items-center justify-center">
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>

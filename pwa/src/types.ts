@@ -20,6 +20,7 @@ export interface Attachment {
   name: string;
   type: string;
   dataUrl?: string; // base64 data URL for images/audio
+  base64?: string;  // raw base64 (no prefix) — used for API sends
   text?: string; // for text files
 }
 
