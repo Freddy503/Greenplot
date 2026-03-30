@@ -1,5 +1,3 @@
-import React from 'react';
-
 export function WelcomeStep(props: any) {
   const { onNext } = props;
 
