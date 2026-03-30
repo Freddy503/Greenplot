@@ -132,3 +132,36 @@ TOOL_HANDLERS = {
     "get_daily_briefing": get_daily_briefing,
     "list_recent_seeds": list_recent_seeds,
 }
+
+
+async def web_search(args: dict, user: User, db: Session) -> str:
+    """Search the web using Exa API."""
+    import httpx
+    query = args["query"]
+    num_results = args.get("num_results", 3)
+    exa_key = getattr(settings, 'EXA_API_KEY', None)
+    if not exa_key:
+        return json.dumps({"status": "error", "message": "Web search not configured. Add EXA_API_KEY to environment."})
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                "https://api.exa.ai/search",
+                headers={"x-api-key": exa_key, "Content-Type": "application/json"},
+                json={"query": query, "numResults": num_results, "type": "auto"},
+                timeout=15.0
+            )
+            data = res.json()
+            results = []
+            for r in data.get("results", [])[:num_results]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "snippet": r.get("text", "")[:300] if r.get("text") else r.get("highlights", [""])[0],
+                })
+            return json.dumps({"status": "ok", "results": results, "query": query})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+# Update the dispatch map
+TOOL_HANDLERS["web_search"] = web_search
