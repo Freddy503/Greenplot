@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -11,6 +11,16 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Seedify — The Living Laboratory",
   description: "Your AI-powered second brain",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Seedify",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#01120b",
 };
 
 export default function RootLayout({
@@ -25,6 +35,9 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
         />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className="min-h-screen bg-[#01120b] text-[#e4fcf0] font-[family-name:var(--font-jakarta)]">
         {children}
