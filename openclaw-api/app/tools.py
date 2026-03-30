@@ -83,3 +83,27 @@ TOOLS = [
         }
     },
 ]
+
+# Add web_search after the existing TOOLS list
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": "Search the web for current information. Use when the user asks about recent events, news, or topics outside the knowledge base.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query to find relevant web results."
+                },
+                "num_results": {
+                    "type": "integer",
+                    "description": "Number of results to return (default 3).",
+                    "default": 3
+                }
+            },
+            "required": ["query"]
+        }
+    }
+})

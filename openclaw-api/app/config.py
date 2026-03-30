@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
     BFL_API_KEY: Optional[str] = None
+    EXA_API_KEY: Optional[str] = None
 
     # Redis (for queue)
     REDIS_URL: str = "redis://redis:6379/0"
