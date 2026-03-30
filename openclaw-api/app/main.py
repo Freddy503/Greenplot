@@ -11,7 +11,8 @@ from app.models import Base, User, Thought, Seed, Usage
 from app.schemas import (
     RegisterRequest, LoginRequest, AuthResponse,
     ThoughtCreate, ThoughtResponse, SeedResponse, SeedSearchResponse,
-    SparkResponse, BriefingResponse, UsageResponse, HealthResponse, TenantsListResponse
+    SparkResponse, BriefingResponse, UsageResponse, HealthResponse, TenantsListResponse,
+    RatingRequest, RatingResponse
 )
 from app.auth import (
     get_password_hash, verify_password, create_access_token,
@@ -210,6 +211,38 @@ def get_monthly_usage(current_user: User = Depends(get_current_user), db: Sessio
         )
     return usage
 
+# --- Ratings ---
+
+@app.post("/api/v1/ratings", response_model=RatingResponse)
+def submit_rating(
+    req: RatingRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from app.models import Rating
+    # Upsert: update if exists, create if not
+    existing = db.query(Rating).filter(
+        Rating.tenant_id == current_user.tenant_id,
+        Rating.message_id == req.message_id
+    ).first()
+    if existing:
+        existing.score = req.score
+        existing.consent = req.consent
+        db.commit()
+        db.refresh(existing)
+        return existing
+    rating = Rating(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        message_id=req.message_id,
+        score=req.score,
+        consent=req.consent,
+    )
+    db.add(rating)
+    db.commit()
+    db.refresh(rating)
+    return rating
+
 # --- Admin (protected by is_admin check; for MVP we'll skip and use direct DB)
 
 @app.get("/api/v1/admin/health")
@@ -284,7 +317,7 @@ def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
     return content_parts
 
 
-# --- Chat (Vercel AI SDK compatible: text stream) ---
+# --- Chat (NDJSON streaming with structured events) ---
 
 @app.post("/api/v1/chat")
 async def chat_endpoint(
@@ -304,7 +337,6 @@ async def chat_endpoint(
         role = msg.get("role")
         text_content = extract_text(msg)
 
-        # If this is the last user message and we have attachments, use multimodal format
         is_last_user = (role == "user" and i == len(messages) - 1) or (
             role == "user" and all(m.get("role") != "user" for m in messages[i+1:])
         )
@@ -326,12 +358,22 @@ async def chat_endpoint(
         "messages": openai_messages,
         "stream": True,
     }
-    async with httpx.AsyncClient() as client:
-        async with client.stream("POST", "https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60.0) as resp:
-            if resp.status_code != 200:
-                error_text = await resp.aread()
-                raise HTTPException(status_code=resp.status_code, detail=f"OpenRouter error: {error_text.decode()}")
-            async def generate():
+
+    async def generate():
+        import asyncio
+        # Emit initial status
+        yield json.dumps({"type": "status", "text": "Thinking…"}) + "\n"
+        await asyncio.sleep(0)  # yield to event loop
+
+        async with httpx.AsyncClient() as client:
+            async with client.stream("POST", "https://openrouter.ai/api/v1/chat/completions",
+                                     headers=headers, json=payload, timeout=60.0) as resp:
+                if resp.status_code != 200:
+                    error_text = await resp.aread()
+                    yield json.dumps({"type": "error", "text": f"OpenRouter error: {error_text.decode()}"}) + "\n"
+                    return
+
+                got_content = False
                 async for line in resp.aiter_lines():
                     if line.startswith("data: "):
                         data = line[6:].strip()
@@ -341,10 +383,16 @@ async def chat_endpoint(
                             chunk = json.loads(data)
                             delta = chunk["choices"][0]["delta"].get("content", "")
                             if delta:
-                                yield delta
+                                if not got_content:
+                                    yield json.dumps({"type": "status", "text": ""}) + "\n"  # clear status
+                                    got_content = True
+                                yield json.dumps({"type": "content", "text": delta}) + "\n"
                         except Exception:
                             continue
-            return StreamingResponse(generate(), media_type="text/plain")
+
+        yield json.dumps({"type": "done"}) + "\n"
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 # --- Heartbeat (multi-modal ingestion coordination) ---
 

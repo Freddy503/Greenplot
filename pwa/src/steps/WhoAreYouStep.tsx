@@ -6,8 +6,6 @@ export function WhoAreYouStep(props: any) {
   const [city, setCity] = useState('');
 
   // rest unchanged, just replace onNext calls with onNext({ nickname, city })
-  const [nickname, setNickname] = useState('');
-  const [city, setCity] = useState('');
 
   return (
     <main className="flex-grow flex flex-col items-center justify-center px-6 py-12 relative">

@@ -14,8 +14,24 @@ export function MessageBubble({ message, onRating }: MessageBubbleProps) {
         <div className="whitespace-pre-wrap">{message.content}</div>
         {message.toolStatus && (
           <div className="text-xs mt-2 opacity-70 flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+            <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
             {message.toolStatus}
+          </div>
+        )}
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {message.toolCalls.map((tc) => (
+              <div key={tc.id} className="text-xs bg-surface-dim/20 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className={`material-symbols-outlined text-sm ${
+                  tc.status === 'done' ? 'text-green-400' :
+                  tc.status === 'error' ? 'text-red-400' : 'text-yellow-400 animate-spin'
+                }`}>
+                  {tc.status === 'done' ? 'check_circle' : tc.status === 'error' ? 'error' : 'progress_activity'}
+                </span>
+                <span className="font-medium">{tc.name}</span>
+                {tc.result && <span className="opacity-60 truncate">{tc.result}</span>}
+              </div>
+            ))}
           </div>
         )}
         {message.attachments && message.attachments.length > 0 && (
@@ -28,9 +44,15 @@ export function MessageBubble({ message, onRating }: MessageBubbleProps) {
             ))}
           </div>
         )}
-        {!isUser && onRating && message.id && (
+        {!isUser && !message.ratingSubmitted && onRating && message.id && (
           <div className="mt-3 border-t border-outline-variant/20 pt-2">
             <RatingStars onRate={(r) => onRating(message.id, r)} />
+          </div>
+        )}
+        {!isUser && message.ratingSubmitted && (
+          <div className="mt-2 text-xs opacity-50 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm">thumb_up</span>
+            Thanks for the feedback
           </div>
         )}
       </div>
