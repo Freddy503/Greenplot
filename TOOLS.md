@@ -1,6 +1,16 @@
 # TOOLS.md - Local Notes
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+## Git Config
+- **Always use Freddy's identity for commits:**
+  - `git config user.name` → `Freddy503`
+  - `git config user.email` → `Freddy503@users.noreply.github.com`
+  - Command: `git -c user.name="Freddy503" -c user.email="Freddy503@users.noreply.github.com" commit -m "..."`
+  - Vercel Hobby blocks commits from unrecognized authors
+
+## Vercel
+- **NEXT_PUBLIC_ env vars are baked at build time** — must be set before deploy
+- Frontend is HTTPS → backend calls must go through Next.js API proxy (mixed content blocks HTTP from HTTPS)
+- Site: `seedify-six.vercel.app`
 
 ## What Goes Here
 
