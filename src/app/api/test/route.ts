@@ -3,28 +3,18 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   const results: Record<string, unknown> = {}
   
-  // Test 1: External URL
+  // Test: Cloudflare tunnel register endpoint
   try {
-    const res = await fetch('https://httpbin.org/get', { signal: AbortSignal.timeout(10000) })
-    results.httpbin = { ok: true, status: res.status }
+    const res = await fetch('https://atomic-probability-ago-mistress.trycloudflare.com/api/v1/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'vercel-test@test.com', password: 'test123' }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const data = await res.json()
+    results.tunnel_register = { ok: true, status: res.status, has_token: !!data.access_token }
   } catch (err) {
-    results.httpbin = { ok: false, error: (err as Error).message }
-  }
-
-  // Test 2: Cloudflare tunnel
-  try {
-    const res = await fetch('https://atomic-probability-ago-mistress.trycloudflare.com/', { signal: AbortSignal.timeout(10000) })
-    results.cloudflare_tunnel = { ok: true, status: res.status }
-  } catch (err) {
-    results.cloudflare_tunnel = { ok: false, error: (err as Error).message }
-  }
-
-  // Test 3: Direct HTTP
-  try {
-    const res = await fetch('http://178.104.67.139:8001/', { signal: AbortSignal.timeout(10000) })
-    results.direct_http = { ok: true, status: res.status }
-  } catch (err) {
-    results.direct_http = { ok: false, error: (err as Error).message }
+    results.tunnel_register = { ok: false, error: (err as Error).message }
   }
 
   return NextResponse.json(results)
