@@ -5,6 +5,8 @@ import { MessageBubble } from './MessageBubble';
 import { VoiceRecorder } from './VoiceRecorder';
 import { LoginScreen } from './LoginScreen';
 import { RegisterScreen } from './RegisterScreen';
+import { enqueue, flush, count } from '../services/offlineQueue';
+import { getSettings, saveSettings, ProcessingSettings } from '../services/processingSettings';
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -13,8 +15,45 @@ export function ChatInterface() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token') || null);
   const [showRegister, setShowRegister] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showSettings, setShowSettings] = useState(false);
+  const [processingSettings, setProcessingSettings] = useState<ProcessingSettings>(getSettings());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Online/offline detection + queue flush
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      const result = await flush(async (item) => {
+        // Re-send queued messages
+        try {
+          const headers: HeadersInit = { 'Content-Type': 'application/json' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const res = await fetch(`${API_BASE}/api/v1/chat`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ messages: item.messages, attachments: item.attachments }),
+          });
+          return res.ok;
+        } catch { return false; }
+      });
+      setPendingCount(await count());
+      if (result.sent > 0) {
+        console.log(`Flushed ${result.sent} queued messages`);
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    // Initial count
+    count().then(setPendingCount);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [token]);
 
   useEffect(() => {
     if (token) {
@@ -64,6 +103,20 @@ export function ChatInterface() {
     setIsLoading(true);
 
     const assistantId = crypto.randomUUID();
+
+    // Offline: queue message instead of sending
+    if (!navigator.onLine) {
+      await enqueue({ messages: [...messages, userMsg], attachments });
+      setPendingCount(await count());
+      setMessages((msgs) => [...msgs, {
+        id: assistantId,
+        role: 'assistant',
+        content: '📭 Queued — will send when back online.',
+      }]);
+      setIsLoading(false);
+      return;
+    }
+
     setMessages((msgs) => [...msgs, { id: assistantId, role: 'assistant', content: '', toolStatus: 'Connecting…' }]);
 
     try {
@@ -207,14 +260,55 @@ export function ChatInterface() {
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-primary">psychology</span>
           <h1 className="font-headline font-bold text-lg">Second Brain</h1>
+          {!isOnline && (
+            <span className="text-[10px] bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full font-medium">
+              Offline{pendingCount > 0 ? ` · ${pendingCount} queued` : ''}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-label text-on-surface-variant">Step 1/7 • Initialization</span>
+          <button onClick={() => setShowSettings(!showSettings)} className="p-1.5 rounded-full hover:bg-surface-dim/20" title="Settings">
+            <span className="material-symbols-outlined text-lg text-on-surface-variant">tune</span>
+          </button>
           <button onClick={handleLogout} className="text-xs text-primary" title="Log out">
             Log out
           </button>
         </div>
       </header>
+
+      {showSettings && (
+        <div className="px-4 py-3 border-b border-outline-variant/20 bg-surface-container space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Local transcription (Privacy mode)</p>
+              <p className="text-xs text-on-surface-variant">Transcribe voice in-browser — audio never leaves your device</p>
+            </div>
+            <button
+              onClick={() => {
+                const next = { ...processingSettings, localTranscription: !processingSettings.localTranscription };
+                setProcessingSettings(next);
+                saveSettings(next);
+              }}
+              className={`w-10 h-6 rounded-full transition-colors ${processingSettings.localTranscription ? 'bg-primary' : 'bg-surface-dim'}`}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform mx-1 ${processingSettings.localTranscription ? 'translate-x-4' : ''}`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Local embeddings</p>
+              <p className="text-xs text-on-surface-variant">Compute vectors locally via gte-small (coming soon)</p>
+            </div>
+            <button
+              disabled
+              className="w-10 h-6 rounded-full bg-surface-dim opacity-40"
+              title="Coming soon"
+            >
+              <div className="w-4 h-4 rounded-full bg-white shadow mx-1" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
