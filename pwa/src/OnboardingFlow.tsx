@@ -43,7 +43,7 @@ export function OnboardingFlow({ onLogout }: OnboardingFlowProps) {
       {stepName === 'welcome' && <WelcomeStep onNext={goToNext} />}
       {stepName === 'who' && <WhoAreYouStep onNext={goToNext} />}
       {stepName === 'interests' && <WhatInterestsStep onNext={goToNext} />}
-      {stepName === 'coretech' && <CoreTechStep />}
+      {stepName === 'coretech' && <CoreTechStep onNext={goToNext} />}
       {stepName === 'nurture' && <NurtureFocusStep onNext={goToNext} />}
       {stepName === 'privacy' && <PrivacyConsentStep onNext={goToNext} />}
       {stepName === 'chat' && <ChatStep onLogout={onLogout} />}
