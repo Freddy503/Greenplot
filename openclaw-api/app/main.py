@@ -475,7 +475,7 @@ async def chat_endpoint(
                             yield json.dumps({
                                 "type": "tool_result",
                                 "id": tool_id,
-                                "result": result[:500]
+                                "result": result[:8000]
                             }) + "\n"
 
                             # Add tool result to messages

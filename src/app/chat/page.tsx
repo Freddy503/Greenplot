@@ -273,9 +273,9 @@ export default function ChatPage() {
                           <span className="font-medium" style={{ color: 'var(--on-surface)' }}>
                             {tool.name.replace(/_/g, ' ')}
                           </span>
-                          {tool.input?.query && (
+                          {String((tool.input as Record<string, unknown>)?.query ?? '') && (
                             <span className="ml-2" style={{ color: 'var(--on-surface-variant)' }}>
-                              "{String(tool.input.query)}"
+                              "{String((tool.input as Record<string, unknown>).query)}"
                             </span>
                           )}
                         </div>
