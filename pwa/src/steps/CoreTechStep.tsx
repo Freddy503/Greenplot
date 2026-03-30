@@ -1,4 +1,4 @@
-export function CoreTechStep() {
+export function CoreTechStep({ onNext }: { onNext: () => void }) {
   return (
     <main className="pt-24 px-6 md:px-12 max-w-7xl mx-auto w-full">
       {/* Hero Section */}
@@ -164,7 +164,7 @@ export function CoreTechStep() {
         <div className="flex-1 z-10">
           <h2 className="text-4xl font-headline font-extrabold mb-4 tracking-tight">Ready to plant your first seed?</h2>
           <p className="text-lg opacity-90 mb-8 font-body">The Arboretum grows stronger with every thought you contribute. Start nurturing your second brain today.</p>
-          <button className="bg-on-primary text-primary px-10 py-4 rounded-full font-headline font-bold text-lg hover:scale-105 transition-transform active:scale-95">
+          <button onClick={onNext} className="bg-on-primary text-primary px-10 py-4 rounded-full font-headline font-bold text-lg hover:scale-105 transition-transform active:scale-95">
             Enter the Garden
           </button>
         </div>

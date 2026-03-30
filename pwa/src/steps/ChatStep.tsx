@@ -237,7 +237,7 @@ export function ChatStep(props: any) {
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>chat_bubble</span>
           <span className="font-body text-[10px] font-bold uppercase tracking-wider mt-1">Chat</span>
         </a>
-        <a className="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary transition-all" href="#">
+        <a className="flex flex-col items-center justify-center text-on-surface-variant/30 rounded-full px-6 py-2 cursor-default" title="Coming soon">
           <span className="material-symbols-outlined">local_florist</span>
           <span className="font-body text-[10px] font-bold uppercase tracking-wider mt-1">Garden</span>
         </a>
