@@ -57,6 +57,22 @@ class BriefingResponse(BaseModel):
     text: str
     image_url: Optional[str] = None
 
+# Rating
+class RatingRequest(BaseModel):
+    message_id: str = Field(..., min_length=1)
+    score: int = Field(..., ge=1, le=5)
+    consent: bool = False
+
+class RatingResponse(BaseModel):
+    id: UUID
+    message_id: str
+    score: int
+    consent: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # Usage
 class UsageResponse(BaseModel):
     llm_tokens: int

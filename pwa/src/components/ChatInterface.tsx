@@ -1,6 +1,6 @@
 import { API_BASE } from '../config';
 import { useState, useRef, useEffect } from 'react';
-import { Message, Attachment } from '../types';
+import { Message, Attachment, StreamEvent, ToolCall } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { VoiceRecorder } from './VoiceRecorder';
 import { LoginScreen } from './LoginScreen';
@@ -26,6 +26,29 @@ export function ChatInterface() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleRating = async (messageId: string, rating: { score: number; consent: boolean }) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/ratings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message_id: messageId,
+          score: rating.score,
+          consent: rating.consent,
+        }),
+      });
+      if (res.ok) {
+        setMessages((msgs) => msgs.map(m => m.id === messageId ? { ...m, ratingSubmitted: true } : m));
+      }
+    } catch (err) {
+      console.error('Rating failed:', err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && attachments.length === 0) return;
@@ -41,14 +64,14 @@ export function ChatInterface() {
     setIsLoading(true);
 
     const assistantId = crypto.randomUUID();
-    setMessages((msgs) => [...msgs, { id: assistantId, role: 'assistant', content: '', toolStatus: 'Thinking…' }]);
+    setMessages((msgs) => [...msgs, { id: assistantId, role: 'assistant', content: '', toolStatus: 'Connecting…' }]);
 
     try {
       const headers: HeadersInit = { 'Content-Type': 'application/json' };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch(`${API_BASE}/api/v1/spark`, {
+      const response = await fetch(`${API_BASE}/api/v1/chat`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ messages: [...messages, userMsg], attachments }),
@@ -67,13 +90,74 @@ export function ChatInterface() {
       if (!reader) throw new Error('No reader');
 
       const decoder = new TextDecoder();
-      let content = '';
+      let buffer = '';
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        content += chunk;
-        setMessages((msgs) => msgs.map(m => m.id === assistantId ? { ...m, content, toolStatus: undefined } : m));
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete NDJSON lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event: StreamEvent = JSON.parse(line);
+            switch (event.type) {
+              case 'status':
+                setMessages((msgs) => msgs.map(m => m.id === assistantId
+                  ? { ...m, toolStatus: event.text || undefined } : m));
+                break;
+              case 'content':
+                setMessages((msgs) => msgs.map(m => m.id === assistantId
+                  ? { ...m, content: m.content + event.text, toolStatus: undefined } : m));
+                break;
+              case 'tool_call':
+                setMessages((msgs) => msgs.map(m => {
+                  if (m.id !== assistantId) return m;
+                  const existing = m.toolCalls || [];
+                  const idx = existing.findIndex(tc => tc.id === event.id);
+                  if (idx >= 0) {
+                    const updated = [...existing];
+                    updated[idx] = { ...updated[idx], name: event.name, input: event.input, status: 'running' };
+                    return { ...m, toolCalls: updated };
+                  }
+                  return { ...m, toolCalls: [...existing, { id: event.id, name: event.name, input: event.input, status: 'running' }] };
+                }));
+                break;
+              case 'tool_result':
+                setMessages((msgs) => msgs.map(m => {
+                  if (m.id !== assistantId) return m;
+                  const updated = (m.toolCalls || []).map(tc =>
+                    tc.id === event.id ? { ...tc, status: 'done' as const, result: event.result } : tc
+                  );
+                  return { ...m, toolCalls: updated };
+                }));
+                break;
+              case 'tool_error':
+                setMessages((msgs) => msgs.map(m => {
+                  if (m.id !== assistantId) return m;
+                  const updated = (m.toolCalls || []).map(tc =>
+                    tc.id === event.id ? { ...tc, status: 'error' as const, result: event.error } : tc
+                  );
+                  return { ...m, toolCalls: updated };
+                }));
+                break;
+              case 'error':
+                setMessages((msgs) => msgs.map(m => m.id === assistantId
+                  ? { ...m, content: `Error: ${event.text}`, toolStatus: undefined } : m));
+                break;
+              case 'done':
+                setMessages((msgs) => msgs.map(m => m.id === assistantId
+                  ? { ...m, toolStatus: undefined } : m));
+                break;
+            }
+          } catch {
+            // skip malformed lines
+          }
+        }
       }
     } catch (err) {
       setMessages((msgs) => msgs.map(m => m.id === assistantId ? { ...m, content: 'Error: ' + (err as Error).message, toolStatus: undefined } : m));
@@ -134,7 +218,7 @@ export function ChatInterface() {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} onRating={handleRating} />
         ))}
         <div ref={bottomRef} />
       </div>

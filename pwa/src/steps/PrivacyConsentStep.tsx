@@ -4,7 +4,6 @@ export function PrivacyConsentStep(props: any) {
   const { onNext } = props;
   const [consent, setConsent] = useState(false);
   // rest unchanged
-  const [consent, setConsent] = useState(false);
 
   return (
     <main className="flex-grow flex flex-col items-center justify-center px-8 py-12 max-w-2xl mx-auto w-full relative">

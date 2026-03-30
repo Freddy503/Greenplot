@@ -56,6 +56,22 @@ class Seed(Base):
         Index('idx_seed_tenant_created', tenant_id, created_at.desc()),
     )
 
+class Rating(Base):
+    __tablename__ = 'ratings'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    message_id = Column(String, nullable=False, index=True)  # client-side message UUID
+    score = Column(Integer, nullable=False)  # 1-5
+    consent = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'message_id', name='uq_rating_tenant_message'),
+        Index('idx_rating_tenant_created', tenant_id, created_at.desc()),
+    )
+
+
 class Usage(Base):
     __tablename__ = 'usage'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

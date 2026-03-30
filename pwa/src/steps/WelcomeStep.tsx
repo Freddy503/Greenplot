@@ -5,9 +5,6 @@ export function WelcomeStep(props: any) {
 
   return (
     <main className="flex-1 relative flex flex-col items-center justify-center px-6 pt-12 pb-24 overflow-hidden">
-      {/* ... rest unchanged ... */}
-  return (
-    <main className="flex-1 relative flex flex-col items-center justify-center px-6 pt-12 pb-24 overflow-hidden">
       {/* Abstract Background Elements */}
       <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-primary-container/10 blur-[120px] rounded-full" />
       <div className="absolute bottom-[-5%] left-[-5%] w-[40%] h-[40%] bg-secondary/5 blur-[100px] rounded-full" />

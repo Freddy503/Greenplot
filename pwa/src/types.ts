@@ -5,12 +5,15 @@ export interface Message {
   toolCalls?: ToolCall[];
   toolStatus?: string;
   attachments?: Attachment[];
+  ratingSubmitted?: boolean;
 }
 
 export interface ToolCall {
   id: string;
   name: string;
   input?: Record<string, any>;
+  status?: 'running' | 'done' | 'error';
+  result?: string;
 }
 
 export interface Attachment {
@@ -24,3 +27,13 @@ export interface Rating {
   score: number; // 1-5
   consent: boolean; // allow use for improvement
 }
+
+// NDJSON stream event types
+export type StreamEvent =
+  | { type: 'status'; text: string }
+  | { type: 'content'; text: string }
+  | { type: 'tool_call'; id: string; name: string; input?: Record<string, any> }
+  | { type: 'tool_result'; id: string; result: string }
+  | { type: 'tool_error'; id: string; error: string }
+  | { type: 'error'; text: string }
+  | { type: 'done' };
