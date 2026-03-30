@@ -4,6 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import os
+import base64
+import mimetypes
 from app.database import engine, get_db
 from app.models import Base, User, Thought, Seed, Usage
 from app.schemas import (
@@ -38,7 +40,7 @@ app = FastAPI(title="OpenClaw API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: restrict in prod
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -240,6 +242,48 @@ def admin_list_tenants(db: Session = Depends(get_db)):
     info = [TenantsListResponse.TenantInfo(id=t.id, email=t.email, created_at=t.created_at, subscription_status=t.subscription_status) for t in tenants]
     return TenantsListResponse(tenants=info, total=len(info))
 
+# --- Attachments helper ---
+
+def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
+    """Convert base64 attachments to OpenRouter-compatible content parts."""
+    image_types = settings.ALLOWED_IMAGE_TYPES.split(",")
+    content_parts = []
+    for att in attachments:
+        b64 = att.get("data") or att.get("base64")
+        filename = att.get("name", "attachment")
+        mime = att.get("mimeType") or att.get("type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        if not b64:
+            continue
+        # Validate size
+        size_bytes = len(base64.b64decode(b64))
+        if size_bytes > max_size_mb * 1024 * 1024:
+            content_parts.append({
+                "type": "text",
+                "text": f"[Skipped {filename}: exceeds {max_size_mb}MB limit]"
+            })
+            continue
+        if mime in image_types:
+            data_url = f"data:{mime};base64,{b64}"
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": data_url}
+            })
+        else:
+            # Text-based: decode and include as text
+            try:
+                text = base64.b64decode(b64).decode("utf-8", errors="replace")
+                content_parts.append({
+                    "type": "text",
+                    "text": f"[File: {filename}]\n{text[:5000]}"
+                })
+            except Exception:
+                content_parts.append({
+                    "type": "text",
+                    "text": f"[File: {filename} ({mime}) - binary, not displayable]"
+                })
+    return content_parts
+
+
 # --- Chat (Vercel AI SDK compatible: text stream) ---
 
 @app.post("/api/v1/chat")
@@ -250,17 +294,26 @@ async def chat_endpoint(
     body = await request.json()
     messages = body.get("messages", [])
     attachments = body.get("attachments", [])
+
+    # Process attachments once (apply to last user message)
+    attachment_parts = process_attachments(attachments, settings.MAX_ATTACHMENT_SIZE_MB) if attachments else []
+
     # Build OpenAI-compatible messages
     openai_messages = []
-    for msg in messages:
+    for i, msg in enumerate(messages):
         role = msg.get("role")
-        content = extract_text(msg)
-        # For attachments, in MVP we just add placeholder note
-        # Later: convert images to data URLs and include as image_url parts
-        if attachments and role == "user":
-            # naive: note there were attachments
-            content += f"\n[Attachments: {len(attachments)} file(s)]"
-        openai_messages.append({"role": role, "content": content})
+        text_content = extract_text(msg)
+
+        # If this is the last user message and we have attachments, use multimodal format
+        is_last_user = (role == "user" and i == len(messages) - 1) or (
+            role == "user" and all(m.get("role") != "user" for m in messages[i+1:])
+        )
+
+        if is_last_user and attachment_parts:
+            content = [{"type": "text", "text": text_content}] + attachment_parts
+            openai_messages.append({"role": role, "content": content})
+        else:
+            openai_messages.append({"role": role, "content": text_content})
 
     headers = {
         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
@@ -293,7 +346,51 @@ async def chat_endpoint(
                             continue
             return StreamingResponse(generate(), media_type="text/plain")
 
-# Root endpoint
-@app.get("/")
-def root():
-    return {"message": "OpenClaw API", "docs": "/docs"}
+# --- Heartbeat (multi-modal ingestion coordination) ---
+
+@app.post("/api/v1/heartbeat")
+async def heartbeat(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Internal heartbeat endpoint for coordinating multi-modal ingestion.
+    Accepts text, voice (audio base64), and image data for processing.
+    """
+    body = await request.json() if await request.body() else {}
+    mode = body.get("mode", "poll")  # poll | ingest
+    attachments = body.get("attachments", [])
+
+    result = {
+        "status": "ok",
+        "mode": mode,
+        "tenant_id": str(current_user.tenant_id),
+        "processed": [],
+    }
+
+    if mode == "ingest" and attachments:
+        for att in attachments:
+            att_type = att.get("type", "unknown")
+            att_name = att.get("name", "unnamed")
+            mime = att.get("mimeType", "")
+
+            if att_type == "image" or mime.startswith("image/"):
+                result["processed"].append({"name": att_name, "type": "image", "status": "queued"})
+            elif att_type == "audio" or mime.startswith("audio/"):
+                result["processed"].append({"name": att_name, "type": "audio", "status": "queued"})
+            elif att_type == "text" or mime.startswith("text/"):
+                result["processed"].append({"name": att_name, "type": "text", "status": "queued"})
+            else:
+                result["processed"].append({"name": att_name, "type": att_type, "status": "unsupported"})
+
+    # Pipeline status (to be expanded)
+    result["pipeline"] = {
+        "text_ingestion": "active",
+        "voice_ingestion": "stub",
+        "image_ingestion": "stub",
+        "garden_pipeline": "linked",
+    }
+    return result
+
+
+
