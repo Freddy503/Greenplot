@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 
+const BACKEND = 'https://atomic-probability-ago-mistress.trycloudflare.com'
+
 export async function POST(req: Request) {
-  const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://atomic-probability-ago-mistress.trycloudflare.com'
   const body = await req.json()
   const authHeader = req.headers.get('authorization') || ''
 
   try {
-    const res = await fetch(`${apiUrl}/api/v1/thoughts`, {
+    const res = await fetch(`${BACKEND}/api/v1/thoughts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     return NextResponse.json(data, { status: res.status })
   } catch (err) {
     return NextResponse.json(
-      { detail: `Cannot reach backend: ${(err as Error).message}` },
+      { detail: `Backend unreachable: ${(err as Error).message}` },
       { status: 502 }
     )
   }
