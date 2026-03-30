@@ -55,6 +55,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - FRONTEND_URL=https://seedify-six.vercel.app,https://atomic-probability-ago-mistress.trycloudflare.com
       - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
+      - NVIDIA_API_KEY=<NVIDIA_API_KEY>
       - CORS_ORIGINS=https://seedify-six.vercel.app,https://atomic-probability-ago-mistress.trycloudflare.com,http://localhost:3000,http://localhost:5173
     volumes:
       - .:/app
