@@ -7,7 +7,7 @@ export const maxDuration = 30
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
-  const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://178.104.67.139:8001'
+  const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://atomic-probability-ago-mistress.trycloudflare.com'
 
   // Forward auth token from frontend
   const authHeader = req.headers.get('authorization') || ''
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
         writer.write({
           type: 'text-delta',
           id: textId,
-          delta: `Cannot reach backend. Check NEXT_PUBLIC_API_URL in Vercel settings (should be http://178.104.67.139:8001).`,
+          delta: `Cannot reach backend. Check NEXT_PUBLIC_API_URL in Vercel settings (should be https://atomic-probability-ago-mistress.trycloudflare.com).`,
         })
         writer.write({ type: 'text-end', id: textId })
       }
