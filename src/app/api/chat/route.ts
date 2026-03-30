@@ -7,7 +7,7 @@ export const maxDuration = 30
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+  const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://178.104.67.139:8001'
 
   // Forward auth token from frontend
   const authHeader = req.headers.get('authorization') || ''

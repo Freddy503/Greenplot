@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+  const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://178.104.67.139:8001'
   const body = await req.json()
   const authHeader = req.headers.get('authorization') || ''
 
