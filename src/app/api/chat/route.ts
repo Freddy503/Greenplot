@@ -3,7 +3,7 @@ import {
   createUIMessageStreamResponse,
 } from 'ai'
 
-export const maxDuration = 30
+export const maxDuration = 60
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
         writer.write({
           type: 'text-delta',
           id: textId,
-          delta: `Cannot reach backend. Check that the Cloudflare tunnel is running.`,
+          delta: `Cannot reach backend. The Cloudflare tunnel may be down.`,
         })
         writer.write({ type: 'text-end', id: textId })
       }
