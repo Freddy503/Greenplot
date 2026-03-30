@@ -1,12 +1,18 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
-import { useChat } from '@/hooks/useChat'
+import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
+import { useRef, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function ChatPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, stop } = useChat()
+  const { messages, sendMessage, status, stop } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+    }),
+  })
+  const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -19,6 +25,13 @@ export default function ChatPage() {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || status !== 'ready') return
+    sendMessage({ text: input })
+    setInput('')
   }
 
   return (
@@ -34,15 +47,13 @@ export default function ChatPage() {
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#69f6b8] font-bold">The Living Laboratory</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleLogout}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#09241b] transition-all active:scale-95"
-            title="Log out"
-          >
-            <span className="material-symbols-outlined text-[#9ab0a5]">logout</span>
-          </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#09241b] transition-all active:scale-95"
+          title="Log out"
+        >
+          <span className="material-symbols-outlined text-[#9ab0a5]">logout</span>
+        </button>
       </header>
 
       {/* Messages */}
@@ -70,20 +81,51 @@ export default function ChatPage() {
                     : 'bg-[#69f6b8] text-[#005a3c] shadow-xl shadow-[#69f6b8]/10'
                 }`}
               >
-                <p className="text-base leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                {message.parts.map((part, index) => {
+                  switch (part.type) {
+                    case 'text':
+                      return (
+                        <p key={index} className="text-base leading-relaxed whitespace-pre-wrap">
+                          {part.text}
+                        </p>
+                      )
+
+                    default:
+                      // Tool call parts: tool-{name}
+                      if (part.type.startsWith('tool-')) {
+                        const toolName = part.type.replace('tool-', '')
+                        const toolPart = part as Record<string, unknown>
+                        return (
+                          <div key={index} className="mt-3 border-t border-[#005a3c]/10 pt-3">
+                            <ToolCallDisplay
+                              toolName={toolName}
+                              state={(toolPart.state as string) || 'unknown'}
+                              input={toolPart.input}
+                              output={toolPart.output}
+                              errorText={toolPart.errorText as string | undefined}
+                            />
+                          </div>
+                        )
+                      }
+                      return null
+                  }
+                })}
               </div>
-              <div className="flex items-center gap-3 pl-2">
-                <span className="material-symbols-outlined text-sm text-[#06b77f]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  science
-                </span>
-                <span className="text-[10px] uppercase tracking-wider text-[#9ab0a5]/60">
-                  {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
+
+              {message.role === 'assistant' && (
+                <div className="flex items-center gap-3 pl-2">
+                  <span className="material-symbols-outlined text-sm text-[#06b77f]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    science
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#9ab0a5]/60">
+                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
             </div>
           ))}
 
-          {isLoading && messages[messages.length - 1]?.content === '' && (
+          {status === 'submitted' && (
             <div className="flex items-center gap-3 px-6 py-3 bg-[#06b77f]/10 border border-[#06b77f]/20 rounded-full w-fit mx-auto animate-pulse">
               <span className="material-symbols-outlined text-[#06b77f] text-sm">local_florist</span>
               <span className="text-xs font-semibold text-[#06b77f] tracking-wide uppercase">Searching your garden…</span>
@@ -114,14 +156,14 @@ export default function ChatPage() {
               placeholder="Nurture a new idea..."
               rows={1}
               value={input}
-              onChange={handleInputChange}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   handleSubmit(e)
                 }
               }}
-              disabled={isLoading}
+              disabled={status !== 'ready'}
             />
 
             <button
@@ -132,7 +174,7 @@ export default function ChatPage() {
               <span className="material-symbols-outlined">mic_none</span>
             </button>
 
-            {isLoading ? (
+            {status === 'streaming' ? (
               <button
                 type="button"
                 onClick={stop}
@@ -143,7 +185,7 @@ export default function ChatPage() {
             ) : (
               <button
                 type="submit"
-                disabled={!input.trim()}
+                disabled={!input.trim() || status !== 'ready'}
                 className="bg-[#69f6b8] text-[#005a3c] p-4 rounded-full shadow-lg shadow-[#69f6b8]/20 hover:shadow-[#69f6b8]/40 transition-all active:scale-95 disabled:opacity-30"
               >
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
@@ -154,4 +196,64 @@ export default function ChatPage() {
       </div>
     </div>
   )
+}
+
+// Tool call display component
+function ToolCallDisplay({
+  toolName,
+  state,
+  input,
+  output,
+  errorText,
+}: {
+  toolName: string
+  state: string
+  input?: unknown
+  output?: unknown
+  errorText?: string
+}) {
+  const toolIcons: Record<string, string> = {
+    web_search: 'search',
+    search: 'search',
+    get_weather: 'cloud',
+    calculate: 'calculate',
+    execute: 'terminal',
+  }
+
+  const icon = toolIcons[toolName] || 'build'
+
+  if (state === 'input-streaming' || state === 'input-available') {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+        <span className="font-medium opacity-70">Using {toolName.replace(/_/g, ' ')}…</span>
+      </div>
+    )
+  }
+
+  if (state === 'output-available') {
+    const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2)
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+          <span className="font-medium opacity-70">{toolName.replace(/_/g, ' ')}</span>
+        </div>
+        <pre className="text-xs bg-[#005a3c]/20 rounded-lg px-3 py-2 overflow-x-auto max-h-40 whitespace-pre-wrap">
+          {outputStr.length > 500 ? outputStr.slice(0, 500) + '…' : outputStr}
+        </pre>
+      </div>
+    )
+  }
+
+  if (state === 'output-error') {
+    return (
+      <div className="flex items-center gap-2 text-xs text-[#ff716c]">
+        <span className="material-symbols-outlined text-sm">error</span>
+        <span>{errorText || `${toolName} failed`}</span>
+      </div>
+    )
+  }
+
+  return null
 }
