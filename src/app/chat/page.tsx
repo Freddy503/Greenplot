@@ -3,8 +3,6 @@
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useRef, useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
 
 export default function ChatPage() {
   const { messages, sendMessage, status, stop } = useChat({
@@ -14,18 +12,10 @@ export default function ChatPage() {
   })
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,13 +37,6 @@ export default function ChatPage() {
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#69f6b8] font-bold">The Living Laboratory</span>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#09241b] transition-all active:scale-95"
-          title="Log out"
-        >
-          <span className="material-symbols-outlined text-[#9ab0a5]">logout</span>
-        </button>
       </header>
 
       {/* Messages */}
