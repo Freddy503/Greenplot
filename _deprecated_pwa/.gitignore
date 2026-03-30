@@ -1,7 +1,0 @@
-# Ignore node modules
-node_modules/
-dist/
-.env
-*.log
-.vercel
-.env*.local
