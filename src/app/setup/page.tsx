@@ -9,8 +9,6 @@ export default function SetupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nickname.trim()) return
@@ -19,8 +17,8 @@ export default function SetupPage() {
     setError('')
 
     try {
-      // 1. Create user profile
-      const registerRes = await fetch(`${apiUrl}/api/v1/register`, {
+      // 1. Create user profile (via Next.js proxy — avoids mixed content)
+      const registerRes = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -41,8 +39,8 @@ export default function SetupPage() {
       localStorage.setItem('seedify_tenant', tenant_id)
       localStorage.setItem('seedify_nickname', nickname.trim())
 
-      // 3. Submit initial thought to seed the garden
-      await fetch(`${apiUrl}/api/v1/thoughts`, {
+      // 3. Seed the garden (non-critical)
+      fetch('/api/thoughts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -52,9 +50,7 @@ export default function SetupPage() {
           content: `Welcome! I'm ${nickname.trim()}. Let's start building my knowledge garden.`,
           source: 'onboarding',
         }),
-      }).catch(() => {
-        // Non-critical — garden seeding is best-effort
-      })
+      }).catch(() => {})
 
       // 4. Go to chat
       router.push('/chat')
