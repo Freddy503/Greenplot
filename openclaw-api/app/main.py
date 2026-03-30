@@ -317,16 +317,21 @@ def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
     return content_parts
 
 
-# --- Chat (NDJSON streaming with structured events) ---
+# --- Chat (NDJSON streaming with tool calling loop) ---
 
 @app.post("/api/v1/chat")
 async def chat_endpoint(
     request: Request,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
+    from app.tools import TOOLS
+    from app.tool_executor import TOOL_HANDLERS
+
     body = await request.json()
     messages = body.get("messages", [])
     attachments = body.get("attachments", [])
+    max_tool_rounds = 3  # prevent infinite loops
 
     # Process attachments once (apply to last user message)
     attachment_parts = process_attachments(attachments, settings.MAX_ATTACHMENT_SIZE_MB) if attachments else []
@@ -353,42 +358,140 @@ async def chat_endpoint(
         "HTTP-Referer": settings.APP_URL or "https://your-domain.com",
         "X-Title": settings.APP_NAME or "Second Brain",
     }
-    payload = {
-        "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
-        "messages": openai_messages,
-        "stream": True,
-    }
 
     async def generate():
+        nonlocal openai_messages
         import asyncio
-        # Emit initial status
         yield json.dumps({"type": "status", "text": "Thinking…"}) + "\n"
-        await asyncio.sleep(0)  # yield to event loop
+        await asyncio.sleep(0)
 
         async with httpx.AsyncClient() as client:
-            async with client.stream("POST", "https://openrouter.ai/api/v1/chat/completions",
-                                     headers=headers, json=payload, timeout=60.0) as resp:
-                if resp.status_code != 200:
-                    error_text = await resp.aread()
-                    yield json.dumps({"type": "error", "text": f"OpenRouter error: {error_text.decode()}"}) + "\n"
-                    return
+            for round_num in range(max_tool_rounds + 1):
+                is_final_round = round_num == max_tool_rounds
 
-                got_content = False
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        data = line[6:].strip()
-                        if data == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data)
-                            delta = chunk["choices"][0]["delta"].get("content", "")
-                            if delta:
-                                if not got_content:
-                                    yield json.dumps({"type": "status", "text": ""}) + "\n"  # clear status
-                                    got_content = True
-                                yield json.dumps({"type": "content", "text": delta}) + "\n"
-                        except Exception:
-                            continue
+                # Request: with tools (except final round, force content)
+                payload = {
+                    "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+                    "messages": openai_messages,
+                    "stream": True,
+                }
+                if not is_final_round and TOOLS:
+                    payload["tools"] = TOOLS
+
+                async with client.stream(
+                    "POST", "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers, json=payload, timeout=120.0
+                ) as resp:
+                    if resp.status_code != 200:
+                        error_text = await resp.aread()
+                        yield json.dumps({"type": "error", "text": f"API error: {error_text.decode()}"}) + "\n"
+                        return
+
+                    # Collect streaming response
+                    content_buffer = ""
+                    tool_calls_acc = {}  # index -> {id, name, arguments_str}
+                    finish_reason = None
+                    got_any = False
+
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:].strip()
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                choice = chunk["choices"][0]
+                                delta = choice.get("delta", {})
+                                finish_reason = choice.get("finish_reason") or finish_reason
+
+                                # Content chunk
+                                text = delta.get("content", "")
+                                if text:
+                                    if not got_any:
+                                        yield json.dumps({"type": "status", "text": ""}) + "\n"
+                                        got_any = True
+                                    content_buffer += text
+                                    yield json.dumps({"type": "content", "text": text}) + "\n"
+
+                                # Tool call chunks (streamed in pieces)
+                                for tc in delta.get("tool_calls", []) or []:
+                                    idx = tc["index"]
+                                    if idx not in tool_calls_acc:
+                                        tool_calls_acc[idx] = {"id": "", "name": "", "arguments": ""}
+                                    if tc.get("id"):
+                                        tool_calls_acc[idx]["id"] = tc["id"]
+                                    fn = tc.get("function", {})
+                                    if fn.get("name"):
+                                        tool_calls_acc[idx]["name"] = fn["name"]
+                                    if fn.get("arguments"):
+                                        tool_calls_acc[idx]["arguments"] += fn["arguments"]
+                            except Exception:
+                                continue
+
+                    # If we got tool_calls, execute them
+                    if tool_calls_acc and finish_reason == "tool_calls":
+                        # Add assistant message with tool_calls to history
+                        assistant_msg = {
+                            "role": "assistant",
+                            "content": content_buffer or None,
+                            "tool_calls": [
+                                {
+                                    "id": tc["id"],
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc["name"],
+                                        "arguments": tc["arguments"]
+                                    }
+                                }
+                                for tc in tool_calls_acc.values()
+                            ]
+                        }
+                        openai_messages.append(assistant_msg)
+
+                        # Execute each tool
+                        for tc in tool_calls_acc.values():
+                            tool_name = tc["name"]
+                            tool_id = tc["id"]
+                            yield json.dumps({
+                                "type": "tool_call",
+                                "id": tool_id,
+                                "name": tool_name,
+                                "input": tc["arguments"][:200]
+                            }) + "\n"
+
+                            try:
+                                args = json.loads(tc["arguments"])
+                            except json.JSONDecodeError:
+                                args = {}
+
+                            # Execute
+                            handler = TOOL_HANDLERS.get(tool_name)
+                            if handler:
+                                try:
+                                    result = await handler(args, current_user, db)
+                                except Exception as e:
+                                    result = json.dumps({"status": "error", "message": str(e)})
+                            else:
+                                result = json.dumps({"status": "error", "message": f"Unknown tool: {tool_name}"})
+
+                            yield json.dumps({
+                                "type": "tool_result",
+                                "id": tool_id,
+                                "result": result[:500]
+                            }) + "\n"
+
+                            # Add tool result to messages
+                            openai_messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "content": result
+                            })
+
+                        # Continue to next round
+                        continue
+                    else:
+                        # No tool calls — we're done
+                        break
 
         yield json.dumps({"type": "done"}) + "\n"
 
