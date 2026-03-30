@@ -161,11 +161,11 @@ Steps:
 - [x] Tool definitions: search_seeds, create_seed, get_daily_briefing, list_recent_seeds
 
 ### Sprint 2: Mobile Reliability & Client-Side AI (1 week)
-- [ ] Add Wake Lock to voice recording
-- [ ] Implement IndexedDB pending uploads queue
-- [ ] Integrate Xenova Whisper tiny for local transcription
+- [x] Add Wake Lock to voice recording
+- [x] Implement IndexedDB pending uploads queue
+- [x] Integrate Xenova Whisper tiny for local transcription
 - [ ] Integrate gte-small for local embeddings (optional)
-- [ ] Add setting for local vs server processing
+- [x] Add setting for local vs server processing
 - [ ] Test on iOS Safari (light/dark modes, background behavior)
 
 ### Sprint 3: Enrichment Pipeline (1 week)
