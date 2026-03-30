@@ -51,9 +51,61 @@ class Seed(Base):
 
     user = relationship("User", back_populates="seeds")
     thought = relationship("Thought", back_populates="seeds")
+    source_links = relationship("SeedLink", foreign_keys="SeedLink.source_seed_id", back_populates="source_seed")
+    target_links = relationship("SeedLink", foreign_keys="SeedLink.target_seed_id", back_populates="target_seed")
 
     __table_args__ = (
         Index('idx_seed_tenant_created', tenant_id, created_at.desc()),
+    )
+
+
+class SeedLink(Base):
+    """Backlinks between related seeds — auto-created by the enrichment pipeline."""
+    __tablename__ = 'seed_links'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_seed_id = Column(UUID(as_uuid=True), ForeignKey('seeds.id'), nullable=False)
+    target_seed_id = Column(UUID(as_uuid=True), ForeignKey('seeds.id'), nullable=False)
+    link_type = Column(String(32), nullable=False, default='similar')  # similar, builds_on, contradicts, related, part_of
+    confidence = Column(Integer, nullable=True)  # store as int (0-1000 for 0.000-1.000 precision)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    source_seed = relationship("Seed", foreign_keys=[source_seed_id], back_populates="source_links")
+    target_seed = relationship("Seed", foreign_keys=[target_seed_id], back_populates="target_links")
+
+    __table_args__ = (
+        UniqueConstraint('source_seed_id', 'target_seed_id', 'link_type', name='uq_link_source_target_type'),
+        Index('idx_link_source', source_seed_id),
+        Index('idx_link_target', target_seed_id),
+    )
+
+
+class Entity(Base):
+    """Extracted entities — people, projects, concepts, tools, etc."""
+    __tablename__ = 'entities'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    entity_type = Column(String(50), nullable=False)  # person, project, concept, tool, org, source
+    mention_count = Column(Integer, default=1)
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'name', 'entity_type', name='uq_entity_tenant_name_type'),
+        Index('idx_entity_tenant_type', tenant_id, entity_type),
+    )
+
+
+class SeedEntity(Base):
+    """Many-to-many join between seeds and entities."""
+    __tablename__ = 'seed_entities'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    seed_id = Column(UUID(as_uuid=True), ForeignKey('seeds.id'), nullable=False)
+    entity_id = Column(UUID(as_uuid=True), ForeignKey('entities.id'), nullable=False)
+    confidence = Column(Integer, nullable=True)  # 0-1000
+
+    __table_args__ = (
+        UniqueConstraint('seed_id', 'entity_id', name='uq_seed_entity'),
     )
 
 class Rating(Base):

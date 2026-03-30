@@ -1,3 +1,4 @@
+import json
 import weaviate
 from weaviate.exceptions import UnexpectedStatusCodeException
 from app.config import settings
@@ -78,6 +79,45 @@ class WeaviateClient:
             class_name=settings.WEAVIATE_CLASS,
             where=where
         )
+
+    def search_similar(self, tenant_id: str, embedding: list, limit: int = 10) -> list[dict]:
+        """
+        Search for similar seeds by vector similarity.
+        Returns list of dicts with id, title, content, metadata, certainty.
+        Used by backlinker for autonomous link creation.
+        """
+        nearVector = {"vector": embedding}
+        query = self.client.query.get(
+            settings.WEAVIATE_CLASS,
+            ["title", "content", "metadata", "image_url", "created_at", "thought_id"]
+        ).with_near_vector(nearVector).with_where({
+            "path": ["tenant_id"],
+            "operator": "Equal",
+            "valueText": tenant_id
+        }).with_additional(["id", "certainty"]).with_limit(limit)
+        result = query.do()
+        objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, [])
+
+        # Normalize to flat dicts
+        results = []
+        for obj in objects:
+            metadata = obj.get("metadata", {})
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except:
+                    metadata = {}
+            results.append({
+                "id": obj.get("_additional", {}).get("id"),
+                "title": obj.get("title", ""),
+                "summary": metadata.get("summary", ""),
+                "content": obj.get("content", ""),
+                "entities": metadata.get("entities", []),
+                "topics": metadata.get("topics", []),
+                "certainty": obj.get("_additional", {}).get("certainty", 0.0),
+                "thought_id": obj.get("thought_id", "")
+            })
+        return results
 
 # Singleton instance
 weaviate_client = WeaviateClient()
