@@ -7,7 +7,7 @@ export const maxDuration = 30
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
-  const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://atomic-probability-ago-mistress.trycloudflare.com'
+  const BACKEND = 'https://atomic-probability-ago-mistress.trycloudflare.com'
 
   // Forward auth token from frontend
   const authHeader = req.headers.get('authorization') || ''
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       let hasStartedText = false
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/chat`, {
+        const res = await fetch(`${BACKEND}/api/v1/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
         writer.write({
           type: 'text-delta',
           id: textId,
-          delta: `Cannot reach backend. Check NEXT_PUBLIC_API_URL in Vercel settings (should be https://atomic-probability-ago-mistress.trycloudflare.com).`,
+          delta: `Cannot reach backend. Check that the Cloudflare tunnel is running.`,
         })
         writer.write({ type: 'text-end', id: textId })
       }
