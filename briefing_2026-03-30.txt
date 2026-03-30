@@ -1,0 +1,74 @@
+☀️ DAILY BRIEFING — Mon, March 30, 2026
+
+1) Weather — Munich
+Partly cloudy, 4°C, gusty winds (32 km/h). Layer up if heading out — feels colder than the number suggests.
+
+---
+
+2) 🏗️ Capability-Centric Architecture (CCA) for Multi-Agent Systems
+
+This week's deep pattern: Capability-Centric Architecture, a framework from a detailed March 28 design guide for building production multi-agent systems that don't collapse under their own weight.
+
+What it solves: Most multi-agent systems hardcode dependencies between orchestrators and workers. When you swap a model backend or change a tool contract, everything downstream breaks. CCA treats each agent capability as an atomic unit with formal contracts (Provisions, Requirements, Protocols) and an internal "Capability Nucleus" with three layers — separating what it does from how it does it.
+
+How it works: A Capability Registry acts as the coordination hub (think service mesh, but for agents). A Capability Lifecycle Manager handles startup/shutdown ordering via dependency graphs. Evolution Envelopes let you version capabilities without breaking running systems. Efficiency Gradients match implementation depth to operational criticality — a simple classifier doesn't need the same robustness as a financial approval agent.
+
+Who's using it: The framework was demonstrated with a 6-agent software engineering pipeline (Requirements Analysis → Code Gen → Test Gen → Review → Docs → PR), each using different model backends (Claude 4.6 Opus, GPT-5.3, Gemini 3.1 Pro). Augment Code's "Intent" system uses a similar Coordinator-Specialist-Verifier topology across 400K+ file codebases.
+
+Seedify relevance: Your second-brain system has exactly this problem — Notion ingestion, PKM indexing, and Odoo task creation are different capabilities with different reliability requirements. CCA's contract-based approach would let you swap Notion for Confluence or add enterprise software data sources without refactoring your orchestrator.
+
+Contrarian view: CCA adds significant upfront complexity. For 2-3 agents, it's overkill — you're building a service mesh when a Makefile would work. The framework shines at 5+ agents with heterogeneous backends. Below that threshold, LangGraph's supervisor pattern with good state management is simpler and ships faster.
+
+Sources: stal.blogspot.com (Mar 28), augmentcode.com (Mar 28), architectureandgovernance.com (Mar 25)
+
+---
+
+3) 📄 Academic Spotlight: MemoryAgentBench (arXiv, Mar 17)
+
+Paper: "Evaluating Memory in LLM Agents via Incremental Multi-Turn Interactions"
+Authors: Yuanzhe Hu, Yu Wang, Julian McAuley — UC San Diego
+Venue: arXiv 2507.05257v3
+
+Core contribution: Existing benchmarks evaluate memory recall but miss whether agents can use memory to make better decisions. MemoryAgentBench tests four competencies: accurate retrieval, selective forgetting, incremental learning, and cross-session knowledge consolidation. They evaluate three agent categories: Long-Context Agents, RAG Agents, and Agentic Memory Agents.
+
+Actionable insight: The key finding — scoring well on memory recall ≠ good downstream decisions. Your PKM system's retrieval accuracy metrics are necessary but insufficient. You should be measuring whether retrieved memories actually improve task completion quality in Odoo/Notion workflows, not just cosine similarity scores.
+
+Link: https://arxiv.org/abs/2507.05257
+
+---
+
+4) 📰 Enterprise AI News
+
+① Oracle Launches 22 Fusion Agentic Applications (Mar 24)
+Oracle unveiled outcome-driven agentic apps embedded directly in Fusion Cloud — workforce scheduling, supplier sourcing, cross-sell programs. Key: agents operate within the operational's permission model and approval hierarchies, not as bolt-on copilots. Reuters reports Oracle's angle is replacing "typing invoices" while keeping human decision-making on strategy.
+→ FDE angle: Enterprise customers will expect agents to respect existing RBAC and approval chains. If your deployment bypasses the permission model, you'll lose the deal to Oracle/Salesforce who embed inside it.
+
+② Gartner: LLM Observability Investments → 50% by 2028 (Mar 30)
+Gartner predicts explainable AI will drive LLM observability to 50% of GenAI deployments (up from 15% today). Global GenAI models market forecast: $25B in 2026, $75B by 2029. They recommend continuous LLM evaluation in CI/CD pipelines and XAI tracing for high-impact use cases.
+→ FDE angle: Every enterprise PoC you ship needs a built-in observability story. "How do we know this agent is working correctly?" is now a board-level question, not a debugging concern.
+
+---
+
+5) 🔥 The Coordination Tax Is Real
+
+Gartner projects 40% of agentic AI initiatives will be cancelled before completion by end of 2027. MIT Sloan found 70% of AI automation pilots fail to generate measurable business impact. The "Year of the Agent" has quietly become the "Decade of the Agent."
+
+The unsexy truth: adding a second agent to your system doesn't double capability — it introduces race conditions, cascading failures, and non-determinism that's genuinely hard to reproduce in debugging. At 10 agents, you've built a distributed system with all the traditional distributed systems problems. Nobody's pitch deck mentions this.
+
+An overhyped database product fails quietly. An overhyped autonomous agent deletes your production data, sends emails to your customers, and commits to your repository — loudly, at scale. The stakes of this particular hype cycle are meaningfully higher.
+
+The play isn't "more agents." It's "fewer agents with better contracts and tighter failure boundaries." CCA (section 2) is one answer. The other is honestly asking: does this problem need a multi-agent solution at all?
+
+Source: dev.to/harsh2644 (Mar 23), Gartner Hype Cycle 2024
+
+---
+
+6) 💡 One Actionable Move
+
+Audit your Seedify architecture against CCA principles. Map each capability (Notion sync, PKM indexing, Odoo task creation) to: (a) its contract — what it provides and requires, (b) its failure mode — what happens when it's down, (c) its evolution path — what changes in the next 6 months. You don't need to implement full CCA, but identifying your implicit contracts will surface coupling issues before they hit production. Spend 30 minutes on this today.
+
+---
+
+7) 🎨 Creative Exercise
+
+Reframe: Take your most "obvious" architecture decision in Seedify and argue the opposite for 5 minutes. If you chose vector DB for memory, write a case for structured graphs. If you chose orchestrator pattern, sketch a mesh. The goal isn't to change your mind — it's to stress-test the assumptions you forgot you were making.

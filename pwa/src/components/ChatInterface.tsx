@@ -1,6 +1,6 @@
 import { API_BASE } from '../config';
 import { useState, useRef, useEffect } from 'react';
-import { Message, Attachment, StreamEvent, ToolCall } from '../types';
+import { Message, Attachment, StreamEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { VoiceRecorder } from './VoiceRecorder';
 import { LoginScreen } from './LoginScreen';

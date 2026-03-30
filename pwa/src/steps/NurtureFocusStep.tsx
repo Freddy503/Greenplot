@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 export function NurtureFocusStep(props: any) {
   const { onNext } = props;
   // We'll just call onNext() with no args, placeholder
