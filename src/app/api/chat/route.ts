@@ -9,6 +9,9 @@ export async function POST(req: Request) {
   const { messages } = await req.json()
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
 
+  // Forward auth token from frontend
+  const authHeader = req.headers.get('authorization') || ''
+
   const stream = createUIMessageStream({
     async execute({ writer }) {
       const textId = crypto.randomUUID()
@@ -19,6 +22,7 @@ export async function POST(req: Request) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(authHeader ? { Authorization: authHeader } : {}),
           },
           body: JSON.stringify({ messages }),
         })
@@ -29,7 +33,7 @@ export async function POST(req: Request) {
           writer.write({
             type: 'text-delta',
             id: textId,
-            delta: `API error: ${res.status} ${errorText}`,
+            delta: `Backend error (${res.status}): ${errorText}`,
           })
           writer.write({ type: 'text-end', id: textId })
           return
@@ -68,40 +72,6 @@ export async function POST(req: Request) {
                   })
                   break
 
-                case 'tool_call':
-                  writer.write({
-                    type: 'tool-input-start',
-                    toolCallId: event.id,
-                    toolName: event.name,
-                  })
-                  try {
-                    const input = typeof event.input === 'string'
-                      ? JSON.parse(event.input)
-                      : event.input
-                    writer.write({
-                      type: 'tool-input-available',
-                      toolCallId: event.id,
-                      toolName: event.name,
-                      input,
-                    })
-                  } catch {
-                    writer.write({
-                      type: 'tool-input-available',
-                      toolCallId: event.id,
-                      toolName: event.name,
-                      input: { raw: event.input },
-                    })
-                  }
-                  break
-
-                case 'tool_result':
-                  writer.write({
-                    type: 'tool-output-available',
-                    toolCallId: event.id,
-                    output: event.result,
-                  })
-                  break
-
                 case 'error':
                   if (!hasStartedText) {
                     writer.write({ type: 'text-start', id: textId })
@@ -130,7 +100,7 @@ export async function POST(req: Request) {
         writer.write({
           type: 'text-delta',
           id: textId,
-          delta: `Connection error: ${(err as Error).message}. Make sure NEXT_PUBLIC_API_URL is set in Vercel.`,
+          delta: `Cannot reach backend. Check NEXT_PUBLIC_API_URL in Vercel settings (should be http://178.104.67.139:8001).`,
         })
         writer.write({ type: 'text-end', id: textId })
       }
