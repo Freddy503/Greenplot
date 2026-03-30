@@ -153,10 +153,12 @@ Steps:
 - [ ] Push repository to remote Git
 
 ### Sprint 1: Structured Tool Calling & Streaming (1 week)
-- [ ] Backend: Switch from SSE text lines to NDJSON streaming for tool events
-- [ ] Define event types: `tool_call`, `tool_result`, `tool_error`, `status`
-- [ ] Frontend: Implement NDJSON parser; maintain tool call stack
-- [ ] Update chat UI to show incremental tool progress (Step X/Y)
+- [x] Backend: Switch from SSE text lines to NDJSON streaming for tool events
+- [x] Define event types: `tool_call`, `tool_result`, `tool_error`, `status`, `done`
+- [x] Frontend: Implement NDJSON parser; maintain tool call stack
+- [x] Update chat UI to show incremental tool progress (expandable cards)
+- [x] LLM tool calling loop (multi-round, up to 3 iterations)
+- [x] Tool definitions: search_seeds, create_seed, get_daily_briefing, list_recent_seeds
 
 ### Sprint 2: Mobile Reliability & Client-Side AI (1 week)
 - [ ] Add Wake Lock to voice recording
