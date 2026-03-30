@@ -100,12 +100,10 @@ def create_thought(
     db.commit()
     db.refresh(thought)
 
-    # Enqueue enrichment (simplified: run inline for now; later use Redis queue)
-    # background_tasks.add_task(enrich_thought, thought.id, str(current_user.tenant_id))
-    # For MVP we'll run synchronously to avoid complexity
-    from app.enricher import enrich_thought
+    # Enrichment pipeline v2: chunk → extract entities → embed → store → backlink
+    from app.enricher_v2 import enrich_thought_v2
     try:
-        enrich_thought(str(thought.id), str(current_user.tenant_id), db)
+        result = enrich_thought_v2(str(thought.id), str(current_user.tenant_id), db)
         thought.status = 'processed'
     except Exception as e:
         thought.status = 'error'
