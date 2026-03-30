@@ -147,8 +147,11 @@ export default function ChatPage() {
                 const newSources: Source[] = []
                 if (parsed.results && Array.isArray(parsed.results)) {
                   for (const r of parsed.results) {
-                    if (r.url) {
-                      newSources.push({ title: r.title || r.url, url: r.url })
+                    if (r.url && r.title && r.title !== 'link' && r.title.trim().length > 0) {
+                      newSources.push({ title: r.title, url: r.url })
+                    } else if (r.url) {
+                      // Fallback: use hostname as title
+                      try { newSources.push({ title: new URL(r.url).hostname, url: r.url }) } catch {}
                     }
                   }
                 }
@@ -156,6 +159,9 @@ export default function ChatPage() {
                 setMessages((prev) =>
                   prev.map((m) => {
                     if (m.id !== assistantMsg.id) return m
+                    // Dedup sources by URL
+                    const existingUrls = new Set(m.sources.map(s => s.url))
+                    const uniqueNew = newSources.filter(s => !existingUrls.has(s.url))
                     return {
                       ...m,
                       toolCalls: m.toolCalls.map((t) =>
@@ -163,7 +169,7 @@ export default function ChatPage() {
                           ? { ...t, status: 'done' as const, output: resultStr }
                           : t
                       ),
-                      sources: [...m.sources, ...newSources],
+                      sources: [...m.sources, ...uniqueNew],
                     }
                   })
                 )
@@ -250,8 +256,14 @@ export default function ChatPage() {
                 }
               >
                 {/* Text content */}
-                {msg.content && (
+                {msg.content ? (
                   <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  msg.role === 'assistant' && msg.toolCalls.length > 0 && !streaming && (
+                    <p className="text-[13px] italic" style={{ color: 'var(--on-surface-variant)' }}>
+                      Search complete. Tap a source to read more.
+                    </p>
+                  )
                 )}
 
                 {/* Tool calls */}
