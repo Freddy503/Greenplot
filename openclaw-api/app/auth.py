@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login", auto_error=False)
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
@@ -35,7 +35,9 @@ def decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     payload = decode_token(token)
     user_id = payload.get("sub")
     if user_id is None:
@@ -47,3 +49,21 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 def get_tenant_id(current_user: User = Depends(get_current_user)) -> str:
     return str(current_user.tenant_id)
+
+DEMO_USER_ID = "00000000-0000-0000-0000-000000000001"
+DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000002"
+
+def get_optional_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Return user if valid token provided, else return a demo user dict."""
+    if not token:
+        return type("DemoUser", (), {"id": DEMO_USER_ID, "tenant_id": DEMO_TENANT_ID})()
+    try:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                return user
+    except HTTPException:
+        pass
+    return type("DemoUser", (), {"id": DEMO_USER_ID, "tenant_id": DEMO_TENANT_ID})()

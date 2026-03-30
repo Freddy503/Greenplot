@@ -11,7 +11,6 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Seedify — The Living Laboratory",
   description: "Your AI-powered second brain",
-  manifest: "/manifest.json",
 };
 
 export default function RootLayout({

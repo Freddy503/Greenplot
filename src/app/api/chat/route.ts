@@ -9,20 +9,6 @@ export async function POST(req: Request) {
   const { messages } = await req.json()
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
 
-  // Extract auth token from cookies or header
-  const cookieHeader = req.headers.get('cookie') || ''
-  let accessToken = ''
-
-  // Parse Supabase auth token from cookies
-  const authCookieMatch = cookieHeader.match(/sb-kpdxrpeuzwzilonvjzcy-auth-token=([^;]+)/)
-  if (authCookieMatch) {
-    try {
-      const decoded = decodeURIComponent(authCookieMatch[1])
-      const parsed = JSON.parse(decoded)
-      accessToken = parsed?.access_token || ''
-    } catch {}
-  }
-
   const stream = createUIMessageStream({
     async execute({ writer }) {
       const textId = crypto.randomUUID()
@@ -33,26 +19,19 @@ export async function POST(req: Request) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({ messages }),
         })
 
         if (!res.ok) {
           const errorText = await res.text()
-          writer.write({
-            type: 'text-start',
-            id: textId,
-          })
+          writer.write({ type: 'text-start', id: textId })
           writer.write({
             type: 'text-delta',
             id: textId,
             delta: `API error: ${res.status} ${errorText}`,
           })
-          writer.write({
-            type: 'text-end',
-            id: textId,
-          })
+          writer.write({ type: 'text-end', id: textId })
           return
         }
 
@@ -95,7 +74,6 @@ export async function POST(req: Request) {
                     toolCallId: event.id,
                     toolName: event.name,
                   })
-                  // Parse and provide tool input
                   try {
                     const input = typeof event.input === 'string'
                       ? JSON.parse(event.input)
@@ -124,10 +102,6 @@ export async function POST(req: Request) {
                   })
                   break
 
-                case 'status':
-                  // Status updates — we can skip or log
-                  break
-
                 case 'error':
                   if (!hasStartedText) {
                     writer.write({ type: 'text-start', id: textId })
@@ -139,9 +113,6 @@ export async function POST(req: Request) {
                     delta: `Error: ${event.text}`,
                   })
                   break
-
-                case 'done':
-                  break
               }
             } catch {
               // Skip malformed lines
@@ -149,7 +120,6 @@ export async function POST(req: Request) {
           }
         }
 
-        // Close text if we started it
         if (hasStartedText) {
           writer.write({ type: 'text-end', id: textId })
         }
@@ -160,7 +130,7 @@ export async function POST(req: Request) {
         writer.write({
           type: 'text-delta',
           id: textId,
-          delta: `Connection error: ${(err as Error).message}`,
+          delta: `Connection error: ${(err as Error).message}. Make sure NEXT_PUBLIC_API_URL is set in Vercel.`,
         })
         writer.write({ type: 'text-end', id: textId })
       }
