@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = 100  # per minute per tenant
 
+    # CORS
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+
+    # Attachments
+    MAX_ATTACHMENT_SIZE_MB: int = 10
+    ALLOWED_IMAGE_TYPES: str = "image/png,image/jpeg,image/gif,image/webp"
+    ALLOWED_DOC_TYPES: str = "application/pdf,text/plain,text/markdown"
+    ATTACHMENTS_DIR: str = "/tmp/openclaw-attachments"
+
     class Config:
         env_file = ".env"
 
