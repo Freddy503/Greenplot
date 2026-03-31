@@ -9,7 +9,7 @@
 - ✅ ERP Consultant @ MUCH Consulting
 - ✅ Agentic AI: RAG, multi-agent, MCP, tool routing (Seedify)
 - ❌ Python: cannot write production code
-- ⚠️ ABAP: not yet certified
+- ~~⚠️ ABAP: not yet certified~~ → DROPPED (not needed for FDE)
 - ⚠️ Cloud/DevOps: Docker basics, growing
 
 ## Study Plan
@@ -21,13 +21,15 @@
 
 | Week | Focus | Status |
 |------|-------|--------|
-| Mar 30 – Apr 5 | Ch 1-5: Intro, Variables, Functions, Scope, Testing | ⬜ |
-| Apr 6 – Apr 12 | Ch 6-9: Computing, Comparisons, Loops, Lists | ⬜ |
-| Apr 13 – Apr 19 | Ch 10-14: Dicts, Sets, Errors, Practice, Quiz | ⬜ |
+| Mar 30 – Apr 5 | Ch 1-5: Intro, Variables, Functions, Scope, Testing | 🟡 starting |
 
 **After Python basics:**
 - [ ] Boot.dev: Intermediate Python
 - [ ] Boot.dev: Learn HTTP Clients in Python
+
+### Track 2: SAP BTP — NEW
+**Focus:** Business Technology Platform fundamentals
+**Priority:** Alongside Python (dropped ABAP — not needed for FDE role)
 - [ ] Build: simple API script that hits an SAP endpoint
 
 ### Track 2: ABAP Cloud Certification — PARALLEL
