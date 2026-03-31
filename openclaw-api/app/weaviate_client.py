@@ -61,12 +61,18 @@ class WeaviateClient:
 
     def search_seeds(self, tenant_id: str, embedding: list, limit: int = 10):
         nearVector = {"vector": embedding}
-        # Search IdeaSeed class — include enrichment fields
+        # Search IdeaSeed class — include enrichment fields, filter by tenant
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
             ["title", "text", "source", "url", "created", "notion_id",
-             "summary", "tags", "entities", "backlinks", "domain", "energy"]
-        ).with_near_vector(nearVector).with_limit(limit * 3)  # fetch extra for dedup
+             "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"]
+        ).with_near_vector(nearVector).with_where({
+            "operator": "Or",
+            "operands": [
+                {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id},
+                {"path": ["tenant_id"], "operator": "Equal", "valueText": ""},
+            ]
+        }).with_limit(limit * 3)  # fetch extra for dedup
         result = query.do()
         objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, [])
 
