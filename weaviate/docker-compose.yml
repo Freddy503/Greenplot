@@ -1,11 +1,10 @@
 version: '3.4'
 services:
   weaviate:
-    image: semitechnologies/weaviate:1.24.6
+    image: cr.weaviate.io/semitechnologies/weaviate:1.36.6
     restart: unless-stopped
     ports:
       - "8080:8080"
-      - "50051:50051"
     volumes:
       - weaviate_data:/var/lib/weaviate
     environment:
