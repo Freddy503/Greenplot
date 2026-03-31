@@ -1,0 +1,3 @@
+Backup date: 2026-03-31
+Notion remains source-of-truth. Backup strategy: rely on Notion's version history.
+If needed, use Notion API to export specific DBs.

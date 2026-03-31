@@ -330,30 +330,14 @@ async def chat_endpoint(
     current_user = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
-    from app.tool_pool import assemble_tool_pool, extract_keyword_hints
+    from app.tools import TOOLS
     from app.tool_executor import TOOL_HANDLERS
-    from app.models_frozen import PermissionContext
     from app.session_store import SessionRecorder
 
     body = await request.json()
     messages = body.get("messages", [])
     attachments = body.get("attachments", [])
     max_tool_rounds = 3  # prevent infinite loops
-
-    # Assemble tool pool with permission filtering
-    tenant_id = str(current_user.tenant_id) if current_user else ""
-    perm = PermissionContext.admin(tenant_id) if (current_user and getattr(current_user, 'is_admin', False)) else PermissionContext.user(tenant_id)
-    
-    # Extract keyword hints from last user message
-    last_user_msg = ""
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            last_user_msg = extract_text(msg)
-            break
-    hints = extract_keyword_hints(last_user_msg)
-    
-    tool_pool = assemble_tool_pool(permission_context=perm, simple_mode=True, keyword_hints=hints)
-    TOOLS = tool_pool.to_openai()
 
     # Process attachments once (apply to last user message)
     attachment_parts = process_attachments(attachments, settings.MAX_ATTACHMENT_SIZE_MB) if attachments else []
@@ -387,14 +371,15 @@ async def chat_endpoint(
         import uuid
         
         # Session recording
+        last_prompt = extract_text(messages[-1]) if messages else ""
         recorder = SessionRecorder(
             user_id=str(current_user.id) if current_user else "anonymous",
-            tenant_id=tenant_id,
-            prompt=last_user_msg[:500],
+            tenant_id=str(current_user.tenant_id) if current_user else "",
+            prompt=last_prompt[:500],
         )
         
         yield json.dumps({"type": "status", "text": "Thinking…"}) + "\n"
-        recorder.event("message", "user", last_user_msg[:200])
+        recorder.event("message", "user", last_prompt[:200])
         await asyncio.sleep(0)
 
         async with httpx.AsyncClient() as client:
