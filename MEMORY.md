@@ -17,10 +17,12 @@
 
 ## Next Actions
 - Push Git (need remote URL from Freddy).
-- Wire backend CORS to include PWA origin when testing (`localhost:5173`).
-- Complete attachment handling in backend: accept base64 media, store as temporary files or inscribe into chat context.
+- Complete Weaviate re-embedding via enrichment pipeline (enrichment/ directory).
+- Migrate to proper AI SDK + useChat with custom transport.
+- Fix Vercel deploy (Cloudflare tunnel URL instability — plan to use env var or named tunnel).
+- Set up Figma MCP this evening.
 - Implement rating persistence.
-- Deploy PWA to hosting service (e.g., Vercel) for production access.
+- Wire OPENROUTER_API_KEY into enrichment pipeline environment.
 
 ## Notes
 Freddy prefers approval‑first for sensitive external actions, values cost‑effectiveness and security, and wants a personal 24/7 assistant that supports creative thinking. Tone: friendly, professional, witty (Woody from Toy Story vibe). Hard boundary: never access other chats or contact people without explicit consent.
