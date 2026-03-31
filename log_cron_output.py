@@ -1,40 +1,30 @@
 #!/usr/bin/env python3
-"""Log CronJob output to Notion (CronJob Knowledge Base)."""
-
-import argparse, os, json, urllib.request, datetime
-
-NOTION_API_KEY = open(os.path.expanduser('~/.config/notion/api_key')).read().strip()
-NOTION_VERSION = '2022-06-28'
-CRON_LOGS_DB = '332fbc8d-40a5-81a8-aad8-d452ba30d931'
+import sys
+import os
+import datetime
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--job_name', required=True)
-    parser.add_argument('--output', required=True)
-    args = parser.parse_args()
+    if len(sys.argv) < 5 or sys.argv[1] != '--job_name' or sys.argv[3] != '--output':
+        print("Usage: python3 log_cron_output.py --job_name <job_name> --output <output>")
+        sys.exit(1)
+    
+    job_name = sys.argv[2]
+    output = sys.argv[4]
+    
+    # Create logs directory if it doesn't exist
+    log_dir = "/root/.openclaw/workspace/logs"
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create log file with timestamp
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = os.path.join(log_dir, f"{job_name}_{timestamp}.log")
+    
+    with open(log_file, 'w') as f:
+        f.write(f"Job: {job_name}\n")
+        f.write(f"Timestamp: {datetime.datetime.now().isoformat()}\n")
+        f.write(f"Output:\n{output}\n")
+    
+    print(f"Logged output to {log_file}")
 
-    now = datetime.datetime.utcnow().isoformat() + 'Z'
-
-    page = {
-        'parent': {'type': 'database_id', 'database_id': CRON_LOGS_DB},
-        'properties': {
-            'Job Name': {'title': [{'text': {'content': args.job_name}}]},
-            'Timestamp': {'date': {'start': now}},
-            'Output': {'rich_text': [{'text': {'content': args.output[:2000]}}]},
-        }
-    }
-
-    req = urllib.request.Request(
-        'https://api.notion.com/v1/pages',
-        data=json.dumps(page).encode(),
-        headers={'Authorization': f'Bearer {NOTION_API_KEY}',
-                 'Notion-Version': NOTION_VERSION,
-                 'Content-Type': 'application/json'})
-    try:
-        urllib.request.urlopen(req, timeout=30)
-    except Exception as e:
-        # Log error locally but don't fail the cron job
-        print(f"Failed to log to Notion: {e}", file=sys.stderr)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
