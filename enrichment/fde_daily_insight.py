@@ -507,6 +507,92 @@ jobs:
             },
         ]
     },
+    "databases": {
+        "title": "🗄️ Databases & Vector Search",
+        "lessons": [
+            {
+                "day": 1,
+                "title": "SQL vs NoSQL — when to use each",
+                "content": """**Concept:** Two types of databases, each good at different things.
+
+**SQL (PostgreSQL, MySQL):**
+- Structured data with clear relationships
+- Tables with rows and columns
+- Great for: users, orders, transactions
+- Query language: SQL
+
+**NoSQL (MongoDB, Weaviate, Redis):**
+- Flexible or specialized data
+- Documents, key-value, vectors
+- Great for: logs, search, caching, AI embeddings
+- Each has its own query style
+
+**Rule of thumb:**
+- Users, orders, billing → SQL (Postgres)
+- Full-text search, AI similarity → Vector DB (Weaviate)
+- Session data, caching → Key-value (Redis)
+- Flexible documents → Document DB (MongoDB)
+
+**Your Seedify uses all three:** Postgres for users/ratings, Weaviate for semantic search, Redis for job queues.
+
+**Try this:** Look at the Seedify docker-compose.yml. Identify which databases are running and what each one stores.""",
+                "quiz": "You need to store user accounts with relationships to orders. SQL or NoSQL?"
+            },
+            {
+                "day": 2,
+                "title": "Vector databases — how AI search works",
+                "content": """**Concept:** A vector database is a smart library that understands *meaning*.
+
+Normal database = filing cabinet. Find things by exact label: "give me note #47."
+
+Vector database = librarian who reads everything. You ask "what's about career planning?" and it finds FDE trajectory notes, enterprise software Academy updates, deployment strategies — even though none literally say "career planning."
+
+**How it works:**
+1. Every text gets converted to a list of numbers (a "vector"): `[0.23, -0.45, 0.78, ...]`
+2. Similar meanings → similar numbers
+3. "FDE career path" and "deployment strategist" end up close together in number-space
+4. Search = find vectors closest to your query vector
+
+**Why FDEs care:** Enterprise data is messy. Users don't search for exact terms. Vector search finds relevant results even when the words don't match.
+
+**Your Weaviate:** Stores IdeaSeed vectors. When you search "career stuff," it finds seeds tagged `career`, `FDE`, `enterprise software Academy` — all because their vectors are close to your query.
+
+**Try this:** Think of a search where exact keyword matching would fail but semantic search would work.""",
+                "quiz": "How does a vector database find relevant results? Does it match keywords or meanings?"
+            },
+            {
+                "day": 3,
+                "title": "GraphQL — SQL for APIs",
+                "content": """**Concept:** REST APIs give you what the server decides. GraphQL lets YOU decide what you get.
+
+**REST:**
+```
+GET /api/seeds → returns ALL fields of ALL seeds
+GET /api/seeds/123 → returns ALL fields of one seed
+```
+Problem: over-fetching (getting data you don't need) or under-fetching (needing 3 calls to get related data).
+
+**GraphQL:**
+```
+query {
+  IdeaSeed(where: {domain: "career"}, limit: 5) {
+    title
+    tags
+    energy
+  }
+}
+```
+You get EXACTLY the fields you asked for, from EXACTLY the data you want.
+
+**Why it matters for FDEs:** When building dashboards or APIs for customers, GraphQL reduces bandwidth, speeds up responses, and lets the frontend evolve without backend changes.
+
+**Your Weaviate uses GraphQL** for complex queries: filter by domain, sort by energy, return only specific fields — all in one call.
+
+**Try this:** Look at the Weaviate queries in your enrichment pipeline. Can you identify the where clause, limit, and requested fields?""",
+                "quiz": "What's the advantage of GraphQL over REST? Give one example."
+            },
+        ]
+    },
 }
 
 
