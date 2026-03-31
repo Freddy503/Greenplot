@@ -321,6 +321,82 @@ def plant_seed(synthesis, entry, web_results, image_url=None):
     return 'https://www.notion.so/' + page['id'].replace('-', '')
 
 
+# ── Enrich Weaviate metadata ──────────────────────────────────────────────────
+def enrich_weaviate_metadata(entry, synthesis, garden_connections):
+    """
+    Bridge: write enrichment metadata back to Weaviate objects after planting.
+    Updates all chunks for this seed with: summary, tags, entities, backlinks, domain, energy.
+    """
+    import time
+    time.sleep(3)  # Wait for sync to index new objects
+
+    notion_id = entry['id']
+
+    # Build enrichment properties
+    tags = synthesis.get('domain_tags', [])
+    domains = [d for d in tags if d in {'Agentic AI', 'Career', 'Enterprise', 'Creativity', 'Systems', 'Learning'}]
+    kebab_tags = [d.lower().replace(' ', '-') for d in (domains or ['agentic-ai'])]
+
+    entities = []
+    for conn in garden_connections[:3]:
+        entities.append({
+            'name': conn.get('title', ''),
+            'type': 'concept',
+            'score': conn.get('score', 0)
+        })
+
+    backlinks = []
+    for conn in garden_connections[:5]:
+        backlinks.append({
+            'notion_id': conn.get('notion_id', ''),
+            'title': conn.get('title', ''),
+            'score': conn.get('score', 0),
+            'reason': 'Garden connection from enrichment'
+        })
+
+    enrichment = {
+        'summary': synthesis.get('summary', '')[:300],
+        'tags': ', '.join(kebab_tags),
+        'entities': json.dumps(entities),
+        'backlinks': json.dumps(backlinks),
+        'energy': synthesis.get('energy', '💡 Spark').split(' ')[-1] if synthesis.get('energy') else 'Spark',
+        'status': 'Growing',
+        'enrichment_version': 1,
+        'parent_id': notion_id,
+        'domain': kebab_tags[0] if kebab_tags else 'agentic-ai',
+    }
+
+    # Find and update all Weaviate objects for this notion_id
+    gql = '{ Get { IdeaSeed(where: { operator: Equal path: ["notion_id"] valueText: "%s" } limit: 20) { _additional { id } } } }' % notion_id
+    req = urllib.request.Request(
+        f'{WEAVIATE_URL}/v1/graphql',
+        data=json.dumps({'query': gql}).encode(),
+        headers={'Content-Type': 'application/json'}
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        res = json.loads(r.read())
+
+    hits = res.get('data', {}).get('Get', {}).get('IdeaSeed', [])
+    updated = 0
+    for hit in hits:
+        obj_id = hit.get('_additional', {}).get('id')
+        if not obj_id:
+            continue
+        try:
+            patch_req = urllib.request.Request(
+                f'{WEAVIATE_URL}/v1/objects/{obj_id}',
+                data=json.dumps({'properties': enrichment}).encode(),
+                headers={'Content-Type': 'application/json'},
+                method='PATCH'
+            )
+            urllib.request.urlopen(patch_req, timeout=10)
+            updated += 1
+        except Exception as e:
+            print(f'    Patch {obj_id} failed: {e}', file=sys.stderr)
+
+    print(f'  Enriched {updated}/{len(hits)} Weaviate chunks', file=sys.stderr)
+
+
 # ── Mark Seeds entry as Planted ────────────────────────────────────────
 def mark_planted(entry_id, seed_url):
     npatch(f'/pages/{entry_id}', {
@@ -407,6 +483,12 @@ def process_entry(entry):
     # 7. Re-sync Weaviate
     subprocess.Popen([sys.executable, SYNC_SCRIPT, '--sync'],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # 8. Enrich Weaviate metadata (tags, entities, backlinks, domain)
+    try:
+        enrich_weaviate_metadata(entry, synthesis, garden_connections)
+    except Exception as e:
+        print(f'  Weaviate enrichment (non-blocking): {e}', file=sys.stderr)
 
     return {
         'seed_title': synthesis['seed_title'],
