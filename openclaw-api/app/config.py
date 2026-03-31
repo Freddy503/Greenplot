@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # LLM & APIs
     OPENROUTER_API_KEY: Optional[str] = None
     # Model for enrichment (LLM)
-    ENRICH_MODEL: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    ENRICH_MODEL: str = "openai/gpt-4o-mini"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
     BFL_API_KEY: Optional[str] = None
