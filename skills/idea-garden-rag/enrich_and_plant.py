@@ -364,6 +364,7 @@ def enrich_weaviate_metadata(entry, synthesis, garden_connections):
         'enrichment_version': 1,
         'parent_id': notion_id,
         'domain': kebab_tags[0] if kebab_tags else 'agentic-ai',
+        'tenant_id': os.environ.get('DEFAULT_TENANT_ID', ''),
     }
 
     # Find and update all Weaviate objects for this notion_id

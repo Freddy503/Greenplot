@@ -31,6 +31,7 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 EMBED_MODEL = "openai/text-embedding-ada-002"
 ENRICHMENT_VERSION = 1
+DEFAULT_TENANT_ID = os.environ.get("DEFAULT_TENANT_ID", "")  # Set for enrichment pipeline owner
 
 
 def weaviate_request(method, path, data=None):
@@ -202,6 +203,8 @@ def upsert_enriched_chunks(seed: dict, extraction: dict, backlinks: list[dict]):
                 "parent_id": notion_id,
                 "domain": extraction.get("domain", "agentic-ai"),
                 "source_url": url,
+                # Multi-tenancy
+                "tenant_id": DEFAULT_TENANT_ID,
             },
             "vector": vector
         }

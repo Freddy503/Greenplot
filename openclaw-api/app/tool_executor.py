@@ -294,6 +294,7 @@ async def search_seeds_filtered(args: dict, user: User, db: Session) -> str:
     tags = args.get("tags", "")
     energy = args.get("energy", "")
     limit = args.get("limit", 5)
+    tenant_id = str(user.tenant_id)
 
     # Build Weaviate where filter
     filters = []
@@ -301,20 +302,24 @@ async def search_seeds_filtered(args: dict, user: User, db: Session) -> str:
         filters.append({"operator": "Equal", "path": ["domain"], "valueText": domain})
     if energy:
         filters.append({"operator": "Equal", "path": ["energy"], "valueText": energy})
+    # Always filter by tenant (or shared/empty)
+    tenant_filter = {"operator": "Or", "operands": [
+        {"operator": "Equal", "path": ["tenant_id"], "valueText": tenant_id},
+        {"operator": "Equal", "path": ["tenant_id"], "valueText": ""}
+    ]}
 
     try:
         import urllib.request as req
 
-        if len(filters) == 1:
-            where_clause = f'where: {{ operator: Equal path: ["{filters[0]["path"][0]}"] valueText: "{filters[0]["valueText"]}" }}'
-        elif len(filters) > 1:
-            conditions = ", ".join(
+        # Build where clause
+        if filters:
+            filter_conditions = ", ".join(
                 f'{{ operator: Equal path: ["{f["path"][0]}"] valueText: "{f["valueText"]}" }}'
                 for f in filters
             )
-            where_clause = f"where: {{ operator: And operands: [{conditions}] }}"
+            where_clause = f"where: {{ operator: And operands: [{{ operator: Or operands: [{{ operator: Equal path: [\"tenant_id\"] valueText: \"{tenant_id}\" }}, {{ operator: Equal path: [\"tenant_id\"] valueText: \"\" }}] }}, {{ operator: And operands: [{filter_conditions}] }}] }}"
         else:
-            where_clause = ""
+            where_clause = f'where: {{ operator: Or operands: [{{ operator: Equal path: ["tenant_id"] valueText: "{tenant_id}" }}, {{ operator: Equal path: ["tenant_id"] valueText: "" }}] }}'
 
         gql = """
         {

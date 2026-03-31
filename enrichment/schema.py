@@ -103,6 +103,14 @@ ENRICHMENT_PROPERTIES = [
         "indexFilterable": True,
         "tokenization": "field"
     },
+    {
+        "name": "tenant_id",
+        "dataType": ["text"],
+        "description": "Owner tenant ID for multi-tenancy isolation",
+        "indexSearchable": False,
+        "indexFilterable": True,
+        "tokenization": "field"
+    },
 ]
 
 
