@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const BACKEND = 'https://atomic-probability-ago-mistress.trycloudflare.com'
+const BACKEND = 'https://memorial-beautifully-says-statewide.trycloudflare.com'
 
 export async function POST(req: Request) {
   const body = await req.json()
