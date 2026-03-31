@@ -12,7 +12,7 @@ from datetime import datetime
 
 
 async def search_seeds(args: dict, user: User, db: Session) -> str:
-    """Semantic search over user's seeds via Weaviate."""
+    """Semantic search over user's seeds via Weaviate (with enrichment metadata)."""
     query = args["query"]
     limit = args.get("limit", 5)
     try:
@@ -25,11 +25,30 @@ async def search_seeds(args: dict, user: User, db: Session) -> str:
         )
         results = []
         for hit in hits:
-            results.append({
+            entry = {
                 "title": hit.get("title", ""),
-                "content": hit.get("content", "")[:300],
+                "content": hit.get("content", "")[:400],
                 "created_at": hit.get("created_at", ""),
-            })
+            }
+            # Add enrichment metadata if available
+            if hit.get("summary"):
+                entry["summary"] = hit["summary"][:200]
+            if hit.get("tags"):
+                entry["tags"] = hit["tags"]
+            if hit.get("domain"):
+                entry["domain"] = hit["domain"]
+            if hit.get("energy"):
+                entry["energy"] = hit["energy"]
+            if hit.get("entities"):
+                try:
+                    ents = json.loads(hit["entities"])
+                    if ents:
+                        entry["entities"] = [e.get("name", "") for e in ents[:3]]
+                except:
+                    pass
+            if hit.get("url"):
+                entry["source"] = hit["url"]
+            results.append(entry)
         if not results:
             return json.dumps({"status": "empty", "message": "No matching seeds found."})
         return json.dumps({"status": "ok", "results": results})

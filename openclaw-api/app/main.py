@@ -146,16 +146,23 @@ def list_seeds(
         seeds = []
         for hit in weaviate_hits:
             seed = Seed(
-                id=uuid.UUID(hex=hit["_additional"]["id"]),  # weaviate returns id like that
+                id=uuid.uuid4(),
                 tenant_id=current_user.tenant_id,
                 user_id=current_user.id,
-                thought_id=uuid.UUID(hex=hit.get("thought_id")) if hit.get("thought_id") else None,
-                title=hit["title"],
-                content=hit["content"],
-                embedding_ref=hit["_additional"]["id"],
-                image_url=hit.get("image_url"),
-                metadata=json.loads(hit.get("metadata", "{}")),
-                created_at=datetime.fromisoformat(hit["created_at"])
+                thought_id=None,
+                title=hit.get("title", ""),
+                content=hit.get("content", ""),
+                embedding_ref="",
+                image_url=None,
+                metadata={
+                    "summary": hit.get("summary", ""),
+                    "tags": hit.get("tags", ""),
+                    "domain": hit.get("domain", ""),
+                    "energy": hit.get("energy", ""),
+                    "source": hit.get("source", ""),
+                    "url": hit.get("url", ""),
+                },
+                created_at=datetime.utcnow()
             )
             seeds.append(seed)
         return SeedSearchResponse(seeds=seeds, query=query, total=len(seeds))
