@@ -3,7 +3,7 @@
 import type { UIMessage } from 'ai'
 import { useState, useRef, useEffect } from 'react'
 
-const API = 'https://atomic-probability-ago-mistress.trycloudflare.com'
+const API = 'https://memorial-beautifully-says-statewide.trycloudflare.com'
 
 interface ToolCall {
   name: string
