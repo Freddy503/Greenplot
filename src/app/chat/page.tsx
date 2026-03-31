@@ -3,7 +3,7 @@
 import type { UIMessage } from 'ai'
 import { useState, useRef, useEffect } from 'react'
 
-const API = 'https://memorial-beautifully-says-statewide.trycloudflare.com'
+const API = 'https://api.greenplot.ink'
 
 interface ToolCall {
   name: string

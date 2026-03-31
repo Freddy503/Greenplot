@@ -7,7 +7,7 @@ export const maxDuration = 300
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
-  const BACKEND = 'https://memorial-beautifully-says-statewide.trycloudflare.com'
+  const BACKEND = 'https://api.greenplot.ink'
 
   // Forward auth token from frontend
   const authHeader = req.headers.get('authorization') || ''
