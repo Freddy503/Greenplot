@@ -61,22 +61,40 @@ class WeaviateClient:
 
     def search_seeds(self, tenant_id: str, embedding: list, limit: int = 10):
         nearVector = {"vector": embedding}
-        # Search IdeaSeed class — properties: title, text (not content)
+        # Search IdeaSeed class — include enrichment fields
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
-            ["title", "text", "source", "url", "created", "notion_id"]
-        ).with_near_vector(nearVector).with_limit(limit)
+            ["title", "text", "source", "url", "created", "notion_id",
+             "summary", "tags", "entities", "backlinks", "domain", "energy"]
+        ).with_near_vector(nearVector).with_limit(limit * 3)  # fetch extra for dedup
         result = query.do()
         objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, [])
-        # Normalize to expected format
-        return [
-            {
+
+        # Deduplicate by notion_id (keep best match per seed)
+        seen = {}
+        for o in objects:
+            nid = o.get("notion_id", "")
+            if not nid:
+                nid = o.get("title", "")
+            if nid in seen:
+                continue
+            seen[nid] = {
                 "title": o.get("title", ""),
                 "content": o.get("text", ""),
                 "created_at": o.get("created", ""),
+                "source": o.get("source", ""),
+                "url": o.get("url", ""),
+                "summary": o.get("summary", ""),
+                "tags": o.get("tags", ""),
+                "entities": o.get("entities", ""),
+                "backlinks": o.get("backlinks", ""),
+                "domain": o.get("domain", ""),
+                "energy": o.get("energy", ""),
             }
-            for o in objects
-        ]
+            if len(seen) >= limit:
+                break
+
+        return list(seen.values())
 
     def delete_tenant_seeds(self, tenant_id: str):
         # Delete all objects for a tenant (for account deletion)
