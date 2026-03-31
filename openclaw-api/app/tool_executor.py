@@ -184,3 +184,183 @@ async def web_search(args: dict, user: User, db: Session) -> str:
 
 # Update the dispatch map
 TOOL_HANDLERS["web_search"] = web_search
+
+
+async def rate_seed(args: dict, user: User, db: Session) -> str:
+    """Rate a seed from 1-5 stars."""
+    seed_id = args["seed_id"]
+    score = args["score"]
+    feedback = args.get("feedback", "")
+    try:
+        from app.models import Rating
+        existing = db.query(Rating).filter(
+            Rating.tenant_id == user.tenant_id,
+            Rating.message_id == seed_id
+        ).first()
+        if existing:
+            existing.score = score
+            existing.consent = True
+            db.commit()
+            return json.dumps({"status": "ok", "message": f"Rating updated to {score}⭐"})
+        rating = Rating(
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            message_id=seed_id,
+            score=score,
+            consent=True,
+        )
+        db.add(rating)
+        db.commit()
+        return json.dumps({"status": "ok", "message": f"Seed rated {score}⭐"})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+async def get_seed_detail(args: dict, user: User, db: Session) -> str:
+    """Get full seed details with enrichment metadata from Weaviate."""
+    seed_id = args["seed_id"]
+    try:
+        # Try Weaviate first (enriched data)
+        gql = """
+        {
+          Get {
+            IdeaSeed(
+              where: { operator: Equal path: ["notion_id"] valueText: "%s" }
+              limit: 1
+            ) {
+              title text summary tags entities backlinks domain energy status enrichment_version source url created
+            }
+          }
+        }
+        """ % seed_id
+        import urllib.request as req
+        r = req.urlopen(req.Request(
+            f"{settings.WEAVIATE_URL}/v1/graphql",
+            data=json.dumps({"query": gql}).encode(),
+            headers={"Content-Type": "application/json"}
+        ), timeout=10)
+        res = json.loads(r.read())
+        hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
+
+        if hits:
+            h = hits[0]
+            result = {
+                "status": "ok",
+                "source": "weaviate",
+                "title": h.get("title", ""),
+                "content": h.get("text", "")[:500],
+                "summary": h.get("summary", ""),
+                "tags": h.get("tags", ""),
+                "domain": h.get("domain", ""),
+                "energy": h.get("energy", ""),
+                "status": h.get("status", ""),
+                "source_url": h.get("url", ""),
+                "created": h.get("created", ""),
+            }
+            # Parse entities
+            try:
+                result["entities"] = json.loads(h.get("entities", "[]"))
+            except:
+                result["entities"] = []
+            # Parse backlinks
+            try:
+                result["backlinks"] = json.loads(h.get("backlinks", "[]"))
+            except:
+                result["backlinks"] = []
+            return json.dumps(result)
+
+        # Fallback to Postgres
+        seed = db.query(Seed).filter(
+            Seed.tenant_id == user.tenant_id,
+            Seed.id == seed_id
+        ).first()
+        if seed:
+            return json.dumps({
+                "status": "ok",
+                "source": "postgres",
+                "title": seed.title,
+                "content": seed.content[:500],
+                "created_at": seed.created_at.isoformat()
+            })
+
+        return json.dumps({"status": "not_found", "message": f"Seed {seed_id} not found."})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+async def search_seeds_filtered(args: dict, user: User, db: Session) -> str:
+    """Search seeds with domain/tag/energy filters in Weaviate."""
+    domain = args.get("domain", "")
+    tags = args.get("tags", "")
+    energy = args.get("energy", "")
+    limit = args.get("limit", 5)
+
+    # Build Weaviate where filter
+    filters = []
+    if domain:
+        filters.append({"operator": "Equal", "path": ["domain"], "valueText": domain})
+    if energy:
+        filters.append({"operator": "Equal", "path": ["energy"], "valueText": energy})
+
+    try:
+        import urllib.request as req
+
+        if len(filters) == 1:
+            where_clause = f'where: {{ operator: Equal path: ["{filters[0]["path"][0]}"] valueText: "{filters[0]["valueText"]}" }}'
+        elif len(filters) > 1:
+            conditions = ", ".join(
+                f'{{ operator: Equal path: ["{f["path"][0]}"] valueText: "{f["valueText"]}" }}'
+                for f in filters
+            )
+            where_clause = f"where: {{ operator: And operands: [{conditions}] }}"
+        else:
+            where_clause = ""
+
+        gql = """
+        {
+          Get {
+            IdeaSeed(
+              %s
+              limit: %d
+              sort: [{ path: ["enrichment_version"], order: desc }]
+            ) {
+              notion_id title summary tags domain energy source url created
+            }
+          }
+        }
+        """ % (where_clause, limit)
+
+        r = req.urlopen(req.Request(
+            f"{settings.WEAVIATE_URL}/v1/graphql",
+            data=json.dumps({"query": gql}).encode(),
+            headers={"Content-Type": "application/json"}
+        ), timeout=10)
+        res = json.loads(r.read())
+        hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
+
+        # Deduplicate by notion_id
+        seen = {}
+        for h in hits:
+            nid = h.get("notion_id", h.get("title", ""))
+            if nid not in seen:
+                seen[nid] = {
+                    "title": h.get("title", ""),
+                    "summary": h.get("summary", "")[:200],
+                    "tags": h.get("tags", ""),
+                    "domain": h.get("domain", ""),
+                    "energy": h.get("energy", ""),
+                    "url": h.get("url", ""),
+                }
+
+        results = list(seen.values())[:limit]
+        if not results:
+            return json.dumps({"status": "empty", "message": "No seeds found with those filters."})
+        return json.dumps({"status": "ok", "count": len(results), "results": results})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+# Register new handlers
+TOOL_HANDLERS["rate_seed"] = rate_seed
+TOOL_HANDLERS["get_seed_detail"] = get_seed_detail
+TOOL_HANDLERS["search_seeds_filtered"] = search_seeds_filtered
