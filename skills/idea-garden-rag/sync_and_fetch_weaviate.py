@@ -261,8 +261,42 @@ def delete_by_notion_id(notion_id):
         pass  # ok if none exist yet
 
 
-def upsert_seed(seed):
+def is_seed_enriched(notion_id):
+    """Check if a seed has been enriched (enrichment_version >= 1)."""
+    gql = """
+    {
+      Get {
+        IdeaSeed(
+          where: { operator: Equal path: ["notion_id"] valueText: "%s" }
+          limit: 1
+        ) { enrichment_version }
+      }
+    }
+    """ % notion_id
+    try:
+        req = urllib.request.Request(
+            f"{WEAVIATE_URL}/v1/graphql",
+            data=json.dumps({"query": gql}).encode(),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            res = json.loads(r.read())
+        hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
+        if hits:
+            version = hits[0].get("enrichment_version")
+            return version is not None and int(version) >= 1
+    except Exception:
+        pass
+    return False
+
+
+def upsert_seed(seed, skip_enriched=True):
     """Chunk, embed, and upsert a seed into Weaviate."""
+    # Skip seeds that have been enriched (enrichment pipeline owns those)
+    if skip_enriched and is_seed_enriched(seed["id"]):
+        print(f"  ⊘ Skipping '{seed['title']}' — already enriched")
+        return
+
     chunks = chunk_text(seed["text"])
     print(f"  Embedding '{seed['title']}' ({len(chunks)} chunks)...")
 

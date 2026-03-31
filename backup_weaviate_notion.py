@@ -22,7 +22,7 @@ def backup_weaviate():
         return
     
     print(f"Backing up Weaviate to {out_path}...")
-    # Fetch all IdeaSeed objects with pagination
+    # Fetch all IdeaSeed objects with pagination (including enrichment fields)
     all_objects = []
     offset = 0
     limit = 1000
@@ -41,6 +41,16 @@ def backup_weaviate():
                   source
                   created
                   url
+                  summary
+                  tags
+                  entities
+                  backlinks
+                  domain
+                  energy
+                  status
+                  enrichment_version
+                  parent_id
+                  source_url
                 }}
               }}
             }}"""
@@ -82,6 +92,37 @@ def backup_notion():
         f.write("If needed, use Notion API to export specific DBs.\n")
     print(f"✓ Notion manifest written to {manifest_path}")
 
+def backup_usage():
+    """Backup ApiCall usage data."""
+    out_path = os.path.join(BACKUP_DIR, f"usage_{today}.json")
+    if os.path.exists(out_path):
+        print(f"Usage backup {out_path} exists, skipping...")
+        return
+
+    gql = {
+        "query": """{
+          Get {
+            ApiCall(limit: 10000) {
+              user_id tenant_id model endpoint tokens_in tokens_out cost_usd latency_ms status timestamp source
+            }
+          }
+        }"""
+    }
+    try:
+        req = urllib.request.Request(
+            f"{WEAVIATE_URL}/v1/graphql",
+            data=json.dumps(gql).encode(),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            res = json.loads(r.read())
+        calls = res.get("data", {}).get("Get", {}).get("ApiCall", [])
+        with open(out_path, "w") as f:
+            json.dump({"backup_date": today, "call_count": len(calls), "calls": calls}, f, indent=2)
+        print(f"✓ Usage backup complete: {len(calls)} records")
+    except Exception as e:
+        print(f"Usage backup skipped: {e}")
+
 def prune_old_backups(keep_days=30):
     cutoff = datetime.date.today() - datetime.timedelta(days=keep_days)
     for filename in os.listdir(BACKUP_DIR):
@@ -99,6 +140,7 @@ def main():
     print(f"=== Backup {today} ===")
     backup_weaviate()
     backup_notion()
+    backup_usage()
     prune_old_backups()
     print("Backup complete.")
 
