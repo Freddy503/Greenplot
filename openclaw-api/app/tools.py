@@ -107,3 +107,85 @@ TOOLS.append({
         }
     }
 })
+
+# Rate a seed (1-5 stars)
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "rate_seed",
+        "description": "Rate a seed from 1-5 stars. Use when the user wants to rate or give feedback on an idea.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "seed_id": {
+                    "type": "string",
+                    "description": "The ID of the seed to rate."
+                },
+                "score": {
+                    "type": "integer",
+                    "description": "Rating from 1-5 stars.",
+                    "minimum": 1,
+                    "maximum": 5
+                },
+                "feedback": {
+                    "type": "string",
+                    "description": "Optional feedback text explaining the rating."
+                }
+            },
+            "required": ["seed_id", "score"]
+        }
+    }
+})
+
+# Get seed detail with enrichment
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "get_seed_detail",
+        "description": "Get full details of a seed including enrichment data (tags, entities, backlinks, domain). Use when the user asks about a specific seed.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "seed_id": {
+                    "type": "string",
+                    "description": "The seed ID or notion_id to look up."
+                }
+            },
+            "required": ["seed_id"]
+        }
+    }
+})
+
+# Search seeds with filters
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "search_seeds_filtered",
+        "description": "Search seeds with specific filters: domain, tags, energy level. Use when user asks 'show me all enterprise seeds' or similar.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Filter by domain: agentic-ai, career, enterprise, systems, learning, creativity.",
+                    "enum": ["agentic-ai", "career", "enterprise", "systems", "learning", "creativity"]
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Filter by tags (comma-separated, matches any)."
+                },
+                "energy": {
+                    "type": "string",
+                    "description": "Filter by energy level.",
+                    "enum": ["Spark", "Hot", "Flow", "Cool"]
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (default 5).",
+                    "default": 5
+                }
+            },
+            "required": []
+        }
+    }
+})
