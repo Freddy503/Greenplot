@@ -582,7 +582,7 @@ export default function OnboardingPage() {
               onNickname={setNickname}
               onCity={setCity}
               onNext={next}
-              onLogin={() => router.push('/chat')}
+              onLogin={() => router.push('/login')}
             />
           )}
 
