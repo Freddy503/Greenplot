@@ -207,4 +207,14 @@ def setup_default_registry() -> ToolRegistry:
         handler=TOOL_HANDLERS.get("rate_seed"),
     ))
 
+    # ── Sub-Agent System ───────────────────────────────────────────
+    from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
+
+    runner = SubagentRunner(
+        registry=registry,
+        api_key="",  # Set at runtime
+        model="anthropic/claude-sonnet-4",
+    )
+    registry.register(create_subagent_tool_spec(runner))
+
     return registry
