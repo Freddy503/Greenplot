@@ -7,10 +7,16 @@ export async function middleware(request: NextRequest) {
     request: { headers: request.headers },
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Skip auth if env vars are missing (avoids MIDDLEWARE_INVOCATION_FAILED)
+  if (!supabaseUrl || !supabaseKey) {
+    return response
+  }
+
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -22,11 +28,13 @@ export async function middleware(request: NextRequest) {
           })
         },
       },
-    }
-  )
+    })
 
-  // Refresh session if expired
-  await supabase.auth.getUser()
+    // Refresh session if expired
+    await supabase.auth.getUser()
+  } catch {
+    // Auth check failed — allow through without auth
+  }
 
   return response
 }
