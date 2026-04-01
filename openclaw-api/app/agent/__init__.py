@@ -20,6 +20,9 @@ from app.agent.agent import SeedifyAgent
 from app.agent.stream import AgentEvent, AgentEventType
 from app.agent.permissions import PermissionLevel, check_permission
 from app.agent.subagents import SubagentRunner, SubagentType
+from app.agent.persist import ChatSessionStore
+from app.agent.prompt import SystemPromptBuilder, Section
+from app.agent.compact import CompactionConfig, CompactionResult, compact_session, should_compact, estimate_tokens
 
 __all__ = [
     "SeedifyAgent",
@@ -33,4 +36,12 @@ __all__ = [
     "check_permission",
     "SubagentRunner",
     "SubagentType",
+    "ChatSessionStore",
+    "SystemPromptBuilder",
+    "Section",
+    "CompactionConfig",
+    "CompactionResult",
+    "compact_session",
+    "should_compact",
+    "estimate_tokens",
 ]
