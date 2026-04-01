@@ -124,6 +124,24 @@ class Rating(Base):
     )
 
 
+class ChatSession(Base):
+    """Persistent chat session storage for the Seedify agent."""
+    __tablename__ = 'chat_sessions'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    title = Column(String(500), nullable=True)
+    messages = Column(JSON, nullable=False, default=list)  # full ContentBlock JSON
+    compaction_summary = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_chat_session_tenant_user', tenant_id, user_id),
+        Index('idx_chat_session_updated', tenant_id, updated_at.desc()),
+    )
+
+
 class Usage(Base):
     __tablename__ = 'usage'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
