@@ -26,6 +26,7 @@ import {
   ToolInput,
   ToolOutput,
 } from '@/components/ai-elements/tool'
+import { SubagentStatus, type SubagentData } from '@/components/ai-elements/subagent'
 import {
   Sources,
   SourcesTrigger,
@@ -129,24 +130,42 @@ export default function ChatPage() {
                           // Tool parts
                           if (part.type.startsWith('tool-')) {
                             const tp = part as any
+                            const isSubagent = tp.type.includes('spawn_subagent')
+                            let subagentData: SubagentData | null = null
+
+                            // Parse sub-agent data from output
+                            if (isSubagent && tp.output) {
+                              try {
+                                subagentData = typeof tp.output === 'string'
+                                  ? JSON.parse(tp.output)
+                                  : tp.output
+                              } catch {}
+                            }
+
                             return (
-                              <Tool key={`${message.id}-tool-${i}`} className="mt-3">
-                                <ToolHeader
-                                  type={tp.type}
-                                  state={tp.state}
-                                />
-                                <ToolContent>
-                                  {tp.input != null && (
-                                    <ToolInput input={tp.input} />
-                                  )}
-                                  {(tp.output != null || tp.errorText != null) && (
-                                    <ToolOutput
-                                      output={tp.output != null ? JSON.stringify(tp.output) : undefined}
-                                      errorText={tp.errorText}
-                                    />
-                                  )}
-                                </ToolContent>
-                              </Tool>
+                              <div key={`${message.id}-tool-${i}`} className="mt-3">
+                                {isSubagent && subagentData && (
+                                  <SubagentStatus data={subagentData} className="mb-2" />
+                                )}
+                                <Tool>
+                                  <ToolHeader
+                                    type={tp.type}
+                                    state={tp.state}
+                                    title={isSubagent ? 'spawn_subagent' : undefined}
+                                  />
+                                  <ToolContent>
+                                    {tp.input != null && (
+                                      <ToolInput input={tp.input} />
+                                    )}
+                                    {(tp.output != null || tp.errorText != null) && (
+                                      <ToolOutput
+                                        output={tp.output != null ? JSON.stringify(tp.output) : undefined}
+                                        errorText={tp.errorText}
+                                      />
+                                    )}
+                                  </ToolContent>
+                                </Tool>
+                              </div>
                             )
                           }
 
