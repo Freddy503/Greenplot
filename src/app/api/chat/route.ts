@@ -178,10 +178,15 @@ export async function POST(req: Request) {
               case 'tool_call': {
                 const toolCallId = crypto.randomUUID()
                 const toolName = event.name || 'unknown'
-                const input =
-                  typeof event.input === 'string'
-                    ? JSON.parse(event.input)
-                    : event.input || {}
+                let input: Record<string, unknown> = {}
+                try {
+                  input =
+                    typeof event.input === 'string'
+                      ? JSON.parse(event.input)
+                      : event.input || {}
+                } catch {
+                  input = { raw: String(event.input || '') }
+                }
 
                 // Signal tool is starting
                 writer.write({
