@@ -22,7 +22,7 @@ export default function SetupPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: `${nickname.toLowerCase().replace(/\s+/g, '')}@seedify.local`,
+          email: `${nickname.toLowerCase().replace(/\s+/g, '')}@greenplot.app`,
           password: crypto.randomUUID(),
         }),
       })

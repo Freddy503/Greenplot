@@ -35,16 +35,19 @@ const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfil
 
 const TOTAL_STEPS = 5
 
-// ── Progress Bar ──────────────────────────────────────
+// ── Progress Bar (Figma: thin green gradient line, 192px centered, rounded) ──
 
 function ProgressBar({ step }: { step: number }) {
   const pct = ((step + 1) / TOTAL_STEPS) * 100
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50">
-      <div className="h-[2px] w-full" style={{ background: 'rgba(105,246,184,0.15)' }}>
+    <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-8">
+      <div className="h-1 w-48 rounded-full overflow-hidden" style={{ background: 'rgba(16,185,129,0.15)' }}>
         <motion.div
-          className="h-full"
-          style={{ background: 'var(--primary)' }}
+          className="h-full rounded-full"
+          style={{
+            background: 'linear-gradient(90deg, #10b981, rgba(16,185,129,0.0))',
+            width: `${pct}%`,
+          }}
           initial={false}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.4, ease: 'easeInOut' }}
@@ -60,10 +63,10 @@ function StepShell({ children, step }: { children: React.ReactNode; step: number
   return (
     <motion.div
       key={step}
-      initial={{ opacity: 0, y: 18 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -18 }}
-      transition={{ duration: 0.28, ease: 'easeOut' }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
       className="w-full flex flex-col items-center"
     >
       {children}
@@ -71,15 +74,17 @@ function StepShell({ children, step }: { children: React.ReactNode; step: number
   )
 }
 
-// ── Shared UI ─────────────────────────────────────────
+// ── Step Label ────────────────────────────────────────
 
 function StepLabel({ step }: { step: number }) {
   return (
-    <p className="text-xs font-medium mb-6" style={{ color: 'var(--on-surface-variant)' }}>
+    <p className="text-xs tracking-wide mb-8" style={{ color: '#9fb8aa', opacity: 0.6 }}>
       Step {step + 1}/{TOTAL_STEPS}
     </p>
   )
 }
+
+// ── Primary Button (Figma: amber/gold, pill-shaped, 68px tall) ──
 
 function PrimaryButton({
   children,
@@ -96,14 +101,18 @@ function PrimaryButton({
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className="w-full py-3.5 rounded-2xl font-semibold text-base transition-all active:scale-[0.97] disabled:opacity-40"
-      style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
+      className="w-full py-4 rounded-full font-semibold text-base transition-all active:scale-[0.97] disabled:opacity-40 shadow-lg"
+      style={{
+        background: '#f59e0b',
+        color: '#ffffff',
+        boxShadow: '0 8px 32px rgba(245,158,11,0.3)',
+      }}
     >
       {loading ? (
         <span className="flex items-center justify-center gap-2">
           <span
             className="w-4 h-4 rounded-full border-2 border-transparent animate-spin"
-            style={{ borderTopColor: 'var(--primary-foreground)' }}
+            style={{ borderTopColor: '#ffffff' }}
           />
           Setting up your garden…
         </span>
@@ -113,6 +122,8 @@ function PrimaryButton({
     </button>
   )
 }
+
+// ── Styled Input ──────────────────────────────────────
 
 function StyledInput({
   value,
@@ -132,58 +143,99 @@ function StyledInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       autoFocus={autoFocus}
-      className="w-full px-4 py-3.5 rounded-2xl text-base outline-none transition-all focus:ring-2"
+      className="w-full px-5 py-4 rounded-full text-base outline-none transition-all placeholder:opacity-50"
       style={{
-        background: 'var(--surface-container)',
-        color: 'var(--on-surface)',
-        border: '1px solid var(--outline-variant)',
-        // @ts-ignore
-        '--tw-ring-color': 'rgba(105,246,184,0.35)',
+        background: '#232623',
+        color: '#e1e3df',
+        border: '1px solid #2e4a3f',
       }}
     />
   )
 }
 
-// ── STEP 0: Welcome ───────────────────────────────────
+// ── STEP 0: Welcome (Figma: Seedify: Welcome) ─────────
 
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <StepShell step={0}>
-      <StepLabel step={0} />
-      {/* Glow icon */}
-      <div className="relative mb-8">
+      {/* Decorative background shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute inset-0 rounded-full blur-2xl opacity-40"
-          style={{ background: 'var(--primary)', transform: 'scale(1.6)' }}
+          className="absolute rounded-full"
+          style={{
+            width: 228,
+            height: 228,
+            background: '#10b981',
+            opacity: 0.06,
+            top: '8%',
+            right: '-15%',
+            filter: 'blur(2px)',
+          }}
         />
-        <span
-          className="material-symbols-outlined relative"
-          style={{ fontSize: 72, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
-        >
-          forest
-        </span>
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: 390,
+            height: 390,
+            background: '#10b981',
+            opacity: 0.04,
+            top: '-10%',
+            left: '-20%',
+            filter: 'blur(60px)',
+          }}
+        />
       </div>
 
-      <h1
-        className="text-3xl font-bold text-center leading-snug mb-3"
-        style={{ color: 'var(--on-surface)' }}
-      >
-        Welcome to{'\n'}Greenplot
-      </h1>
-      <p className="text-sm text-center leading-relaxed mb-10 max-w-xs" style={{ color: 'var(--on-surface-variant)' }}>
-        Your personal AI agent for creative thinking. Ideas as living matter, nurtured to help you grow.
-      </p>
+      <StepLabel step={0} />
+
+      {/* Seed motif illustration — dark green rounded container */}
+      <div className="relative mb-10">
+        <div
+          className="w-56 h-72 rounded-[9999px] flex items-center justify-center relative overflow-hidden"
+          style={{ background: '#1a2e26' }}
+        >
+          {/* Floating decorative element */}
+          <div
+            className="absolute w-20 h-20 rounded-full"
+            style={{
+              background: '#10b981',
+              top: '15%',
+              right: '10%',
+              opacity: 0.8,
+            }}
+          />
+          {/* Main icon */}
+          <span
+            className="material-symbols-outlined relative z-10"
+            style={{ fontSize: 72, color: '#10b981', fontVariationSettings: '"FILL" 1' }}
+          >
+            forest
+          </span>
+        </div>
+      </div>
+
+      {/* Typography */}
+      <div className="text-center mb-10">
+        <h1 className="text-4xl font-bold leading-tight mb-6" style={{ color: '#e1e3df' }}>
+          Welcome to{'\n'}your creative{'\n'}Brain
+        </h1>
+        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+          Your personal AI agent in your pocket for creative thinking.
+          Information as living matter, nurtured to help you grow.
+        </p>
+      </div>
 
       <PrimaryButton onClick={onNext}>Get Started</PrimaryButton>
 
-      <p className="mt-6 text-xs" style={{ color: 'var(--on-surface-variant)' }}>
+      <p className="mt-6 text-xs flex items-center gap-2" style={{ color: '#9fb8aa', opacity: 0.6 }}>
+        <span className="w-2 h-2 rounded-full" style={{ background: '#10b981' }} />
         Version 1.0 — Built for growers
       </p>
     </StepShell>
   )
 }
 
-// ── STEP 1: Who Are You ───────────────────────────────
+// ── STEP 1: Who Are You (Figma: Who are you?) ─────────
 
 function StepWhoAreYou({
   nickname,
@@ -203,31 +255,38 @@ function StepWhoAreYou({
   return (
     <StepShell step={1}>
       <StepLabel step={1} />
-      <span
-        className="material-symbols-outlined mb-6"
-        style={{ fontSize: 40, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
-      >
-        person_pin
-      </span>
-      <h2 className="text-2xl font-bold text-center mb-2" style={{ color: 'var(--on-surface)' }}>
-        Tell us about your roots
-      </h2>
-      <p className="text-sm text-center leading-relaxed mb-8 max-w-xs" style={{ color: 'var(--on-surface-variant)' }}>
-        Every garden needs a keeper. Choose a name that reflects your digital presence.
-      </p>
 
-      <div className="w-full space-y-3 mb-8">
-        <StyledInput
-          value={nickname}
-          onChange={onNickname}
-          placeholder="Seedling_42"
-          autoFocus
-        />
-        <StyledInput
-          value={city}
-          onChange={onCity}
-          placeholder="Your city (optional)"
-        />
+      <div className="text-center mb-10">
+        <h2 className="text-3xl font-bold mb-3" style={{ color: '#e1e3df' }}>
+          Tell us about your{'\n'}roots
+        </h2>
+        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+          Every garden needs a keeper. Choose a name that reflects your digital presence.
+        </p>
+      </div>
+
+      <div className="w-full space-y-4 mb-10">
+        <div>
+          <label className="block text-xs font-medium mb-2 pl-1" style={{ color: '#9fb8aa' }}>
+            Nickname
+          </label>
+          <StyledInput
+            value={nickname}
+            onChange={onNickname}
+            placeholder="Seedling_42"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-2 pl-1" style={{ color: '#9fb8aa' }}>
+            City <span style={{ opacity: 0.5 }}>(Optional)</span>
+          </label>
+          <StyledInput
+            value={city}
+            onChange={onCity}
+            placeholder="The Digital Valley"
+          />
+        </div>
       </div>
 
       <PrimaryButton onClick={onNext} disabled={!nickname.trim()}>
@@ -236,8 +295,8 @@ function StepWhoAreYou({
 
       <button
         onClick={onLogin}
-        className="mt-4 text-sm transition-opacity hover:opacity-80"
-        style={{ color: 'var(--primary)' }}
+        className="mt-5 text-sm font-medium transition-opacity hover:opacity-80"
+        style={{ color: '#10b981' }}
       >
         Already have an account? Log In
       </button>
@@ -245,7 +304,7 @@ function StepWhoAreYou({
   )
 }
 
-// ── STEP 2: Interests ─────────────────────────────────
+// ── STEP 2: Interests (Figma: What interests you?) ─────
 
 function StepInterests({
   selected,
@@ -263,35 +322,29 @@ function StepInterests({
   return (
     <StepShell step={2}>
       <StepLabel step={2} />
-      <span
-        className="material-symbols-outlined mb-6"
-        style={{ fontSize: 40, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
-      >
-        interests
-      </span>
-      <h2 className="text-2xl font-bold text-center mb-2" style={{ color: 'var(--on-surface)' }}>
-        Cultivating Interests
-      </h2>
-      <p className="text-sm text-center leading-relaxed mb-8 max-w-xs" style={{ color: 'var(--on-surface-variant)' }}>
-        What seeds should we plant?
-      </p>
 
-      <div className="flex flex-wrap gap-2 justify-center mb-6">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl font-bold mb-3" style={{ color: '#e1e3df' }}>
+          Cultivating{'\n'}Interests
+        </h2>
+        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+          What seeds should we plant?
+        </p>
+      </div>
+
+      {/* Interest chips — Figma style: pill-shaped, organic tonal layering */}
+      <div className="flex flex-wrap gap-3 justify-center mb-8">
         {INTEREST_OPTIONS.map((interest) => {
           const isSelected = selected.includes(interest)
           return (
             <button
               key={interest}
               onClick={() => onToggle(interest)}
-              className="px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95"
+              className="px-5 py-2.5 rounded-full text-sm font-medium transition-all active:scale-95"
               style={
                 isSelected
-                  ? { background: '#69f6b8', color: '#005a3c' }
-                  : {
-                      background: 'var(--surface-container)',
-                      color: 'var(--on-surface-variant)',
-                      border: '1px solid var(--outline-variant)',
-                    }
+                  ? { background: '#10b981', color: '#ffffff' }
+                  : { background: '#232623', color: '#9fb8aa', border: '1px solid #2e4a3f' }
               }
             >
               {interest}
@@ -300,7 +353,8 @@ function StepInterests({
         })}
       </div>
 
-      <div className="w-full mb-8">
+      {/* Custom input */}
+      <div className="w-full mb-10">
         <StyledInput
           value={custom}
           onChange={onCustom}
@@ -308,14 +362,23 @@ function StepInterests({
         />
       </div>
 
-      <PrimaryButton onClick={onNext}>
-        Continue
-      </PrimaryButton>
+      <div className="flex items-center justify-between w-full">
+        <button
+          onClick={onNext}
+          className="text-sm font-medium transition-opacity hover:opacity-80"
+          style={{ color: '#9fb8aa' }}
+        >
+          Back
+        </button>
+        <PrimaryButton onClick={onNext}>
+          Continue
+        </PrimaryButton>
+      </div>
     </StepShell>
   )
 }
 
-// ── STEP 3: Digest Frequency ──────────────────────────
+// ── STEP 3: Nurture Focus (Figma: Nurture Focus) ──────
 
 function StepNurtureFocus({
   frequency,
@@ -329,49 +392,46 @@ function StepNurtureFocus({
   return (
     <StepShell step={3}>
       <StepLabel step={3} />
-      <span
-        className="material-symbols-outlined mb-6"
-        style={{ fontSize: 40, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
-      >
-        spa
-      </span>
-      <h2 className="text-2xl font-bold text-center mb-2" style={{ color: 'var(--on-surface)' }}>
-        Nurture your focus
-      </h2>
-      <p className="text-sm text-center leading-relaxed mb-8 max-w-xs" style={{ color: 'var(--on-surface-variant)' }}>
-        How often should Greenplot surface your growing ideas?
-      </p>
 
-      <div className="w-full space-y-3 mb-8">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl font-bold mb-3" style={{ color: '#e1e3df' }}>
+          Nurture your focus.
+        </h2>
+        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+          Choose your harvest frequency. Adjust how often you want to collect your yields.
+        </p>
+      </div>
+
+      <div className="w-full space-y-3 mb-10">
         {DIGEST_OPTIONS.map((opt) => {
           const isSelected = frequency === opt.value
           return (
             <button
               key={opt.value}
               onClick={() => onFrequency(opt.value)}
-              className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all active:scale-[0.98]"
+              className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all active:scale-[0.98] text-left"
               style={{
-                background: isSelected ? 'rgba(105,246,184,0.12)' : 'var(--surface-container)',
-                border: `1.5px solid ${isSelected ? '#69f6b8' : 'var(--outline-variant)'}`,
+                background: isSelected ? 'rgba(16,185,129,0.1)' : '#232623',
+                border: `1.5px solid ${isSelected ? '#10b981' : '#2e4a3f'}`,
               }}
             >
               {/* Radio dot */}
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
                 style={{
-                  border: `2px solid ${isSelected ? '#69f6b8' : 'var(--outline-variant)'}`,
-                  background: isSelected ? '#69f6b8' : 'transparent',
+                  border: `2px solid ${isSelected ? '#10b981' : '#657a70'}`,
+                  background: isSelected ? '#10b981' : 'transparent',
                 }}
               >
                 {isSelected && (
-                  <div className="w-2 h-2 rounded-full" style={{ background: '#005a3c' }} />
+                  <div className="w-2 h-2 rounded-full bg-white" />
                 )}
               </div>
-              <div className="text-left">
-                <p className="text-sm font-semibold" style={{ color: isSelected ? '#69f6b8' : 'var(--on-surface)' }}>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: isSelected ? '#10b981' : '#e1e3df' }}>
                   {opt.label}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--on-surface-variant)' }}>
+                <p className="text-xs mt-0.5" style={{ color: '#9fb8aa' }}>
                   {opt.sublabel}
                 </p>
               </div>
@@ -380,14 +440,12 @@ function StepNurtureFocus({
         })}
       </div>
 
-      <PrimaryButton onClick={onNext}>
-        Continue
-      </PrimaryButton>
+      <PrimaryButton onClick={onNext}>Continue</PrimaryButton>
     </StepShell>
   )
 }
 
-// ── STEP 4: How It Works ──────────────────────────────
+// ── STEP 4: How It Works (Figma: How it works) ────────
 
 const BENTO_CARDS = [
   {
@@ -398,17 +456,17 @@ const BENTO_CARDS = [
   {
     icon: 'language',
     title: 'Web Enrichment',
-    body: 'Importing outside nutrients. We leverage LLM models and high-fidelity research to expand your knowledge beyond garden walls.',
+    body: 'Importing Outside Nutrients. We leverage LLM models and high-fidelity research to expand your knowledge beyond the garden walls.',
   },
   {
     icon: 'favorite',
     title: 'Heartbeat',
-    body: 'The daily pulse. Morning Spark prompts and Daily Briefings ensure you never lose track of evolving thoughts.',
+    body: 'The daily Garden Pulse. Morning Spark prompts and Daily Briefings ensure you never lose track of evolving thoughts.',
   },
   {
     icon: 'hub',
     title: 'Search & Graph',
-    body: 'Powered by vector search and knowledge graphs. Semantic similarity across your entire knowledge base.',
+    body: 'Powered by Vector Search and Knowledge Graphs. Semantic similarity across your entire knowledge base.',
   },
 ]
 
@@ -424,40 +482,59 @@ function StepHowItWorks({
   return (
     <StepShell step={4}>
       <StepLabel step={4} />
-      <h2 className="text-2xl font-bold text-center mb-2" style={{ color: 'var(--on-surface)' }}>
-        The Living Intelligence
-      </h2>
-      <p className="text-sm text-center leading-relaxed mb-8 max-w-xs" style={{ color: 'var(--on-surface-variant)' }}>
-        Experience how your digital greenhouse breathes, learns, and connects.
-      </p>
 
-      <div className="grid grid-cols-2 gap-3 w-full mb-8">
-        {BENTO_CARDS.map((card) => (
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold mb-3" style={{ color: '#e1e3df' }}>
+          The Living{'\n'}Intelligence
+        </h2>
+        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+          Experience how your digital greenhouse breathes, learns, and connects.
+        </p>
+      </div>
+
+      {/* Bento grid — Figma: 2x2, organic tonal layering */}
+      <div className="grid grid-cols-2 gap-3 w-full mb-10">
+        {BENTO_CARDS.map((card, i) => (
           <div
             key={card.title}
-            className="flex flex-col gap-2 p-4 rounded-2xl"
-            style={{ background: 'var(--surface-container)' }}
+            className="flex flex-col gap-2.5 p-5 rounded-2xl relative overflow-hidden"
+            style={{ background: '#1a2e26', border: '1px solid #2e4a3f' }}
           >
+            {/* Subtle organic background */}
+            <div
+              className="absolute w-16 h-16 rounded-full -top-4 -right-4"
+              style={{ background: '#10b981', opacity: 0.06 }}
+            />
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: 26, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
+              style={{ fontSize: 28, color: '#10b981', fontVariationSettings: '"FILL" 1' }}
             >
               {card.icon}
             </span>
-            <p className="text-sm font-semibold leading-tight" style={{ color: 'var(--on-surface)' }}>
+            <p className="text-sm font-bold leading-tight" style={{ color: '#e1e3df' }}>
               {card.title}
             </p>
-            <p className="text-xs leading-relaxed" style={{ color: 'var(--on-surface-variant)' }}>
+            <p className="text-xs leading-relaxed" style={{ color: '#9fb8aa' }}>
               {card.body}
             </p>
           </div>
         ))}
       </div>
 
+      {/* Seeds auto-sync banner */}
+      <div
+        className="w-full rounded-2xl p-4 mb-8 text-center"
+        style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}
+      >
+        <p className="text-xs leading-relaxed" style={{ color: '#9fb8aa' }}>
+          Seeds are automatically synced to memory so both you and the AI can connect the dots. No manual saving required.
+        </p>
+      </div>
+
       {error && (
         <div
           className="w-full rounded-2xl px-4 py-3 mb-4 text-sm"
-          style={{ background: 'rgba(255,113,108,0.1)', color: 'var(--error)' }}
+          style={{ background: 'rgba(255,113,108,0.1)', color: '#ff716c' }}
         >
           {error}
         </div>
@@ -466,6 +543,10 @@ function StepHowItWorks({
       <PrimaryButton onClick={onEnter} loading={loading}>
         Enter the Garden
       </PrimaryButton>
+
+      <p className="mt-4 text-xs text-center" style={{ color: '#9fb8aa', opacity: 0.5 }}>
+        Initializing the Greenhouse
+      </p>
     </StepShell>
   )
 }
@@ -515,7 +596,7 @@ export default function OnboardingPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: `${slug}@greenplot.local`,
+          email: `${slug}@greenplot.app`,
           password,
         }),
       })
@@ -568,10 +649,10 @@ export default function OnboardingPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 py-16 pb-8"
-      style={{ background: 'var(--background)' }}
+      className="min-h-screen flex flex-col items-center justify-center px-6 py-16 pb-8 relative overflow-hidden"
+      style={{ background: '#111412' }}
     >
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm relative z-10">
         <AnimatePresence mode="wait">
           {currentStep === 0 && <StepWelcome onNext={next} />}
 

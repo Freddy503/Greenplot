@@ -4,52 +4,59 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Seedify Theme ────────────────────────────────────── */
+/* ── Greenplot Theme (Figma-matched) ────────────────── */
 :root {
-  /* Seedify custom tokens (used by Material Icons + legacy styles) */
-  --surface: #01120b;
-  --surface-container: #051e15;
-  --surface-container-high: #09241b;
-  --surface-container-highest: #0d2b21;
-  --primary-dim: #58e7ab;
-  --primary-container: #06b77f;
-  --on-surface: #e4fcf0;
-  --on-surface-variant: #9ab0a5;
-  --outline: #657a70;
-  --outline-variant: #384c43;
-  --on-primary: #005a3c;
-  --on-background: #e4fcf0;
+  /* Core surfaces */
+  --background: #111412;
+  --surface: #1a2e26;
+  --surface-container: #232623;
+  --surface-container-high: #2e312e;
+  --surface-container-highest: #384038;
 
-  /* shadcn color tokens → Seedify palette */
-  --background: #01120b;
-  --foreground: #e4fcf0;
-  --card: #051e15;
-  --card-foreground: #e4fcf0;
-  --popover: #051e15;
-  --popover-foreground: #e4fcf0;
-  --primary: #69f6b8;
-  --primary-foreground: #005a3c;
-  --secondary: #f8a010;
-  --secondary-foreground: #01120b;
-  --muted: #0d2b21;
-  --muted-foreground: #9ab0a5;
-  --accent: #09241b;
-  --accent-foreground: #e4fcf0;
+  /* Green accent (from Figma: rgb(16,185,129)) */
+  --primary: #10b981;
+  --primary-foreground: #ffffff;
+
+  /* Amber/CTA (from Figma: rgb(245,158,11)) */
+  --secondary: #f59e0b;
+  --secondary-foreground: #ffffff;
+
+  /* Text */
+  --on-surface: #e1e3df;
+  --on-surface-variant: #9fb8aa;
+  --on-primary: #ffffff;
+  --on-background: #e1e3df;
+
+  /* Borders & outlines */
+  --outline: #657a70;
+  --outline-variant: #2e4a3f;
+
+  /* Status */
   --destructive: #ff716c;
-  --border: #384c43;
-  --input: #384c43;
-  --ring: #69f6b8;
+  --muted: #232623;
+  --muted-foreground: #9fb8aa;
+
+  /* shadcn aliases */
+  --card: #1a2e26;
+  --card-foreground: #e1e3df;
+  --popover: #1a2e26;
+  --popover-foreground: #e1e3df;
+  --accent: #2e312e;
+  --accent-foreground: #e1e3df;
+  --border: #2e4a3f;
+  --input: #2e312e;
+  --ring: #10b981;
   --radius: 0.75rem;
 
   /* Sidebar */
-  --sidebar: #051e15;
-  --sidebar-foreground: #e4fcf0;
-  --sidebar-primary: #69f6b8;
-  --sidebar-primary-foreground: #005a3c;
-  --sidebar-accent: #09241b;
-  --sidebar-accent-foreground: #e4fcf0;
-  --sidebar-border: #384c43;
-  --sidebar-ring: #69f6b8;
+  --sidebar: #111412;
+  --sidebar-foreground: #e1e3df;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1a2e26;
+  --sidebar-accent-foreground: #e1e3df;
+  --sidebar-border: #2e4a3f;
+  --sidebar-ring: #10b981;
 }
 
 /* ── Base Styles ──────────────────────────────────────── */
