@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#111412",
+  themeColor: "#01120b",
 };
 
 export default function RootLayout({
@@ -42,7 +42,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body
-        className="min-h-screen bg-[#111412] text-[#e1e3df]"
+        className="min-h-screen bg-[#01120b] text-[#e4fcf0]"
         style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
       >
         <TooltipProvider>{children}</TooltipProvider>
