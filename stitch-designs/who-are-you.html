@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Seedify Onboarding - Tell us about your roots</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-high": "#09241b",
+              "on-secondary-fixed": "#4c2e00",
+              "inverse-primary": "#006d4a",
+              "surface-dim": "#01120b",
+              "surface-bright": "#123227",
+              "on-tertiary-fixed": "#004b33",
+              "secondary-container": "#855300",
+              "primary-dim": "#58e7ab",
+              "tertiary-fixed": "#6bffc1",
+              "surface": "#01120b",
+              "secondary-fixed-dim": "#ffb554",
+              "on-tertiary-container": "#006042",
+              "inverse-surface": "#e7fff2",
+              "secondary-fixed": "#ffc885",
+              "tertiary-fixed-dim": "#5af0b4",
+              "surface-variant": "#0d2b21",
+              "primary-fixed": "#69f6b8",
+              "on-tertiary": "#006948",
+              "on-primary-container": "#002919",
+              "on-secondary-fixed-variant": "#724700",
+              "error": "#ff716c",
+              "error-dim": "#d7383b",
+              "surface-container-highest": "#0d2b21",
+              "on-primary": "#005a3c",
+              "on-error": "#490006",
+              "on-error-container": "#ffa8a3",
+              "on-secondary": "#4a2c00",
+              "tertiary-dim": "#5af0b4",
+              "secondary": "#f8a010",
+              "surface-container-lowest": "#000000",
+              "on-background": "#e4fcf0",
+              "surface-tint": "#69f6b8",
+              "surface-container-low": "#021710",
+              "outline": "#657a70",
+              "on-surface": "#e4fcf0",
+              "on-primary-fixed": "#00452d",
+              "outline-variant": "#384c43",
+              "tertiary-container": "#6bffc1",
+              "surface-container": "#051e15",
+              "primary": "#69f6b8",
+              "primary-fixed-dim": "#58e7ab",
+              "background": "#01120b",
+              "on-tertiary-fixed-variant": "#006b4a",
+              "primary-container": "#06b77f",
+              "error-container": "#9f0519",
+              "inverse-on-surface": "#455950",
+              "on-surface-variant": "#9ab0a5",
+              "secondary-dim": "#e79400",
+              "on-secondary-container": "#fff6f0",
+              "tertiary": "#cdffe3",
+              "on-primary-fixed-variant": "#006544"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .seed-shape {
+            clip-path: path('M50 0 C80 0 100 30 100 60 C100 85 80 100 50 100 C20 100 0 85 0 60 C0 30 20 0 50 0 Z');
+        }
+        .glass-panel {
+            background: linear-gradient(135deg, rgba(18, 50, 39, 0.6) 0%, rgba(2, 23, 16, 0.8) 100%);
+            backdrop-filter: blur(24px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body min-h-screen flex flex-col overflow-x-hidden">
+<!-- Suppressed Shell: Navigation is hidden for linear onboarding task -->
+<main class="flex-grow flex flex-col items-center justify-center px-6 py-12 relative">
+<!-- Atmospheric Background Elements -->
+<div class="absolute top-[-10%] right-[-10%] w-96 h-96 bg-primary/10 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-[-5%] left-[-5%] w-80 h-80 bg-secondary/5 rounded-full blur-[100px]"></div>
+<!-- Progress Indicator -->
+<div class="w-full max-w-md mb-12 flex flex-col items-center">
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden mb-3">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container w-[28.5%]" style="transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1)"></div>
+</div>
+<span class="text-on-surface-variant font-label text-[10px] tracking-[0.2em] uppercase font-bold">Step 2 of 7</span>
+</div>
+<div class="w-full max-w-lg space-y-10 text-center">
+<!-- Header Section -->
+<div class="space-y-4">
+<h1 class="text-4xl md:text-5xl font-headline font-extrabold tracking-tight leading-tight text-on-surface">
+                    Tell us about your roots
+                </h1>
+<p class="text-on-surface-variant text-lg max-w-xs mx-auto leading-relaxed">
+                    Every garden needs a keeper. Choose a name that reflects your digital presence.
+                </p>
+</div>
+<!-- Avatar Upload Section -->
+<div class="relative group mx-auto w-40 h-40">
+<div class="absolute inset-0 bg-primary/20 blur-2xl group-hover:bg-primary/30 transition-all duration-500 rounded-full"></div>
+<div class="relative w-full h-full bg-surface-container-high seed-shape flex items-center justify-center border border-outline-variant/20 hover:border-primary/40 transition-colors cursor-pointer overflow-hidden">
+<img alt="Abstract organic green texture" class="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-110 transition-transform duration-700" data-alt="abstract close-up of vibrant emerald green plant leaf with intricate vein patterns and soft atmospheric lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDN8dlkB7DnCPHdg9hBOZugjmIpGxpG6A3GrxfkQrIjWohuOQ0WRY_Na7am7rjLHazcxpYW4U60VNzYj9fAwoMPRmg11NuSaIg0MN-gLbQyTbTwvigBDzk_5aAbXTRQ_bNmUNirCRD_y2K52wxH35dJNGuXJvG_nDIXgf4kd_U1qHExoEvZGbHSiEn66X2wIMWXvS6DSehZafQNvtzZxf_vm-FN5PDBfpSEpBZhhiksnnA8qXVP7bwFzMUgrED2_BXlG_KN0tXgrBDc"/>
+<div class="relative z-10 flex flex-col items-center gap-2">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-3xl" data-icon="photo_camera">photo_camera</span>
+</div>
+</div>
+</div>
+<!-- Mini floating badge -->
+<div class="absolute -bottom-2 -right-2 w-10 h-10 bg-secondary rounded-full flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-on-secondary text-xl" data-icon="add" style="font-variation-settings: 'wght' 700;">add</span>
+</div>
+</div>
+<!-- Form Section -->
+<div class="space-y-6 text-left max-w-sm mx-auto">
+<div class="space-y-2">
+<label class="block font-label text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant ml-4">Nickname</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border-none rounded-xl px-6 py-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary transition-all" placeholder="Seedling_42" type="text"/>
+<div class="absolute inset-y-0 right-4 flex items-center text-primary/40">
+<span class="material-symbols-outlined" data-icon="face">face</span>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block font-label text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant ml-4">City (Optional)</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border-none rounded-xl px-6 py-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary transition-all" placeholder="The Digital Valley" type="text"/>
+<div class="absolute inset-y-0 right-4 flex items-center text-primary/40">
+<span class="material-symbols-outlined" data-icon="location_on">location_on</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Button -->
+<div class="pt-8">
+<button class="w-full max-w-xs mx-auto group relative flex items-center justify-center gap-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(105,246,184,0.3)] hover:shadow-[0_15px_50px_-10px_rgba(105,246,184,0.5)] active:scale-95 transition-all duration-300">
+<span class="text-lg">Next</span>
+<span class="material-symbols-outlined transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Support Footer -->
+<footer class="py-8 px-6 text-center">
+<p class="text-on-surface-variant/40 text-xs tracking-wide">
+            Already have an account? <span class="text-primary font-bold cursor-pointer hover:underline">Log In</span>
+</p>
+</footer>
+</body></html>

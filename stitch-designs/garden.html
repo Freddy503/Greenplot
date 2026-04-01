@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed": "#004b33",
+              "secondary-fixed": "#ffc885",
+              "surface-variant": "#0d2b21",
+              "on-secondary-fixed-variant": "#724700",
+              "secondary-container": "#855300",
+              "secondary": "#f8a010",
+              "surface-container-high": "#09241b",
+              "inverse-surface": "#e7fff2",
+              "secondary-fixed-dim": "#ffb554",
+              "on-tertiary": "#006948",
+              "error-container": "#9f0519",
+              "error": "#ff716c",
+              "inverse-on-surface": "#455950",
+              "primary-dim": "#58e7ab",
+              "primary-fixed-dim": "#58e7ab",
+              "primary-fixed": "#69f6b8",
+              "surface-bright": "#123227",
+              "on-tertiary-fixed-variant": "#006b4a",
+              "on-surface": "#e4fcf0",
+              "on-secondary-fixed": "#4c2e00",
+              "surface-container-lowest": "#000000",
+              "on-background": "#e4fcf0",
+              "outline": "#657a70",
+              "on-primary-container": "#002919",
+              "tertiary-fixed": "#6bffc1",
+              "tertiary": "#cdffe3",
+              "on-primary-fixed-variant": "#006544",
+              "on-primary-fixed": "#00452d",
+              "on-primary": "#005a3c",
+              "surface-dim": "#01120b",
+              "surface": "#01120b",
+              "tertiary-fixed-dim": "#5af0b4",
+              "outline-variant": "#384c43",
+              "on-surface-variant": "#9ab0a5",
+              "surface-container": "#051e15",
+              "error-dim": "#d7383b",
+              "tertiary-container": "#6bffc1",
+              "surface-container-highest": "#0d2b21",
+              "on-tertiary-container": "#006042",
+              "surface-tint": "#69f6b8",
+              "tertiary-dim": "#5af0b4",
+              "on-secondary": "#4a2c00",
+              "primary-container": "#06b77f",
+              "on-error-container": "#ffa8a3",
+              "surface-container-low": "#021710",
+              "primary": "#69f6b8",
+              "on-error": "#490006",
+              "on-secondary-container": "#fff6f0",
+              "secondary-dim": "#e79400",
+              "background": "#01120b",
+              "inverse-primary": "#006d4a"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-header {
+            background: rgba(1, 18, 11, 0.8);
+            backdrop-filter: blur(24px);
+        }
+        .growth-shadow {
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<!-- Top Navigation Anchor (Shared Component: TopAppBar) -->
+<header class="fixed top-0 w-full z-50 bg-[#01120b] dark:bg-[#01120b] flex justify-between items-center px-6 h-16 w-full font-['Plus_Jakarta_Sans'] tracking-tight text-on-surface">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="user profile avatar" class="w-full h-full object-cover" data-alt="close-up portrait of a professional man with friendly expression in soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7Vms1QsoDTEKThc5PkutMCfGRqcaGd84fs0dsQF6fbvgl2Z-bI3hmVd_qHILI_c7gLWgGdxb_XhX-snvHJ3WOl4I751WCM2roqSIdvl5ZhbiBMv_y7OxPFFBzP6269_ZjLWn_I5GsNKOw9o24i10n89IxPIA2p6qR59puEZxzMJ-2XTsveNDqIu-8Qygzxdwz53tXnL_aMy3XM-mws3nQtz-KFGNGLWwEeGK_9OuheO_YqST387CAjMa1DEM3bwYmUakpcmeIuEvC"/>
+</div>
+<span class="text-xl font-bold tracking-tighter text-[#69f6b8]">Seedify</span>
+</div>
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-[#9ab0a5] hover:bg-[#0d2b21] transition-colors p-2 rounded-full active:scale-95 duration-200">search</button>
+<button class="text-[#9ab0a5] font-label text-sm uppercase tracking-widest hover:bg-[#0d2b21] px-3 py-1 rounded-full transition-colors active:scale-95 duration-200">Chat</button>
+</div>
+</header>
+<main class="pt-20 pb-32 px-4 max-w-2xl mx-auto">
+<!-- Knowledge Toggle -->
+<div class="flex justify-center mb-8">
+<div class="bg-surface-container-low p-1.5 rounded-full flex items-center w-full max-w-[280px]">
+<button class="flex-1 py-2 px-4 rounded-full text-sm font-bold text-[#9ab0a5] transition-all">Chat</button>
+<button class="flex-1 py-2 px-4 rounded-full text-sm font-bold bg-gradient-to-br from-[#69f6b8] to-[#06b77f] text-[#005a3c] shadow-lg">Garden</button>
+</div>
+</div>
+<!-- Section Hero -->
+<section class="mb-8 px-2">
+<h1 class="text-3xl font-headline font-extrabold tracking-tight mb-2 leading-tight">Knowledge <span class="text-primary">Garden</span></h1>
+<p class="text-on-surface-variant text-sm leading-relaxed max-w-xs">Cultivating intelligence through structured organic seeds of thought.</p>
+</section>
+<!-- Notion-inspired Table-like List -->
+<div class="bg-surface-container-low rounded-lg overflow-hidden border border-outline-variant/10">
+<!-- Table Header -->
+<div class="grid grid-cols-[48px_1fr_80px] px-4 py-3 border-b border-outline-variant/10 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">
+<div>Type</div>
+<div>Seed Title</div>
+<div class="text-right">Status</div>
+</div>
+<!-- List of Seeds -->
+<div class="divide-y divide-outline-variant/5">
+<!-- Row 1 -->
+<div class="grid grid-cols-[48px_1fr_80px] items-center px-4 py-5 hover:bg-surface-container transition-colors cursor-pointer group active:scale-[0.99] duration-200">
+<div class="flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl" style="font-variation-settings: 'FILL' 1;">psychiatry</span>
+</div>
+<div class="pr-4">
+<h3 class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors mb-1">Agentic AI in Procurement</h3>
+<div class="flex flex-wrap gap-2">
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">AI</span>
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">Business</span>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-tighter">Enriched</span>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-[48px_1fr_80px] items-center px-4 py-5 hover:bg-surface-container transition-colors cursor-pointer group active:scale-[0.99] duration-200">
+<div class="flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-dim text-xl">potted_plant</span>
+</div>
+<div class="pr-4">
+<h3 class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors mb-1">Sustainable Supply Chains</h3>
+<div class="flex flex-wrap gap-2">
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">Eco</span>
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">Logistics</span>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold text-primary uppercase tracking-tighter">Sprouting</span>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-[48px_1fr_80px] items-center px-4 py-5 hover:bg-surface-container transition-colors cursor-pointer group active:scale-[0.99] duration-200">
+<div class="flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div class="pr-4">
+<h3 class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors mb-1">Quantum Ledger Protocols</h3>
+<div class="flex flex-wrap gap-2">
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">Web3</span>
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">Tech</span>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-tighter">Enriched</span>
+</div>
+</div>
+<!-- Row 4 -->
+<div class="grid grid-cols-[48px_1fr_80px] items-center px-4 py-5 hover:bg-surface-container transition-colors cursor-pointer group active:scale-[0.99] duration-200">
+<div class="flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-dim text-xl">energy_savings_leaf</span>
+</div>
+<div class="pr-4">
+<h3 class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors mb-1">Biomimicry in Architecture</h3>
+<div class="flex flex-wrap gap-2">
+<span class="text-[9px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">Design</span>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold text-primary uppercase tracking-tighter">Dormant</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Featured Growth Card -->
+<div class="mt-10 relative overflow-hidden rounded-lg bg-surface-container p-6 border border-primary/10">
+<div class="absolute -right-10 -top-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl"></div>
+<div class="relative z-10">
+<span class="inline-block px-3 py-1 rounded-full bg-secondary/20 text-secondary text-[10px] font-bold uppercase tracking-widest mb-4">Focus Seed</span>
+<h4 class="text-xl font-headline font-bold mb-2">Neural Foraging Techniques</h4>
+<p class="text-on-surface-variant text-xs leading-relaxed mb-4">Your garden is currently processing 12 signals to enrich this specific seed. Estimated bloom in 4 hours.</p>
+<div class="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
+<div class="bg-gradient-to-r from-primary to-primary-container h-full w-[65%] rounded-full shadow-[0_0_8px_rgba(105,246,184,0.4)]"></div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-28 right-6 w-14 h-14 bg-secondary rounded-full shadow-lg shadow-secondary/30 flex items-center justify-center text-on-secondary active:scale-90 transition-transform z-40 group">
+<span class="material-symbols-outlined text-2xl font-bold">add</span>
+</button>
+<!-- Bottom Navigation Shell (Shared Component: BottomNavBar) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-[#021710]/80 backdrop-blur-xl rounded-t-[32px] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.4)] flex justify-around items-center px-4 pb-6 pt-2">
+<div class="flex flex-col items-center justify-center text-[#9ab0a5] p-3 hover:text-[#69f6b8] active:scale-90 transition-transform cursor-pointer">
+<span class="material-symbols-outlined">home</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-gradient-to-br from-[#69f6b8] to-[#06b77f] text-[#005a3c] rounded-full p-3 active:scale-90 transition-transform cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">psychiatry</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#9ab0a5] p-3 hover:text-[#69f6b8] active:scale-90 transition-transform cursor-pointer">
+<span class="material-symbols-outlined">search</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#9ab0a5] p-3 hover:text-[#69f6b8] active:scale-90 transition-transform cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+</div>
+</nav>
+</body></html>
