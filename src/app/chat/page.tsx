@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 // Layout
 import Header from '@/components/layout/header'
@@ -49,11 +49,19 @@ import { Shimmer } from '@/components/ai-elements/shimmer'
 import { PaperclipIcon, GlobeIcon } from 'lucide-react'
 
 export default function ChatPage() {
+  // Safe localStorage access (avoids SSR crash)
+  const [authToken, setAuthToken] = useState('')
+  useEffect(() => {
+    try {
+      setAuthToken(localStorage.getItem('seedify_token') || '')
+    } catch {}
+  }, [])
+
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       body: () => ({
-        _auth_token: localStorage.getItem('seedify_token') || '',
+        _auth_token: authToken,
       }),
     }),
     experimental_throttle: 50,
