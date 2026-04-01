@@ -17,9 +17,13 @@
   --primary: #10b981;
   --primary-foreground: #ffffff;
 
-  /* Amber/CTA (from Figma: rgb(245,158,11)) */
+  /* Amber/CTA (from Stitch design system) */
   --secondary: #f59e0b;
   --secondary-foreground: #ffffff;
+
+  /* Tertiary (Stitch: warm amber) */
+  --tertiary: #ffb84d;
+  --tertiary-container: #fea619;
 
   /* Text */
   --on-surface: #e1e3df;
@@ -70,6 +74,14 @@ body {
   background-color: var(--background);
   color: var(--on-surface);
   font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+/* ── Chat Bubble Shapes (Stitch design system) ──────── */
+.user-bubble {
+  border-radius: 2rem 2rem 0.25rem 2rem !important;
+}
+.assistant-bubble {
+  border-radius: 0.25rem 2rem 2rem 2rem !important;
 }
 
 /* Material Symbols */

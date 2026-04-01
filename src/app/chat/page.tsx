@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 
 // Layout
 import Header from '@/components/layout/header'
+import BottomNav from '@/components/layout/bottom-nav'
 
 // AI Elements
 import {
@@ -180,7 +181,7 @@ export default function ChatPage() {
                     )}
 
                     <Message from={message.role}>
-                      <MessageContent>
+                      <MessageContent className={message.role === 'user' ? 'user-bubble' : 'assistant-bubble'}>
                         {message.parts.map((part, i) => {
                           // Text parts
                           if (part.type === 'text') {
@@ -310,7 +311,7 @@ export default function ChatPage() {
 
       {/* ── Input ────────────────────────────────────────── */}
       <div
-        className="shrink-0 px-4 pb-6 pt-4"
+        className="shrink-0 px-4 pb-24 md:pb-6 pt-4"
         style={{
           background: 'linear-gradient(to top, var(--background) 60%, transparent)',
         }}
@@ -346,6 +347,8 @@ export default function ChatPage() {
           </PromptInput>
         </div>
       </div>
+
+      <BottomNav />
     </div>
   )
 }
