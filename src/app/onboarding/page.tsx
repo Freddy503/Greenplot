@@ -241,12 +241,13 @@ function StepWhoAreYou({
         Next
       </PrimaryButton>
 
-      <button
+      <Button
+        variant="link"
         onClick={onLogin}
-        className="mt-5 text-sm font-medium text-primary transition-opacity hover:opacity-80"
+        className="mt-5 text-sm font-medium text-primary"
       >
         Already have an account? Log In
-      </button>
+      </Button>
     </StepShell>
   )
 }
@@ -284,10 +285,10 @@ function StepInterests({
         {INTEREST_OPTIONS.map((interest) => {
           const isSelected = selected.includes(interest)
           return (
-            <button
+            <div
               key={interest}
               onClick={() => onToggle(interest)}
-              className="transition-all active:scale-95"
+              className="cursor-pointer transition-all active:scale-95"
             >
               <Badge
                 variant={isSelected ? 'default' : 'outline'}
@@ -301,7 +302,7 @@ function StepInterests({
               >
                 {interest}
               </Badge>
-            </button>
+            </div>
           )
         })}
       </div>
