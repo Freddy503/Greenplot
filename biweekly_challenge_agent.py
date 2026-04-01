@@ -140,7 +140,7 @@ def create_notion_challenge_page(challenge_text, stats):
             {
                 "object": "block",
                 "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": f"Total seeds: {stats['total_seeds']}\nDomain distribution: {json.dumps(stats['domain_counts'], indent=2)}\nIsolated seeds: {len(stats['isolated_seeds'])}"}}]
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": f"Total seeds: {stats['total_seeds']}\nDomain distribution: {json.dumps(stats['domain_counts'], indent=2)}\nIsolated seeds: {len(stats['isolated_seeds'])}"}}]}
             },
             {
                 "object": "block",
@@ -150,7 +150,7 @@ def create_notion_challenge_page(challenge_text, stats):
             {
                 "object": "block",
                 "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": challenge_text}}]
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": challenge_text}}]}
             }
         ]
     }
