@@ -4,55 +4,55 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Seedify Theme ────────────────────────────────────── */
 :root {
+  /* Seedify custom tokens (used by Material Icons + legacy styles) */
   --surface: #01120b;
   --surface-container: #051e15;
   --surface-container-high: #09241b;
   --surface-container-highest: #0d2b21;
-  --primary: oklch(0.205 0 0);
   --primary-dim: #58e7ab;
   --primary-container: #06b77f;
   --on-surface: #e4fcf0;
   --on-surface-variant: #9ab0a5;
   --outline: #657a70;
   --outline-variant: #384c43;
-  --secondary: oklch(0.97 0 0);
-  --tertiary: #cdffe3;
-  --error: #ff716c;
   --on-primary: #005a3c;
   --on-background: #e4fcf0;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* shadcn color tokens → Seedify palette */
+  --background: #01120b;
+  --foreground: #e4fcf0;
+  --card: #051e15;
+  --card-foreground: #e4fcf0;
+  --popover: #051e15;
+  --popover-foreground: #e4fcf0;
+  --primary: #69f6b8;
+  --primary-foreground: #005a3c;
+  --secondary: #f8a010;
+  --secondary-foreground: #01120b;
+  --muted: #0d2b21;
+  --muted-foreground: #9ab0a5;
+  --accent: #09241b;
+  --accent-foreground: #e4fcf0;
+  --destructive: #ff716c;
+  --border: #384c43;
+  --input: #384c43;
+  --ring: #69f6b8;
+  --radius: 0.75rem;
+
+  /* Sidebar */
+  --sidebar: #051e15;
+  --sidebar-foreground: #e4fcf0;
+  --sidebar-primary: #69f6b8;
+  --sidebar-primary-foreground: #005a3c;
+  --sidebar-accent: #09241b;
+  --sidebar-accent-foreground: #e4fcf0;
+  --sidebar-border: #384c43;
+  --sidebar-ring: #69f6b8;
 }
 
+/* ── Base Styles ──────────────────────────────────────── */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -65,14 +65,15 @@ body {
   font-family: "Plus Jakarta Sans", sans-serif;
 }
 
+/* Material Symbols */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
-
 .material-symbols-outlined.filled {
   font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
+/* ── shadcn theme bridge ──────────────────────────────── */
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
@@ -84,11 +85,6 @@ body {
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -116,39 +112,8 @@ body {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
+/* Streamdown styles (for MessageResponse markdown rendering) */
+@source "../node_modules/streamdown/dist/*.js";
 
 @layer base {
   * {
