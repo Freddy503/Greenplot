@@ -6,7 +6,7 @@ import {
 export const maxDuration = 60 // Vercel Hobby = 10s effective, Pro = 60s+
 
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
-const BACKEND_TIMEOUT_MS = 8000 // Under Vercel's 10s Hobby limit
+const BACKEND_TIMEOUT_MS = 9000 // 9s — safely under Vercel Hobby's 10s limit
 
 export async function POST(req: Request) {
   const body = await req.json()
@@ -228,7 +228,7 @@ export async function POST(req: Request) {
           type: 'text-delta',
           id: textId,
           delta: isTimeout
-            ? 'Request timed out. The AI is thinking — try a simpler question or try again.'
+            ? 'This request requires tools (search, research, etc.) and takes longer than the current hosting allows. Try a simpler question, or upgrade to Vercel Pro for longer timeouts.'
             : 'Cannot reach backend. The Cloudflare tunnel may be down.',
         })
         writer.write({ type: 'text-end', id: textId })
