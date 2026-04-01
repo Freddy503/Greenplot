@@ -57,7 +57,7 @@ export default function ChatPage() {
     } catch {}
   }, [])
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       body: () => ({
@@ -67,7 +67,10 @@ export default function ChatPage() {
     experimental_throttle: 50,
   })
 
-  useEffect(() => {}, []) // no-op — header handles nickname
+  // Clear stale messages on mount (fresh conversation)
+  useEffect(() => {
+    setMessages([])
+  }, [])
 
   const handleSubmit = (msg: PromptInputMessage) => {
     if (!msg.text?.trim() || status !== 'ready') return
