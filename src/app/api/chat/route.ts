@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       }
 
       try {
-        const res = await fetch(`${BACKEND}/api/v1/chat`, {
+        const res = await fetch(`${BACKEND}/api/v1/chat/v2`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
