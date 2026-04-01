@@ -597,4 +597,68 @@ async def ingest_image_endpoint(
     return result
 
 
+# --- Chat v2 (refactored agent architecture) ---
+
+@app.post("/api/v1/chat/v2")
+async def chat_v2_endpoint(
+    request: Request,
+    current_user = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Chat endpoint using the new agent architecture.
+
+    Replaces the inline loop with:
+    - Declarative ToolRegistry (JSON Schema, permission levels)
+    - Typed Session with ContentBlocks
+    - AgentEvent stream (typed events, NDJSON serialization)
+    - Permission checking before tool execution
+    - Session compaction for long conversations
+
+    Response format is backward-compatible with /api/v1/chat.
+    """
+    from app.agent.setup import setup_default_registry
+    from app.agent.agent import SeedifyAgent
+    from app.session_store import SessionRecorder
+
+    body = await request.json()
+    messages = body.get("messages", [])
+    attachments = body.get("attachments", [])
+
+    # Setup agent with registry
+    registry = setup_default_registry()
+    agent = SeedifyAgent(
+        registry=registry,
+        api_key=settings.OPENROUTER_API_KEY,
+        model=settings.ENRICH_MODEL,
+        max_rounds=3,
+    )
+
+    # Extract last user prompt for recording
+    last_prompt = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            last_prompt = extract_text(msg)
+            break
+    recorder = SessionRecorder(
+        user_id=str(current_user.id) if current_user else "anonymous",
+        tenant_id=str(current_user.tenant_id) if current_user else "",
+        prompt=last_prompt[:500],
+    )
+
+    async def generate():
+        async for event in agent.run(messages, current_user, db, attachments=attachments):
+            d = event.to_dict()
+
+            # Record events
+            if event.type.value == "content":
+                recorder.event("content", "assistant", d.get("text", "")[:100])
+            elif event.type.value == "tool_call":
+                recorder.event("tool_call", d.get("name", ""), d.get("input", "")[:200])
+            elif event.type.value == "tool_result":
+                recorder.event("tool_result", d.get("id", ""), d.get("result", "")[:200])
+
+            yield event.to_ndjson()
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
