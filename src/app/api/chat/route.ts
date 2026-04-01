@@ -37,20 +37,32 @@ export async function POST(req: Request) {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS)
 
+        const requestBody = JSON.stringify({
+          messages,
+          ...(currentSessionId ? { session_id: currentSessionId } : {}),
+        })
+
+        // Debug: log request to Vercel function logs
+        console.log('[chat] Sending to backend:', {
+          messageCount: messages.length,
+          lastRole: messages[messages.length - 1]?.role,
+          hasToken: !!authHeader,
+          sessionId: currentSessionId,
+        })
+
         const res = await fetch(`${BACKEND}/api/v1/chat/v2`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(authHeader ? { Authorization: authHeader } : {}),
           },
-          body: JSON.stringify({
-            messages,
-            ...(currentSessionId ? { session_id: currentSessionId } : {}),
-          }),
+          body: requestBody,
           signal: controller.signal,
         })
 
         clearTimeout(timeout)
+
+        console.log('[chat] Backend response:', { status: res.status, ok: res.ok })
 
         if (!res.ok) {
           const errorText = await res.text()
@@ -211,6 +223,7 @@ export async function POST(req: Request) {
       } catch (err) {
         ensureTextStarted()
         const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort'))
+        console.error('[chat] Error:', { isTimeout, message: err instanceof Error ? err.message : String(err) })
         writer.write({
           type: 'text-delta',
           id: textId,
