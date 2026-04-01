@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import os
 import base64
 import mimetypes
@@ -255,8 +256,8 @@ def admin_health():
     # Check Weaviate, Postgres, LLM APIs
     status = {"weaviate": "unknown", "postgres": "unknown", "openrouter": "unknown"}
     try:
-        # Weaviate meta
-        weaviate_client.client.meta.get()
+        # Weaviate (v4 client)
+        weaviate_client.client.is_live()
         status["weaviate"] = "ok"
     except:
         status["weaviate"] = "down"
@@ -264,13 +265,18 @@ def admin_health():
         # Postgres
         from app.database import engine
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         status["postgres"] = "ok"
     except:
         status["postgres"] = "down"
-    # TODO: ping OpenRouter
-    status["openrouter"] = "unknown"
-    overall = "ok" if all(v == "ok" for v in ["weaviate", "postgres"]) else "degraded"
+    # OpenRouter
+    try:
+        import httpx
+        r = httpx.get("https://openrouter.ai/api/v1/models", timeout=5)
+        status["openrouter"] = "ok" if r.status_code == 200 else "down"
+    except:
+        status["openrouter"] = "down"
+    overall = "ok" if all(status[k] == "ok" for k in ["weaviate", "postgres", "openrouter"]) else "degraded"
     return HealthResponse(status=overall, checks=status)
 
 @app.get("/api/v1/admin/tenants", response_model=TenantsListResponse)
