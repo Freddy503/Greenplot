@@ -20,7 +20,7 @@ export default function Header() {
   return (
     <header
       className="fixed top-0 w-full z-50 backdrop-blur-xl border-b"
-      style={{ background: 'rgba(1,18,11,0.85)', borderColor: 'var(--border)' }}
+      style={{ background: 'rgba(17,20,18,0.85)', borderColor: 'var(--border)' }}
     >
       <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
         {/* Logo */}
