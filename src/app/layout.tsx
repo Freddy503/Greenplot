@@ -1,10 +1,8 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Geist } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -33,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("dark", jakarta.variable, "font-sans", geist.variable)}>
+    <html lang="en" className={cn("dark", jakarta.variable)}>
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
@@ -43,7 +41,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className="min-h-screen bg-[#111412] text-[#e1e3df] font-[family-name:var(--font-jakarta)]">
+      <body
+        className="min-h-screen bg-[#111412] text-[#e1e3df]"
+        style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
+      >
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
