@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import Header from '@/components/layout/header'
+import BottomNav from '@/components/layout/bottom-nav'
 import { cn } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────
@@ -398,7 +399,7 @@ export default function GardenPage() {
     <div className="flex flex-col min-h-screen" style={{ background: 'var(--background)' }}>
       <Header />
 
-      <main className="pt-16 pb-8 px-4 md:max-w-5xl md:mx-auto w-full flex-1">
+      <main className="pt-16 pb-28 md:pb-8 px-4 md:max-w-5xl md:mx-auto w-full flex-1">
         {/* ── Garden Header ──────────────────────────────── */}
         <div className="py-6">
           <div className="flex items-center gap-3 mb-1">
@@ -587,6 +588,8 @@ export default function GardenPage() {
           </p>
         )}
       </main>
+
+      <BottomNav />
     </div>
   )
 }

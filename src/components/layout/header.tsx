@@ -33,15 +33,23 @@ export default function Header() {
               forest
             </span>
           </div>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
-              Greenplot
-            </h1>
-            {nickname && (
-              <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                @{nickname}
-              </span>
-            )}
+          <div className="flex flex-col">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-base font-bold leading-tight" style={{ color: 'var(--foreground)' }}>
+                Greenplot
+              </h1>
+              {nickname && (
+                <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                  @{nickname}
+                </span>
+              )}
+            </div>
+            <span
+              className="text-[9px] font-bold uppercase tracking-[0.18em] leading-none"
+              style={{ color: 'var(--primary)' }}
+            >
+              The Living Laboratory
+            </span>
           </div>
         </div>
 
