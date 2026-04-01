@@ -14,7 +14,7 @@ export default function Header() {
   const [nickname, setNickname] = useState('')
 
   useEffect(() => {
-    setNickname(localStorage.getItem('seedify_nickname') || '')
+    setNickname(localStorage.getItem('greenplot_nickname') || '')
   }, [])
 
   return (
@@ -29,13 +29,13 @@ export default function Header() {
             className="w-8 h-8 flex items-center justify-center rounded-full"
             style={{ background: 'var(--primary)' }}
           >
-            <span className="font-bold text-sm" style={{ color: 'var(--primary-foreground)' }}>
-              S
+            <span className="material-symbols-outlined text-base" style={{ color: 'var(--primary-foreground)', fontSize: '18px' }}>
+              forest
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <h1 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
-              Seedify
+              Greenplot
             </h1>
             {nickname && (
               <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
