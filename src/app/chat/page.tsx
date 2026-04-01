@@ -284,7 +284,7 @@ export default function ChatPage() {
                 )
               })() && (
                 <div className="flex items-center gap-2 px-2 py-1">
-                  <Shimmer className="text-sm" style={{ color: 'var(--primary)' }}>
+                  <Shimmer className="text-sm text-primary">
                     Thinking...
                   </Shimmer>
                 </div>
