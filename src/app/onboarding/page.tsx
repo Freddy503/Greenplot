@@ -4,6 +4,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'motion/react'
 
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
+
 // ── Types ─────────────────────────────────────────────
 
 interface OnboardingProfile {
@@ -37,21 +43,15 @@ const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfil
 
 const TOTAL_STEPS = 5
 
-// ── Progress Bar (Stitch: thin green gradient line, centered, rounded-full) ──
+// ── Progress Bar ──────────────────────────────────────
 
 function ProgressBar({ step }: { step: number }) {
   const pct = ((step + 1) / TOTAL_STEPS) * 100
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-8">
-      <div
-        className="h-1 w-48 rounded-full overflow-hidden"
-        style={{ background: 'rgba(16,185,129,0.15)' }}
-      >
+      <div className="h-1 w-48 rounded-full overflow-hidden bg-primary/15">
         <motion.div
-          className="h-full rounded-full"
-          style={{
-            background: 'linear-gradient(90deg, #10B981, rgba(16,185,129,0.0))',
-          }}
+          className="h-full rounded-full bg-gradient-to-r from-primary to-primary/0"
           initial={false}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.4, ease: 'easeInOut' }}
@@ -82,80 +82,43 @@ function StepShell({ children, step }: { children: React.ReactNode; step: number
 
 function StepLabel({ step }: { step: number }) {
   return (
-    <p
-      className="text-xs tracking-wide mb-8 font-medium"
-      style={{ color: '#9fb8aa', opacity: 0.6 }}
-    >
+    <p className="text-xs tracking-wide mb-8 font-medium text-on-surface-variant/60">
       Step {step + 1}/{TOTAL_STEPS}
     </p>
   )
 }
 
-// ── Amber CTA Button (Stitch: bg-tertiary, rounded-full) ──
+// ── Amber CTA Button ──────────────────────────────────
 
 function PrimaryButton({
   children,
   onClick,
   disabled,
   loading,
+  type = 'button',
 }: {
   children: React.ReactNode
   onClick?: () => void
   disabled?: boolean
   loading?: boolean
+  type?: 'button' | 'submit'
 }) {
   return (
-    <button
+    <Button
+      type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className="w-full py-5 px-10 rounded-full font-bold text-lg transition-all active:scale-[0.97] disabled:opacity-40"
-      style={{
-        background: '#ffb84d',
-        color: '#482a00',
-        boxShadow: '0 8px 32px rgba(255,184,77,0.20)',
-      }}
+      className="w-full py-5 px-10 rounded-full font-bold text-lg h-auto bg-secondary text-on-secondary hover:bg-secondary/90 shadow-[0_8px_32px_rgba(248,160,16,0.20)] active:scale-[0.97] transition-transform"
     >
       {loading ? (
         <span className="flex items-center justify-center gap-2">
-          <span
-            className="w-4 h-4 rounded-full border-2 border-transparent animate-spin"
-            style={{ borderTopColor: '#482a00' }}
-          />
+          <Spinner className="text-on-secondary" />
           Setting up your garden…
         </span>
       ) : (
         children
       )}
-    </button>
-  )
-}
-
-// ── Pill Input ────────────────────────────────────────
-
-function StyledInput({
-  value,
-  onChange,
-  placeholder,
-  autoFocus,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder: string
-  autoFocus?: boolean
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      autoFocus={autoFocus}
-      className="w-full px-5 py-4 rounded-full text-base outline-none transition-all font-medium placeholder:opacity-40"
-      style={{
-        background: '#2e312e',
-        color: '#e1e3df',
-      }}
-    />
+    </Button>
   )
 }
 
@@ -166,107 +129,47 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
     <StepShell step={0}>
       {/* Decorative bg blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: 300,
-            height: 300,
-            background: '#10B981',
-            opacity: 0.05,
-            top: '-5%',
-            left: '-10%',
-            filter: 'blur(80px)',
-          }}
-        />
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: 200,
-            height: 200,
-            background: '#ffb84d',
-            opacity: 0.04,
-            bottom: '15%',
-            right: '-8%',
-            filter: 'blur(60px)',
-          }}
-        />
+        <div className="absolute rounded-full w-[300px] h-[300px] bg-primary opacity-[0.05] -top-[5%] -left-[10%] blur-[80px]" />
+        <div className="absolute rounded-full w-[200px] h-[200px] bg-secondary opacity-[0.04] bottom-[15%] -right-[8%] blur-[60px]" />
       </div>
 
       <StepLabel step={0} />
 
-      {/* Seed motif — tall pill container (Stitch: w-64 h-80 rounded-full) */}
+      {/* Seed motif */}
       <div className="relative mb-10">
-        <div
-          className="w-56 h-72 rounded-full flex items-center justify-center relative overflow-hidden"
-          style={{ background: '#1f211f' }}
-        >
-          {/* Glass morphism floating overlay */}
-          <div
-            className="absolute glass-morphism rounded-full"
-            style={{
-              width: 64,
-              height: 64,
-              top: '12%',
-              right: '10%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+        <div className="w-56 h-72 rounded-full flex items-center justify-center relative overflow-hidden bg-surface-container">
+          <div className="absolute glass-morphism rounded-full w-16 h-16 top-[12%] right-[10%] flex items-center justify-center">
             <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 24, color: '#10B981', fontVariationSettings: '"FILL" 1' }}
+              className="material-symbols-outlined text-primary"
+              style={{ fontSize: 24, fontVariationSettings: '"FILL" 1' }}
             >
               eco
             </span>
           </div>
-
-          {/* Floating decorative circle */}
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: 48,
-              height: 48,
-              background: 'rgba(16,185,129,0.15)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(16,185,129,0.30)',
-              bottom: '15%',
-              left: '10%',
-            }}
-          />
-
-          {/* Main icon */}
+          <div className="absolute rounded-full w-12 h-12 bg-primary/15 backdrop-blur-sm border border-primary/30 bottom-[15%] left-[10%]" />
           <span
-            className="material-symbols-outlined relative z-10"
-            style={{ fontSize: 72, color: '#10B981', fontVariationSettings: '"FILL" 1' }}
+            className="material-symbols-outlined text-primary relative z-10"
+            style={{ fontSize: 72, fontVariationSettings: '"FILL" 1' }}
           >
             forest
           </span>
         </div>
       </div>
 
-      {/* Typography (Stitch: text-5xl font-extrabold tracking-tighter) */}
       <div className="text-center mb-10">
-        <h1
-          className="text-5xl font-extrabold tracking-tighter leading-[1.1] mb-6"
-          style={{ color: '#e1e3df' }}
-        >
+        <h1 className="text-5xl font-extrabold tracking-tighter leading-[1.1] mb-6 text-on-surface">
           Welcome to{'\n'}Greenplot
         </h1>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
           Your personal AI agent for creative thinking.
           Information as living matter, nurtured to help you grow.
         </p>
       </div>
 
-      {/* Amber CTA */}
       <PrimaryButton onClick={onNext}>Get Started</PrimaryButton>
 
-      <p
-        className="mt-6 text-xs flex items-center gap-2 font-medium"
-        style={{ color: '#9fb8aa', opacity: 0.6 }}
-      >
-        <span className="w-2 h-2 rounded-full" style={{ background: '#10B981' }} />
+      <p className="mt-6 text-xs flex items-center gap-2 font-medium text-on-surface-variant/60">
+        <span className="w-2 h-2 rounded-full bg-primary" />
         Version 1.0 — Built for growers
       </p>
     </StepShell>
@@ -295,43 +198,41 @@ function StepWhoAreYou({
       <StepLabel step={1} />
 
       <div className="text-center mb-10">
-        <h2
-          className="text-3xl font-extrabold tracking-tight mb-3"
-          style={{ color: '#e1e3df' }}
-        >
+        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
           Tell us about your roots
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
           Every garden needs a keeper. Choose a name that reflects your digital presence.
         </p>
       </div>
 
       <div className="w-full space-y-4 mb-10">
         <div>
-          <label
-            className="block text-xs font-bold mb-2 pl-1 uppercase tracking-wider"
-            style={{ color: '#10B981' }}
-          >
+          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
             Nickname
-          </label>
-          <StyledInput
+          </Label>
+          <Input
+            type="text"
             value={nickname}
-            onChange={onNickname}
+            onChange={(e) => onNickname(e.target.value)}
             placeholder="Seedling_42"
             autoFocus
+            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
           />
         </div>
         <div>
-          <label
-            className="block text-xs font-bold mb-2 pl-1 uppercase tracking-wider"
-            style={{ color: '#10B981' }}
-          >
-            City <span style={{ opacity: 0.5, textTransform: 'none', letterSpacing: 0 }}>(Optional)</span>
-          </label>
-          <StyledInput
+          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
+            City{' '}
+            <span className="text-on-surface-variant/50 normal-case tracking-normal font-medium">
+              (Optional)
+            </span>
+          </Label>
+          <Input
+            type="text"
             value={city}
-            onChange={onCity}
+            onChange={(e) => onCity(e.target.value)}
             placeholder="The Digital Valley"
+            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
           />
         </div>
       </div>
@@ -342,8 +243,7 @@ function StepWhoAreYou({
 
       <button
         onClick={onLogin}
-        className="mt-5 text-sm font-medium transition-opacity hover:opacity-80"
-        style={{ color: '#10B981' }}
+        className="mt-5 text-sm font-medium text-primary transition-opacity hover:opacity-80"
       >
         Already have an account? Log In
       </button>
@@ -371,18 +271,15 @@ function StepInterests({
       <StepLabel step={2} />
 
       <div className="text-center mb-10">
-        <h2
-          className="text-3xl font-extrabold tracking-tight mb-3"
-          style={{ color: '#e1e3df' }}
-        >
+        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
           Cultivating Interests
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
           What seeds should we plant?
         </p>
       </div>
 
-      {/* Pill chips (Stitch: rounded-full px-5 py-2.5) */}
+      {/* Pill chips using Badge */}
       <div className="flex flex-wrap gap-3 justify-center mb-8">
         {INTEREST_OPTIONS.map((interest) => {
           const isSelected = selected.includes(interest)
@@ -390,29 +287,33 @@ function StepInterests({
             <button
               key={interest}
               onClick={() => onToggle(interest)}
-              className="px-5 py-2.5 rounded-full text-sm font-medium transition-all active:scale-95"
-              style={
-                isSelected
-                  ? { background: '#10B981', color: '#003825' }
-                  : {
-                      background: '#1f211f',
-                      color: '#9fb8aa',
-                      border: '1px solid rgba(63,73,67,0.20)',
-                    }
-              }
+              className="transition-all active:scale-95"
             >
-              {interest}
+              <Badge
+                variant={isSelected ? 'default' : 'outline'}
+                className={`
+                  cursor-pointer px-5 py-2.5 rounded-full text-sm font-medium h-auto
+                  ${isSelected
+                    ? 'bg-primary text-on-primary border-0 hover:bg-primary/90'
+                    : 'bg-surface-container text-on-surface-variant border-outline-variant/20 hover:bg-surface-container-high'
+                  }
+                `}
+              >
+                {interest}
+              </Badge>
             </button>
           )
         })}
       </div>
 
-      {/* Custom interest */}
+      {/* Custom interest input */}
       <div className="w-full mb-10">
-        <StyledInput
+        <Input
+          type="text"
           value={custom}
-          onChange={onCustom}
+          onChange={(e) => onCustom(e.target.value)}
           placeholder="Add your own…"
+          className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
         />
       </div>
 
@@ -437,85 +338,76 @@ function StepNurtureFocus({
       <StepLabel step={3} />
 
       <div className="text-center mb-10">
-        <h2
-          className="text-3xl font-extrabold tracking-tight mb-3"
-          style={{ color: '#e1e3df' }}
-        >
+        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
           Nurture your focus.
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
           Choose your harvest frequency. Adjust how often you want to collect your yields.
         </p>
       </div>
 
-      {/* Radio cards (Stitch: pill-shaped containers) */}
+      {/* Radio cards */}
       <div className="w-full space-y-3 mb-6">
         {DIGEST_OPTIONS.map((opt) => {
           const isSelected = frequency === opt.value
           return (
-            <button
+            <Button
               key={opt.value}
+              variant="outline"
               onClick={() => onFrequency(opt.value)}
-              className="w-full flex items-center gap-4 px-5 py-4 rounded-full transition-all active:scale-[0.98] text-left"
-              style={{
-                background: isSelected ? 'rgba(16,185,129,0.10)' : '#1f211f',
-                border: `1.5px solid ${isSelected ? '#10B981' : 'rgba(63,73,67,0.20)'}`,
-              }}
+              className={`
+                w-full flex items-center gap-4 px-5 py-4 rounded-full h-auto text-left justify-start
+                transition-all active:scale-[0.98]
+                ${isSelected
+                  ? 'bg-primary/10 border-primary text-on-surface'
+                  : 'bg-surface-container border-outline-variant/20 text-on-surface'
+                }
+              `}
             >
-              {/* Amber radio dot when selected (Stitch) */}
+              {/* Radio dot */}
               <div
-                className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                style={{
-                  border: `2px solid ${isSelected ? '#ffb84d' : '#89938d'}`,
-                  background: isSelected ? '#ffb84d' : 'transparent',
-                }}
+                className={`
+                  w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all border-2
+                  ${isSelected ? 'border-secondary bg-secondary' : 'border-on-surface-variant/50 bg-transparent'}
+                `}
               >
-                {isSelected && <div className="w-2 h-2 rounded-full" style={{ background: '#482a00' }} />}
+                {isSelected && <div className="w-2 h-2 rounded-full bg-on-secondary" />}
               </div>
-              <div>
-                <p
-                  className="text-sm font-bold"
-                  style={{ color: isSelected ? '#10B981' : '#e1e3df' }}
-                >
+              <div className="flex flex-col items-start">
+                <p className={`text-sm font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
                   {opt.label}
                 </p>
-                <p className="text-xs font-medium mt-0.5" style={{ color: '#9fb8aa' }}>
+                <p className="text-xs font-medium mt-0.5 text-on-surface-variant">
                   {opt.sublabel}
                 </p>
               </div>
-            </button>
+            </Button>
           )
         })}
       </div>
 
       {/* Time setting */}
-      <div
-        className="w-full rounded-full px-5 py-4 mb-2 flex items-center justify-between"
-        style={{ background: '#1f211f', border: '1px solid rgba(63,73,67,0.20)' }}
-      >
+      <div className="w-full rounded-full px-5 py-4 mb-2 flex items-center justify-between bg-surface-container border border-outline-variant/20">
         <div>
-          <p className="text-xs font-medium" style={{ color: '#9fb8aa' }}>Time</p>
-          <p className="text-lg font-bold" style={{ color: '#e1e3df' }}>09:00 AM</p>
+          <p className="text-xs font-medium text-on-surface-variant">Time</p>
+          <p className="text-lg font-bold text-on-surface">09:00 AM</p>
         </div>
-        <button
-          className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all active:scale-95"
-          style={{
-            background: 'rgba(16,185,129,0.12)',
-            color: '#10B981',
-            border: '1px solid rgba(16,185,129,0.20)',
-          }}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/12 text-primary border border-primary/20 hover:bg-primary/20"
         >
           Edit
-        </button>
+        </Button>
       </div>
 
-      <p className="text-xs text-center mb-6" style={{ color: '#9fb8aa', opacity: 0.6 }}>
+      <p className="text-xs text-center mb-6 text-on-surface-variant/60">
         Local time based on your current region.
       </p>
 
       <PrimaryButton onClick={onNext}>Next →</PrimaryButton>
 
-      <p className="mt-4 text-xs text-center" style={{ color: '#9fb8aa', opacity: 0.5 }}>
+      <p className="mt-4 text-xs text-center text-on-surface-variant/50">
         You can change these settings later in Profile &gt; Vault.
       </p>
     </StepShell>
@@ -561,74 +453,52 @@ function StepHowItWorks({
       <StepLabel step={4} />
 
       <div className="text-center mb-8">
-        <h2
-          className="text-3xl font-extrabold tracking-tight mb-3"
-          style={{ color: '#e1e3df' }}
-        >
+        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
           The Living Intelligence
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto" style={{ color: '#9fb8aa' }}>
+        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
           Experience how your digital greenhouse breathes, learns, and connects.
         </p>
       </div>
 
-      {/* Bento grid 2x2 (Stitch: rounded-2xl bg-surface-container) */}
+      {/* Bento grid 2x2 */}
       <div className="grid grid-cols-2 gap-3 w-full mb-8">
         {BENTO_CARDS.map((card) => (
           <div
             key={card.title}
-            className="flex flex-col gap-2.5 p-5 rounded-2xl relative overflow-hidden"
-            style={{ background: '#1f211f' }}
+            className="flex flex-col gap-2.5 p-5 rounded-2xl relative overflow-hidden bg-surface-container"
           >
-            {/* Subtle organic bg blob */}
-            <div
-              className="absolute w-16 h-16 rounded-full -top-4 -right-4 pointer-events-none"
-              style={{ background: '#10B981', opacity: 0.06 }}
-            />
+            <div className="absolute w-16 h-16 rounded-full -top-4 -right-4 pointer-events-none bg-primary opacity-[0.06]" />
             <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 28, color: '#10B981', fontVariationSettings: '"FILL" 1' }}
+              className="material-symbols-outlined text-primary"
+              style={{ fontSize: 28, fontVariationSettings: '"FILL" 1' }}
             >
               {card.icon}
             </span>
-            <p className="text-sm font-bold leading-tight" style={{ color: '#e1e3df' }}>
-              {card.title}
-            </p>
-            <p className="text-xs leading-relaxed font-medium" style={{ color: '#9fb8aa' }}>
-              {card.body}
-            </p>
+            <p className="text-sm font-bold leading-tight text-on-surface">{card.title}</p>
+            <p className="text-xs leading-relaxed font-medium text-on-surface-variant">{card.body}</p>
           </div>
         ))}
       </div>
 
       {/* Sync banner */}
-      <div
-        className="w-full rounded-full px-5 py-3 mb-8 text-center"
-        style={{
-          background: 'rgba(16,185,129,0.08)',
-          border: '1px solid rgba(16,185,129,0.15)',
-        }}
-      >
-        <p className="text-xs font-medium leading-relaxed" style={{ color: '#9fb8aa' }}>
+      <div className="w-full rounded-full px-5 py-3 mb-8 text-center bg-primary/8 border border-primary/15">
+        <p className="text-xs font-medium leading-relaxed text-on-surface-variant">
           Seeds auto-sync to memory — no manual saving required.
         </p>
       </div>
 
       {error && (
-        <div
-          className="w-full rounded-full px-5 py-3 mb-4 text-sm font-medium"
-          style={{ background: 'rgba(255,180,171,0.10)', color: '#ffb4ab' }}
-        >
+        <div className="w-full rounded-full px-5 py-3 mb-4 text-sm font-medium bg-error/10 text-error">
           {error}
         </div>
       )}
 
-      {/* "Enter the Garden" amber CTA */}
       <PrimaryButton onClick={onEnter} loading={loading}>
         Enter the Garden
       </PrimaryButton>
 
-      <p className="mt-4 text-xs text-center font-medium" style={{ color: '#9fb8aa', opacity: 0.5 }}>
+      <p className="mt-4 text-xs text-center font-medium text-on-surface-variant/50">
         Initializing the Greenhouse
       </p>
     </StepShell>
@@ -720,24 +590,9 @@ export default function OnboardingPage() {
   const next = () => setCurrentStep((s) => Math.min(s + 1, TOTAL_STEPS - 1))
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 py-16 pb-8 relative overflow-hidden"
-      style={{ background: '#111412' }}
-    >
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16 pb-8 relative overflow-hidden bg-background">
       {/* Global background glow */}
-      <div
-        className="absolute rounded-full pointer-events-none"
-        style={{
-          width: 500,
-          height: 500,
-          background: '#10B981',
-          opacity: 0.03,
-          top: '10%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          filter: 'blur(120px)',
-        }}
-      />
+      <div className="absolute rounded-full pointer-events-none w-[500px] h-[500px] bg-primary opacity-[0.03] top-[10%] left-1/2 -translate-x-1/2 blur-[120px]" />
 
       <div className="w-full max-w-sm relative z-10">
         <AnimatePresence mode="wait">

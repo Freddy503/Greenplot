@@ -3,6 +3,10 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -46,109 +50,75 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden"
-      style={{ background: '#111412' }}
-    >
-      {/* Decorative blurred glow */}
-      <div
-        className="absolute rounded-full pointer-events-none"
-        style={{
-          width: 400,
-          height: 400,
-          background: '#10B981',
-          opacity: 0.04,
-          top: '15%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          filter: 'blur(80px)',
-        }}
-      />
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden bg-background">
+      {/* Decorative glow */}
+      <div className="absolute rounded-full pointer-events-none w-[400px] h-[400px] bg-primary opacity-[0.04] top-[15%] left-1/2 -translate-x-1/2 blur-[80px]" />
 
       <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="relative mb-6 inline-block">
-            <div
-              className="absolute inset-0 rounded-full blur-2xl opacity-40"
-              style={{ background: '#10B981', transform: 'scale(1.6)' }}
-            />
+            <div className="absolute inset-0 rounded-full blur-2xl opacity-40 bg-primary scale-[1.6]" />
             <span
-              className="material-symbols-outlined relative"
-              style={{ fontSize: 56, color: '#10B981', fontVariationSettings: '"FILL" 1' }}
+              className="material-symbols-outlined relative text-primary"
+              style={{ fontSize: 56, fontVariationSettings: '"FILL" 1' }}
             >
               forest
             </span>
           </div>
-          <h1
-            className="text-2xl font-extrabold tracking-tight"
-            style={{ color: '#e1e3df' }}
-          >
+          <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">
             Welcome back
           </h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: '#9fb8aa' }}>
+          <p className="mt-1 text-sm font-medium text-on-surface-variant">
             Log in to your Greenplot garden
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-3">
-          {/* Email pill input */}
-          <input
+          <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
             autoFocus
-            className="w-full px-5 py-4 rounded-full text-base outline-none font-medium transition-all placeholder:opacity-40"
-            style={{
-              background: '#2e312e',
-              color: '#e1e3df',
-            }}
+            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
           />
 
-          {/* Password pill input */}
-          <input
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full px-5 py-4 rounded-full text-base outline-none font-medium transition-all placeholder:opacity-40"
-            style={{
-              background: '#2e312e',
-              color: '#e1e3df',
-            }}
+            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
           />
 
           {error && (
-            <div
-              className="rounded-full px-5 py-3 text-sm font-medium"
-              style={{ background: 'rgba(255,180,171,0.10)', color: '#ffb4ab' }}
-            >
+            <div className="rounded-full px-5 py-3 text-sm font-medium bg-error/10 text-error">
               {error}
             </div>
           )}
 
-          {/* Amber CTA button (Stitch pattern) */}
-          <button
+          <Button
             type="submit"
             disabled={!email.trim() || !password.trim() || loading}
-            className="w-full py-4 rounded-full font-bold text-base transition-all active:scale-[0.97] disabled:opacity-40"
-            style={{
-              background: '#ffb84d',
-              color: '#482a00',
-              boxShadow: '0 8px 32px rgba(255,184,77,0.20)',
-            }}
+            className="w-full py-4 rounded-full font-bold text-base h-auto bg-secondary text-on-secondary hover:bg-secondary/90 shadow-[0_8px_32px_rgba(248,160,16,0.20)] active:scale-[0.97] transition-transform"
           >
-            {loading ? 'Logging in…' : 'Log In'}
-          </button>
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner className="text-on-secondary" />
+                Logging in…
+              </span>
+            ) : (
+              'Log In'
+            )}
+          </Button>
         </form>
 
         {/* New account link */}
         <button
           onClick={() => router.push('/onboarding')}
-          className="w-full mt-4 py-3 text-sm font-medium transition-opacity hover:opacity-80 rounded-full"
-          style={{ color: '#10B981' }}
+          className="w-full mt-4 py-3 text-sm font-medium text-primary transition-opacity hover:opacity-80 rounded-full"
         >
           New here? Create an account
         </button>

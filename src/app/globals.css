@@ -147,6 +147,20 @@ body {
   --radius-lg: 2rem;
   --radius-xl: 3rem;
   --radius-2xl: 9999px;
+
+  /* ── Stitch extended palette ──────────────────── */
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-on-primary: var(--on-primary);
+  --color-on-secondary: var(--on-secondary);
+  --color-outline-variant: var(--outline-variant);
+  --color-primary-container: var(--primary-container);
+  --color-error: var(--error);
 }
 
 /* Streamdown styles (for MessageResponse markdown rendering) */
