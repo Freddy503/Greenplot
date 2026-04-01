@@ -4,6 +4,9 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useEffect, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+
 // Layout
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
@@ -86,11 +89,8 @@ function ThumbsRating({ messageId }: { messageId: string }) {
         aria-label="Thumbs up"
       >
         <span
-          className="material-symbols-outlined text-[18px] transition-colors"
-          style={{
-            color: rating === 'up' ? 'var(--primary)' : 'rgba(154,176,165,0.60)',
-            fontVariationSettings: rating === 'up' ? '"FILL" 1' : '"FILL" 0',
-          }}
+          className={`material-symbols-outlined text-[18px] transition-colors ${rating === 'up' ? 'text-primary' : 'text-on-surface-variant/60'}`}
+          style={{ fontVariationSettings: rating === 'up' ? '"FILL" 1' : '"FILL" 0' }}
         >
           thumb_up
         </span>
@@ -101,11 +101,8 @@ function ThumbsRating({ messageId }: { messageId: string }) {
         aria-label="Thumbs down"
       >
         <span
-          className="material-symbols-outlined text-[18px] transition-colors"
-          style={{
-            color: rating === 'down' ? 'var(--error)' : 'rgba(154,176,165,0.60)',
-            fontVariationSettings: rating === 'down' ? '"FILL" 1' : '"FILL" 0',
-          }}
+          className={`material-symbols-outlined text-[18px] transition-colors ${rating === 'down' ? 'text-error' : 'text-on-surface-variant/60'}`}
+          style={{ fontVariationSettings: rating === 'down' ? '"FILL" 1' : '"FILL" 0' }}
         >
           thumb_down
         </span>
