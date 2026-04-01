@@ -324,7 +324,7 @@ export default function GardenPage() {
 
   // Fetch seeds
   useEffect(() => {
-    const token = localStorage.getItem('seedify_token')
+    const token = localStorage.getItem('greenplot_token')
     fetch('/api/seeds?limit=100', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -345,7 +345,7 @@ export default function GardenPage() {
     setSeeds((prev) =>
       prev.map((s) => (s.id === seedId ? { ...s, rating } : s))
     )
-    const token = localStorage.getItem('seedify_token')
+    const token = localStorage.getItem('greenplot_token')
     fetch(`/api/seeds/${seedId}/rate`, {
       method: 'POST',
       headers: {

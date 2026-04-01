@@ -53,11 +53,11 @@ export default function ChatPage() {
   const [authToken, setAuthToken] = useState('')
   useEffect(() => {
     try {
-      setAuthToken(localStorage.getItem('seedify_token') || '')
+      setAuthToken(localStorage.getItem('greenplot_token') || '')
     } catch {}
   }, [])
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, status, setMessages, error } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       body: () => ({
@@ -65,7 +65,15 @@ export default function ChatPage() {
       }),
     }),
     experimental_throttle: 50,
+    onError: (err) => {
+      console.error('[chat] useChat error:', err)
+    },
   })
+
+  // Debug: log error to console
+  useEffect(() => {
+    if (error) console.error('[chat] Error state:', error)
+  }, [error])
 
   // Clear stale messages on mount (fresh conversation)
   useEffect(() => {
@@ -74,6 +82,7 @@ export default function ChatPage() {
 
   const handleSubmit = (msg: PromptInputMessage) => {
     if (!msg.text?.trim() || status !== 'ready') return
+    console.log('[chat] Sending:', msg.text)
     sendMessage({ text: msg.text })
   }
 
@@ -92,13 +101,13 @@ export default function ChatPage() {
                 icon={
                   <span
                     className="material-symbols-outlined text-5xl"
-                    style={{ color: 'var(--primary)' }}
+                    style={{ color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
                   >
-                    local_florist
+                    psychiatry
                   </span>
                 }
-                title="Plant your first seed"
-                description="Ask questions, search the web, or capture ideas. Your AI second brain is ready."
+                title="Start a conversation"
+                description="Ask questions, capture ideas, or search the web. Your AI second brain is ready to grow with you."
               />
             ) : (
               messages.map((message) => {

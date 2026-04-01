@@ -5,12 +5,46 @@ import {
 
 export const maxDuration = 60 // Vercel Hobby = 10s effective, Pro = 60s+
 
-const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
+const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 const BACKEND_TIMEOUT_MS = 9000 // 9s — safely under Vercel Hobby's 10s limit
 
+/**
+ * Transform AI SDK v5 messages (parts format) → backend format (content string).
+ * The backend expects: { role, content } not { role, parts: [{type:"text",text}] }
+ */
+function toBackendMessages(
+  msgs: Array<{ role: string; parts?: Array<{ type: string; text?: string }>; content?: string }>
+): Array<{ role: string; content: string }> {
+  return msgs.map((m) => {
+    if (m.content) return { role: m.role, content: m.content }
+    if (m.parts) {
+      const text = m.parts
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text || '')
+        .join('')
+      return { role: m.role, content: text }
+    }
+    return { role: m.role, content: '' }
+  })
+}
+
 export async function POST(req: Request) {
-  const body = await req.json()
-  const { messages } = body
+  let body: Record<string, any>
+  try {
+    body = await req.json()
+  } catch (err) {
+    const rawText = await req.text().catch(() => 'failed to read body')
+    console.error('[chat] JSON parse error:', err instanceof Error ? err.message : String(err))
+    console.error('[chat] Raw body (first 500):', rawText.slice(0, 500))
+    console.error('[chat] Content-Type:', req.headers.get('content-type'))
+    return new Response(
+      JSON.stringify({ error: `Invalid JSON in request body: ${err instanceof Error ? err.message : String(err)}` }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+  const rawMessages = body.messages || []
+
+  const messages = toBackendMessages(rawMessages)
 
   // Auth token forwarded from frontend via body
   const token: string = body._auth_token || ''
@@ -46,6 +80,7 @@ export async function POST(req: Request) {
         console.log('[chat] Sending to backend:', {
           messageCount: messages.length,
           lastRole: messages[messages.length - 1]?.role,
+          lastContent: messages[messages.length - 1]?.content?.slice(0, 80),
           hasToken: !!authHeader,
           sessionId: currentSessionId,
         })
@@ -223,13 +258,14 @@ export async function POST(req: Request) {
       } catch (err) {
         ensureTextStarted()
         const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort'))
-        console.error('[chat] Error:', { isTimeout, message: err instanceof Error ? err.message : String(err) })
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.error('[chat] CATCH ERROR:', { isTimeout, errMsg, backend: BACKEND, stack: err instanceof Error ? err.stack?.slice(0, 300) : '' })
         writer.write({
           type: 'text-delta',
           id: textId,
           delta: isTimeout
             ? 'This request requires tools (search, research, etc.) and takes longer than the current hosting allows. Try a simpler question, or upgrade to Vercel Pro for longer timeouts.'
-            : 'Cannot reach backend. The Cloudflare tunnel may be down.',
+            : `Cannot reach backend (${errMsg}). The Cloudflare tunnel may be down.`,
         })
         writer.write({ type: 'text-end', id: textId })
       }
