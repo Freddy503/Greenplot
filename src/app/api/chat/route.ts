@@ -15,10 +15,14 @@ export async function POST(req: Request) {
   const token: string = body._auth_token || ''
   const authHeader = token ? `Bearer ${token}` : ''
 
+  // Session ID for resume
+  const sessionId: string = body.session_id || ''
+
   const stream = createUIMessageStream({
     async execute({ writer }) {
       let textId = ''
       let hasStartedText = false
+      let currentSessionId = sessionId
 
       const ensureTextStarted = () => {
         if (!hasStartedText) {
@@ -35,7 +39,10 @@ export async function POST(req: Request) {
             'Content-Type': 'application/json',
             ...(authHeader ? { Authorization: authHeader } : {}),
           },
-          body: JSON.stringify({ messages }),
+          body: JSON.stringify({
+            messages,
+            ...(currentSessionId ? { session_id: currentSessionId } : {}),
+          }),
         })
 
         if (!res.ok) {
@@ -72,23 +79,38 @@ export async function POST(req: Request) {
           buffer = lines.pop() || ''
 
           for (const line of lines) {
-            if (!line.trim()) continue
+            // SSE format: "data: {...}"
+            const trimmed = line.trim()
+            if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+            const jsonStr = trimmed.slice(6) // Remove "data: " prefix
+            if (!jsonStr) continue
 
             let event: {
               type: string
+              session_id?: string
               text?: string
               name?: string
               input?: string | Record<string, unknown>
               result?: string | Record<string, unknown>
+              message?: string
             }
 
             try {
-              event = JSON.parse(line)
+              event = JSON.parse(jsonStr)
             } catch {
               continue
             }
 
             switch (event.type) {
+              case 'session': {
+                // Backend confirms session ID
+                if (event.session_id) {
+                  currentSessionId = event.session_id
+                }
+                break
+              }
+
               case 'content': {
                 ensureTextStarted()
                 writer.write({
@@ -114,7 +136,7 @@ export async function POST(req: Request) {
                   toolName,
                 })
 
-                // Tool input is immediately available (backend sends complete input)
+                // Tool input is immediately available
                 writer.write({
                   type: 'tool-input-available',
                   toolCallId,
@@ -125,19 +147,12 @@ export async function POST(req: Request) {
               }
 
               case 'tool_result': {
-                // Tool results arrive after tool calls in this backend.
-                // The tool state shown to the user is already complete
-                // (tool-input-start + tool-input-available were emitted
-                // when the tool_call event arrived). No additional stream
-                // event is needed here.
-
                 // Extract sources from web search results
                 const output =
                   typeof event.result === 'string'
                     ? event.result
                     : JSON.stringify(event.result)
 
-                // Extract sources from web search results
                 try {
                   const parsed = JSON.parse(output)
                   if (parsed.results && Array.isArray(parsed.results)) {
@@ -175,7 +190,7 @@ export async function POST(req: Request) {
                 writer.write({
                   type: 'text-delta',
                   id: textId,
-                  delta: `\n\n⚠️ ${event.text || 'Unknown error'}`,
+                  delta: `\n\n⚠️ ${event.message || event.text || 'Unknown error'}`,
                 })
                 break
               }

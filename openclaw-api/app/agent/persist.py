@@ -5,10 +5,12 @@ Stores full ChatSession records with ContentBlock JSON messages.
 Uses SQLAlchemy models from app.models and the Session/Message types
 from app.agent.session for serialization.
 
+Note: Uses synchronous SQLAlchemy to match the existing database setup.
+
 Usage:
     store = ChatSessionStore(db)
-    await store.save(session_id, messages, tenant_id, user_id, title="Chat")
-    messages = await store.load(session_id)
+    store.save(session_id, messages, tenant_id, user_id, title="Chat")
+    messages = store.load(session_id)
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import select, func, delete as sa_delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session as DbSession
 
 from app.models import ChatSession
 from app.agent.session import Session, Message
@@ -25,25 +27,25 @@ from app.agent.session import Session, Message
 
 class ChatSessionStore:
     """
-    Postgres-backed session store using SQLAlchemy async sessions.
+    Postgres-backed session store using SQLAlchemy sessions.
 
     Persists conversation sessions as ChatSession rows with full
     ContentBlock JSON messages and optional compaction summaries.
 
     Usage:
         store = ChatSessionStore(db_session)
-        await store.save(session_id="abc", messages=session.messages, ...)
-        loaded = await store.load("abc")
+        store.save(session_id="abc", messages=session.messages, ...)
+        loaded = store.load("abc")
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: DbSession) -> None:
         """
         Args:
-            db: An active SQLAlchemy AsyncSession.
+            db: An active SQLAlchemy Session.
         """
         self._db = db
 
-    async def save(
+    def save(
         self,
         session_id: str,
         messages: list[Message],
@@ -73,9 +75,9 @@ class ChatSessionStore:
         messages_json = [m.to_dict() for m in messages]
 
         # Try to find existing session
-        stmt = select(ChatSession).where(ChatSession.id == uuid.UUID(session_id))
-        result = await self._db.execute(stmt)
-        existing = result.scalar_one_or_none()
+        existing = self._db.query(ChatSession).filter(
+            ChatSession.id == uuid.UUID(session_id)
+        ).first()
 
         if existing:
             existing.messages = messages_json
@@ -97,10 +99,10 @@ class ChatSessionStore:
             )
             self._db.add(record)
 
-        await self._db.flush()
+        self._db.flush()
         return session_id
 
-    async def load(self, session_id: str) -> Optional[list[Message]]:
+    def load(self, session_id: str) -> Optional[list[Message]]:
         """
         Load messages for a session.
 
@@ -110,16 +112,19 @@ class ChatSessionStore:
         Returns:
             List of Message objects, or None if session not found.
         """
-        stmt = select(ChatSession).where(ChatSession.id == uuid.UUID(session_id))
-        result = await self._db.execute(stmt)
-        record = result.scalar_one_or_none()
+        try:
+            record = self._db.query(ChatSession).filter(
+                ChatSession.id == uuid.UUID(session_id)
+            ).first()
+        except (ValueError, Exception):
+            return None
 
         if record is None:
             return None
 
         return [Message.from_dict(m) for m in (record.messages or [])]
 
-    async def load_session(self, session_id: str) -> Optional[Session]:
+    def load_session(self, session_id: str) -> Optional[Session]:
         """
         Load a full Session object with metadata.
 
@@ -129,9 +134,12 @@ class ChatSessionStore:
         Returns:
             Session object, or None if not found.
         """
-        stmt = select(ChatSession).where(ChatSession.id == uuid.UUID(session_id))
-        result = await self._db.execute(stmt)
-        record = result.scalar_one_or_none()
+        try:
+            record = self._db.query(ChatSession).filter(
+                ChatSession.id == uuid.UUID(session_id)
+            ).first()
+        except (ValueError, Exception):
+            return None
 
         if record is None:
             return None
@@ -142,7 +150,7 @@ class ChatSessionStore:
             session._compaction_summary = record.compaction_summary
         return session
 
-    async def list_sessions(
+    def list_sessions(
         self,
         tenant_id: str,
         user_id: str,
@@ -159,17 +167,10 @@ class ChatSessionStore:
         Returns:
             List of dicts with id, title, created_at, message_count.
         """
-        stmt = (
-            select(ChatSession)
-            .where(
-                ChatSession.tenant_id == uuid.UUID(tenant_id),
-                ChatSession.user_id == uuid.UUID(user_id),
-            )
-            .order_by(ChatSession.updated_at.desc())
-            .limit(limit)
-        )
-        result = await self._db.execute(stmt)
-        records = result.scalars().all()
+        records = self._db.query(ChatSession).filter(
+            ChatSession.tenant_id == uuid.UUID(tenant_id),
+            ChatSession.user_id == uuid.UUID(user_id),
+        ).order_by(ChatSession.updated_at.desc()).limit(limit).all()
 
         summaries = []
         for record in records:
@@ -178,11 +179,12 @@ class ChatSessionStore:
                 "id": str(record.id),
                 "title": record.title,
                 "created_at": record.created_at.isoformat() if record.created_at else None,
+                "updated_at": record.updated_at.isoformat() if record.updated_at else None,
                 "message_count": message_count,
             })
         return summaries
 
-    async def delete(self, session_id: str) -> bool:
+    def delete(self, session_id: str) -> bool:
         """
         Delete a chat session.
 
@@ -192,7 +194,11 @@ class ChatSessionStore:
         Returns:
             True if deleted, False if not found.
         """
-        stmt = sa_delete(ChatSession).where(ChatSession.id == uuid.UUID(session_id))
-        result = await self._db.execute(stmt)
-        await self._db.flush()
-        return result.rowcount > 0
+        try:
+            result = self._db.query(ChatSession).filter(
+                ChatSession.id == uuid.UUID(session_id)
+            ).delete()
+            self._db.flush()
+            return result > 0
+        except (ValueError, Exception):
+            return False
