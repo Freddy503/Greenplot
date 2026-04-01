@@ -680,7 +680,10 @@ async def chat_v2_endpoint(
     system_prompt = prompt_builder.render()
 
     # ── Setup Agent ───────────────────────────────────────────────
-    registry = setup_default_registry()
+    registry = setup_default_registry(
+        api_key=settings.OPENROUTER_API_KEY,
+        model=settings.ENRICH_MODEL,
+    )
     agent = SeedifyAgent(
         registry=registry,
         api_key=settings.OPENROUTER_API_KEY,
@@ -691,9 +694,19 @@ async def chat_v2_endpoint(
 
     # ── Compaction Check ──────────────────────────────────────────
     config = CompactionConfig(preserve_recent=10, max_tokens=8000)
-    if should_compact(agent_session, config):
-        result = compact_session(agent_session, config)
-        agent_session = result.compacted_session
+
+    # If we have a loaded session with prior messages, prepend them
+    if agent_session and agent_session.messages:
+        # Check if compaction is needed
+        if should_compact(agent_session, config):
+            compaction_result = compact_session(agent_session, config)
+            agent_session = compaction_result.compacted_session
+
+        # Prepend prior session messages to the current messages
+        prior_messages = agent_session.to_llm_messages()
+        # Only add prior messages if they're not already in the current messages
+        if prior_messages and len(prior_messages) > 1:
+            messages = prior_messages + messages
 
     # ── Session Recording ─────────────────────────────────────────
     last_prompt = ""
@@ -727,20 +740,19 @@ async def chat_v2_endpoint(
             # SSE format
             yield f"data: {_json.dumps(d, ensure_ascii=False)}\n\n"
 
-        # Persist session after turn (best-effort)
+        # Persist session after turn using the agent's full session
         try:
             if current_user:
-                # Convert messages from the agent run into Message objects
-                from app.agent.session import Message as _Msg, ContentBlock as _CB
-                session_messages = [_Msg.user(last_prompt)] if last_prompt else []
-                store.save(
-                    session_id=session_id,
-                    messages=session_messages,
-                    tenant_id=str(current_user.tenant_id),
-                    user_id=str(current_user.id),
-                    title=last_prompt[:50] if last_prompt else None,
-                )
-                db.commit()
+                actual_session = agent.last_session
+                if actual_session and actual_session.messages:
+                    store.save(
+                        session_id=session_id,
+                        messages=actual_session.messages,
+                        tenant_id=str(current_user.tenant_id),
+                        user_id=str(current_user.id),
+                        title=last_prompt[:50] if last_prompt else None,
+                    )
+                    db.commit()
         except Exception:
             pass
 
