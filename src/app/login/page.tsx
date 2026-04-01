@@ -34,7 +34,6 @@ export default function LoginPage() {
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
 
-      // Try to restore nickname from email
       const nickname = email.split('@')[0]
       localStorage.setItem('greenplot_nickname', nickname)
 
@@ -48,84 +47,108 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-6"
-      style={{ background: 'var(--background)' }}
+      className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden"
+      style={{ background: '#111412' }}
     >
-      <div className="w-full max-w-sm">
+      {/* Decorative blurred glow */}
+      <div
+        className="absolute rounded-full pointer-events-none"
+        style={{
+          width: 400,
+          height: 400,
+          background: '#10B981',
+          opacity: 0.04,
+          top: '15%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          filter: 'blur(80px)',
+        }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="relative mb-6 inline-block">
             <div
               className="absolute inset-0 rounded-full blur-2xl opacity-40"
-              style={{ background: 'var(--primary)', transform: 'scale(1.6)' }}
+              style={{ background: '#10B981', transform: 'scale(1.6)' }}
             />
             <span
               className="material-symbols-outlined relative"
-              style={{ fontSize: 56, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
+              style={{ fontSize: 56, color: '#10B981', fontVariationSettings: '"FILL" 1' }}
             >
               forest
             </span>
           </div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--on-surface)' }}>
+          <h1
+            className="text-2xl font-extrabold tracking-tight"
+            style={{ color: '#e1e3df' }}
+          >
             Welcome back
           </h1>
-          <p className="mt-2 text-sm" style={{ color: 'var(--on-surface-variant)' }}>
+          <p className="mt-1 text-sm font-medium" style={{ color: '#9fb8aa' }}>
             Log in to your Greenplot garden
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-3">
+          {/* Email pill input */}
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
             autoFocus
-            className="w-full px-4 py-3.5 rounded-2xl text-base outline-none"
+            className="w-full px-5 py-4 rounded-full text-base outline-none font-medium transition-all placeholder:opacity-40"
             style={{
-              background: 'var(--surface-container)',
-              border: '1px solid var(--outline-variant)',
-              color: 'var(--on-surface)',
+              background: '#2e312e',
+              color: '#e1e3df',
             }}
           />
+
+          {/* Password pill input */}
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full px-4 py-3.5 rounded-2xl text-base outline-none"
+            className="w-full px-5 py-4 rounded-full text-base outline-none font-medium transition-all placeholder:opacity-40"
             style={{
-              background: 'var(--surface-container)',
-              border: '1px solid var(--outline-variant)',
-              color: 'var(--on-surface)',
+              background: '#2e312e',
+              color: '#e1e3df',
             }}
           />
 
           {error && (
             <div
-              className="rounded-2xl px-4 py-3 text-sm"
-              style={{ background: 'rgba(255,113,108,0.1)', color: 'var(--destructive)' }}
+              className="rounded-full px-5 py-3 text-sm font-medium"
+              style={{ background: 'rgba(255,180,171,0.10)', color: '#ffb4ab' }}
             >
               {error}
             </div>
           )}
 
+          {/* Amber CTA button (Stitch pattern) */}
           <button
             type="submit"
             disabled={!email.trim() || !password.trim() || loading}
-            className="w-full py-3.5 rounded-2xl font-semibold text-base transition-all active:scale-[0.97] disabled:opacity-40"
-            style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
+            className="w-full py-4 rounded-full font-bold text-base transition-all active:scale-[0.97] disabled:opacity-40"
+            style={{
+              background: '#ffb84d',
+              color: '#482a00',
+              boxShadow: '0 8px 32px rgba(255,184,77,0.20)',
+            }}
           >
-            {loading ? 'Logging in...' : 'Log In'}
+            {loading ? 'Logging in…' : 'Log In'}
           </button>
         </form>
 
-        {/* Links */}
+        {/* New account link */}
         <button
           onClick={() => router.push('/onboarding')}
-          className="w-full mt-4 py-3 text-sm transition-opacity hover:opacity-80"
-          style={{ color: 'var(--primary)' }}
+          className="w-full mt-4 py-3 text-sm font-medium transition-opacity hover:opacity-80 rounded-full"
+          style={{ color: '#10B981' }}
         >
           New here? Create an account
         </button>
