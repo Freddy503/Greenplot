@@ -2,7 +2,10 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+
+// Layout
+import Header from '@/components/layout/header'
 
 // AI Elements
 import {
@@ -45,8 +48,6 @@ import { Shimmer } from '@/components/ai-elements/shimmer'
 import { PaperclipIcon, GlobeIcon } from 'lucide-react'
 
 export default function ChatPage() {
-  const [nickname, setNickname] = useState('')
-
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -57,9 +58,7 @@ export default function ChatPage() {
     experimental_throttle: 50,
   })
 
-  useEffect(() => {
-    setNickname(localStorage.getItem('seedify_nickname') || '')
-  }, [])
+  useEffect(() => {}, []) // no-op — header handles nickname
 
   const handleSubmit = (msg: PromptInputMessage) => {
     if (!msg.text?.trim() || status !== 'ready') return
@@ -70,32 +69,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-screen" style={{ background: 'var(--background)' }}>
-      {/* ── Header ───────────────────────────────────────── */}
-      <header
-        className="fixed top-0 w-full z-50 flex items-center px-6 py-4 border-b backdrop-blur-xl"
-        style={{ background: 'rgba(1,18,11,0.8)', borderColor: 'var(--outline-variant)' }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 flex items-center justify-center rounded-full"
-            style={{ background: 'var(--primary)' }}
-          >
-            <span className="font-bold text-lg" style={{ color: 'var(--primary-foreground)' }}>
-              S
-            </span>
-          </div>
-          <div>
-            <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>
-              Seedify
-            </h1>
-            {nickname && (
-              <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                @{nickname}
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
       <main className="pt-20 pb-40 px-4 md:max-w-4xl md:mx-auto w-full flex-1">
