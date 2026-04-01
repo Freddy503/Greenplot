@@ -1,7 +1,9 @@
 {
   "asked": [
     "learning:1",
-    "sql_data:2"
+    "sql_data:2",
+    "sql_data:0",
+    "coding:2"
   ],
   "scores": []
 }

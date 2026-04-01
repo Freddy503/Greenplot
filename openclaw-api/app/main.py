@@ -556,10 +556,38 @@ async def heartbeat(
     # Pipeline status (to be expanded)
     result["pipeline"] = {
         "text_ingestion": "active",
-        "voice_ingestion": "stub",
-        "image_ingestion": "stub",
+        "voice_ingestion": "active",
+        "image_ingestion": "active",
         "garden_pipeline": "linked",
     }
+    return result
+
+
+# --- Ingestion endpoints ---
+
+from fastapi import UploadFile, File
+
+@app.post("/api/v1/ingest/voice")
+async def ingest_voice_endpoint(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Voice ingestion: audio → Whisper transcript → Thought → enrich_v2 → Seed"""
+    from app.ingest import ingest_voice
+    result = await ingest_voice(file, current_user, db)
+    return result
+
+
+@app.post("/api/v1/ingest/image")
+async def ingest_image_endpoint(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Image ingestion: image → Vision extract → Thought → enrich_v2 → BFL concept art → Seed"""
+    from app.ingest import ingest_image
+    result = await ingest_image(file, current_user, db)
     return result
 
 
