@@ -15,7 +15,7 @@ export const Suggestions = ({ className, children, ...props }: SuggestionsProps)
   </div>
 );
 
-export type SuggestionProps = ComponentProps<typeof Button> & {
+export type SuggestionProps = Omit<ComponentProps<typeof Button>, 'onClick'> & {
   suggestion: string;
   onClick?: (suggestion: string) => void;
 };
