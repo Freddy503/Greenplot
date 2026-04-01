@@ -44,12 +44,24 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import { Shimmer } from '@/components/ai-elements/shimmer'
+import {
+  Suggestions,
+  Suggestion,
+} from '@/components/ai-elements/suggestion'
 
 // Icons
 import { PaperclipIcon, GlobeIcon } from 'lucide-react'
 
+// ── Suggestions for empty state ───────────────────────
+
+const STARTER_SUGGESTIONS = [
+  'What can you help me with?',
+  'Tell me about vector search',
+  'How does the enrichment pipeline work?',
+  'Plant a seed about AI trends',
+]
+
 export default function ChatPage() {
-  // Safe localStorage access (avoids SSR crash)
   const [authToken, setAuthToken] = useState('')
   useEffect(() => {
     try {
@@ -57,7 +69,7 @@ export default function ChatPage() {
     } catch {}
   }, [])
 
-  const { messages, sendMessage, status, setMessages, error } = useChat({
+  const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       body: () => ({
@@ -70,48 +82,80 @@ export default function ChatPage() {
     },
   })
 
-  // Debug: log error to console
-  useEffect(() => {
-    if (error) console.error('[chat] Error state:', error)
-  }, [error])
-
-  // Clear stale messages on mount (fresh conversation)
+  // Clear stale messages on mount
   useEffect(() => {
     setMessages([])
   }, [])
 
   const handleSubmit = (msg: PromptInputMessage) => {
     if (!msg.text?.trim() || status !== 'ready') return
-    console.log('[chat] Sending:', msg.text)
     sendMessage({ text: msg.text })
+  }
+
+  const handleSuggestion = (suggestion: string) => {
+    if (status !== 'ready') return
+    sendMessage({ text: suggestion })
   }
 
   const isStreaming = status === 'submitted' || status === 'streaming'
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--background)' }}>
+    <div className="flex flex-col h-dvh" style={{ background: 'var(--background)' }}>
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="pt-20 pb-40 px-4 md:max-w-4xl md:mx-auto w-full flex-1">
+      <main className="pt-14 flex-1 min-h-0 overflow-hidden">
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
-              <ConversationEmptyState
-                icon={
-                  <span
-                    className="material-symbols-outlined text-5xl"
-                    style={{ color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
-                  >
-                    psychiatry
-                  </span>
-                }
-                title="Start a conversation"
-                description="Ask questions, capture ideas, or search the web. Your AI second brain is ready to grow with you."
-              />
+              <ConversationEmptyState>
+                <div className="flex flex-col items-center gap-6 max-w-lg mx-auto">
+                  {/* Brand icon */}
+                  <div className="relative">
+                    <div
+                      className="absolute inset-0 rounded-full blur-2xl opacity-30"
+                      style={{ background: 'var(--primary)', transform: 'scale(1.8)' }}
+                    />
+                    <span
+                      className="material-symbols-outlined relative"
+                      style={{ fontSize: 56, color: 'var(--primary)', fontVariationSettings: '"FILL" 1' }}
+                    >
+                      forest
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <div className="text-center">
+                    <h2
+                      className="text-xl font-bold mb-1.5"
+                      style={{ color: 'var(--on-surface)' }}
+                    >
+                      Start a conversation
+                    </h2>
+                    <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+                      Ask questions, capture ideas, or search the web. Your AI second brain is ready to grow with you.
+                    </p>
+                  </div>
+
+                  {/* Suggestion chips */}
+                  <Suggestions>
+                    {STARTER_SUGGESTIONS.map((s) => (
+                      <Suggestion
+                        key={s}
+                        suggestion={s}
+                        onClick={handleSuggestion}
+                        style={{
+                          background: 'var(--surface-container)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--on-surface-variant)',
+                        }}
+                      />
+                    ))}
+                  </Suggestions>
+                </div>
+              </ConversationEmptyState>
             ) : (
               messages.map((message) => {
-                // Count sources from parts
                 const sourceParts = message.parts.filter((p) => p.type === 'source-url')
 
                 return (
@@ -147,13 +191,43 @@ export default function ChatPage() {
                             )
                           }
 
+                          // Reasoning parts (chain of thought)
+                          if (part.type === 'reasoning') {
+                            return (
+                              <div key={`${message.id}-reason-${i}`} className="mb-2">
+                                <details className="group">
+                                  <summary
+                                    className="flex items-center gap-2 cursor-pointer text-xs font-medium select-none"
+                                    style={{ color: 'var(--muted-foreground)' }}
+                                  >
+                                    <span
+                                      className="material-symbols-outlined text-sm transition-transform group-open:rotate-90"
+                                      style={{ fontVariationSettings: '"FILL" 1' }}
+                                    >
+                                      chevron_right
+                                    </span>
+                                    Thought process
+                                  </summary>
+                                  <div
+                                    className="mt-2 ml-6 text-xs leading-relaxed whitespace-pre-wrap rounded-lg p-3"
+                                    style={{
+                                      background: 'var(--surface-container)',
+                                      color: 'var(--muted-foreground)',
+                                    }}
+                                  >
+                                    {(part as any).text}
+                                  </div>
+                                </details>
+                              </div>
+                            )
+                          }
+
                           // Tool parts
                           if (part.type.startsWith('tool-')) {
                             const tp = part as any
                             const isSubagent = tp.type.includes('spawn_subagent')
                             let subagentData: SubagentData | null = null
 
-                            // Parse sub-agent data from output
                             if (isSubagent && tp.output) {
                               try {
                                 subagentData = typeof tp.output === 'string'
@@ -210,7 +284,7 @@ export default function ChatPage() {
                 )
               })() && (
                 <div className="flex items-center gap-2 px-2 py-1">
-                  <Shimmer className="text-sm text-primary">
+                  <Shimmer className="text-sm" style={{ color: 'var(--primary)' }}>
                     Thinking...
                   </Shimmer>
                 </div>
@@ -236,7 +310,7 @@ export default function ChatPage() {
 
       {/* ── Input ────────────────────────────────────────── */}
       <div
-        className="fixed bottom-0 left-0 w-full px-4 pb-6 pt-8 z-40"
+        className="shrink-0 px-4 pb-6 pt-4"
         style={{
           background: 'linear-gradient(to top, var(--background) 60%, transparent)',
         }}
@@ -245,7 +319,7 @@ export default function ChatPage() {
           <PromptInput onSubmit={handleSubmit} globalDrop multiple>
             <PromptInputBody>
               <PromptInputTextarea
-                placeholder="Ask anything..."
+                placeholder="Nurture a new idea..."
                 disabled={isStreaming}
               />
             </PromptInputBody>
