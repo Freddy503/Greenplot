@@ -422,7 +422,7 @@ def create_subagent_tool_spec(runner: SubagentRunner) -> ToolSpec:
             "agent_id": manifest.agent_id,
             "name": manifest.name,
             "subagent_type": manifest.subagent_type,
-            "status": manifest.status,
+            "agent_status": manifest.status,
             "message": f"Sub-agent '{manifest.name}' spawned (type: {manifest.subagent_type})",
         })
 

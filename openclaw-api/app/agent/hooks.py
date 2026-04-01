@@ -271,14 +271,14 @@ class HookRunner:
                 payload=payload,
             )
 
-            if outcome.message:
+            if outcome.kind == HookOutcomeKind.WARN:
+                if outcome.message:
+                    messages.append(outcome.message)
+            elif outcome.message:
                 messages.append(outcome.message)
 
             if outcome.is_denied:
                 return HookRunResult.deny(messages)
-
-            if outcome.kind == HookOutcomeKind.WARN and outcome.message:
-                messages.append(outcome.message)
 
         return HookRunResult.allow(messages)
 

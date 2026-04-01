@@ -79,6 +79,12 @@ class SeedifyAgent:
         self.max_rounds = max_rounds
         self.system_prompt = system_prompt
         self.hook_runner = hook_runner  # Optional HookRunner for pre/post tool hooks
+        self._last_session: Optional[Session] = None  # Captured after run()
+
+    @property
+    def last_session(self) -> Optional[Session]:
+        """The session from the most recent run(). Available after the generator completes."""
+        return self._last_session
 
     async def run(
         self,
@@ -290,6 +296,9 @@ class SeedifyAgent:
                     if content_buffer:
                         session.add(Message.assistant(content_buffer))
                     break
+
+        # Capture session for persistence
+        self._last_session = session
 
         yield AgentEvent.done()
 

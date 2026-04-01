@@ -15,7 +15,7 @@ from app.agent.registry import ToolRegistry, ToolSpec
 from app.agent.permissions import PermissionLevel
 
 
-def setup_default_registry() -> ToolRegistry:
+def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-sonnet-4") -> ToolRegistry:
     """
     Create and populate the default tool registry.
 
@@ -212,8 +212,8 @@ def setup_default_registry() -> ToolRegistry:
 
     runner = SubagentRunner(
         registry=registry,
-        api_key="",  # Set at runtime
-        model="anthropic/claude-sonnet-4",
+        api_key=api_key,
+        model=model,
     )
     registry.register(create_subagent_tool_spec(runner))
 
