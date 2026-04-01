@@ -70,6 +70,7 @@ class SeedifyAgent:
         api_base: str = "https://openrouter.ai/api/v1/chat/completions",
         max_rounds: int = 3,
         system_prompt: str = "",
+        hook_runner: Optional[Any] = None,
     ) -> None:
         self.registry = registry
         self.api_key = api_key
@@ -77,6 +78,7 @@ class SeedifyAgent:
         self.api_base = api_base
         self.max_rounds = max_rounds
         self.system_prompt = system_prompt
+        self.hook_runner = hook_runner  # Optional HookRunner for pre/post tool hooks
 
     async def run(
         self,
@@ -231,6 +233,20 @@ class SeedifyAgent:
 
                         yield AgentEvent.tool_call(tool_id, tool_name, tc["arguments"])
 
+                        # Pre-tool hook (can deny execution)
+                        if self.hook_runner:
+                            pre_result = await self.hook_runner.run_p<RESEND_API_KEY>(tool_name, args)
+                            for msg in p<RESEND_API_KEY>:
+                                yield AgentEvent.status(f"Hook: {msg}")
+                            if p<RESEND_API_KEY>:
+                                result = json.dumps({
+                                    "status": "error",
+                                    "message": p<RESEND_API_KEY>[0] if p<RESEND_API_KEY> else f"Tool '{tool_name}' denied by hook",
+                                })
+                                yield AgentEvent.tool_result(tool_id, result)
+                                session.add(Message.tool_result(tool_id, tool_name, result, True))
+                                continue
+
                         # Execute with permission check
                         result = await self.registry.execute(
                             tool_name,
@@ -239,6 +255,21 @@ class SeedifyAgent:
                             db,
                             permission=user_permission,
                         )
+
+                        # Post-tool hook (can mark errors)
+                        if self.hook_runner:
+                            is_error_for_hook = False
+                            try:
+                                is_error_for_hook = json.loads(result).get("status") == "error"
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                            post_result = await self.hook_runner.run_post_tool_use(
+                                tool_name, args, result, is_error_for_hook
+                            )
+                            for msg in post_result.messages:
+                                yield AgentEvent.status(f"Hook: {msg}")
+                            if post_result.denied:
+                                is_error_for_hook = True
 
                         yield AgentEvent.tool_result(tool_id, result)
 
