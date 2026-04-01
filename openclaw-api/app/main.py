@@ -608,33 +608,94 @@ async def chat_v2_endpoint(
     """
     Chat endpoint using the new agent architecture.
 
-    Replaces the inline loop with:
-    - Declarative ToolRegistry (JSON Schema, permission levels)
-    - Typed Session with ContentBlocks
-    - AgentEvent stream (typed events, NDJSON serialization)
-    - Permission checking before tool execution
-    - Session compaction for long conversations
+    Features:
+    - Declarative ToolRegistry with JSON Schema + permissions
+    - Typed Session with ContentBlocks + persistence
+    - SystemPromptBuilder for dynamic context
+    - Auto-compaction for long sessions
+    - SSE streaming (text/event-stream)
 
-    Response format is backward-compatible with /api/v1/chat.
+    Request body:
+        messages: Chat history (OpenAI format)
+        session_id: Optional — resume an existing session
+        attachments: Optional file attachments
+
+    Response: SSE stream with typed events
     """
     from app.agent.setup import setup_default_registry
     from app.agent.agent import SeedifyAgent
+    from app.agent.persist import ChatSessionStore
+    from app.agent.prompt import SystemPromptBuilder
+    from app.agent.compact import CompactionConfig, should_compact, compact_session, estimate_tokens
+    from app.agent.session import Session, Message
     from app.session_store import SessionRecorder
 
     body = await request.json()
     messages = body.get("messages", [])
     attachments = body.get("attachments", [])
+    session_id = body.get("session_id", "")
 
-    # Setup agent with registry
+    # ── Session Persistence ───────────────────────────────────────
+    store = ChatSessionStore(db)
+    agent_session = None
+
+    if session_id and current_user:
+        agent_session = store.load_session(session_id)
+
+    if agent_session is None:
+        import uuid as _uuid
+        session_id = _uuid.uuid4().hex[:12]
+        agent_session = Session(session_id=session_id)
+    else:
+        session_id = agent_session.session_id
+
+    # ── Build System Prompt ───────────────────────────────────────
+    prompt_builder = SystemPromptBuilder()
+
+    if current_user:
+        prompt_builder = prompt_builder.with_user_profile(
+            name=getattr(current_user, "email", "User"),
+            timezone="UTC",
+            preferences={},
+        )
+
+    # Garden stats (best-effort)
+    try:
+        from app.models import Seed
+        seed_count = db.query(Seed).filter(
+            Seed.tenant_id == current_user.tenant_id
+        ).count() if current_user else 0
+        recent = db.query(Seed).filter(
+            Seed.tenant_id == current_user.tenant_id
+        ).order_by(Seed.created_at.desc()).limit(3).all() if current_user else []
+        recent_titles = [s.title for s in recent]
+        prompt_builder = prompt_builder.with_garden_stats(
+            seed_count=seed_count,
+            recent_seeds=recent_titles,
+            domains=[],
+        )
+    except Exception:
+        pass
+
+    system_prompt = prompt_builder.render()
+
+    # ── Setup Agent ───────────────────────────────────────────────
     registry = setup_default_registry()
     agent = SeedifyAgent(
         registry=registry,
         api_key=settings.OPENROUTER_API_KEY,
         model=settings.ENRICH_MODEL,
         max_rounds=3,
+        system_prompt=system_prompt,
     )
 
-    # Extract last user prompt for recording
+    # ── Compaction Check ──────────────────────────────────────────
+    config = CompactionConfig(preserve_recent=10, max_tokens=8000)
+    if should_compact(agent_session, config):
+        result = compact_session(agent_session, config)
+        agent_session = result.compacted_session
+
+    # ── Session Recording ─────────────────────────────────────────
     last_prompt = ""
     for msg in reversed(messages):
         if msg.get("role") == "user":
@@ -647,6 +708,11 @@ async def chat_v2_endpoint(
     )
 
     async def generate():
+        import json as _json
+
+        # Send session_id as first event
+        yield f"data: {_json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+
         async for event in agent.run(messages, current_user, db, attachments=attachments):
             d = event.to_dict()
 
@@ -658,7 +724,81 @@ async def chat_v2_endpoint(
             elif event.type.value == "tool_result":
                 recorder.event("tool_result", d.get("id", ""), d.get("result", "")[:200])
 
-            yield event.to_ndjson()
+            # SSE format
+            yield f"data: {_json.dumps(d, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(generate(), media_type="application/x-ndjson")
+        # Persist session after turn (best-effort)
+        try:
+            if current_user:
+                # Convert messages from the agent run into Message objects
+                from app.agent.session import Message as _Msg, ContentBlock as _CB
+                session_messages = [_Msg.user(last_prompt)] if last_prompt else []
+                store.save(
+                    session_id=session_id,
+                    messages=session_messages,
+                    tenant_id=str(current_user.tenant_id),
+                    user_id=str(current_user.id),
+                    title=last_prompt[:50] if last_prompt else None,
+                )
+                db.commit()
+        except Exception:
+            pass
 
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+
+# --- Session Management ---
+
+@app.get("/api/v1/sessions")
+def list_sessions(
+    limit: int = 20,
+    current_user: User = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """List user's chat sessions, ordered by most recent."""
+    if not current_user:
+        return []
+    from app.agent.persist import ChatSessionStore
+    store = ChatSessionStore(db)
+    return store.list_sessions(
+        tenant_id=str(current_user.tenant_id),
+        user_id=str(current_user.id),
+        limit=limit,
+    )
+
+
+@app.get("/api/v1/sessions/{session_id}")
+def get_session(
+    session_id: str,
+    current_user: User = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Load a chat session with full message history."""
+    if not current_user:
+        return {"error": "Not authenticated"}
+    from app.agent.persist import ChatSessionStore
+    store = ChatSessionStore(db)
+    session = store.load_session(session_id)
+    if session is None:
+        return {"error": "Session not found"}
+    return {
+        "session_id": session.session_id,
+        "messages": session.to_dict()["messages"],
+    }
+
+
+@app.delete("/api/v1/sessions/{session_id}")
+def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a chat session."""
+    if not current_user:
+        return {"error": "Not authenticated"}
+    from app.agent.persist import ChatSessionStore
+    store = ChatSessionStore(db)
+    ok = store.delete(session_id)
+    db.commit()
+    return {"deleted": ok}
