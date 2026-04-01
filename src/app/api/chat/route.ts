@@ -3,9 +3,10 @@ import {
   createUIMessageStreamResponse,
 } from 'ai'
 
-export const maxDuration = 300
+export const maxDuration = 60 // Vercel Hobby = 10s effective, Pro = 60s+
 
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
+const BACKEND_TIMEOUT_MS = 8000 // Under Vercel's 10s Hobby limit
 
 export async function POST(req: Request) {
   const body = await req.json()
@@ -33,6 +34,9 @@ export async function POST(req: Request) {
       }
 
       try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS)
+
         const res = await fetch(`${BACKEND}/api/v1/chat/v2`, {
           method: 'POST',
           headers: {
@@ -43,7 +47,10 @@ export async function POST(req: Request) {
             messages,
             ...(currentSessionId ? { session_id: currentSessionId } : {}),
           }),
+          signal: controller.signal,
         })
+
+        clearTimeout(timeout)
 
         if (!res.ok) {
           const errorText = await res.text()
@@ -203,11 +210,13 @@ export async function POST(req: Request) {
         }
       } catch (err) {
         ensureTextStarted()
+        const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort'))
         writer.write({
           type: 'text-delta',
           id: textId,
-          delta:
-            'Cannot reach backend. The Cloudflare tunnel may be down.',
+          delta: isTimeout
+            ? 'Request timed out. The AI is thinking — try a simpler question or try again.'
+            : 'Cannot reach backend. The Cloudflare tunnel may be down.',
         })
         writer.write({ type: 'text-end', id: textId })
       }
