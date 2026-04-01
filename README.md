@@ -93,6 +93,7 @@ python3 enrichment/monitor.py --full
 ## Project Structure
 ```
 ├── src/                    # React frontend (Next.js)
+│   └── app/api/chat/       # AI chat streaming endpoint
 ├── openclaw-api/           # FastAPI backend
 │   ├── app/
 │   │   ├── main.py         # API endpoints
@@ -124,7 +125,24 @@ python3 enrichment/monitor.py --full
 - **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT auth
 - **Database:** PostgreSQL 15, Weaviate 1.36, Redis 7
 - **AI:** OpenRouter (GPT-4o-mini, Nemotron), OpenAI embeddings
-- **Infra:** Docker Compose, GitHub Actions, Vercel
+- **Infra:** Docker Compose, GitHub Actions, Vercel (Hobby tier)
+
+## Known Issues & Status
+
+### Tunnel Flakiness
+The Cloudflare tunnel connecting Vercel → backend intermittently drops requests, especially during long tool calls (>8s). Simple requests (2-3s) work fine.
+
+### Vercel Hobby Timeout
+Vercel Hobby plan limits serverless functions to 10 seconds. Tool-heavy requests (research, search) often exceed this, causing timeouts. Options:
+- Upgrade to **Vercel Pro** ($20/mo) — 300s timeout
+- Set up **HTTPS on the server** with Let's Encrypt — stable direct connection
+- Accept limitation — simple chat works, tools may timeout
+
+### Weaviate Enrichment
+Enrichment fields (domain, tags, energy) are empty — pipeline reported success but data not saved. Needs re-run.
+
+### Idea Garden
+100 seeds in Weaviate, but enrichment data missing. BFL concept maps generated for some seeds.
 
 ## Design Principles
 - **Immutability where possible** — frozen dataclasses, no accidental mutation
