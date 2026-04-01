@@ -10,7 +10,7 @@ interface OnboardingProfile {
   nickname: string
   city: string
   interests: string[]
-  digestFrequency: 'twice-daily' | 'once-daily' | 'weekly'
+  digestFrequency: 'twice-daily' | 'once-daily' | 'bi-weekly' | 'weekly' | 'calendar'
   onboardedAt: string
 }
 
@@ -28,9 +28,11 @@ const INTEREST_OPTIONS = [
 ]
 
 const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfile['digestFrequency'] }[] = [
-  { label: 'Twice a day', sublabel: 'Morning & evening briefings', value: 'twice-daily' },
-  { label: 'Once a day', sublabel: 'Morning spark every day', value: 'once-daily' },
-  { label: 'Weekly', sublabel: 'One curated digest per week', value: 'weekly' },
+  { label: 'Twice a day', sublabel: 'Morning & evening cycles', value: 'twice-daily' },
+  { label: 'Once a day', sublabel: 'Standard growth pattern', value: 'once-daily' },
+  { label: 'Bi-Weekly', sublabel: 'Mid-week and weekend updates', value: 'bi-weekly' },
+  { label: 'Weekly', sublabel: 'Batch collection every Sunday', value: 'weekly' },
+  { label: 'Based on Calendar', sublabel: 'Smart Scheduling', value: 'calendar' },
 ]
 
 const TOTAL_STEPS = 5
@@ -447,7 +449,7 @@ function StepNurtureFocus({
       </div>
 
       {/* Radio cards (Stitch: pill-shaped containers) */}
-      <div className="w-full space-y-3 mb-10">
+      <div className="w-full space-y-3 mb-6">
         {DIGEST_OPTIONS.map((opt) => {
           const isSelected = frequency === opt.value
           return (
@@ -486,7 +488,36 @@ function StepNurtureFocus({
         })}
       </div>
 
-      <PrimaryButton onClick={onNext}>Continue</PrimaryButton>
+      {/* Time setting */}
+      <div
+        className="w-full rounded-full px-5 py-4 mb-2 flex items-center justify-between"
+        style={{ background: '#1f211f', border: '1px solid rgba(63,73,67,0.20)' }}
+      >
+        <div>
+          <p className="text-xs font-medium" style={{ color: '#9fb8aa' }}>Time</p>
+          <p className="text-lg font-bold" style={{ color: '#e1e3df' }}>09:00 AM</p>
+        </div>
+        <button
+          className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all active:scale-95"
+          style={{
+            background: 'rgba(16,185,129,0.12)',
+            color: '#10B981',
+            border: '1px solid rgba(16,185,129,0.20)',
+          }}
+        >
+          Edit
+        </button>
+      </div>
+
+      <p className="text-xs text-center mb-6" style={{ color: '#9fb8aa', opacity: 0.6 }}>
+        Local time based on your current region.
+      </p>
+
+      <PrimaryButton onClick={onNext}>Next →</PrimaryButton>
+
+      <p className="mt-4 text-xs text-center" style={{ color: '#9fb8aa', opacity: 0.5 }}>
+        You can change these settings later in Profile &gt; Vault.
+      </p>
     </StepShell>
   )
 }
