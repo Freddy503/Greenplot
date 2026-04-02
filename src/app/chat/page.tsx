@@ -19,6 +19,7 @@ import {
 
 // Hooks
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder'
+import { pollNotifications } from '@/hooks/use-push-notifications'
 
 // Layout
 import Header from '@/components/layout/header'
@@ -166,6 +167,13 @@ export default function ChatPage() {
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
+
+  // Poll for push notifications every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(pollNotifications, 60000)
+    pollNotifications() // check immediately
+    return () => clearInterval(interval)
+  }, [])
 
   // Persist messages to sessionStorage whenever they change
   useEffect(() => {
