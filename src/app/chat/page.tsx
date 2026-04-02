@@ -142,7 +142,27 @@ export default function ChatPage() {
   // No clear on mount — chat persists within session
 
   // ── Garden Enrichment ──────────────────────────────
+  const GARDEN_SKIP_PATTERNS = [
+    /^(hi|hey|hello|yo|sup|ok|okay|yes|no|sure|thanks|ty|thx|got it|lol|haha|nice|cool|great)\b/i,
+    /^.{0,15}$/,
+    /^(what('s| is) the (weather|time|date)|how('s| is) it going|what('?s| is) up)/i,
+    /^(can you|could you|would you) (see|check|look at|open|go to)/i,
+  ]
+
+  const shouldEnrichGarden = (text: string): boolean => {
+    // Skip short/generic messages
+    if (GARDEN_SKIP_PATTERNS.some(p => p.test(text.trim()))) return false
+    // Skip pure commands / URLs / code
+    if (/^https?:\/\//.test(text.trim())) return false
+    if (/^\/\w+/.test(text.trim())) return false
+    return true
+  }
+
   const enrichWithGarden = useCallback(async (text: string): Promise<string> => {
+    if (!shouldEnrichGarden(text)) {
+      setLastGardenSeeds([])
+      return text
+    }
     try {
       setGardenEnriching(true)
       const res = await fetch('/api/seeds/search', {
