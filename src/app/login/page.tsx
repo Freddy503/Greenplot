@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { usePushNotifications } from '@/hooks/use-push-notifications'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { requestPermission } = usePushNotifications()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +48,9 @@ export default function LoginPage() {
 
       const nickname = email.split('@')[0]
       localStorage.setItem('greenplot_nickname', nickname)
+
+      // Register push notifications (non-blocking)
+      requestPermission().catch(() => {})
 
       router.push('/chat')
     } catch (err) {

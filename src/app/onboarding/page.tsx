@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Checkbox } from '@/components/ui/checkbox'
+import { usePushNotifications } from '@/hooks/use-push-notifications'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -531,6 +532,7 @@ export default function OnboardingPage() {
   const [digestFrequency, setDigestFrequency] = useState<OnboardingProfile['digestFrequency']>('once-daily')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { requestPermission } = usePushNotifications()
 
   const toggleInterest = (val: string) => {
     setSelectedInterests((prev) =>
@@ -592,6 +594,9 @@ export default function OnboardingPage() {
           source: 'onboarding',
         }),
       }).catch(() => {})
+
+      // Register push notifications (non-blocking)
+      requestPermission().catch(() => {})
 
       router.push('/chat')
     } catch (err) {
