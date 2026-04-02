@@ -65,11 +65,16 @@ function getSeedIcon(domain: string) {
 
 // ── Seed Row ──────────────────────────────────────────
 
-function SeedRow({ seed }: { seed: Seed }) {
+function SeedRow({ seed, allSeeds }: { seed: Seed; allSeeds: Seed[] }) {
   const icon = getSeedIcon(seed.domain || '')
   const isFilled = icon === 'psychiatry' || icon === 'eco'
   const statusStyle = getStatusStyle(seed.status || '')
   const tags = seed.domain ? seed.domain.split(',').map((t: string) => t.trim()).filter(Boolean) : []
+
+  // Count connections: other seeds sharing at least one domain tag
+  const connections = tags.length > 0
+    ? allSeeds.filter(s => s.id !== seed.id && s.domain && tags.some(t => s.domain!.toLowerCase().includes(t.toLowerCase()))).length
+    : 0
 
   return (
     <TableRow className="border-b border-outline-variant/5 hover:bg-surface-container transition-colors cursor-pointer group">
@@ -96,9 +101,17 @@ function SeedRow({ seed }: { seed: Seed }) {
         )}
       </TableCell>
       <TableCell className="text-right w-20">
-        <span className={`text-[10px] font-bold uppercase tracking-tighter ${statusStyle.color}`}>
-          {statusStyle.label}
-        </span>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className={`text-[10px] font-bold uppercase tracking-tighter ${statusStyle.color}`}>
+            {statusStyle.label}
+          </span>
+          {connections > 0 && (
+            <span className="flex items-center gap-0.5 text-[9px] text-secondary/60">
+              <span className="material-symbols-outlined" style={{ fontSize: '10px', fontVariationSettings: '"FILL" 1' }}>link</span>
+              {connections}
+            </span>
+          )}
+        </div>
       </TableCell>
     </TableRow>
   )
@@ -214,7 +227,7 @@ export default function GardenPage() {
               </TableHeader>
               <TableBody>
                 {seeds.map((seed) => (
-                  <SeedRow key={seed.id} seed={seed} />
+                  <SeedRow key={seed.id} seed={seed} allSeeds={seeds} />
                 ))}
               </TableBody>
             </Table>
@@ -241,6 +254,76 @@ export default function GardenPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Seed Connections */}
+        {seeds.length > 1 && (() => {
+          // Group seeds by domain
+          const domainMap = new Map<string, Seed[]>()
+          seeds.forEach(s => {
+            const domains = s.domain ? s.domain.split(',').map(d => d.trim()).filter(Boolean) : ['Uncategorized']
+            domains.forEach(d => {
+              if (!domainMap.has(d)) domainMap.set(d, [])
+              domainMap.get(d)!.push(s)
+            })
+          })
+          const clusters = [...domainMap.entries()]
+            .filter(([, s]) => s.length > 1)
+            .sort((a, b) => b[1].length - a[1].length)
+            .slice(0, 5)
+
+          if (clusters.length === 0) return null
+
+          return (
+            <Card className="mt-10 relative overflow-hidden bg-surface-container border-secondary/10">
+              <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-secondary/5 rounded-full blur-3xl" />
+              <CardContent className="relative z-10 p-6">
+                <div className="flex items-center gap-2 mb-5">
+                  <span
+                    className="material-symbols-outlined text-secondary"
+                    style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}
+                  >
+                    hub
+                  </span>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-secondary">
+                    Seed Connections
+                  </h3>
+                </div>
+                <p className="text-xs text-on-surface-variant mb-4">
+                  Seeds that share domains and themes. Your second brain is forming patterns.
+                </p>
+                <div className="space-y-4">
+                  {clusters.map(([domain, clusterSeeds]) => (
+                    <div key={domain} className="group">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge className="bg-primary/10 text-primary text-[10px] font-bold border-0">
+                          {domain}
+                        </Badge>
+                        <span className="text-[10px] text-on-surface-variant/50">
+                          {clusterSeeds.length} seeds
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 ml-1">
+                        {clusterSeeds.slice(0, 4).map(s => (
+                          <span
+                            key={s.id}
+                            className="text-[11px] text-on-surface-variant bg-surface-container-low rounded-full px-2.5 py-1 border border-outline-variant/10 hover:border-primary/20 transition-colors cursor-default"
+                          >
+                            {s.title.length > 30 ? s.title.slice(0, 30) + '…' : s.title}
+                          </span>
+                        ))}
+                        {clusterSeeds.length > 4 && (
+                          <span className="text-[10px] text-on-surface-variant/40 self-center">
+                            +{clusterSeeds.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })()}
       </main>
 
       {/* FAB */}
