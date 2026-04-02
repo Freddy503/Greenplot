@@ -25,6 +25,10 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 
+// Layout
+import Header from '@/components/layout/header'
+import BottomNav from '@/components/layout/bottom-nav'
+
 // ── Types ─────────────────────────────────────────────
 
 interface Seed {
@@ -155,49 +159,9 @@ export default function GardenPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-8 h-8">
-            <AvatarFallback className="bg-surface-container-highest text-primary text-xs font-bold">
-              {nickname.charAt(0).toUpperCase() || 'G'}
-            </AvatarFallback>
-          </Avatar>
-          <span className="text-xl font-bold tracking-tighter text-primary">Greenplot</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-on-surface-variant rounded-full">
-            <span className="material-symbols-outlined">search</span>
-          </Button>
-          <Button
-            variant="ghost"
-            className="text-on-surface-variant text-sm uppercase tracking-widest font-medium rounded-full"
-            onClick={() => router.push('/chat')}
-          >
-            Chat
-          </Button>
-        </div>
-      </header>
+      <Header />
 
-      <main className="pt-20 pb-32 px-4 max-w-2xl mx-auto w-full">
-        {/* Toggle */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-surface-container-low p-1.5 rounded-full flex items-center w-full max-w-[280px]">
-            <Button
-              variant="ghost"
-              className="flex-1 rounded-full text-sm font-bold text-on-surface-variant"
-              onClick={() => router.push('/chat')}
-            >
-              Chat
-            </Button>
-            <Button
-              className="flex-1 rounded-full text-sm font-bold bg-gradient-to-br from-primary to-primary-container text-primary-foreground shadow-lg"
-            >
-              Garden
-            </Button>
-          </div>
-        </div>
-
+      <main className="pt-20 pb-28 px-4 max-w-2xl mx-auto w-full">
         {/* Hero */}
         <section className="mb-8 px-2">
           <h1 className="text-3xl font-extrabold tracking-tight mb-2 leading-tight text-on-surface">
@@ -365,24 +329,7 @@ export default function GardenPage() {
         <span className="material-symbols-outlined text-2xl font-bold">add</span>
       </Button>
 
-      {/* Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-surface-container-low/80 backdrop-blur-xl rounded-t-[32px] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.4)]">
-        <Button variant="ghost" size="icon" className="text-on-surface-variant rounded-full p-3">
-          <span className="material-symbols-outlined">home</span>
-        </Button>
-        <Button
-          size="icon"
-          className="rounded-full p-3 bg-gradient-to-br from-primary to-primary-container text-primary-foreground"
-        >
-          <span className="material-symbols-outlined" style={{ fontVariationSettings: '"FILL" 1' }}>chat_bubble</span>
-        </Button>
-        <Button variant="ghost" size="icon" className="text-on-surface-variant rounded-full p-3">
-          <span className="material-symbols-outlined">search</span>
-        </Button>
-        <Button variant="ghost" size="icon" className="text-on-surface-variant rounded-full p-3">
-          <span className="material-symbols-outlined">settings</span>
-        </Button>
-      </nav>
+      <BottomNav />
     </div>
   )
 }
