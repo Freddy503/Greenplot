@@ -61,13 +61,16 @@ class WeaviateClient:
 
     def search_seeds(self, tenant_id: str, embedding: list, limit: int = 10):
         nearVector = {"vector": embedding}
-        # Search IdeaSeed class — include enrichment fields
-        # Note: tenant filtering disabled (Weaviate 1.23 doesn't support empty string in where)
+        # Search IdeaSeed class — include enrichment fields, filter by tenant
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
             ["title", "text", "source", "url", "created", "notion_id",
              "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"]
-        ).with_near_vector(nearVector).with_limit(limit * 3)
+        ).with_near_vector(nearVector).with_where({
+            "path": ["tenant_id"],
+            "operator": "Equal",
+            "valueText": tenant_id,
+        }).with_limit(limit * 3)
         result = query.do()
         objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, []) or []
 
