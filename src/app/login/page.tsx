@@ -22,10 +22,13 @@ export default function LoginPage() {
     setError('')
 
     try {
+      // Accept nickname or email: if no @, append @greenplot.app
+      const loginEmail = email.includes('@') ? email.trim() : `${email.trim().toLowerCase()}@greenplot.app`
+
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+        body: JSON.stringify({ email: loginEmail, password: password.trim() }),
       })
 
       if (!res.ok) {
@@ -77,10 +80,10 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-3">
           <Input
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
+            placeholder="Nickname or email"
             autoFocus
             className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
           />
