@@ -148,8 +148,10 @@ export default function ChatPage() {
     },
   })
 
-  // Restore messages from sessionStorage on mount
+  // Restore messages from sessionStorage — runs once on mount
+  const [restored, setRestored] = useState(false)
   useEffect(() => {
+    if (restored) return
     try {
       const saved = sessionStorage.getItem('greenplot_chat')
       if (saved) {
@@ -159,17 +161,19 @@ export default function ChatPage() {
         }
       }
     } catch {}
+    setRestored(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [restored])
 
-  // Persist messages to sessionStorage on change
+  // Persist messages to sessionStorage whenever they change
   useEffect(() => {
+    if (!restored) return // don't save until we've restored
     if (messages.length > 0) {
       try {
         sessionStorage.setItem('greenplot_chat', JSON.stringify(messages))
       } catch {}
     }
-  }, [messages])
+  }, [messages, restored])
 
   // ── Garden Enrichment ──────────────────────────────
   // API decides intelligently whether to enrich based on:
