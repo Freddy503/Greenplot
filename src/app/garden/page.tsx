@@ -146,7 +146,7 @@ export default function GardenPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-background/80 backdrop-blur-xl">
+      <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <Avatar className="w-8 h-8">
             <AvatarFallback className="bg-surface-container-highest text-primary text-xs font-bold">

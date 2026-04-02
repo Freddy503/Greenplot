@@ -1,13 +1,19 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
+  weight: ["200", "300", "400", "500", "600", "700", "800"],
+});
+
+const beVietnam = Be_Vietnam_Pro({
+  variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -31,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("dark", jakarta.variable)}>
+    <html lang="en" className={cn("dark", jakarta.variable, beVietnam.variable)}>
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
@@ -43,7 +49,7 @@ export default function RootLayout({
       </head>
       <body
         className="min-h-screen bg-[#01120b] text-[#e4fcf0]"
-        style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
+        style={{ fontFamily: "Plus Jakarta Sans, Be Vietnam Pro, sans-serif" }}
       >
         <TooltipProvider>{children}</TooltipProvider>
       </body>

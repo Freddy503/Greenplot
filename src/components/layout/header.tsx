@@ -23,7 +23,7 @@ export default function Header() {
   const initial = nickname ? nickname[0].toUpperCase() : 'G'
 
   return (
-    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-background/80 backdrop-blur-2xl border-b border-outline-variant/10">
+    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-surface/80 backdrop-blur-2xl border-b border-outline-variant/10">
       {/* Logo + Identity */}
       <div className="flex items-center gap-3">
         <Avatar className="w-10 h-10 bg-primary shadow-[0_4px_16px_rgba(105,246,184,0.20)]">
