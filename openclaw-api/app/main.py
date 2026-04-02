@@ -819,6 +819,80 @@ def delete_session(
 
 # --- Chat Harvest: Create seeds from chat insights ---
 
+@app.post("/api/v1/chat/harvest-all")
+def harvest_all(
+    x_api_key: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    """
+    System endpoint: Harvest ALL users' recent chat sessions.
+    Requires X-API-Key header matching HARVEST_API_KEY env var.
+    """
+    harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
+    if x_api_key != harvest_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    from app.agent.persist import ChatSessionStore
+    store = ChatSessionStore(db)
+
+    # Get all users with recent sessions
+    from app.models import ChatSession as ChatSessionModel
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(hours=2)
+    sessions = db.query(ChatSessionModel).filter(
+        ChatSessionModel.updated_at >= cutoff
+    ).order_by(ChatSessionModel.updated_at.desc()).limit(10).all()
+
+    harvested = 0
+    for session_row in sessions:
+        try:
+            session = store.load_session(str(session_row.id))
+            if not session or not session.messages:
+                continue
+
+            # Extract assistant text
+            assistant_texts = []
+            for msg in session.messages:
+                if hasattr(msg, 'role') and msg.role == 'assistant':
+                    for block in (msg.content or []):
+                        if hasattr(block, 'type') and block.type == 'text':
+                            assistant_texts.append(block.text)
+                        elif isinstance(block, dict) and block.get('type') == 'text':
+                            assistant_texts.append(block.get('text', ''))
+
+            if not assistant_texts:
+                continue
+
+            combined = "\n\n".join(assistant_texts[:3])
+            if len(combined) > 1500:
+                combined = combined[:1500] + "..."
+
+            thought = Thought(
+                tenant_id=session_row.tenant_id,
+                user_id=session_row.user_id,
+                content=f"Chat Insights:\n\n{combined}",
+                source='auto_harvest',
+                status='pending'
+            )
+            db.add(thought)
+            db.flush()
+
+            from app.enricher_v2 import enrich_thought_v2
+            try:
+                enrich_thought_v2(str(thought.id), str(session_row.tenant_id), db)
+                thought.status = 'processed'
+            except Exception as e:
+                thought.status = 'error'
+                thought.error_message = str(e)
+            db.commit()
+            harvested += 1
+        except Exception:
+            db.rollback()
+            continue
+
+    return {"harvested": harvested, "sessions_checked": len(sessions)}
+
+
 @app.post("/api/v1/chat/harvest")
 def harvest_chat(
     session_id: Optional[str] = None,
