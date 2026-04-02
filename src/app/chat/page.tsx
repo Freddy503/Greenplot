@@ -15,9 +15,6 @@ import { useVoiceRecorder } from '@/hooks/use-voice-recorder'
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 
-// Components
-import { RelatedSeedsPanel } from '@/components/seeds/related-seeds-panel'
-
 // AI Elements
 import {
   Conversation,
@@ -121,6 +118,8 @@ function ThumbsRating({ messageId }: { messageId: string }) {
 export default function ChatPage() {
   const [authToken, setAuthToken] = useState('')
   const [msgTimes] = useState<Record<string, string>>({})
+  const [gardenEnriching, setGardenEnriching] = useState(false)
+  const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
   useEffect(() => {
     try {
       setAuthToken(localStorage.getItem('greenplot_token') || '')
@@ -142,26 +141,54 @@ export default function ChatPage() {
 
   // No clear on mount — chat persists within session
 
-  const handleSubmit = (msg: PromptInputMessage) => {
-    if (!msg.text?.trim() || status !== 'ready') return
-    sendMessage({ text: msg.text })
-  }
+  // ── Garden Enrichment ──────────────────────────────
+  const enrichWithGarden = useCallback(async (text: string): Promise<string> => {
+    try {
+      setGardenEnriching(true)
+      const res = await fetch('/api/seeds/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: text, limit: 3 }),
+      })
+      if (!res.ok) return text
+      const data = await res.json()
+      const seeds = data.seeds || []
+      setLastGardenSeeds(seeds.slice(0, 3))
 
-  const handleSuggestion = (suggestion: string) => {
+      if (data.context) {
+        return `${text}\n\n${data.context}`
+      }
+      return text
+    } catch {
+      return text
+    } finally {
+      setGardenEnriching(false)
+    }
+  }, [])
+
+  const handleSubmit = useCallback(async (msg: PromptInputMessage) => {
+    if (!msg.text?.trim() || status !== 'ready') return
+    const enrichedText = await enrichWithGarden(msg.text.trim())
+    sendMessage({ text: enrichedText })
+  }, [status, sendMessage, enrichWithGarden])
+
+  const handleSuggestion = useCallback(async (suggestion: string) => {
     if (status !== 'ready') return
-    sendMessage({ text: suggestion })
-  }
+    const enrichedText = await enrichWithGarden(suggestion)
+    sendMessage({ text: enrichedText })
+  }, [status, sendMessage, enrichWithGarden])
 
   // ── Voice Memo ────────────────────────────────────────
   const [voiceError, setVoiceError] = useState<string | null>(null)
 
   const handleTranscription = useCallback(
-    (text: string) => {
+    async (text: string) => {
       if (status === 'ready') {
-        sendMessage({ text: `🎙️ ${text}` })
+        const enrichedText = await enrichWithGarden(`🎙️ Voice memo: ${text}`)
+        sendMessage({ text: enrichedText })
       }
     },
-    [status, sendMessage]
+    [status, sendMessage, enrichWithGarden]
   )
 
   const handleVoiceError = useCallback((msg: string) => {
@@ -394,8 +421,22 @@ export default function ChatPage() {
               })
             )}
 
+            {/* Garden enrichment indicator */}
+            {gardenEnriching && (
+              <div className="flex justify-center my-4">
+                <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-primary/10 border border-primary/20">
+                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px' }}>
+                    park
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-primary">
+                    🌱 Enriching from your garden…
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Streaming indicator */}
-            {isStreaming && (
+            {isStreaming && !gardenEnriching && (
               <div className="flex justify-center my-4">
                 <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-secondary/10 border border-secondary/20">
                   <span className="material-symbols-outlined text-secondary" style={{ fontSize: '16px' }}>
@@ -408,22 +449,15 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Related seeds — shown after assistant messages when not streaming */}
-            {!isStreaming && messages.length > 1 && (() => {
-              const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
-              const userText = lastUserMsg?.parts
-                ?.filter(p => p.type === 'text')
-                .map(p => (p as any).text || '')
-                .join('') || ''
-              if (userText.length < 15) return null
-              return (
-                <RelatedSeedsPanel
-                  query={userText}
-                  token={authToken}
-                  className="mt-2"
-                />
-              )
-            })()}
+            {/* Garden sources — compact badge after assistant messages */}
+            {!isStreaming && lastGardenSeeds.length > 0 && (
+              <div className="flex items-center gap-2 px-2 mb-3 animate-in fade-in">
+                <span className="material-symbols-outlined text-primary/40" style={{ fontSize: '12px', fontVariationSettings: '"FILL" 1' }}>park</span>
+                <span className="text-[10px] text-on-surface-variant/40">
+                  Enriched by: {lastGardenSeeds.map(s => s.title).join(', ')}
+                </span>
+              </div>
+            )}
 
             {/* Thinking indicator */}
             {isStreaming &&
