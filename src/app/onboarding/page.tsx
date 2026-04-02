@@ -6,9 +6,9 @@ import { motion, AnimatePresence } from 'motion/react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { Checkbox } from '@/components/ui/checkbox'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -23,14 +23,14 @@ interface OnboardingProfile {
 // ── Constants ─────────────────────────────────────────
 
 const INTEREST_OPTIONS = [
-  'Technology',
-  'Business',
-  'Entrepreneurship',
-  'AI',
-  'Design',
-  'Productivity',
-  'Learning',
-  'Creativity',
+  { label: 'Technology', icon: 'rocket_launch' },
+  { label: 'Business trends', icon: 'trending_up' },
+  { label: 'Entrepreneurship', icon: 'lightbulb' },
+  { label: 'AI', icon: 'memory' },
+  { label: 'Design', icon: 'palette' },
+  { label: 'Productivity', icon: 'bolt' },
+  { label: 'Learning', icon: 'menu_book' },
+  { label: 'Creativity', icon: 'auto_awesome' },
 ]
 
 const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfile['digestFrequency'] }[] = [
@@ -42,19 +42,39 @@ const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfil
 ]
 
 const TOTAL_STEPS = 5
+const STEP_LABELS = ['Welcome', 'Roots', 'Interests', 'Nurture', 'Intelligence']
 
-// ── Progress Bar ──────────────────────────────────────
+// ── Ambient Background ────────────────────────────────
+
+function AmbientBg() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute rounded-full w-[500px] h-[500px] bg-primary/10 -top-[15%] -right-[20%] blur-[120px]" />
+      <div className="absolute rounded-full w-[400px] h-[400px] bg-secondary/5 -bottom-[10%] -left-[20%] blur-[100px]" />
+    </div>
+  )
+}
+
+// ── Progress Bar (Stitch: top, gradient, step labels) ─
 
 function ProgressBar({ step }: { step: number }) {
   const pct = ((step + 1) / TOTAL_STEPS) * 100
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-8">
-      <div className="h-1 w-48 rounded-full overflow-hidden bg-primary/15">
+    <div className="w-full max-w-md mb-12 flex flex-col gap-4">
+      <div className="flex justify-between items-end">
+        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+          Step {step + 1} of {TOTAL_STEPS}
+        </span>
+        <span className="text-[10px] font-bold text-primary uppercase tracking-[0.1em]">
+          {STEP_LABELS[step]}
+        </span>
+      </div>
+      <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
         <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-primary to-primary/0"
+          className="h-full rounded-full bg-gradient-to-r from-primary to-primary-container shadow-[0_0_15px_rgba(105,246,184,0.3)]"
           initial={false}
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.4, ease: 'easeInOut' }}
+          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
         />
       </div>
     </div>
@@ -71,54 +91,86 @@ function StepShell({ children, step }: { children: React.ReactNode; step: number
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="w-full flex flex-col items-center"
+      className="w-full max-w-lg flex flex-col items-center"
     >
       {children}
     </motion.div>
   )
 }
 
-// ── Step Label ────────────────────────────────────────
+// ── Gradient CTA Button (Stitch style) ────────────────
 
-function StepLabel({ step }: { step: number }) {
-  return (
-    <p className="text-xs tracking-wide mb-8 font-medium text-on-surface-variant/60">
-      Step {step + 1}/{TOTAL_STEPS}
-    </p>
-  )
-}
-
-// ── Amber CTA Button ──────────────────────────────────
-
-function PrimaryButton({
+function CTAButton({
   children,
   onClick,
   disabled,
   loading,
-  type = 'button',
+  icon = 'arrow_forward',
 }: {
   children: React.ReactNode
   onClick?: () => void
   disabled?: boolean
   loading?: boolean
-  type?: 'button' | 'submit'
+  icon?: string
 }) {
   return (
-    <Button
-      type={type}
+    <button
       onClick={onClick}
       disabled={disabled || loading}
-      className="w-full py-5 px-10 rounded-full font-bold text-lg h-auto bg-secondary text-on-secondary hover:bg-secondary/90 shadow-[0_8px_32px_rgba(248,160,16,0.20)] active:scale-[0.97] transition-transform"
+      className="w-full max-w-xs group relative flex items-center justify-center gap-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(105,246,184,0.3)] hover:shadow-[0_15px_50px_-10px_rgba(105,246,184,0.5)] active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
     >
       {loading ? (
         <span className="flex items-center justify-center gap-2">
-          <Spinner className="text-on-secondary" />
+          <Spinner className="text-on-primary" />
           Setting up your garden…
         </span>
       ) : (
-        children
+        <>
+          <span className="text-lg">{children}</span>
+          <span
+            className="material-symbols-outlined transition-transform group-hover:translate-x-1"
+            style={{ fontVariationSettings: '"wght" 700' }}
+          >
+            {icon}
+          </span>
+        </>
       )}
-    </Button>
+    </button>
+  )
+}
+
+// ── Input Field (Stitch style: pill, with icon) ───────
+
+function StitchInput({
+  label,
+  icon,
+  optional,
+  ...props
+}: {
+  label: string
+  icon: string
+  optional?: boolean
+} & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div className="space-y-2">
+      <Label className="block text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant ml-4">
+        {label}
+        {optional && (
+          <span className="text-on-surface-variant/50 normal-case tracking-normal font-medium ml-1">
+            (Optional)
+          </span>
+        )}
+      </Label>
+      <div className="relative group">
+        <Input
+          {...props}
+          className="w-full bg-surface-container-highest border-none rounded-full px-6 py-4 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary transition-all pr-12"
+        />
+        <div className="absolute inset-y-0 right-4 flex items-center text-primary/40 pointer-events-none">
+          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>{icon}</span>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -127,17 +179,10 @@ function PrimaryButton({
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <StepShell step={0}>
-      {/* Decorative bg blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute rounded-full w-[300px] h-[300px] bg-primary opacity-[0.05] -top-[5%] -left-[10%] blur-[80px]" />
-        <div className="absolute rounded-full w-[200px] h-[200px] bg-secondary opacity-[0.04] bottom-[15%] -right-[8%] blur-[60px]" />
-      </div>
-
-      <StepLabel step={0} />
-
       {/* Seed motif */}
       <div className="relative mb-10">
-        <div className="w-56 h-72 rounded-full flex items-center justify-center relative overflow-hidden bg-surface-container">
+        <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-[1.8]" />
+        <div className="relative w-56 h-72 rounded-full flex items-center justify-center bg-surface-container border border-outline-variant/20 overflow-hidden">
           <div className="absolute glass-morphism rounded-full w-16 h-16 top-[12%] right-[10%] flex items-center justify-center">
             <span
               className="material-symbols-outlined text-primary"
@@ -146,7 +191,6 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
               eco
             </span>
           </div>
-          <div className="absolute rounded-full w-12 h-12 bg-primary/15 backdrop-blur-sm border border-primary/30 bottom-[15%] left-[10%]" />
           <span
             className="material-symbols-outlined text-primary relative z-10"
             style={{ fontSize: 72, fontVariationSettings: '"FILL" 1' }}
@@ -160,16 +204,15 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         <h1 className="text-5xl font-extrabold tracking-tighter leading-[1.1] mb-6 text-on-surface">
           Welcome to{'\n'}Greenplot
         </h1>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
-          Your personal AI agent for creative thinking.
-          Information as living matter, nurtured to help you grow.
+        <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
+          Your personal AI agent for creative thinking. Information as living matter, nurtured to help you grow.
         </p>
       </div>
 
-      <PrimaryButton onClick={onNext}>Get Started</PrimaryButton>
+      <CTAButton onClick={onNext}>Get Started</CTAButton>
 
-      <p className="mt-6 text-xs flex items-center gap-2 font-medium text-on-surface-variant/60">
-        <span className="w-2 h-2 rounded-full bg-primary" />
+      <p className="mt-6 text-xs flex items-center gap-2 font-medium text-on-surface-variant/40">
+        <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
         Version 1.0 — Built for growers
       </p>
     </StepShell>
@@ -207,89 +250,48 @@ function StepWhoAreYou({
 
   return (
     <StepShell step={1}>
-      <StepLabel step={1} />
+      {/* Avatar upload placeholder */}
+      <div className="relative group mx-auto w-36 h-36 mb-8">
+        <div className="absolute inset-0 bg-primary/20 blur-2xl group-hover:bg-primary/30 transition-all duration-500 rounded-full" />
+        <div className="relative w-full h-full rounded-full flex items-center justify-center bg-surface-container-high border border-outline-variant/20 hover:border-primary/40 transition-colors cursor-pointer overflow-hidden">
+          <div className="relative z-10 flex flex-col items-center gap-2">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+              <span className="material-symbols-outlined text-3xl">photo_camera</span>
+            </div>
+          </div>
+        </div>
+        <div className="absolute -bottom-1 -right-1 w-10 h-10 bg-secondary rounded-full flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+          <span className="material-symbols-outlined text-on-secondary text-xl" style={{ fontVariationSettings: '"wght" 700' }}>add</span>
+        </div>
+      </div>
 
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
+      <div className="text-center mb-8">
+        <h2 className="text-4xl font-extrabold tracking-tight mb-3 text-on-surface">
           Tell us about your roots
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
+        <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
           Every garden needs a keeper. Choose a name that reflects your digital presence.
         </p>
       </div>
 
-      <div className="w-full space-y-4 mb-10">
-        <div>
-          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
-            Nickname
-          </Label>
-          <Input
-            type="text"
-            value={nickname}
-            onChange={(e) => onNickname(e.target.value)}
-            placeholder="Seedling_42"
-            autoFocus
-            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
-          />
-        </div>
-        <div>
-          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
-            Password
-          </Label>
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => onPassword(e.target.value)}
-            placeholder="Min. 6 characters"
-            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
-          />
-          {password.length > 0 && !passwordValid && (
-            <p className="text-xs mt-1 pl-1 text-error">At least 6 characters</p>
-          )}
-        </div>
-        <div>
-          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
-            Confirm Password
-          </Label>
-          <Input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => onConfirmPassword(e.target.value)}
-            placeholder="Repeat your password"
-            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
-          />
-          {confirmPassword.length > 0 && !passwordsMatch && (
-            <p className="text-xs mt-1 pl-1 text-error">Passwords don't match</p>
-          )}
-        </div>
-        <div>
-          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
-            City{' '}
-            <span className="text-on-surface-variant/50 normal-case tracking-normal font-medium">
-              (Optional)
-            </span>
-          </Label>
-          <Input
-            type="text"
-            value={city}
-            onChange={(e) => onCity(e.target.value)}
-            placeholder="The Digital Valley"
-            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
-          />
-        </div>
+      <div className="w-full space-y-4 mb-8">
+        <StitchInput label="Nickname" icon="face" value={nickname} onChange={(e) => onNickname(e.target.value)} placeholder="Seedling_42" autoFocus />
+        <StitchInput label="Password" icon="lock" type="password" value={password} onChange={(e) => onPassword(e.target.value)} placeholder="Min. 6 characters" />
+        {password.length > 0 && !passwordValid && (
+          <p className="text-xs text-error ml-4">At least 6 characters</p>
+        )}
+        <StitchInput label="Confirm Password" icon="lock" type="password" value={confirmPassword} onChange={(e) => onConfirmPassword(e.target.value)} placeholder="Repeat your password" />
+        {confirmPassword.length > 0 && !passwordsMatch && (
+          <p className="text-xs text-error ml-4">Passwords don't match</p>
+        )}
+        <StitchInput label="City" icon="location_on" optional value={city} onChange={(e) => onCity(e.target.value)} placeholder="The Digital Valley" />
       </div>
 
-      <PrimaryButton onClick={onNext} disabled={!canProceed}>
-        Next
-      </PrimaryButton>
+      <CTAButton onClick={onNext} disabled={!canProceed}>Next</CTAButton>
 
-      <Button
-        variant="link"
-        onClick={onLogin}
-        className="mt-5 text-sm font-medium text-primary"
-      >
-        Already have an account? Log In
-      </Button>
+      <button onClick={onLogin} className="mt-6 text-xs text-on-surface-variant/40 hover:text-primary transition-colors">
+        Already have an account? <span className="text-primary font-bold">Log In</span>
+      </button>
     </StepShell>
   )
 }
@@ -311,56 +313,57 @@ function StepInterests({
 }) {
   return (
     <StepShell step={2}>
-      <StepLabel step={2} />
-
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
-          Cultivating Interests
+      <div className="text-left mb-10 w-full">
+        <h2 className="text-[2.5rem] leading-[1.1] font-extrabold tracking-[-0.04em] text-on-surface mb-4">
+          What seeds should<br />we plant?
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
-          What seeds should we plant?
+        <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
+          Select topics that excite you to curate your digital garden.
         </p>
       </div>
 
-      {/* Pill chips using Badge */}
-      <div className="flex flex-wrap gap-3 justify-center mb-8">
-        {INTEREST_OPTIONS.map((interest) => {
-          const isSelected = selected.includes(interest)
+      {/* Interest chips with icons */}
+      <div className="w-full flex flex-wrap gap-3 mb-6">
+        {INTEREST_OPTIONS.map(({ label, icon }) => {
+          const isSelected = selected.includes(label)
           return (
-            <div
-              key={interest}
-              onClick={() => onToggle(interest)}
-              className="cursor-pointer transition-all active:scale-95"
+            <button
+              key={label}
+              onClick={() => onToggle(label)}
+              className={`flex items-center px-5 py-3.5 rounded-full font-bold text-sm transition-all active:scale-95 ${
+                isSelected
+                  ? 'bg-gradient-to-br from-primary to-primary-container text-on-primary'
+                  : 'bg-surface-container hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
+              }`}
             >
-              <Badge
-                variant={isSelected ? 'default' : 'outline'}
-                className={`
-                  cursor-pointer px-5 py-2.5 rounded-full text-sm font-medium h-auto
-                  ${isSelected
-                    ? 'bg-primary text-on-primary border-0 hover:bg-primary/90'
-                    : 'bg-surface-container text-on-surface-variant border-outline-variant/20 hover:bg-surface-container-high'
-                  }
-                `}
+              <span
+                className="material-symbols-outlined mr-2"
+                style={{ fontSize: '20px', fontVariationSettings: isSelected ? '"FILL" 1' : '"FILL" 0' }}
               >
-                {interest}
-              </Badge>
-            </div>
+                {icon}
+              </span>
+              {label}
+            </button>
           )
         })}
       </div>
 
-      {/* Custom interest input */}
+      {/* Custom interest */}
       <div className="w-full mb-10">
-        <Input
-          type="text"
-          value={custom}
-          onChange={(e) => onCustom(e.target.value)}
-          placeholder="Add your own…"
-          className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
-        />
+        <div className="relative">
+          <Input
+            value={custom}
+            onChange={(e) => onCustom(e.target.value)}
+            placeholder="Add your own…"
+            className="w-full bg-surface-container-highest border-none rounded-full px-6 py-4 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary pr-14"
+          />
+          <div className="absolute inset-y-0 right-4 flex items-center text-primary/40 pointer-events-none">
+            <span className="material-symbols-outlined">add</span>
+          </div>
+        </div>
       </div>
 
-      <PrimaryButton onClick={onNext}>Continue</PrimaryButton>
+      <CTAButton onClick={onNext}>Continue</CTAButton>
     </StepShell>
   )
 }
@@ -378,13 +381,11 @@ function StepNurtureFocus({
 }) {
   return (
     <StepShell step={3}>
-      <StepLabel step={3} />
-
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
+      <div className="text-left mb-10 w-full">
+        <h2 className="text-[2.5rem] leading-[1.1] font-extrabold tracking-[-0.04em] text-on-surface mb-4">
           Nurture your focus.
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
+        <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
           Choose your harvest frequency. Adjust how often you want to collect your yields.
         </p>
       </div>
@@ -394,25 +395,19 @@ function StepNurtureFocus({
         {DIGEST_OPTIONS.map((opt) => {
           const isSelected = frequency === opt.value
           return (
-            <Button
+            <button
               key={opt.value}
-              variant="outline"
               onClick={() => onFrequency(opt.value)}
-              className={`
-                w-full flex items-center gap-4 px-5 py-4 rounded-full h-auto text-left justify-start
-                transition-all active:scale-[0.98]
-                ${isSelected
-                  ? 'bg-primary/10 border-primary text-on-surface'
-                  : 'bg-surface-container border-outline-variant/20 text-on-surface'
-                }
-              `}
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-full text-left transition-all active:scale-[0.98] border ${
+                isSelected
+                  ? 'bg-primary/10 border-primary/30'
+                  : 'bg-surface-container border-outline-variant/20 hover:bg-surface-container-high'
+              }`}
             >
-              {/* Radio dot */}
               <div
-                className={`
-                  w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all border-2
-                  ${isSelected ? 'border-secondary bg-secondary' : 'border-on-surface-variant/50 bg-transparent'}
-                `}
+                className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all border-2 ${
+                  isSelected ? 'border-secondary bg-secondary' : 'border-on-surface-variant/50 bg-transparent'
+                }`}
               >
                 {isSelected && <div className="w-2 h-2 rounded-full bg-on-secondary" />}
               </div>
@@ -420,11 +415,9 @@ function StepNurtureFocus({
                 <p className={`text-sm font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
                   {opt.label}
                 </p>
-                <p className="text-xs font-medium mt-0.5 text-on-surface-variant">
-                  {opt.sublabel}
-                </p>
+                <p className="text-xs font-medium mt-0.5 text-on-surface-variant">{opt.sublabel}</p>
               </div>
-            </Button>
+            </button>
           )
         })}
       </div>
@@ -435,22 +428,18 @@ function StepNurtureFocus({
           <p className="text-xs font-medium text-on-surface-variant">Time</p>
           <p className="text-lg font-bold text-on-surface">09:00 AM</p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/12 text-primary border border-primary/20 hover:bg-primary/20"
-        >
+        <span className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/12 text-primary border border-primary/20">
           Edit
-        </Button>
+        </span>
       </div>
 
-      <p className="text-xs text-center mb-6 text-on-surface-variant/60">
+      <p className="text-xs text-center mb-6 text-on-surface-variant/40">
         Local time based on your current region.
       </p>
 
-      <PrimaryButton onClick={onNext}>Next →</PrimaryButton>
+      <CTAButton onClick={onNext}>Next</CTAButton>
 
-      <p className="mt-4 text-xs text-center text-on-surface-variant/50">
+      <p className="mt-4 text-xs text-center text-on-surface-variant/30">
         You can change these settings later in Profile &gt; Vault.
       </p>
     </StepShell>
@@ -460,26 +449,10 @@ function StepNurtureFocus({
 // ── STEP 4: How It Works ──────────────────────────────
 
 const BENTO_CARDS = [
-  {
-    icon: 'auto_awesome',
-    title: 'Synthesis',
-    body: 'Your raw thoughts are seeds. We provide the water and light needed for them to thrive through synthesis.',
-  },
-  {
-    icon: 'language',
-    title: 'Web Enrichment',
-    body: 'Importing outside nutrients. LLM models and high-fidelity research expand your knowledge beyond the garden walls.',
-  },
-  {
-    icon: 'favorite',
-    title: 'Heartbeat',
-    body: 'The daily Garden Pulse. Morning Spark prompts and Daily Briefings keep your evolving thoughts alive.',
-  },
-  {
-    icon: 'hub',
-    title: 'Search & Graph',
-    body: 'Powered by Vector Search and Knowledge Graphs. Semantic similarity across your entire knowledge base.',
-  },
+  { icon: 'auto_awesome', title: 'Synthesis', body: 'Your raw thoughts are seeds. We provide the water and light needed for them to thrive through synthesis.' },
+  { icon: 'language', title: 'Web Enrichment', body: 'Importing outside nutrients. LLM models and high-fidelity research expand your knowledge beyond the garden walls.' },
+  { icon: 'favorite', title: 'Heartbeat', body: 'The daily Garden Pulse. Morning Spark prompts and Daily Briefings keep your evolving thoughts alive.' },
+  { icon: 'hub', title: 'Search & Graph', body: 'Powered by Vector Search and Knowledge Graphs. Semantic similarity across your entire knowledge base.' },
 ]
 
 function StepHowItWorks({
@@ -493,25 +466,20 @@ function StepHowItWorks({
 }) {
   return (
     <StepShell step={4}>
-      <StepLabel step={4} />
-
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-extrabold tracking-tight mb-3 text-on-surface">
+      <div className="text-left mb-8 w-full">
+        <h2 className="text-[2.5rem] leading-[1.1] font-extrabold tracking-[-0.04em] text-on-surface mb-4">
           The Living Intelligence
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
+        <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
           Experience how your digital greenhouse breathes, learns, and connects.
         </p>
       </div>
 
-      {/* Bento grid 2x2 */}
-      <div className="grid grid-cols-2 gap-3 w-full mb-8">
+      {/* Bento grid */}
+      <div className="grid grid-cols-2 gap-3 w-full mb-6">
         {BENTO_CARDS.map((card) => (
-          <div
-            key={card.title}
-            className="flex flex-col gap-2.5 p-5 rounded-2xl relative overflow-hidden bg-surface-container"
-          >
-            <div className="absolute w-16 h-16 rounded-full -top-4 -right-4 pointer-events-none bg-primary opacity-[0.06]" />
+          <div key={card.title} className="flex flex-col gap-2.5 p-5 rounded-2xl bg-surface-container border border-outline-variant/10 relative overflow-hidden">
+            <div className="absolute w-16 h-16 rounded-full -top-4 -right-4 bg-primary opacity-[0.06]" />
             <span
               className="material-symbols-outlined text-primary"
               style={{ fontSize: 28, fontVariationSettings: '"FILL" 1' }}
@@ -525,8 +493,8 @@ function StepHowItWorks({
       </div>
 
       {/* Sync banner */}
-      <div className="w-full rounded-full px-5 py-3 mb-8 text-center bg-primary/8 border border-primary/15">
-        <p className="text-xs font-medium leading-relaxed text-on-surface-variant">
+      <div className="w-full rounded-full px-5 py-3 mb-6 text-center bg-primary/8 border border-primary/15">
+        <p className="text-xs font-medium text-on-surface-variant">
           Seeds auto-sync to memory — no manual saving required.
         </p>
       </div>
@@ -537,11 +505,11 @@ function StepHowItWorks({
         </div>
       )}
 
-      <PrimaryButton onClick={onEnter} loading={loading}>
+      <CTAButton onClick={onEnter} loading={loading} icon="eco">
         Enter the Garden
-      </PrimaryButton>
+      </CTAButton>
 
-      <p className="mt-4 text-xs text-center font-medium text-on-surface-variant/50">
+      <p className="mt-4 text-xs text-center font-medium text-on-surface-variant/30">
         Initializing the Greenhouse
       </p>
     </StepShell>
@@ -634,58 +602,54 @@ export default function OnboardingPage() {
   const next = () => setCurrentStep((s) => Math.min(s + 1, TOTAL_STEPS - 1))
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16 pb-8 relative overflow-hidden bg-background">
-      {/* Global background glow */}
-      <div className="absolute rounded-full pointer-events-none w-[500px] h-[500px] bg-primary opacity-[0.03] top-[10%] left-1/2 -translate-x-1/2 blur-[120px]" />
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16 relative overflow-hidden bg-background">
+      <AmbientBg />
 
-      <div className="w-full max-w-sm relative z-10">
-        <AnimatePresence mode="wait">
-          {currentStep === 0 && <StepWelcome onNext={next} />}
-
-          {currentStep === 1 && (
-            <StepWhoAreYou
-              nickname={nickname}
-              city={city}
-              password={password}
-              confirmPassword={confirmPassword}
-              onNickname={setNickname}
-              onCity={setCity}
-              onPassword={setPassword}
-              onConfirmPassword={setConfirmPassword}
-              onNext={next}
-              onLogin={() => router.push('/login')}
-            />
-          )}
-
-          {currentStep === 2 && (
-            <StepInterests
-              selected={selectedInterests}
-              onToggle={toggleInterest}
-              custom={customInterest}
-              onCustom={setCustomInterest}
-              onNext={next}
-            />
-          )}
-
-          {currentStep === 3 && (
-            <StepNurtureFocus
-              frequency={digestFrequency}
-              onFrequency={setDigestFrequency}
-              onNext={next}
-            />
-          )}
-
-          {currentStep === 4 && (
-            <StepHowItWorks
-              onEnter={handleEnter}
-              loading={loading}
-              error={error}
-            />
-          )}
-        </AnimatePresence>
+      {/* Progress at top */}
+      <div className="w-full max-w-lg mb-8">
+        <ProgressBar step={currentStep} />
       </div>
 
-      <ProgressBar step={currentStep} />
+      <AnimatePresence mode="wait">
+        {currentStep === 0 && <StepWelcome onNext={next} />}
+        {currentStep === 1 && (
+          <StepWhoAreYou
+            nickname={nickname}
+            city={city}
+            password={password}
+            confirmPassword={confirmPassword}
+            onNickname={setNickname}
+            onCity={setCity}
+            onPassword={setPassword}
+            onConfirmPassword={setConfirmPassword}
+            onNext={next}
+            onLogin={() => router.push('/login')}
+          />
+        )}
+        {currentStep === 2 && (
+          <StepInterests
+            selected={selectedInterests}
+            onToggle={toggleInterest}
+            custom={customInterest}
+            onCustom={setCustomInterest}
+            onNext={next}
+          />
+        )}
+        {currentStep === 3 && (
+          <StepNurtureFocus
+            frequency={digestFrequency}
+            onFrequency={setDigestFrequency}
+            onNext={next}
+          />
+        )}
+        {currentStep === 4 && (
+          <StepHowItWorks
+            onEnter={handleEnter}
+            loading={loading}
+            error={error}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
