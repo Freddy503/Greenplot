@@ -577,6 +577,7 @@ export default function OnboardingPage() {
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
       localStorage.setItem('greenplot_nickname', nickname.trim())
+      localStorage.setItem('greenplot_email', `${slug}@greenplot.app`)
       localStorage.setItem('greenplot_profile', JSON.stringify(profile))
 
       const interestStr = allInterests.length > 0 ? allInterests.join(', ') : 'general ideas'
