@@ -148,7 +148,28 @@ export default function ChatPage() {
     },
   })
 
-  // No clear on mount — chat persists within session
+  // Restore messages from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('greenplot_chat')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed)
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist messages to sessionStorage on change
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        sessionStorage.setItem('greenplot_chat', JSON.stringify(messages))
+      } catch {}
+    }
+  }, [messages])
 
   // ── Garden Enrichment ──────────────────────────────
   // API decides intelligently whether to enrich based on:
@@ -330,11 +351,11 @@ export default function ChatPage() {
                       <div className="flex flex-col items-start gap-3 pr-12 mb-8">
                         <Message from="assistant">
                           <MessageContent
-                            className="assistant-bubble bg-primary text-on-primary px-8 py-6 shadow-[0_20px_40px_rgba(105,246,184,0.10)] relative overflow-hidden"
+                            className="assistant-bubble bg-surface-container-high text-on-surface px-8 py-6 border border-outline-variant/10 relative overflow-hidden"
                           >
                             {/* Decorative bg icon */}
                             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none" aria-hidden>
-                              <span className="material-symbols-outlined text-on-primary" style={{ fontSize: '64px' }}>
+                              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '64px' }}>
                                 psychology
                               </span>
                             </div>
@@ -343,7 +364,7 @@ export default function ChatPage() {
                               {message.parts.map((part, i) => {
                                 if (part.type === 'text') {
                                   return (
-                                    <div key={`${message.id}-text-${i}`} className="text-on-primary">
+                                    <div key={`${message.id}-text-${i}`} className="text-on-surface-variant">
                                       <MessageResponse>{part.text}</MessageResponse>
                                     </div>
                                   )
@@ -353,16 +374,16 @@ export default function ChatPage() {
                                   return (
                                     <div key={`${message.id}-reason-${i}`} className="mb-2">
                                       <details className="group">
-                                        <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium select-none text-on-primary/70">
+                                        <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium select-none text-on-surface-variant/70">
                                           <span
-                                            className="material-symbols-outlined text-sm transition-transform group-open:rotate-90 text-on-primary/70"
+                                            className="material-symbols-outlined text-sm transition-transform group-open:rotate-90 text-on-surface-variant/70"
                                             style={{ fontVariationSettings: '"FILL" 1', fontSize: '16px' }}
                                           >
                                             chevron_right
                                           </span>
                                           Thought process
                                         </summary>
-                                        <div className="mt-2 ml-6 text-xs leading-relaxed whitespace-pre-wrap rounded-2xl p-3 bg-on-primary/10 text-on-primary/80">
+                                        <div className="mt-2 ml-6 text-xs leading-relaxed whitespace-pre-wrap rounded-2xl p-3 bg-surface-container/50 text-on-surface-variant/80">
                                           {(part as any).text}
                                         </div>
                                       </details>
@@ -414,51 +435,18 @@ export default function ChatPage() {
                           </MessageContent>
                         </Message>
 
-                        {/* ── Action Buttons Bento ────────────────── */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pl-2 pr-4 mt-1 w-full max-w-sm">
-                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors">
-                            <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}>image</span>
-                            Create image
-                          </button>
-                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors">
-                            <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}>explore</span>
-                            Explore
-                          </button>
-                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-primary/20 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors col-span-1">
-                            <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}>eco</span>
-                            <span className="flex flex-col items-start leading-tight">
-                              <span>Add to seed</span>
-                              <span className="text-[9px] text-on-surface-variant/50">Sync to memory</span>
-                            </span>
-                          </button>
-                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors">
-                            <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>dashboard_customize</span>
-                            To board
-                          </button>
-                          <div className="flex items-center gap-1 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 col-span-1 md:col-span-2">
-                            <span className="text-[10px] text-on-surface-variant/60 mr-1 font-medium">Rate</span>
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <span
-                                key={star}
-                                className="material-symbols-outlined text-primary cursor-pointer hover:scale-110 transition-transform"
-                                style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}
-                              >
-                                star
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Timestamp + thumbs rating */}
+                        {/* Timestamp + conditional rating (garden-enriched only) */}
                         <div className="flex items-center gap-3 pl-2">
                           <span
-                            className="material-symbols-outlined text-primary"
+                            className="material-symbols-outlined text-on-surface-variant/40"
                             style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}
                           >
                             psychology
                           </span>
                           <span className="text-[10px] text-on-surface-variant/60">{timeStr}</span>
-                          <ThumbsRating messageId={message.id} />
+                          {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
+                            <ThumbsRating messageId={message.id} />
+                          )}
                         </div>
                       </div>
                     )}
