@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, Request
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from typing import Optional
 import os
 import base64
 import mimetypes
@@ -814,3 +815,84 @@ def delete_session(
     ok = store.delete(session_id)
     db.commit()
     return {"deleted": ok}
+
+
+# --- Chat Harvest: Create seeds from chat insights ---
+
+@app.post("/api/v1/chat/harvest")
+def harvest_chat(
+    session_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Extract insights from the most recent chat session and create thoughts/seeds.
+    If session_id is provided, harvests that specific session.
+    Otherwise harvests the user's most recent session.
+    """
+    from app.agent.persist import ChatSessionStore
+    from app.agent.session import Message
+    store = ChatSessionStore(db)
+
+    # Load session
+    if session_id:
+        session = store.load_session(session_id)
+    else:
+        sessions = store.list_sessions(
+            tenant_id=str(current_user.tenant_id),
+            user_id=str(current_user.id),
+            limit=1
+        )
+        session = sessions[0] if sessions else None
+
+    if not session:
+        raise HTTPException(status_code=404, detail="No chat session found")
+
+    # Extract assistant text messages
+    assistant_texts = []
+    for msg in session.messages:
+        if hasattr(msg, 'role') and msg.role == 'assistant':
+            for block in (msg.content or []):
+                if hasattr(block, 'type') and block.type == 'text':
+                    assistant_texts.append(block.text)
+                elif isinstance(block, dict) and block.get('type') == 'text':
+                    assistant_texts.append(block.get('text', ''))
+
+    if not assistant_texts:
+        return {"created": 0, "message": "No assistant messages to harvest"}
+
+    # Combine insights into a single thought
+    combined = "\n\n".join(assistant_texts[:5])  # Limit to last 5 messages
+    if len(combined) > 2000:
+        combined = combined[:2000] + "..."
+
+    thought_content = f"Chat Insights:\n\n{combined}"
+
+    # Create thought
+    thought = Thought(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        content=thought_content,
+        source='chat_harvest',
+        status='pending'
+    )
+    db.add(thought)
+    db.commit()
+    db.refresh(thought)
+
+    # Run enrichment pipeline
+    from app.enricher_v2 import enrich_thought_v2
+    try:
+        enrich_thought_v2(str(thought.id), str(current_user.tenant_id), db)
+        thought.status = 'processed'
+    except Exception as e:
+        thought.status = 'error'
+        thought.error_message = str(e)
+    db.commit()
+
+    return {
+        "created": 1,
+        "thought_id": str(thought.id),
+        "session_id": session.session_id,
+        "messages_harvested": len(assistant_texts),
+    }
