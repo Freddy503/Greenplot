@@ -40,24 +40,32 @@ interface Seed {
   source: string
   domain?: string
   status?: string
+  summary?: string
+  tags?: string
+  energy?: string
   _additional?: { id: string }
 }
 
 // ── Helpers ───────────────────────────────────────────
 
 function parseSeed(raw: any): Seed {
-  const text = raw.text || ''
-  const domain = raw.domain || text.match(/Domain:\s*(.+)/)?.[1]?.trim() || ''
-  const status = raw.status || text.match(/Status:\s*(.+)/)?.[1]?.trim() || ''
+  const text = raw.content || raw.text || ''
+  const metadata = raw.metadata || {}
+  const domain = raw.domain || metadata.domain || text.match(/Domain:\s*(.+)/)?.[1]?.trim() || ''
+  const status = raw.status || metadata.status || text.match(/Status:\s*(.+)/)?.[1]?.trim() || ''
   const title = raw.title || text.split('\n')[0]?.slice(0, 60) || 'Untitled'
   return {
-    id: raw._additional?.id || raw.notion_id || '',
+    id: raw.id || raw._additional?.id || raw.notion_id || '',
     title,
     text,
-    created: raw.created || '',
-    source: raw.source || '',
+    created: raw.created_at || raw.created || '',
+    source: raw.source || metadata.source || '',
     domain,
     status,
+    // Carry enrichment data for the detail sheet
+    ...(metadata.summary ? { summary: metadata.summary } : {}),
+    ...(metadata.tags ? { tags: metadata.tags } : {}),
+    ...(metadata.energy ? { energy: metadata.energy } : {}),
   }
 }
 

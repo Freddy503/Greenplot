@@ -254,7 +254,8 @@ export default function ChatPage() {
   )
 
   const handleVoiceError = useCallback((msg: string) => {
-    toast.error(msg)
+    toast.error(`🎙️ ${msg}`)
+    console.error('[voice-error]', msg)
   }, [])
 
   const {
