@@ -90,3 +90,22 @@ export function usePushNotifications() {
 
   return { status, subscription, requestPermission }
 }
+
+// Poll for queued notifications (called from service worker or app)
+export async function pollNotifications() {
+  try {
+    const res = await fetch('/api/push/notifications')
+    const data = await res.json()
+    const notifications = data.notifications || []
+
+    for (const notif of notifications) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(notif.title, {
+          body: notif.body,
+          icon: '/icon-192.png',
+          data: notif.url,
+        })
+      }
+    }
+  } catch {}
+}
