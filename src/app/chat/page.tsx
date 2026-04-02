@@ -149,15 +149,15 @@ export default function ChatPage() {
     },
   })
 
-  // Restore messages from sessionStorage — runs once on mount, only if chat is empty
+  // Restore messages from localStorage — survives refresh, logout, tab close
   const [restored, setRestored] = useState(false)
   useEffect(() => {
     if (restored) return
     setRestored(true)
-    // Only restore if the chat is currently empty (avoids overwriting server state)
+    // Only restore if the chat is currently empty
     if (messages.length > 0) return
     try {
-      const saved = sessionStorage.getItem('greenplot_chat')
+      const saved = localStorage.getItem('greenplot_chat_messages')
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -175,16 +175,13 @@ export default function ChatPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Persist messages to sessionStorage whenever they change
+  // Persist messages to localStorage whenever they change
   useEffect(() => {
-    if (!restored) return // don't save until we've restored
+    if (!restored) return
     if (messages.length > 0) {
       try {
-        sessionStorage.setItem('greenplot_chat', JSON.stringify(messages))
+        localStorage.setItem('greenplot_chat_messages', JSON.stringify(messages))
       } catch {}
-    } else {
-      // Clear storage when chat is empty (new session)
-      sessionStorage.removeItem('greenplot_chat')
     }
   }, [messages, restored])
 
