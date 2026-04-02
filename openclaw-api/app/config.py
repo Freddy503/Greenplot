@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # LLM & APIs
     OPENROUTER_API_KEY: Optional[str] = None
+    NVIDIA_API_KEY: Optional[str] = None
     # Model for enrichment (LLM)
     ENRICH_MODEL: str = "openai/gpt-4o-mini"
     # Model for embeddings (use OpenRouter's embedding endpoint)
