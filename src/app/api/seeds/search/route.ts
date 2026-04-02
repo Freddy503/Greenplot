@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Weaviate is reachable from Vercel only if tunneled.
-// For now, this route proxies BM25 search to Weaviate via the backend.
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 const WEAVIATE_URL = process.env.WEAVIATE_URL || 'http://localhost:8080'
 
@@ -19,8 +17,52 @@ function safeStr(v: unknown, fallback = ''): string {
   return typeof v === 'string' && v.trim() ? v.trim() : fallback
 }
 
+// ── Intent classification ────────────────────────────────
+// Determine if this message would benefit from garden enrichment.
+
+type Intent = 'enrich' | 'skip'
+
+function classifyIntent(text: string): Intent {
+  const t = text.trim().toLowerCase()
+
+  // Always skip: very short, greetings, commands, pure URLs
+  if (t.length < 20) return 'skip'
+  if (/^https?:\/\//.test(t)) return 'skip'
+  if (/^\/\w+/.test(t)) return 'skip'
+  if (/^(hi|hey|hello|yo|sup|ok|okay|yes|no|sure|thanks|ty|thx|got it|lol|haha|nice|cool|great)\b/.test(t)) return 'skip'
+
+  // Skip: simple factual / operational questions
+  if (/^(what('s| is) the (weather|time|date)|how('s| is) it going|what('?s| is) up|how are you)/.test(t)) return 'skip'
+  if (/^(can you|could you|would you) (see|check|look at|open|go to|run|execute)/.test(t)) return 'skip'
+  if (/^(remind me|set a (timer|reminder|alarm)|play |pause |stop )/.test(t)) return 'skip'
+
+  // Skip: meta/app questions
+  if (/^(who are you|what can you do|help|show me (the |your )?commands)/.test(t)) return 'skip'
+
+  // Enrich: questions about concepts, ideas, strategies, architecture, learning
+  const ENRICH_SIGNALS = [
+    /\b(what|how|why|explain|describe|compare|contrast|difference|approach|strategy|pattern|architecture|design|structure|framework|concept|idea|opinion|thought|perspective|recommend|suggest|advice)\b/,
+    /\b(build|create|implement|integrate|deploy|scale|optimize|improve|refactor|evaluate|assess|review)\b/,
+    /\b(learn|understand|study|explore|research|investigate|analyze|break down|walk through)\b/,
+    /\b(agentic|agent|rag|vector|embedding|llm|prompt|pipeline|workflow|automation|orchestrat|multi.agent)\b/,
+    /\b(system|platform|tool|service|api|backend|frontend|database|infrastructure|architecture)\b/,
+    /\b(knowledge|second.brain|pkm|garden|seed|enrich|connection|insight|pattern)\b/,
+    /\b(career|interview|fde|enterprise|deployment|production)\b/,
+  ]
+
+  if (ENRICH_SIGNALS.some(p => p.test(t))) return 'enrich'
+
+  // Default: if it's a multi-sentence question, enrich
+  const sentences = t.split(/[.!?]+/).filter(s => s.trim().length > 5)
+  if (sentences.length >= 2) return 'enrich'
+
+  // Default skip for ambiguous short questions
+  return 'skip'
+}
+
+// ── Weaviate search ──────────────────────────────────────
+
 async function searchWeaviate(query: string, limit: number): Promise<WeaviateSeed[]> {
-  // Try Weaviate directly first (works when tunnel is up)
   const gql = `{ Get { IdeaSeed(bm25: { query: ${JSON.stringify(query)}, properties: ["title", "summary", "tags", "domain", "text"] } limit: ${limit}) { title domain tags energy summary text _additional { score } } } }`
 
   try {
@@ -33,12 +75,10 @@ async function searchWeaviate(query: string, limit: number): Promise<WeaviateSee
       signal: controller.signal,
     })
     clearTimeout(timeout)
-
     if (!res.ok) throw new Error(`Weaviate ${res.status}`)
     const data = await res.json()
     return data?.data?.Get?.IdeaSeed || []
   } catch {
-    // Fallback: use backend seeds endpoint with query param
     try {
       const res = await fetch(
         `${BACKEND}/api/v1/seeds?query=${encodeURIComponent(query)}&limit=${limit}`,
@@ -53,6 +93,8 @@ async function searchWeaviate(query: string, limit: number): Promise<WeaviateSee
     }
   }
 }
+
+// ── Build context block ──────────────────────────────────
 
 function buildGardenContext(seeds: WeaviateSeed[]): string {
   if (seeds.length === 0) return ''
@@ -85,15 +127,50 @@ function buildGardenContext(seeds: WeaviateSeed[]): string {
   ].join('\n')
 }
 
+// ── Relevance gate ──────────────────────────────────────
+// Even if intent says "enrich", only include if results are actually relevant.
+
+function isRelevantEnough(seeds: WeaviateSeed[], query: string): boolean {
+  if (seeds.length === 0) return false
+
+  const q = query.toLowerCase()
+  return seeds.some(s => {
+    const title = safeStr(s.title).toLowerCase()
+    const summary = safeStr(s.summary).toLowerCase()
+    const tags = safeStr(s.tags).toLowerCase()
+    const combined = `${title} ${summary} ${tags}`
+
+    // Check if any significant word from the query appears in the seed
+    const queryWords = q.split(/\s+/).filter(w => w.length > 4)
+    const matchCount = queryWords.filter(w => combined.includes(w)).length
+    return matchCount >= 2 || (matchCount >= 1 && seeds[0]?._additional?.score && Number(seeds[0]._additional.score) > 3)
+  })
+}
+
+// ── Route handler ────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   try {
     const { query, limit = 3 } = await req.json()
 
     if (!query || typeof query !== 'string' || query.length < 5) {
-      return NextResponse.json({ context: '', seeds: [] })
+      return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'too_short' })
     }
 
+    // Step 1: Intent classification
+    const intent = classifyIntent(query)
+    if (intent === 'skip') {
+      return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'intent_skip' })
+    }
+
+    // Step 2: Search garden
     const seeds = await searchWeaviate(query, Math.min(limit, 5))
+
+    // Step 3: Relevance gate — only enrich if results actually match
+    if (!isRelevantEnough(seeds, query)) {
+      return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'no_relevant_seeds' })
+    }
+
     const context = buildGardenContext(seeds)
 
     return NextResponse.json({
@@ -103,8 +180,9 @@ export async function POST(req: NextRequest) {
         domain: safeStr(s.domain),
         summary: safeStr(s.summary, safeStr(s.text)).slice(0, 150),
       })).filter(s => s.title),
+      enriched: true,
     })
   } catch (err) {
-    return NextResponse.json({ context: '', seeds: [], error: String(err) }, { status: 500 })
+    return NextResponse.json({ context: '', seeds: [], enriched: false, error: String(err) }, { status: 500 })
   }
 }
