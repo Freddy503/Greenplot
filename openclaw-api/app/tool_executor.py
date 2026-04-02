@@ -127,19 +127,40 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
 
 
 async def list_recent_seeds(args: dict, user: User, db: Session) -> str:
-    """List recent seeds from Postgres."""
+    """List recent seeds — tries Postgres first, falls back to Weaviate."""
     limit = args.get("limit", 5)
     try:
         seeds = db.query(Seed).filter(
             Seed.tenant_id == user.tenant_id
         ).order_by(Seed.created_at.desc()).limit(limit).all()
-        results = [
-            {"title": s.title, "content": s.content[:200], "created_at": s.created_at.isoformat()}
-            for s in seeds
-        ]
-        if not results:
-            return json.dumps({"status": "empty", "message": "No seeds yet. Start by capturing an idea!"})
-        return json.dumps({"status": "ok", "results": results})
+        if seeds:
+            results = [
+                {"title": s.title, "content": s.content[:200], "created_at": s.created_at.isoformat()}
+                for s in seeds
+            ]
+            return json.dumps({"status": "ok", "results": results})
+
+        # Fallback: search Weaviate for recent seeds
+        from app.enricher import embed_text
+        embedding = embed_text("recent ideas knowledge seeds")
+        hits = weaviate_client.search_seeds(
+            tenant_id=str(user.tenant_id),
+            embedding=embedding,
+            limit=limit
+        )
+        if hits:
+            results = [
+                {
+                    "title": h.get("title", ""),
+                    "content": (h.get("content") or "")[:200],
+                    "domain": h.get("domain", ""),
+                    "tags": h.get("tags", ""),
+                }
+                for h in hits if h.get("title")
+            ]
+            return json.dumps({"status": "ok", "results": results})
+
+        return json.dumps({"status": "empty", "message": "No seeds yet. Start by capturing an idea!"})
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)})
 
