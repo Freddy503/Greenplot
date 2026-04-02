@@ -29,6 +29,7 @@ import {
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
+import { KnowledgeGraph } from '@/components/seeds/knowledge-graph'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -150,6 +151,7 @@ export default function GardenPage() {
   const [nickname, setNickname] = useState('')
   const [selectedSeed, setSelectedSeed] = useState<Seed | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
 
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
@@ -174,17 +176,49 @@ export default function GardenPage() {
 
       <main className="pt-20 pb-28 px-4 max-w-2xl mx-auto w-full">
         {/* Hero */}
-        <section className="mb-8 px-2">
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 leading-tight text-on-surface">
-            Knowledge <span className="text-primary">Garden</span>
-          </h1>
+        <section className="mb-6 px-2">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
+              Knowledge <span className="text-primary">Garden</span>
+            </h1>
+            {/* View toggle */}
+            <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-full">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-full transition-all ${viewMode === 'list' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/50'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', fontVariationSettings: viewMode === 'list' ? '"FILL" 1' : '"FILL" 0' }}>view_list</span>
+              </button>
+              <button
+                onClick={() => setViewMode('graph')}
+                className={`p-2 rounded-full transition-all ${viewMode === 'graph' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/50'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', fontVariationSettings: viewMode === 'graph' ? '"FILL" 1' : '"FILL" 0' }}>hub</span>
+              </button>
+            </div>
+          </div>
           <p className="text-sm leading-relaxed max-w-xs text-on-surface-variant">
-            Cultivating intelligence through structured organic seeds of thought.
+            {viewMode === 'list'
+              ? 'Cultivating intelligence through structured organic seeds of thought.'
+              : 'Visualize the connections between your ideas.'}
           </p>
         </section>
 
-        {/* Seed Table */}
-        {loading ? (
+        {/* Graph View */}
+        {viewMode === 'graph' && !loading && seeds.length > 0 && (
+          <div className="mb-8 rounded-2xl overflow-hidden bg-surface-container-low border border-outline-variant/10">
+            <KnowledgeGraph
+              seeds={seeds}
+              onNodeClick={(seed) => {
+                setSelectedSeed(seed as Seed)
+                setDetailOpen(true)
+              }}
+            />
+          </div>
+        )}
+
+        {/* Seed Table — list view only */}
+        {viewMode === 'list' && (loading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="flex items-center gap-3 px-2">
@@ -241,9 +275,9 @@ export default function GardenPage() {
               </TableBody>
             </Table>
           </Card>
-        )}
+        ))}
 
-        {/* Focus Seed Card */}
+        {/* Focus Seed Card — always visible */}
         {focusSeed && (
           <Card className="mt-10 relative overflow-hidden bg-surface-container border-primary/10">
             <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
