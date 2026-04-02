@@ -8,7 +8,10 @@ export async function GET(req: NextRequest) {
   const query = searchParams.get('query') || ''
   const limit = searchParams.get('limit') || '50'
 
-  const url = `${BACKEND}/api/v1/seeds?${new URLSearchParams({ limit, ...(query ? { query } : {}) })}`
+  // Always search the backend (which queries Weaviate via vector search)
+  // When no query, use a broad search to populate the garden
+  const searchQuery = query || 'knowledge ideas project technology business creativity learning'
+  const url = `${BACKEND}/api/v1/seeds?query=${encodeURIComponent(searchQuery)}&limit=${limit}`
 
   try {
     const res = await fetch(url, {
@@ -16,7 +19,7 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: token } : {}),
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(10000),
     })
 
     if (!res.ok) {
@@ -25,28 +28,6 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await res.json()
-    const seeds = data.seeds || []
-
-    // If no seeds from backend (Postgres empty), try Weaviate search
-    if (seeds.length === 0 && !query) {
-      try {
-        const searchRes = await fetch(`${BACKEND}/api/v1/seeds?query=knowledge+ideas+project&limit=${limit}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: token } : {}),
-          },
-          signal: AbortSignal.timeout(8000),
-        })
-        if (searchRes.ok) {
-          const searchData = await searchRes.json()
-          const searchSeeds = searchData.seeds || []
-          if (searchSeeds.length > 0) {
-            return NextResponse.json({ seeds: searchSeeds, total: searchSeeds.length, source: 'weaviate' })
-          }
-        }
-      } catch {}
-    }
-
     return NextResponse.json(data)
   } catch {
     return NextResponse.json({ seeds: [], error: 'Backend unreachable' }, { status: 503 })
