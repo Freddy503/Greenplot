@@ -29,7 +29,12 @@ import {
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
-import { KnowledgeGraph } from '@/components/seeds/knowledge-graph'
+import dynamic from 'next/dynamic'
+
+const KnowledgeGraph = dynamic(
+  () => import('@/components/seeds/knowledge-graph').then(m => ({ default: m.KnowledgeGraph })),
+  { ssr: false, loading: () => <div className="w-full h-[400px] rounded-2xl bg-surface-container-low border border-outline-variant/10 animate-pulse" /> }
+)
 
 // ── Types ─────────────────────────────────────────────
 
