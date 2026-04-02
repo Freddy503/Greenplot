@@ -52,7 +52,7 @@ class WeaviateClient:
             "image_url": image_url,
             "created_at": created_at or datetime.utcnow().isoformat()
         }
-        uuid = self.client.data.object.create(
+        uuid = self.client.data_object.create(
             class_name=settings.WEAVIATE_CLASS,
             data_object=obj,
             vector=embedding
