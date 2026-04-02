@@ -407,6 +407,41 @@ export default function ChatPage() {
                           </MessageContent>
                         </Message>
 
+                        {/* ── Action Buttons Bento ────────────────── */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pl-2 pr-4 mt-1 w-full max-w-sm">
+                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors">
+                            <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}>image</span>
+                            Create image
+                          </button>
+                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors">
+                            <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}>explore</span>
+                            Explore
+                          </button>
+                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-primary/20 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors col-span-1">
+                            <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}>eco</span>
+                            <span className="flex flex-col items-start leading-tight">
+                              <span>Add to seed</span>
+                              <span className="text-[9px] text-on-surface-variant/50">Sync to memory</span>
+                            </span>
+                          </button>
+                          <button className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface-variant text-xs font-medium hover:bg-surface-container-highest transition-colors">
+                            <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>dashboard_customize</span>
+                            To board
+                          </button>
+                          <div className="flex items-center gap-1 px-4 py-2.5 rounded-full bg-surface-container-high border border-outline-variant/10 col-span-1 md:col-span-2">
+                            <span className="text-[10px] text-on-surface-variant/60 mr-1 font-medium">Rate</span>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span
+                                key={star}
+                                className="material-symbols-outlined text-primary cursor-pointer hover:scale-110 transition-transform"
+                                style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}
+                              >
+                                star
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
                         {/* Timestamp + thumbs rating */}
                         <div className="flex items-center gap-3 pl-2">
                           <span
@@ -428,11 +463,11 @@ export default function ChatPage() {
             {/* Garden enrichment indicator */}
             {gardenEnriching && (
               <div className="flex justify-center my-4">
-                <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-primary/10 border border-primary/20">
-                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px' }}>
+                <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-tertiary-container/10 border border-tertiary-container/20">
+                  <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '16px' }}>
                     park
                   </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-primary">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-tertiary">
                     🌱 Enriching from your garden…
                   </span>
                 </div>
