@@ -66,12 +66,15 @@ export function useVoiceRecorder({
           const ext = mediaRecorder.mimeType.includes('webm') ? 'webm' : 'mp4'
           formData.append('file', blob, `voice-memo.${ext}`)
 
+          // Get fresh token from localStorage (might have been set after hook init)
+          const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '')
+
           const res = await fetch(
             `${backendUrl || 'https://api.greenplot.ink'}/api/v1/ingest/voice`,
             {
               method: 'POST',
               headers: {
-                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
               },
               body: formData,
             }
@@ -83,7 +86,7 @@ export function useVoiceRecorder({
           }
 
           const data = await res.json()
-          const transcript = data.transcription || data.text || data.content || ''
+          const transcript = data.transcript || data.transcription || data.text || data.content || ''
           if (transcript.trim()) {
             onTranscription(transcript.trim())
           } else {
