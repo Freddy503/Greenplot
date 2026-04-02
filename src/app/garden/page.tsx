@@ -28,6 +28,7 @@ import {
 // Layout
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ function getSeedIcon(domain: string) {
 
 // ── Seed Row ──────────────────────────────────────────
 
-function SeedRow({ seed, allSeeds }: { seed: Seed; allSeeds: Seed[] }) {
+function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; onClick: () => void }) {
   const icon = getSeedIcon(seed.domain || '')
   const isFilled = icon === 'psychiatry' || icon === 'eco'
   const statusStyle = getStatusStyle(seed.status || '')
@@ -91,7 +92,7 @@ function SeedRow({ seed, allSeeds }: { seed: Seed; allSeeds: Seed[] }) {
     : 0
 
   return (
-    <TableRow className="border-b border-outline-variant/5 hover:bg-surface-container transition-colors cursor-pointer group">
+    <TableRow className="border-b border-outline-variant/5 hover:bg-surface-container transition-colors cursor-pointer group" onClick={onClick}>
       <TableCell className="w-12">
         <span
           className="material-symbols-outlined text-xl text-primary"
@@ -139,6 +140,8 @@ export default function GardenPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [nickname, setNickname] = useState('')
+  const [selectedSeed, setSelectedSeed] = useState<Seed | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
@@ -225,7 +228,7 @@ export default function GardenPage() {
               </TableHeader>
               <TableBody>
                 {seeds.map((seed) => (
-                  <SeedRow key={seed.id} seed={seed} allSeeds={seeds} />
+                  <SeedRow key={seed.id} seed={seed} allSeeds={seeds} onClick={() => { setSelectedSeed(seed); setDetailOpen(true) }} />
                 ))}
               </TableBody>
             </Table>
@@ -328,6 +331,12 @@ export default function GardenPage() {
       >
         <span className="material-symbols-outlined text-2xl font-bold">add</span>
       </Button>
+
+      <SeedDetailSheet
+        seed={selectedSeed}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+      />
 
       <BottomNav />
     </div>
