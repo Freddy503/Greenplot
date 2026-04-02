@@ -181,18 +181,30 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 function StepWhoAreYou({
   nickname,
   city,
+  password,
+  confirmPassword,
   onNickname,
   onCity,
+  onPassword,
+  onConfirmPassword,
   onNext,
   onLogin,
 }: {
   nickname: string
   city: string
+  password: string
+  confirmPassword: string
   onNickname: (v: string) => void
   onCity: (v: string) => void
+  onPassword: (v: string) => void
+  onConfirmPassword: (v: string) => void
   onNext: () => void
   onLogin: () => void
 }) {
+  const passwordsMatch = password === confirmPassword
+  const passwordValid = password.length >= 6
+  const canProceed = nickname.trim() && passwordValid && passwordsMatch
+
   return (
     <StepShell step={1}>
       <StepLabel step={1} />
@@ -222,6 +234,36 @@ function StepWhoAreYou({
         </div>
         <div>
           <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
+            Password
+          </Label>
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => onPassword(e.target.value)}
+            placeholder="Min. 6 characters"
+            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
+          />
+          {password.length > 0 && !passwordValid && (
+            <p className="text-xs mt-1 pl-1 text-error">At least 6 characters</p>
+          )}
+        </div>
+        <div>
+          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
+            Confirm Password
+          </Label>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => onConfirmPassword(e.target.value)}
+            placeholder="Repeat your password"
+            className="w-full px-5 py-4 rounded-full text-base h-auto bg-surface-container-highest text-on-surface border-0 placeholder:text-on-surface-variant/40 focus-visible:ring-primary/50"
+          />
+          {confirmPassword.length > 0 && !passwordsMatch && (
+            <p className="text-xs mt-1 pl-1 text-error">Passwords don't match</p>
+          )}
+        </div>
+        <div>
+          <Label className="text-xs font-bold mb-2 pl-1 uppercase tracking-wider text-primary block">
             City{' '}
             <span className="text-on-surface-variant/50 normal-case tracking-normal font-medium">
               (Optional)
@@ -237,7 +279,7 @@ function StepWhoAreYou({
         </div>
       </div>
 
-      <PrimaryButton onClick={onNext} disabled={!nickname.trim()}>
+      <PrimaryButton onClick={onNext} disabled={!canProceed}>
         Next
       </PrimaryButton>
 
@@ -514,6 +556,8 @@ export default function OnboardingPage() {
 
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [selectedInterests, setSelectedInterests] = useState<string[]>([])
   const [customInterest, setCustomInterest] = useState('')
   const [digestFrequency, setDigestFrequency] = useState<OnboardingProfile['digestFrequency']>('once-daily')
@@ -537,7 +581,6 @@ export default function OnboardingPage() {
 
     try {
       const slug = nickname.toLowerCase().replace(/\s+/g, '')
-      const password = crypto.randomUUID()
 
       const registerRes = await fetch('/api/register', {
         method: 'POST',
@@ -603,8 +646,12 @@ export default function OnboardingPage() {
             <StepWhoAreYou
               nickname={nickname}
               city={city}
+              password={password}
+              confirmPassword={confirmPassword}
               onNickname={setNickname}
               onCity={setCity}
+              onPassword={setPassword}
+              onConfirmPassword={setConfirmPassword}
               onNext={next}
               onLogin={() => router.push('/login')}
             />

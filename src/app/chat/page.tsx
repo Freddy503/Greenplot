@@ -133,10 +133,7 @@ export default function ChatPage() {
     },
   })
 
-  // Clear stale messages on mount
-  useEffect(() => {
-    setMessages([])
-  }, [])
+  // No clear on mount — chat persists within session
 
   const handleSubmit = (msg: PromptInputMessage) => {
     if (!msg.text?.trim() || status !== 'ready') return
