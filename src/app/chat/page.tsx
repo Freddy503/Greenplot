@@ -7,6 +7,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PromptBox } from '@/components/ui/chatgpt-prompt-input'
+import { Toaster, toast } from 'sonner'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 
 // Hooks
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder'
@@ -183,7 +192,6 @@ export default function ChatPage() {
   }, [status, sendMessage, enrichWithGarden])
 
   // ── Voice Memo ────────────────────────────────────────
-  const [voiceError, setVoiceError] = useState<string | null>(null)
 
   const handleTranscription = useCallback(
     async (text: string) => {
@@ -196,8 +204,7 @@ export default function ChatPage() {
   )
 
   const handleVoiceError = useCallback((msg: string) => {
-    setVoiceError(msg)
-    setTimeout(() => setVoiceError(null), 4000)
+    toast.error(msg)
   }, [])
 
   const {
@@ -528,12 +535,6 @@ export default function ChatPage() {
 
       {/* ── Input area ───────────────────────────────── */}
       <div className="shrink-0 px-4 pb-24 md:pb-6 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative">
-        {/* Voice error toast */}
-        {voiceError && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-error/10 text-error text-xs font-medium px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
-            {voiceError}
-          </div>
-        )}
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
@@ -575,6 +576,7 @@ export default function ChatPage() {
         </div>
       </div>
 
+      <Toaster theme="dark" position="top-center" richColors closeButton />
       <BottomNav />
     </div>
   )
