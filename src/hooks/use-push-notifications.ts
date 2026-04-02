@@ -69,6 +69,9 @@ export function usePushNotifications() {
       setSubscription(sub)
       setStatus('subscribed')
 
+      // Store subscription for cron job delivery
+      localStorage.setItem('greenplot_push_sub', JSON.stringify(sub.toJSON()))
+
       // Send subscription to server
       const userId = localStorage.getItem('greenplot_token') || 'default'
       await fetch('/api/push/subscribe', {
