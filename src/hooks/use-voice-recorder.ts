@@ -69,8 +69,8 @@ export function useVoiceRecorder({
           // Get fresh token from localStorage (might have been set after hook init)
           const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '')
 
-          // Use Next.js proxy to avoid CORS issues
-          const voiceUrl = '/api/ingest/voice'
+          // Call backend directly (CORS is configured for seedify-six.vercel.app)
+          const voiceUrl = 'https://api.greenplot.ink/api/v1/ingest/voice'
 
           const res = await fetch(voiceUrl, {
               method: 'POST',
