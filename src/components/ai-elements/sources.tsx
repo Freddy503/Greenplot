@@ -13,7 +13,7 @@ export type SourcesProps = ComponentProps<"div">;
 
 export const Sources = ({ className, ...props }: SourcesProps) => (
   <Collapsible
-    className={cn("not-prose mb-4 text-primary text-xs", className)}
+    className={cn("not-prose mb-4 text-on-surface-variant text-xs", className)}
     {...props}
   />
 );
@@ -61,7 +61,7 @@ export type SourceProps = ComponentProps<"a">;
 
 export const Source = ({ href, title, children, ...props }: SourceProps) => (
   <a
-    className="flex items-center gap-2"
+    className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors underline decoration-outline-variant/40 hover:decoration-primary"
     href={href}
     rel="noreferrer"
     target="_blank"
@@ -69,8 +69,8 @@ export const Source = ({ href, title, children, ...props }: SourceProps) => (
   >
     {children ?? (
       <>
-        <BookIcon className="h-4 w-4" />
-        <span className="block font-medium">{title}</span>
+        <BookIcon className="h-4 w-4 text-primary shrink-0" />
+        <span className="block font-medium truncate max-w-[260px]">{title}</span>
       </>
     )}
   </a>
