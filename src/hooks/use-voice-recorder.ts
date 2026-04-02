@@ -32,12 +32,31 @@ export function useVoiceRecorder({
 
   const startRecording = useCallback(async () => {
     try {
+      // Check if MediaRecorder is available
+      if (typeof MediaRecorder === 'undefined') {
+        onError?.('Voice recording not supported in this browser')
+        return
+      }
+
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        onError?.('Microphone access not available (requires HTTPS)')
+        return
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4',
-      })
+
+      // Find a supported MIME type
+      let mimeType = 'audio/webm'
+      if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4'
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus'
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm'
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
 
       chunksRef.current = []
 
@@ -83,10 +102,12 @@ export function useVoiceRecorder({
 
           if (!res.ok) {
             const errText = await res.text()
+            console.error('[voice] Upload failed:', res.status, errText)
             throw new Error(errText || `Upload failed (${res.status})`)
           }
 
           const data = await res.json()
+          console.log('[voice] Response:', data)
           const transcript = data.transcript || data.transcription || data.text || data.content || ''
           if (transcript.trim()) {
             onTranscription(transcript.trim())
@@ -110,8 +131,16 @@ export function useVoiceRecorder({
       timerRef.current = setInterval(() => {
         setDuration((d) => d + 1)
       }, 1000)
-    } catch {
-      onError?.('Microphone access denied')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[voice] Recording error:', msg)
+      if (msg.includes('Permission') || msg.includes('permission') || msg.includes('NotAllowed')) {
+        onError?.('Microphone permission denied. Please allow microphone access.')
+      } else if (msg.includes('NotFoundError') || msg.includes('no microphone')) {
+        onError?.('No microphone found on this device')
+      } else {
+        onError?.(`Microphone access denied: ${msg}`)
+      }
     }
   }, [backendUrl, authToken, onError, onTranscription, stopTimer])
 
