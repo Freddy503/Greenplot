@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 const WEAVIATE_URL = process.env.WEAVIATE_URL || 'http://localhost:8080'
+const WEAVIATE_TUNNEL = 'https://weaviate.greenplot.ink'
 
 interface WeaviateSeed {
   title?: string | null
@@ -62,36 +63,29 @@ function classifyIntent(text: string): Intent {
 
 // ── Weaviate search ──────────────────────────────────────
 
-async function searchWeaviate(query: string, limit: number): Promise<WeaviateSeed[]> {
+async function searchWeaviate(query: string, limit: number, token?: string): Promise<WeaviateSeed[]> {
   const gql = `{ Get { IdeaSeed(bm25: { query: ${JSON.stringify(query)}, properties: ["title", "summary", "tags", "domain", "text"] } limit: ${limit}) { title domain tags energy summary text _additional { score } } } }`
 
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch(`${WEAVIATE_URL}/v1/graphql`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: gql }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!res.ok) throw new Error(`Weaviate ${res.status}`)
-    const data = await res.json()
-    return data?.data?.Get?.IdeaSeed || []
-  } catch {
+  // Try tunnel first (works from Vercel), then localhost (works on server)
+  for (const url of [WEAVIATE_TUNNEL, WEAVIATE_URL]) {
     try {
-      const res = await fetch(
-        `${BACKEND}/api/v1/seeds?query=${encodeURIComponent(query)}&limit=${limit}`,
-        { signal: AbortSignal.timeout(5000) }
-      )
-      if (!res.ok) return []
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch(`${url}/v1/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: gql }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      if (!res.ok) continue
       const data = await res.json()
-      const seeds = data.seeds || data || []
-      return Array.isArray(seeds) ? seeds : []
-    } catch {
-      return []
-    }
+      const seeds = data?.data?.Get?.IdeaSeed
+      if (seeds && seeds.length > 0) return seeds
+    } catch {}
   }
+
+  return []
 }
 
 // ── Build context block ──────────────────────────────────
