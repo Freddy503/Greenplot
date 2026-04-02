@@ -29,12 +29,7 @@ import {
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
-import dynamic from 'next/dynamic'
-
-const KnowledgeGraph = dynamic(
-  () => import('@/components/seeds/knowledge-graph').then(m => ({ default: m.KnowledgeGraph })),
-  { ssr: false, loading: () => <div className="w-full h-[400px] rounded-2xl bg-surface-container-low border border-outline-variant/10 animate-pulse" /> }
-)
+import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -156,6 +151,7 @@ export default function GardenPage() {
   const [nickname, setNickname] = useState('')
   const [selectedSeed, setSelectedSeed] = useState<Seed | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
 
   useEffect(() => {
@@ -209,17 +205,19 @@ export default function GardenPage() {
           </p>
         </section>
 
-        {/* Graph View */}
-        {viewMode === 'graph' && !loading && seeds.length > 0 && (
-          <div className="mb-8 rounded-2xl overflow-hidden bg-surface-container-low border border-outline-variant/10">
-            <KnowledgeGraph
-              seeds={seeds}
-              onNodeClick={(seed) => {
-                setSelectedSeed(seed as Seed)
-                setDetailOpen(true)
-              }}
-            />
-          </div>
+        {/* View Graph Button */}
+        {!loading && !error && seeds.length > 0 && (
+          <button
+            onClick={() => setGraphOpen(true)}
+            className="w-full mb-6 flex items-center justify-center gap-3 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-[0.98] group"
+          >
+            <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" style={{ fontSize: '22px', fontVariationSettings: '"FILL" 1' }}>hub</span>
+            <div className="text-left">
+              <p className="text-sm font-bold text-on-surface">View Knowledge Graph</p>
+              <p className="text-[10px] text-on-surface-variant">{seeds.length} seeds connected</p>
+            </div>
+            <span className="material-symbols-outlined text-on-surface-variant/40 ml-auto">open_in_new</span>
+          </button>
         )}
 
         {/* Seed Table — list view only */}
@@ -383,6 +381,17 @@ export default function GardenPage() {
         seed={selectedSeed}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+      />
+
+      <FullScreenGraph
+        seeds={seeds}
+        open={graphOpen}
+        onClose={() => setGraphOpen(false)}
+        onNodeClick={(seed) => {
+          setGraphOpen(false)
+          setSelectedSeed(seed as Seed)
+          setDetailOpen(true)
+        }}
       />
 
       <BottomNav />
