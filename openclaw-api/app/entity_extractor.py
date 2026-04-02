@@ -59,7 +59,7 @@ def extract_entities(text: str) -> dict:
 
     try:
         response = openai_client.chat.completions.create(
-            model="openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+            model="nvidia/nemotron-3-super-120b-a12b:free",
             messages=[
                 {"role": "system", "content": EXTRACTION_PROMPT},
                 {"role": "user", "content": text[:3000]}  # Cap input to avoid token waste

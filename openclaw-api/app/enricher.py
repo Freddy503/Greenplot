@@ -34,7 +34,7 @@ def embed_text(text: str) -> list:
 def generate_seed(thought_text: str) -> dict:
     # Use Nemotron Super to synthesize
     response = openai_client.chat.completions.create(
-        model="openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+        model="nvidia/nemotron-3-super-120b-a12b:free",
         messages=[
             {"role": "system", "content": "You are an insight synthesizer. Given a raw thought, produce a structured seed with a concise title and a rich elaboration that captures the core idea and potential implications. Respond in JSON: {title: string, content: string, tags: string[]}"},
             {"role": "user", "content": thought_text}
