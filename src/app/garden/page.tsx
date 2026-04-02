@@ -320,10 +320,10 @@ export default function GardenPage() {
         })()}
       </main>
 
-      {/* FAB */}
+      {/* FAB — moved up to not overlap bottom nav */}
       <Button
         size="icon"
-        className="fixed bottom-28 right-6 w-14 h-14 bg-secondary text-on-secondary rounded-full shadow-lg shadow-secondary/30 z-40"
+        className="fixed bottom-24 right-4 w-14 h-14 bg-secondary text-on-secondary rounded-full shadow-lg shadow-secondary/30 z-40 md:bottom-8"
         onClick={() => router.push('/chat')}
       >
         <span className="material-symbols-outlined text-2xl font-bold">add</span>

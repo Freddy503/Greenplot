@@ -25,9 +25,30 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await res.json()
+    const seeds = data.seeds || []
+
+    // If no seeds from backend (Postgres empty), try Weaviate search
+    if (seeds.length === 0 && !query) {
+      try {
+        const searchRes = await fetch(`${BACKEND}/api/v1/seeds?query=knowledge+ideas+project&limit=${limit}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: token } : {}),
+          },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (searchRes.ok) {
+          const searchData = await searchRes.json()
+          const searchSeeds = searchData.seeds || []
+          if (searchSeeds.length > 0) {
+            return NextResponse.json({ seeds: searchSeeds, total: searchSeeds.length, source: 'weaviate' })
+          }
+        }
+      } catch {}
+    }
+
     return NextResponse.json(data)
   } catch {
-    // Backend unreachable — return empty for graceful degradation
     return NextResponse.json({ seeds: [], error: 'Backend unreachable' }, { status: 503 })
   }
 }
