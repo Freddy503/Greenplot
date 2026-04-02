@@ -125,8 +125,12 @@ export const PromptBox = React.forwardRef<
   HTMLTextAreaElement,
   Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'onSubmit'> & {
     onSubmit?: (message: string) => void
+    isRecording?: boolean
+    isProcessingVoice?: boolean
+    recordingDuration?: number
+    onToggleVoice?: () => void
   }
->(({ className, onSubmit, ...props }, ref) => {
+>(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, ...props }, ref) => {
   const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [value, setValue] = React.useState('')
@@ -274,14 +278,29 @@ export const PromptBox = React.forwardRef<
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container focus-visible:outline-none"
+                  onClick={onToggleVoice}
+                  disabled={isProcessingVoice}
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-all focus-visible:outline-none',
+                    isRecording
+                      ? 'bg-error/15 text-error animate-pulse hover:bg-error/25'
+                      : isProcessingVoice
+                        ? 'bg-surface-container cursor-wait'
+                        : 'hover:bg-surface-container'
+                  )}
                 >
                   <MicIcon className="h-5 w-5" />
-                  <span className="sr-only">Record voice</span>
+                  <span className="sr-only">{isRecording ? 'Stop recording' : 'Record voice'}</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" showArrow>
-                <p>Record voice</p>
+                <p>
+                  {isRecording
+                    ? `Recording${recordingDuration ? ` ${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')}` : ''} — tap to stop`
+                    : isProcessingVoice
+                      ? 'Transcribing…'
+                      : 'Record voice memo'}
+                </p>
               </TooltipContent>
             </Tooltip>
 

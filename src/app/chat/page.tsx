@@ -2,15 +2,21 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PromptBox } from '@/components/ui/chatgpt-prompt-input'
 
+// Hooks
+import { useVoiceRecorder } from '@/hooks/use-voice-recorder'
+
 // Layout
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+
+// Components
+import { RelatedSeedsPanel } from '@/components/seeds/related-seeds-panel'
 
 // AI Elements
 import {
@@ -145,6 +151,33 @@ export default function ChatPage() {
     if (status !== 'ready') return
     sendMessage({ text: suggestion })
   }
+
+  // ── Voice Memo ────────────────────────────────────────
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+
+  const handleTranscription = useCallback(
+    (text: string) => {
+      if (status === 'ready') {
+        sendMessage({ text: `🎙️ ${text}` })
+      }
+    },
+    [status, sendMessage]
+  )
+
+  const handleVoiceError = useCallback((msg: string) => {
+    setVoiceError(msg)
+    setTimeout(() => setVoiceError(null), 4000)
+  }, [])
+
+  const {
+    state: voiceState,
+    duration: voiceDuration,
+    toggleRecording,
+  } = useVoiceRecorder({
+    onTranscription: handleTranscription,
+    onError: handleVoiceError,
+    authToken,
+  })
 
   const isStreaming = status === 'submitted' || status === 'streaming'
 
@@ -375,6 +408,23 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Related seeds — shown after assistant messages when not streaming */}
+            {!isStreaming && messages.length > 1 && (() => {
+              const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+              const userText = lastUserMsg?.parts
+                ?.filter(p => p.type === 'text')
+                .map(p => (p as any).text || '')
+                .join('') || ''
+              if (userText.length < 15) return null
+              return (
+                <RelatedSeedsPanel
+                  query={userText}
+                  token={authToken}
+                  className="mt-2"
+                />
+              )
+            })()}
+
             {/* Thinking indicator */}
             {isStreaming &&
               messages.length > 0 &&
@@ -404,7 +454,26 @@ export default function ChatPage() {
       </main>
 
       {/* ── Input area ───────────────────────────────── */}
-      <div className="shrink-0 px-4 pb-24 md:pb-6 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent">
+      <div className="shrink-0 px-4 pb-24 md:pb-6 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative">
+        {/* Voice error toast */}
+        {voiceError && (
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-error/10 text-error text-xs font-medium px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
+            {voiceError}
+          </div>
+        )}
+        {/* Recording indicator */}
+        {voiceState === 'recording' && (
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
+            <span className="w-2 h-2 bg-error rounded-full animate-pulse" />
+            Recording {Math.floor(voiceDuration / 60)}:{String(voiceDuration % 60).padStart(2, '0')}
+          </div>
+        )}
+        {voiceState === 'processing' && (
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-secondary/10 text-secondary text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
+            <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+            Transcribing…
+          </div>
+        )}
         <div className="max-w-2xl mx-auto">
           <form
             onSubmit={(e) => {
@@ -419,6 +488,10 @@ export default function ChatPage() {
             <PromptBox
               name="message"
               disabled={isStreaming}
+              isRecording={voiceState === 'recording'}
+              isProcessingVoice={voiceState === 'processing'}
+              recordingDuration={voiceDuration}
+              onToggleVoice={toggleRecording}
               onSubmit={(text) => {
                 if (text?.trim() && status === 'ready') {
                   sendMessage({ text: text.trim() })
