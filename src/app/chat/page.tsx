@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { PromptBox } from '@/components/ui/chatgpt-prompt-input'
 
 // Layout
 import Header from '@/components/layout/header'
@@ -404,29 +405,27 @@ export default function ChatPage() {
 
       {/* ── Input area ───────────────────────────────── */}
       <div className="shrink-0 px-4 pb-24 md:pb-6 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent">
-        <div className="max-w-4xl mx-auto">
-          <PromptInput onSubmit={handleSubmit} globalDrop multiple>
-            <PromptInputBody>
-              <PromptInputTextarea
-                placeholder="Nurture a new idea..."
-                disabled={isStreaming}
-              />
-            </PromptInputBody>
-            <PromptInputFooter>
-              <PromptInputTools>
-                <PromptInputButton tooltip={{ content: 'Attach files' }} variant="ghost">
-                  <PaperclipIcon size={16} />
-                </PromptInputButton>
-                <PromptInputButton tooltip={{ content: 'Search the web' }} variant="ghost">
-                  <GlobeIcon size={16} />
-                </PromptInputButton>
-              </PromptInputTools>
-              <PromptInputSubmit
-                status={isStreaming ? 'streaming' : 'ready'}
-                disabled={isStreaming}
-              />
-            </PromptInputFooter>
-          </PromptInput>
+        <div className="max-w-2xl mx-auto">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const formData = new FormData(e.currentTarget)
+              const text = formData.get('message') as string
+              if (text?.trim() && status === 'ready') {
+                sendMessage({ text: text.trim() })
+              }
+            }}
+          >
+            <PromptBox
+              name="message"
+              disabled={isStreaming}
+              onSubmit={(text) => {
+                if (text?.trim() && status === 'ready') {
+                  sendMessage({ text: text.trim() })
+                }
+              }}
+            />
+          </form>
         </div>
       </div>
 
