@@ -75,19 +75,30 @@ function buildGraph(seeds: Seed[]): { nodes: GraphNode[]; links: GraphLink[] } {
 
   // Also link by shared words in title (semantic proximity)
   for (let i = 0; i < seeds.length; i++) {
-    const wordsA = new Set(seeds[i].title.toLowerCase().split(/\s+/).filter(w => w.length > 4))
+    const wordsA = new Set(seeds[i].title.toLowerCase().split(/\s+/).filter(w => w.length > 3))
     for (let j = i + 1; j < seeds.length; j++) {
-      const wordsB = new Set(seeds[j].title.toLowerCase().split(/\s+/).filter(w => w.length > 4))
+      const wordsB = new Set(seeds[j].title.toLowerCase().split(/\s+/).filter(w => w.length > 3))
       const shared = [...wordsA].filter(w => wordsB.has(w))
-      if (shared.length >= 2) {
+      if (shared.length >= 1) {
         const key = [seeds[i].id, seeds[j].id].sort().join('-')
         if (!linkSet.has(key)) {
           linkSet.add(key)
-          links.push({ source: seeds[i].id, target: seeds[j].id, strength: 0.3 })
+          const strength = Math.min(shared.length / 5, 0.5)
+          links.push({ source: seeds[i].id, target: seeds[j].id, strength })
           nodes[i].connections++
           nodes[j].connections++
         }
       }
+    }
+  }
+
+  // If no links at all (no shared domain or words), create sequential links
+  // to keep graph connected and visually meaningful
+  if (links.length === 0 && nodes.length > 1) {
+    for (let i = 0; i < Math.min(nodes.length - 1, 20); i++) {
+      links.push({ source: nodes[i].id, target: nodes[i + 1].id, strength: 0.1 })
+      nodes[i].connections++
+      nodes[i + 1].connections++
     }
   }
 
