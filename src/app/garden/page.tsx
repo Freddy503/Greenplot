@@ -14,6 +14,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -200,21 +210,45 @@ export default function GardenPage() {
 
         {/* Seed Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <span className="material-symbols-outlined text-3xl animate-spin text-primary">progress_activity</span>
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="flex items-center gap-3 px-2">
+                <Skeleton className="w-8 h-8 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-3/4 rounded-full" />
+                  <Skeleton className="h-3 w-1/2 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-14 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : error ? (
-          <div className="rounded-lg p-6 text-center text-sm bg-error/10 text-error">
-            <span className="material-symbols-outlined text-2xl mb-2 block">cloud_off</span>
-            {error}
-          </div>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <span className="material-symbols-outlined">cloud_off</span>
+              </EmptyMedia>
+              <EmptyTitle>Connection Error</EmptyTitle>
+              <EmptyDescription>{error}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : seeds.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <span className="material-symbols-outlined text-5xl mb-4 text-on-surface-variant">search_off</span>
-            <p className="text-sm text-on-surface-variant">
-              No seeds yet. Capture ideas in the chat to grow your garden.
-            </p>
-          </div>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="default">
+                <span className="material-symbols-outlined text-5xl text-on-surface-variant">search_off</span>
+              </EmptyMedia>
+              <EmptyTitle>No seeds yet</EmptyTitle>
+              <EmptyDescription>
+                Capture ideas in the chat to grow your garden.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" className="rounded-full" onClick={() => router.push('/chat')}>
+                Start Chatting
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
           <Card className="bg-surface-container-low border-outline-variant/10 overflow-hidden">
             <Table>
@@ -246,11 +280,7 @@ export default function GardenPage() {
               <p className="text-xs leading-relaxed text-on-surface-variant mb-4">
                 Your garden is currently enriching this seed. Estimated bloom soon.
               </p>
-              <div className="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="h-full w-[65%] rounded-full bg-gradient-to-r from-primary to-primary-container shadow-[0_0_8px_rgba(105,246,184,0.4)]"
-                />
-              </div>
+              <Progress value={65} className="h-1.5 mt-4 bg-surface-container-low [&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-primary-container [&>div]:shadow-[0_0_8px_rgba(105,246,184,0.4)]" />
             </CardContent>
           </Card>
         )}
