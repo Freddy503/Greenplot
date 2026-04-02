@@ -29,17 +29,15 @@ MAX_CANDIDATES = 10  # Top-k from Weaviate
 
 
 def embed_text(text: str) -> list[float]:
-    """Embed text using NVIDIA NIM (same as enricher)."""
+    """Embed text using OpenRouter."""
     resp = httpx.post(
-        "https://integrate.api.nvidia.com/v1/embeddings",
+        "https://openrouter.ai/api/v1/embeddings",
         json={
-            "input": text[:2000],  # Cap for embedding
-            "model": "nvidia/nv-embedqa-e5-v5",
-            "input_type": "passage",
-            "encoding_format": "float"
+            "input": text[:2000],
+            "model": "openai/text-embedding-ada-002",
         },
-        headers={"Authorization": f"Bearer {settings.NVIDIA_API_KEY}"},
-        timeout=30
+        headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
+        timeout=30,
     )
     resp.raise_for_status()
     return resp.json()["data"][0]["embedding"]
