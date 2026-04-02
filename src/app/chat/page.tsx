@@ -179,18 +179,38 @@ export default function ChatPage() {
   const enrichWithGarden = useCallback(async (text: string): Promise<string> => {
     try {
       setGardenEnriching(true)
-      const res = await fetch('/api/seeds/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text, limit: 3 }),
-      })
-      if (!res.ok) return text
-      const data = await res.json()
-      const seeds = data.seeds || []
+
+      // Call both garden search and memory retrieval in parallel
+      const [gardenRes, memoryRes] = await Promise.allSettled([
+        fetch('/api/seeds/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: text, limit: 3 }),
+        }).then(r => r.ok ? r.json() : null),
+        fetch('/api/seeds/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: text, user_id: authToken || 'default' }),
+        }).then(r => r.ok ? r.json() : null),
+      ])
+
+      const gardenData = gardenRes.status === 'fulfilled' ? gardenRes.value : null
+      const memoryData = memoryRes.status === 'fulfilled' ? memoryRes.value : null
+
+      const seeds = gardenData?.seeds || []
       setLastGardenSeeds(seeds.length > 0 ? seeds.slice(0, 3) : [])
 
-      if (data.enriched && data.context) {
-        return `${text}\n\n${data.context}`
+      // Build combined context
+      const parts: string[] = []
+      if (gardenData?.enriched && gardenData?.context) {
+        parts.push(gardenData.context)
+      }
+      if (memoryData?.context) {
+        parts.push(memoryData.context)
+      }
+
+      if (parts.length > 0) {
+        return `${text}\n\n${parts.join("\n")}`
       }
       return text
     } catch {
