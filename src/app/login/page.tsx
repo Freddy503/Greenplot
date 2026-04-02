@@ -23,7 +23,10 @@ export default function LoginPage() {
 
     try {
       // Accept nickname or email: if no @, append @greenplot.app
-      const loginEmail = email.includes('@') ? email.trim() : `${email.trim().toLowerCase()}@greenplot.app`
+      // Strip spaces to match onboarding's slug format (nickname → "nickname@greenplot.app")
+      const loginEmail = email.includes('@')
+        ? email.trim()
+        : `${email.trim().toLowerCase().replace(/\s+/g, '')}@greenplot.app`
 
       const res = await fetch('/api/login', {
         method: 'POST',

@@ -148,10 +148,13 @@ export default function ChatPage() {
     },
   })
 
-  // Restore messages from sessionStorage — runs once on mount
+  // Restore messages from sessionStorage — runs once on mount, only if chat is empty
   const [restored, setRestored] = useState(false)
   useEffect(() => {
     if (restored) return
+    setRestored(true)
+    // Only restore if the chat is currently empty (avoids overwriting server state)
+    if (messages.length > 0) return
     try {
       const saved = sessionStorage.getItem('greenplot_chat')
       if (saved) {
@@ -161,7 +164,6 @@ export default function ChatPage() {
         }
       }
     } catch {}
-    setRestored(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
 
@@ -172,6 +174,9 @@ export default function ChatPage() {
       try {
         sessionStorage.setItem('greenplot_chat', JSON.stringify(messages))
       } catch {}
+    } else {
+      // Clear storage when chat is empty (new session)
+      sessionStorage.removeItem('greenplot_chat')
     }
   }, [messages, restored])
 
