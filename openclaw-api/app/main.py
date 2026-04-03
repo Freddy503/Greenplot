@@ -1890,3 +1890,9 @@ def enrich_seeds_batch(
         "remaining": remaining,
         "message": f"Enriched {enriched} seeds" + (f", {remaining} remaining" if remaining > 0 else " — all done!")
     }
+
+# --- Links & Wiki routers ---
+from app.links import router as links_router
+from app.wiki import router as wiki_router
+app.include_router(links_router)
+app.include_router(wiki_router)

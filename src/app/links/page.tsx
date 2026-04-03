@@ -171,76 +171,143 @@ export default function LinksPage() {
   const [filter, setFilter] = useState<'all' | 'starred'>('all')
   const [search, setSearch] = useState('')
 
-  // Load from localStorage
+  // Load from API
   useEffect(() => {
-    const stored = localStorage.getItem('greenplot_links')
-    if (stored) {
-      try {
-        setLinks(JSON.parse(stored))
-      } catch {}
-    }
-    setLoading(false)
+    const token = localStorage.getItem('greenplot_token')
+    fetch('/api/links', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then(data => {
+        setLinks(data.links || [])
+      })
+      .catch(() => {
+        // Fallback to localStorage
+        const stored = localStorage.getItem('greenplot_links')
+        if (stored) { try { setLinks(JSON.parse(stored)) } catch {} }
+      })
+      .finally(() => setLoading(false))
   }, [])
 
-  // Save to localStorage
-  const saveLinks = useCallback((updated: LinkItem[]) => {
-    setLinks(updated)
+  // Save to localStorage as cache
+  const saveLinksCache = useCallback((updated: LinkItem[]) => {
     localStorage.setItem('greenplot_links', JSON.stringify(updated))
   }, [])
 
-  // Add link
+  // Add link via backend API
   const handleAdd = async () => {
     if (!newUrl.trim()) return
     setAdding(true)
 
-    const url = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`
-    const domain = extractDomain(url)
-
-    const newLink: LinkItem = {
-      id: crypto.randomUUID(),
-      url,
-      title: domain,
-      summary: '',
-      domain,
-      tags: [],
-      favicon: getFavicon(domain),
-      addedAt: new Date().toISOString(),
-      starred: false,
-    }
-
-    // Try to fetch page title via backend
     try {
       const token = localStorage.getItem('greenplot_token')
-      const res = await fetch('/api/links/fetch', {
+      const res = await fetch('/api/links', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: newUrl }),
       })
+
       if (res.ok) {
         const data = await res.json()
-        newLink.title = data.title || domain
-        newLink.summary = data.summary || ''
-        newLink.tags = data.tags || []
+        const newLink: LinkItem = {
+          id: data.id,
+          url: data.url,
+          title: data.title || extractDomain(data.url),
+          summary: data.summary || '',
+          domain: data.domain || extractDomain(data.url),
+          tags: [],
+          favicon: getFavicon(data.domain || extractDomain(data.url)),
+          addedAt: new Date().toISOString(),
+          starred: false,
+        }
+        const updated = [newLink, ...links]
+        setLinks(updated)
+        saveLinksCache(updated)
+      } else {
+        // Fallback: local add
+        const url = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`
+        const domain = extractDomain(url)
+        const newLink: LinkItem = {
+          id: crypto.randomUUID(),
+          url,
+          title: domain,
+          summary: '',
+          domain,
+          tags: [],
+          favicon: getFavicon(domain),
+          addedAt: new Date().toISOString(),
+          starred: false,
+        }
+        const updated = [newLink, ...links]
+        setLinks(updated)
+        saveLinksCache(updated)
       }
     } catch {
-      // Fallback: just use domain as title
+      // Fallback: local add
+      const url = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`
+      const domain = extractDomain(url)
+      const newLink: LinkItem = {
+        id: crypto.randomUUID(),
+        url,
+        title: domain,
+        summary: '',
+        domain,
+        tags: [],
+        favicon: getFavicon(domain),
+        addedAt: new Date().toISOString(),
+        starred: false,
+      }
+      const updated = [newLink, ...links]
+      setLinks(updated)
+      saveLinksCache(updated)
     }
 
-    saveLinks([newLink, ...links])
     setNewUrl('')
     setAddOpen(false)
     setAdding(false)
   }
 
-  const toggleStar = (id: string) => {
-    saveLinks(links.map(l => l.id === id ? { ...l, starred: !l.starred } : l))
+  const toggleStar = async (id: string) => {
+    const link = links.find(l => l.id === id)
+    if (!link) return
+    const newStarred = !link.starred
+
+    // Optimistic update
+    const updated = links.map(l => l.id === id ? { ...l, starred: newStarred } : l)
+    setLinks(updated)
+    saveLinksCache(updated)
+
+    // Backend sync
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      await fetch(`/api/links/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ starred: newStarred }),
+      })
+    } catch {}
   }
 
-  const deleteLink = (id: string) => {
-    saveLinks(links.filter(l => l.id !== id))
+  const deleteLink = async (id: string) => {
+    // Optimistic delete
+    const updated = links.filter(l => l.id !== id)
+    setLinks(updated)
+    saveLinksCache(updated)
+
+    // Backend sync
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      await fetch(`/api/links/${id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+    } catch {}
   }
 
   // Filter
