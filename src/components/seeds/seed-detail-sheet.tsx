@@ -79,22 +79,20 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
     if (!open || !seed) return
     setLoadingLinks(true)
     const token = localStorage.getItem('greenplot_token')
-    fetch('/api/links', {
+
+    // Use server-side search with domain or title keywords
+    const searchQuery = domain || tags[0] || seed.title?.split(' ').slice(0, 3).join(' ') || ''
+    if (!searchQuery) {
+      setLoadingLinks(false)
+      return
+    }
+
+    fetch(`/api/links?search=${encodeURIComponent(searchQuery)}&limit=5`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.ok ? r.json() : { links: [] })
       .then(data => {
-        const links = data.links || []
-        // Match by domain overlap or exact URL
-        const related = links.filter((l: any) => {
-          if (seed.url && l.url === seed.url) return true
-          if (l.garden_seed_id && l.garden_seed_id === seed.id) return true
-          if (domain && l.domain && l.domain.toLowerCase() === domain.toLowerCase()) return true
-          const seedTags = tags.map(t => t.toLowerCase())
-          const linkTags = (l.tags || []).map((t: string) => t.toLowerCase())
-          return seedTags.some(t => linkTags.includes(t))
-        })
-        setRelatedLinks(related.slice(0, 5))
+        setRelatedLinks(data.links || [])
       })
       .catch(() => setRelatedLinks([]))
       .finally(() => setLoadingLinks(false))
