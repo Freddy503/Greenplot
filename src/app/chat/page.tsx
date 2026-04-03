@@ -77,7 +77,7 @@ import { PaperclipIcon, GlobeIcon } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
-const STARTER_SUGGESTIONS = [
+const FALLBACK_SUGGESTIONS = [
   'What can you help me with?',
   'Tell me about vector search',
   'How does the enrichment pipeline work?',
@@ -137,9 +137,30 @@ export default function ChatPage() {
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
   // Track generated images keyed by the message ID they relate to
   const [generatedImages, setGeneratedImages] = useState<Record<string, { url: string; prompt: string }>>({})
+  // Dynamic suggestions from garden
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
+
   useEffect(() => {
     try {
-      setAuthToken(localStorage.getItem('greenplot_token') || '')
+      const token = localStorage.getItem('greenplot_token') || ''
+      setAuthToken(token)
+
+      // Fetch dynamic suggestions from garden
+      fetch('/api/garden/prompt-suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ count: 4 }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.suggestions?.length > 0) {
+            setDynamicSuggestions(data.suggestions)
+          }
+        })
+        .catch(() => {}) // Keep fallback suggestions
     } catch {}
   }, [])
 
@@ -332,7 +353,7 @@ export default function ChatPage() {
 
                   {/* Suggestion chips */}
                   <Suggestions>
-                    {STARTER_SUGGESTIONS.map((s) => (
+                    {dynamicSuggestions.map((s) => (
                       <Suggestion
                         key={s}
                         suggestion={s}

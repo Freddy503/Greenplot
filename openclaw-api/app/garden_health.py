@@ -261,3 +261,78 @@ async def ask_garden(body: AskRequest, request: Request):
         })
 
     return {"answer": answer, "sources": formatted_sources}
+
+
+# ── P0: Prompt Suggestions on Login ───────────────────
+
+class PromptSuggestionRequest(BaseModel):
+    count: int = 4
+
+
+@router.post("/prompt-suggestions")
+async def prompt_suggestions(body: PromptSuggestionRequest, request: Request):
+    """Generate 3-4 contextual prompt suggestions based on the user's garden content."""
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=100)
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=50)
+
+    suggestions = []
+
+    # Strategy 1: Recently starred items → "Tell me more about X"
+    starred = [l for l in links if l.get("starred")]
+    for link in starred[:2]:
+        title = link.get("title", "your recent interest")
+        suggestions.append(f"Tell me more about: {title}")
+
+    # Strategy 2: Enriched links with no wiki article → "Compile insights about X"
+    wiki_source_ids = set()
+    for a in articles:
+        for lid in a.get("sourceLinkIds", []):
+            wiki_source_ids.add(lid)
+    enriched_no_wiki = [
+        l for l in links
+        if l.get("status") == "enriched" and l.get("id") not in wiki_source_ids
+    ]
+    if enriched_no_wiki:
+        domains = {}
+        for l in enriched_no_wiki:
+            d = l.get("domain", "")
+            if d:
+                domains[d] = domains.get(d, 0) + 1
+        if domains:
+            top_domain = max(domains, key=domains.get)
+            suggestions.append(f"What patterns do you see in my {top_domain} links?")
+
+    # Strategy 3: Pending links → "Help me enrich this link"
+    pending = [l for l in links if l.get("status") == "pending"]
+    if pending:
+        suggestions.append(f"I have {len(pending)} unprocessed links — help me organize them")
+
+    # Strategy 4: Wiki articles → "Expand on X article"
+    if articles:
+        recent = articles[0]
+        suggestions.append(f"Expand on: {recent.get('title', 'your recent article')}")
+
+    # Strategy 5: General garden prompts
+    general = [
+        "What's the most interesting connection in my garden?",
+        "Plant a seed about today's biggest AI breakthrough",
+        "Summarize my research interests in 3 sentences",
+        "What gaps exist in my knowledge garden?",
+        "Create a seed from this idea: ",
+        "Find related links I might have missed",
+        "What should I explore next based on my garden?",
+    ]
+
+    # Fill remaining slots from general
+    import random
+    random.shuffle(general)
+    for g in general:
+        if len(suggestions) >= body.count:
+            break
+        if g not in suggestions:
+            suggestions.append(g)
+
+    return {"suggestions": suggestions[:body.count]}
