@@ -1732,6 +1732,41 @@ def get_memories(
     return {"items": mem.get(tenant_id, []), "count": len(mem.get(tenant_id, []))}
 
 
+# --- Account Management ---
+
+@app.delete("/api/v1/account")
+def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete user account and all associated data (thoughts, seeds, sessions, Weaviate data)."""
+    tenant_id = str(current_user.tenant_id)
+
+    # 1. Delete Weaviate data for this tenant
+    try:
+        weaviate_client.delete_tenant_seeds(tenant_id)
+    except Exception as e:
+        print(f"Weaviate delete warning: {e}")
+
+    # 2. Delete push subscriptions for this tenant
+    subs = _load_subs()
+    subs = [s for s in subs if s.get("tenant_id") != tenant_id]
+    _save_subs(subs)
+
+    # 3. Delete memory store for this tenant
+    mem = _load_mem()
+    if tenant_id in mem:
+        del mem[tenant_id]
+        _save_mem(mem)
+
+    # 4. Delete Postgres data (cascades: thoughts, seeds, usage via SQLAlchemy)
+    db.query(CalendarConnection).filter(CalendarConnection.tenant_id == current_user.tenant_id).delete()
+    db.delete(current_user)
+    db.commit()
+
+    return {"status": "ok", "message": "Account and all data deleted"}
+
+
 # --- Batch Enrichment ---
 
 class EnrichBatchRequest(BaseModel):

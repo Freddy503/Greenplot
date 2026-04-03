@@ -26,3 +26,13 @@
 ## Notes
 Freddy prefers approval‑first for sensitive external actions, values cost‑effectiveness and security, and wants a personal 24/7 assistant that supports creative thinking. Tone: friendly, professional, witty (Woody from Toy Story vibe). Hard boundary: never access other chats or contact people without explicit consent.
 
+
+## Project State (2026-04-02 EOD)
+**Frontend:** Next.js 16 on Vercel Pro, deployed to seedify-six.vercel.app + www.greenplot.ink
+**Backend:** FastAPI Docker, Weaviate 1.36.6 on port 8080, PostgreSQL, Redis
+**Account:** contact@example.com / <password> (FreddyK), tenant 87959b2e
+**Seeds:** 221 in Weaviate with Freddy's tenant_id, vectors, enrichment data
+**Design:** Stitch MCP design system, shadcn/ui, dark mode (#69f6b8 primary, #01120b bg)
+**Working:** Login, chat, garden, seed creation, seed detail, knowledge graph, PWA notifications
+**Broken:** Voice transcription (CORS fixed but Freddy hasn't confirmed working), cloudflare tunnel
+**Pending:** Enrichment pipeline re-run (5/221 enriched), Obsidian wikilinks, Figma MCP

@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
   { href: '/garden', label: 'Garden', icon: 'local_florist' },
+  { href: '/links', label: 'Links', icon: 'link' },
+  { href: '/wiki', label: 'Wiki', icon: 'auto_stories' },
   { href: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
