@@ -162,3 +162,20 @@ class Usage(Base):
         UniqueConstraint('tenant_id', 'date', name='uq_tenant_date'),
         Index('idx_usage_tenant_date', tenant_id, date),
     )
+
+class CalendarConnection(Base):
+    """Google Calendar OAuth tokens per user."""
+    __tablename__ = 'calendar_connections'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), unique=True, nullable=False)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    provider = Column(String(32), default='google')
+    access_token = Column(String, nullable=True)  # short-lived
+    refresh_token = Column(String, nullable=True)  # long-lived
+    token_expiry = Column(DateTime, nullable=True)
+    calendar_timezone = Column(String(64), nullable=True)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")

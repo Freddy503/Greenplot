@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
   { href: '/garden', label: 'Garden', icon: 'local_florist' },
+  { href: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
 export default function BottomNav() {
