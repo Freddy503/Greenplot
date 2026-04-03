@@ -323,11 +323,47 @@ export default function ChatPage() {
     }
   }, [])
 
+  const handleSaveLastResponse = useCallback(() => {
+    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && m.parts.some(p => p.type === 'text'))
+    if (!lastAssistant) {
+      toast.error('No assistant response to save')
+      return
+    }
+    const textPart = lastAssistant.parts.find(p => p.type === 'text' && 'text' in p)
+    if (!textPart || !('text' in textPart)) {
+      toast.error('No text content to save')
+      return
+    }
+    const token = localStorage.getItem('greenplot_token')
+    fetch('/api/seeds', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        text: textPart.text.slice(0, 500),
+        title: textPart.text.split('\n')[0].slice(0, 60),
+        source: 'chat_save',
+      }),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(() => toast.success('Saved to garden 🌱'))
+      .catch(() => toast.error('Failed to save'))
+  }, [messages])
+
   const handleSubmit = useCallback(async (msg: PromptInputMessage) => {
     if (!msg.text?.trim() || status !== 'ready') return
+
+    // Intercept /save command
+    if (/^\/save\b/i.test(msg.text.trim())) {
+      handleSaveLastResponse()
+      return
+    }
+
     const enrichedText = await enrichWithGarden(msg.text.trim())
     sendMessage({ text: enrichedText })
-  }, [status, sendMessage, enrichWithGarden])
+  }, [status, sendMessage, enrichWithGarden, handleSaveLastResponse])
 
   const handleSuggestion = useCallback(async (suggestion: string) => {
     if (status !== 'ready') return

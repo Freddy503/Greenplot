@@ -26,6 +26,7 @@ import {
 
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+import { LinkDetailSheet } from '@/components/links/link-detail-sheet'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -39,6 +40,10 @@ interface LinkItem {
   favicon: string
   addedAt: string
   starred: boolean
+  status?: string
+  connection_count?: number
+  garden_seed_id?: string
+  enrichedAt?: string
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -79,10 +84,10 @@ function timeAgo(date: string): string {
 
 // ── Link Card ─────────────────────────────────────────
 
-function LinkCard({ link, onStar, onDelete }: { link: LinkItem; onStar: () => void; onDelete: () => void }) {
+function LinkCard({ link, onStar, onDelete, onClick }: { link: LinkItem; onStar: () => void; onDelete: () => void; onClick: () => void }) {
   const domainColor = getDomainColor(link.domain)
   return (
-    <Card className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all group">
+    <Card className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all group cursor-pointer" onClick={onClick}>
       <CardContent className="p-4">
         <div className="flex gap-3">
           {/* Favicon */}
@@ -140,6 +145,13 @@ function LinkCard({ link, onStar, onDelete }: { link: LinkItem; onStar: () => vo
                   {tag}
                 </Badge>
               ))}
+              {/* Cross-tab connections */}
+              {link.garden_seed_id && (
+                <span className="flex items-center gap-0.5 text-[9px] text-primary/70">
+                  <span className="material-symbols-outlined" style={{ fontSize: '10px', fontVariationSettings: '"FILL" 1' }}>eco</span>
+                  in garden
+                </span>
+              )}
               <span className="text-[9px] text-on-surface-variant/40 ml-auto">
                 {timeAgo(link.addedAt)}
               </span>
@@ -173,6 +185,8 @@ export default function LinksPage() {
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState<'all' | 'starred'>('all')
   const [search, setSearch] = useState('')
+  const [selectedLink, setSelectedLink] = useState<LinkItem | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   // Load from API
   useEffect(() => {
@@ -499,6 +513,7 @@ export default function LinksPage() {
                 link={link}
                 onStar={() => toggleStar(link.id)}
                 onDelete={() => deleteLink(link.id)}
+                onClick={() => { setSelectedLink(link); setDetailOpen(true) }}
               />
             ))}
           </div>
@@ -589,6 +604,13 @@ export default function LinksPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Link Detail Sheet */}
+      <LinkDetailSheet
+        link={selectedLink}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+      />
     </div>
   )
 }
