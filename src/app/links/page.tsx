@@ -263,7 +263,7 @@ export default function LinksPage() {
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
-              Link <span className="text-primary">Collection</span>
+              Link <span className="text-primary">Hub</span>
             </h1>
             <Button
               onClick={() => setAddOpen(true)}
