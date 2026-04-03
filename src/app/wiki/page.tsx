@@ -28,7 +28,10 @@ interface WikiArticle {
   backlinks: string[]
   createdAt: string
   updatedAt: string
-  seedIds: string[]
+  seedIds?: string[]
+  sourceSeedIds?: string[]
+  sourceLinkIds?: string[]
+  summary?: string
 }
 
 // ── Helpers ───────────────────────────────────────────

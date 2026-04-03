@@ -1,12 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user
 from app.weaviate_client import weaviate_client
-from app.config import settings
 import httpx
-import json
-import re
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
@@ -27,6 +24,7 @@ class LinkUpdate(BaseModel):
     tags: Optional[str] = None
     starred: Optional[bool] = None
     status: Optional[str] = None
+    related_ids: Optional[str] = None
 
 
 class LinkBulkCreate(BaseModel):
@@ -183,6 +181,8 @@ async def update_link(link_id: str, body: LinkUpdate, request: Request):
         updates["starred"] = body.starred
     if body.status is not None:
         updates["status"] = body.status
+    if body.related_ids is not None:
+        updates["related_ids"] = body.related_ids
 
     success = weaviate_client.update_link(link_id, **updates)
     if not success:
