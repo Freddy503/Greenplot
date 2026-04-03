@@ -558,6 +558,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           email: `${slug}@greenplot.app`,
           password,
+          city: city.trim() || undefined,
         }),
       })
 
