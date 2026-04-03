@@ -109,6 +109,51 @@ class WeaviateClient:
             }
             self.client.schema.create_class(wiki_class)
 
+        # Create GreenPlotNode class (unified node type)
+        if "GreenPlotNode" not in existing:
+            node_class = {
+                "class": "GreenPlotNode",
+                "description": "Unified node: seed, link, wiki, or chat-insight. One store, multiple views.",
+                "properties": [
+                    # Core discriminated fields
+                    {"name": "node_type", "dataType": ["text"]},  # seed | link | wiki | chat-insight
+                    {"name": "tenant_id", "dataType": ["text"]},
+                    {"name": "user_id", "dataType": ["text"]},
+
+                    # Universal fields (all types)
+                    {"name": "title", "dataType": ["text"]},
+                    {"name": "content", "dataType": ["text"]},
+                    {"name": "summary", "dataType": ["text"]},
+                    {"name": "domain", "dataType": ["text"]},
+                    {"name": "tags", "dataType": ["text"]},
+                    {"name": "source", "dataType": ["text"]},  # chat | hub | voice | auto
+                    {"name": "status", "dataType": ["text"]},  # raw | enriched | compiled
+                    {"name": "url", "dataType": ["text"]},
+
+                    # Connections (JSON array of connected node IDs)
+                    {"name": "connections", "dataType": ["text"]},
+                    {"name": "backlinks", "dataType": ["text"]},
+
+                    # Type-specific (JSON blob)
+                    {"name": "data", "dataType": ["text"]},
+
+                    # Enrichment
+                    {"name": "entities", "dataType": ["text"]},
+                    {"name": "energy", "dataType": ["text"]},
+
+                    # Metadata
+                    {"name": "starred", "dataType": ["boolean"]},
+                    {"name": "favicon", "dataType": ["text"]},
+                    {"name": "image_url", "dataType": ["text"]},
+                    {"name": "created_at", "dataType": ["date"]},
+                    {"name": "updated_at", "dataType": ["date"]},
+                ],
+                "vectorIndexConfig": {
+                    "vector": {"dimensions": 1024, "distance": "cosine"}
+                }
+            }
+            self.client.schema.create_class(node_class)
+
     def add_seed(self, tenant_id: str, user_id: str, thought_id: str, title: str, content: str, embedding: list, metadata: dict = None, image_url: str = None, created_at: str = None):
         obj = {
             "tenant_id": tenant_id,
@@ -427,6 +472,278 @@ class WeaviateClient:
             return True
         except Exception:
             return False
+
+    # ── GreenPlotNode CRUD (Unified) ──────────────────
+
+    def add_node(self, node_type: str, tenant_id: str, user_id: str,
+                 title: str, content: str = "", summary: str = "",
+                 domain: str = "", tags: str = "", source: str = "chat",
+                 status: str = "raw", url: str = "", connections: list = None,
+                 backlinks: list = None, entities: str = "", energy: str = "",
+                 starred: bool = False, favicon: str = "", image_url: str = "",
+                 data: dict = None, embedding: list = None,
+                 created_at: str = None) -> str:
+        """Create a unified node (seed, link, wiki, or chat-insight)."""
+        from datetime import datetime as dt
+        now = dt.utcnow().isoformat()
+        obj = {
+            "node_type": node_type,
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "title": title,
+            "content": content,
+            "summary": summary,
+            "domain": domain,
+            "tags": tags,
+            "source": source,
+            "status": status,
+            "url": url,
+            "connections": json.dumps(connections or []),
+            "backlinks": json.dumps(backlinks or []),
+            "entities": entities,
+            "energy": energy,
+            "starred": starred,
+            "favicon": favicon,
+            "image_url": image_url or "",
+            "data": json.dumps(data or {}),
+            "created_at": created_at or now,
+            "updated_at": now,
+        }
+        if embedding:
+            return self.client.data_object.create(
+                class_name="GreenPlotNode", data_object=obj, vector=embedding
+            )
+        return self.client.data_object.create(class_name="GreenPlotNode", data_object=obj)
+
+    def get_nodes(self, tenant_id: str, node_type: str = None,
+                  search: str = None, limit: int = 50) -> list[dict]:
+        """Get unified nodes, optionally filtered by type."""
+        where = {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id}
+        props = [
+            "node_type", "title", "content", "summary", "domain", "tags",
+            "source", "status", "url", "connections", "backlinks",
+            "entities", "energy", "starred", "favicon", "image_url",
+            "data", "created_at", "updated_at"
+        ]
+        query = self.client.query.get("GreenPlotNode", props).with_where(where).with_limit(limit)
+
+        if node_type:
+            query = query.with_where({
+                "operator": "And",
+                "operands": [
+                    where,
+                    {"path": ["node_type"], "operator": "Equal", "valueText": node_type}
+                ]
+            })
+
+        result = query.do()
+        objects = result.get("data", {}).get("Get", {}).get("GreenPlotNode", []) or []
+
+        nodes = []
+        for obj in objects:
+            # Client-side search
+            if search:
+                q = search.lower()
+                searchable = f"{obj.get('title', '')} {obj.get('content', '')} {obj.get('summary', '')} {obj.get('domain', '')} {obj.get('tags', '')}".lower()
+                if q not in searchable:
+                    continue
+
+            tags_str = obj.get("tags", "") or ""
+            tag_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+            connections_raw = obj.get("connections", "[]") or "[]"
+            connections_list = json.loads(connections_raw) if isinstance(connections_raw, str) else connections_raw
+            backlinks_raw = obj.get("backlinks", "[]") or "[]"
+            backlinks_list = json.loads(backlinks_raw) if isinstance(backlinks_raw, str) else backlinks_raw
+            data_raw = obj.get("data", "{}") or "{}"
+            data_obj = json.loads(data_raw) if isinstance(data_raw, str) else data_raw
+
+            nodes.append({
+                "id": obj.get("_additional", {}).get("id", ""),
+                "node_type": obj.get("node_type", ""),
+                "title": obj.get("title", ""),
+                "content": obj.get("content", ""),
+                "summary": obj.get("summary", ""),
+                "domain": obj.get("domain", ""),
+                "tags": tag_list,
+                "source": obj.get("source", ""),
+                "status": obj.get("status", "raw"),
+                "url": obj.get("url", ""),
+                "connections": connections_list,
+                "backlinks": backlinks_list,
+                "entities": obj.get("entities", ""),
+                "energy": obj.get("energy", ""),
+                "starred": obj.get("starred", False),
+                "favicon": obj.get("favicon", ""),
+                "image_url": obj.get("image_url", ""),
+                "data": data_obj,
+                "created_at": obj.get("created_at", ""),
+                "updated_at": obj.get("updated_at", ""),
+            })
+
+        nodes.sort(key=lambda x: x["created_at"], reverse=True)
+        return nodes
+
+    def search_nodes(self, tenant_id: str, embedding: list, node_type: str = None,
+                     limit: int = 10) -> list[dict]:
+        """Vector search across unified nodes."""
+        where = {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id}
+        if node_type:
+            where = {
+                "operator": "And",
+                "operands": [
+                    {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id},
+                    {"path": ["node_type"], "operator": "Equal", "valueText": node_type}
+                ]
+            }
+
+        query = self.client.query.get("GreenPlotNode", [
+            "node_type", "title", "content", "summary", "domain", "tags",
+            "url", "connections", "data", "created_at"
+        ]).with_near_vector({"vector": embedding}).with_where(where).with_additional(
+            ["id", "certainty"]
+        ).with_limit(limit)
+
+        result = query.do()
+        objects = result.get("data", {}).get("Get", {}).get("GreenPlotNode", []) or []
+
+        return [{
+            "id": obj.get("_additional", {}).get("id", ""),
+            "node_type": obj.get("node_type", ""),
+            "title": obj.get("title", ""),
+            "content": obj.get("content", ""),
+            "summary": obj.get("summary", ""),
+            "domain": obj.get("domain", ""),
+            "tags": obj.get("tags", ""),
+            "url": obj.get("url", ""),
+            "certainty": obj.get("_additional", {}).get("certainty", 0.0),
+            "created_at": obj.get("created_at", ""),
+        } for obj in objects]
+
+    def update_node(self, node_id: str, **kwargs) -> bool:
+        """Update a unified node."""
+        # Serialize list/dict fields to JSON strings
+        for key in ("connections", "backlinks", "data"):
+            if key in kwargs and isinstance(kwargs[key], (list, dict)):
+                kwargs[key] = json.dumps(kwargs[key])
+        try:
+            self.client.data_object.update(
+                class_name="GreenPlotNode", uuid=node_id, data_object=kwargs
+            )
+            return True
+        except Exception:
+            return False
+
+    def delete_node(self, node_id: str) -> bool:
+        try:
+            self.client.data_object.delete(uuid=node_id, class_name="GreenPlotNode")
+            return True
+        except Exception:
+            return False
+
+    def add_node_connection(self, node_id: str, target_id: str) -> bool:
+        """Add a bidirectional connection between two nodes."""
+        try:
+            # Get current connections for source node
+            obj = self.client.data_object.get(uuid=node_id, class_name="GreenPlotNode")
+            current = json.loads(obj.get("connections", "[]") or "[]")
+            if target_id not in current:
+                current.append(target_id)
+                self.client.data_object.update(
+                    class_name="GreenPlotNode", uuid=node_id,
+                    data_object={"connections": json.dumps(current)}
+                )
+            # Reverse connection on target
+            target = self.client.data_object.get(uuid=target_id, class_name="GreenPlotNode")
+            target_conns = json.loads(target.get("connections", "[]") or "[]")
+            if node_id not in target_conns:
+                target_conns.append(node_id)
+                self.client.data_object.update(
+                    class_name="GreenPlotNode", uuid=target_id,
+                    data_object={"connections": json.dumps(target_conns)}
+                )
+            return True
+        except Exception:
+            return False
+
+    def migrate_to_unified(self, tenant_id: str, user_id: str) -> dict:
+        """Migrate existing seeds, links, wiki articles to GreenPlotNode class."""
+        stats = {"seeds": 0, "links": 0, "wiki": 0, "errors": 0}
+
+        # Migrate seeds
+        try:
+            seeds = self.search_seeds(tenant_id, embedding=[0.0] * 1024, limit=200)
+            for seed in seeds:
+                try:
+                    self.add_node(
+                        node_type="seed", tenant_id=tenant_id, user_id=user_id,
+                        title=seed.get("title", "Untitled"),
+                        content=seed.get("content", ""),
+                        summary=seed.get("summary", ""),
+                        domain=seed.get("domain", ""),
+                        tags=seed.get("tags", ""),
+                        source=seed.get("source", "chat"),
+                        status="enriched" if seed.get("summary") else "raw",
+                        url=seed.get("url", ""),
+                        entities=seed.get("entities", ""),
+                        energy=seed.get("energy", ""),
+                    )
+                    stats["seeds"] += 1
+                except Exception:
+                    stats["errors"] += 1
+        except Exception:
+            pass
+
+        # Migrate links
+        try:
+            links = self.get_links(tenant_id, limit=200)
+            for link in links:
+                try:
+                    self.add_node(
+                        node_type="link", tenant_id=tenant_id, user_id=user_id,
+                        title=link.get("title", link.get("url", "")),
+                        summary=link.get("summary", ""),
+                        domain=link.get("domain", ""),
+                        tags=",".join(link.get("tags", [])) if isinstance(link.get("tags"), list) else link.get("tags", ""),
+                        source="hub",
+                        status=link.get("status", "pending"),
+                        url=link.get("url", ""),
+                        starred=link.get("starred", False),
+                        favicon=link.get("favicon", ""),
+                        data={"og_image": link.get("og_image", ""), "connection_count": link.get("connection_count", 0)},
+                    )
+                    stats["links"] += 1
+                except Exception:
+                    stats["errors"] += 1
+        except Exception:
+            pass
+
+        # Migrate wiki articles
+        try:
+            articles = self.get_wiki_articles(tenant_id, limit=200)
+            for article in articles:
+                try:
+                    self.add_node(
+                        node_type="wiki", tenant_id=tenant_id, user_id=user_id,
+                        title=article.get("title", ""),
+                        content=article.get("content", ""),
+                        summary=article.get("summary", ""),
+                        domain=article.get("category", ""),
+                        source="auto",
+                        status="compiled",
+                        backlinks=article.get("backlinks", []),
+                        data={
+                            "source_seed_ids": article.get("sourceSeedIds", []),
+                            "source_link_ids": article.get("sourceLinkIds", []),
+                            "health_score": article.get("healthScore", 50),
+                        },
+                    )
+                    stats["wiki"] += 1
+                except Exception:
+                    stats["errors"] += 1
+        except Exception:
+            pass
+
+        return stats
 
 # Singleton instance
 weaviate_client = WeaviateClient()

@@ -516,6 +516,140 @@ def submit_rating(
     db.refresh(rating)
     return rating
 
+# --- Unified GreenPlotNode API ---
+
+@app.get("/api/v1/nodes")
+def list_nodes(
+    node_type: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+):
+    """List unified nodes, optionally filtered by type (seed|link|wiki|chat-insight)."""
+    tenant_id = str(current_user.tenant_id)
+    nodes = weaviate_client.get_nodes(
+        tenant_id=tenant_id, node_type=node_type, search=search, limit=limit
+    )
+    return {"nodes": nodes, "total": len(nodes)}
+
+
+@app.post("/api/v1/nodes")
+def create_node(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """Create a unified node. Body: { node_type, title, content?, summary?, domain?, tags?, source?, url?, data? }"""
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
+
+    node_type = body.get("node_type", "seed")
+    if node_type not in ("seed", "link", "wiki", "chat-insight"):
+        raise HTTPException(status_code=400, detail="Invalid node_type")
+
+    node_id = weaviate_client.add_node(
+        node_type=node_type,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        title=body.get("title", "Untitled"),
+        content=body.get("content", ""),
+        summary=body.get("summary", ""),
+        domain=body.get("domain", ""),
+        tags=body.get("tags", ""),
+        source=body.get("source", "chat"),
+        status=body.get("status", "raw"),
+        url=body.get("url", ""),
+        entities=body.get("entities", ""),
+        energy=body.get("energy", ""),
+        starred=body.get("starred", False),
+        favicon=body.get("favicon", ""),
+        data=body.get("data", {}),
+    )
+    return {"id": node_id, "node_type": node_type, "ok": True}
+
+
+@app.post("/api/v1/nodes/search")
+def search_nodes_endpoint(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """Vector search across unified nodes. Body: { query, node_type?, limit? }"""
+    tenant_id = str(current_user.tenant_id)
+    query = body.get("query", "")
+    node_type = body.get("node_type")
+    limit = body.get("limit", 10)
+
+    if not query:
+        return {"nodes": [], "total": 0}
+
+    # Get embedding for query
+    import httpx
+    try:
+        resp = httpx.post(
+            "https://openrouter.ai/api/v1/embeddings",
+            json={"input": query[:2000], "model": "openai/text-embedding-ada-002"},
+            headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
+            timeout=30,
+        )
+        embedding = resp.json()["data"][0]["embedding"]
+    except Exception:
+        return {"nodes": [], "total": 0, "error": "embedding_failed"}
+
+    nodes = weaviate_client.search_nodes(
+        tenant_id=tenant_id, embedding=embedding,
+        node_type=node_type, limit=limit
+    )
+    return {"nodes": nodes, "total": len(nodes)}
+
+
+@app.patch("/api/v1/nodes/{node_id}")
+def update_node_endpoint(
+    node_id: str,
+    body: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """Update a unified node."""
+    ok = weaviate_client.update_node(node_id, **body)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return {"ok": True}
+
+
+@app.delete("/api/v1/nodes/{node_id}")
+def delete_node_endpoint(
+    node_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a unified node."""
+    ok = weaviate_client.delete_node(node_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return {"ok": True}
+
+
+@app.post("/api/v1/nodes/{node_id}/connect/{target_id}")
+def connect_nodes(
+    node_id: str,
+    target_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Add bidirectional connection between two nodes."""
+    ok = weaviate_client.add_node_connection(node_id, target_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return {"ok": True}
+
+
+@app.post("/api/v1/nodes/migrate")
+def migrate_nodes(
+    current_user: User = Depends(get_current_user),
+):
+    """Migrate existing seeds, links, wiki articles to unified GreenPlotNode class."""
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
+    stats = weaviate_client.migrate_to_unified(tenant_id, user_id)
+    return {"ok": True, "migrated": stats}
+
+
 # --- Admin (protected by is_admin check; for MVP we'll skip and use direct DB)
 
 @app.get("/api/v1/admin/health")
