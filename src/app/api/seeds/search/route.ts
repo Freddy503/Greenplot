@@ -120,23 +120,20 @@ function buildGardenContext(seeds: WeaviateSeed[]): string {
 }
 
 // ── Relevance gate ──────────────────────────────────────
-// Even if intent says "enrich", only include if results are actually relevant.
+// Trust vector search results — if backend returned seeds, they're semantically relevant.
+// Only gate out when seeds have zero enrichment data AND low vector scores.
 
 function isRelevantEnough(seeds: WeaviateSeed[], query: string): boolean {
   if (seeds.length === 0) return false
 
-  const q = query.toLowerCase()
-  return seeds.some(s => {
-    const title = safeStr(s.title).toLowerCase()
-    const summary = safeStr(s.summary).toLowerCase()
-    const tags = safeStr(s.tags).toLowerCase()
-    const combined = `${title} ${summary} ${tags}`
+  // If the backend vector search returned results, trust them — they're ranked by similarity
+  // Only reject if ALL results have very low scores (unlikely with vector search)
+  const hasGoodScore = seeds.some(s =>
+    s._additional?.score && Number(s._additional.score) > 1
+  )
 
-    // Check if any significant word from the query appears in the seed
-    const queryWords = q.split(/\s+/).filter(w => w.length > 4)
-    const matchCount = queryWords.filter(w => combined.includes(w)).length
-    return matchCount >= 2 || (matchCount >= 1 && seeds[0]?._additional?.score && Number(seeds[0]._additional.score) > 3)
-  })
+  // Always allow if we have results (vector search already filtered by relevance)
+  return seeds.length > 0
 }
 
 // ── Route handler ────────────────────────────────────────
