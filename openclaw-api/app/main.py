@@ -45,6 +45,10 @@ with engine.connect() as conn:
     if not result.fetchone():
         conn.execute(text("ALTER TABLE users ADD COLUMN city VARCHAR"))
         conn.commit()
+    result2 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='digest_frequency'"))
+    if not result2.fetchone():
+        conn.execute(text("ALTER TABLE users ADD COLUMN digest_frequency VARCHAR DEFAULT 'once-daily'"))
+        conn.commit()
 
 app = FastAPI(title="OpenClaw API", version="0.1.0")
 
@@ -73,7 +77,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         email=req.email,
         password_hash=get_password_hash(req.password),
         tenant_id=uuid.uuid4(),
-        city=req.city
+        city=req.city,
+        digest_frequency=req.digest_frequency or 'once-daily'
     )
     db.add(user)
     db.commit()
@@ -94,6 +99,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 class ProfileUpdate(BaseModel):
     city: Optional[str] = None
+    digest_frequency: Optional[str] = None  # twice-daily, once-daily, bi-weekly, weekly, calendar
 
 @app.patch("/api/v1/profile")
 def update_profile(
@@ -103,9 +109,11 @@ def update_profile(
 ):
     if req.city is not None:
         current_user.city = req.city
+    if req.digest_frequency is not None:
+        current_user.digest_frequency = req.digest_frequency
     db.commit()
     db.refresh(current_user)
-    return {"status": "ok", "city": current_user.city}
+    return {"status": "ok", "city": current_user.city, "digest_frequency": current_user.digest_frequency}
 
 # --- Thoughts ---
 

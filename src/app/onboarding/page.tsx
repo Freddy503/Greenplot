@@ -42,6 +42,29 @@ const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfil
   { label: 'Based on Calendar', sublabel: 'Smart Scheduling', value: 'calendar' },
 ]
 
+// Cron job previews per cadence
+const CRON_PREVIEW: Record<OnboardingProfile['digestFrequency'], Array<{ icon: string; name: string; time: string; desc: string }>> = {
+  'twice-daily': [
+    { icon: 'wb_sunny', name: 'Morning Spark', time: '8:00 AM', desc: 'Weather, schedule & a creative prompt to start your day' },
+    { icon: 'nights_stay', name: 'Evening Reflection', time: '8:00 PM', desc: 'Review your day, capture loose thoughts' },
+    { icon: 'eco', name: 'Garden Pulse', time: '12:00 PM', desc: 'Seed enrichment & connection check' },
+  ],
+  'once-daily': [
+    { icon: 'wb_sunny', name: 'Daily Briefing', time: '9:00 AM', desc: 'Weather, calendar highlights, recent seeds & creative prompt' },
+    { icon: 'eco', name: 'Garden Pulse', time: '9:00 AM', desc: 'Runs alongside your briefing' },
+  ],
+  'bi-weekly': [
+    { icon: 'trending_up', name: 'Mid-Week Digest', time: 'Wed 10:00 AM', desc: 'Weekly trends, new seeds, web highlights' },
+    { icon: 'auto_stories', name: 'Weekend Review', time: 'Sun 10:00 AM', desc: 'Deep-dive into your garden, connection map' },
+  ],
+  'weekly': [
+    { icon: 'auto_stories', name: 'Weekly Roundup', time: 'Sunday 10:00 AM', desc: 'Full week recap: seeds created, enriched, trending topics' },
+  ],
+  'calendar': [
+    { icon: 'event', name: 'Smart Scheduling', time: 'Based on your calendar', desc: 'Delivers insights when you have free time — never during meetings' },
+  ],
+}
+
 const TOTAL_STEPS = 5
 const STEP_LABELS = ['Welcome', 'Roots', 'Interests', 'Nurture', 'Intelligence']
 
@@ -387,19 +410,19 @@ function StepNurtureFocus({
           Nurture your focus.
         </h2>
         <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
-          Choose your harvest frequency. Adjust how often you want to collect your yields.
+          Choose how often you want your AI garden to deliver insights. Each cadence includes a preview of what you'll receive.
         </p>
       </div>
 
       {/* Radio cards */}
-      <div className="w-full space-y-3 mb-6">
+      <div className="w-full space-y-3 mb-4">
         {DIGEST_OPTIONS.map((opt) => {
           const isSelected = frequency === opt.value
           return (
             <button
               key={opt.value}
               onClick={() => onFrequency(opt.value)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-full text-left transition-all active:scale-[0.98] border ${
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-left transition-all active:scale-[0.98] border ${
                 isSelected
                   ? 'bg-primary/10 border-primary/30'
                   : 'bg-surface-container border-outline-variant/20 hover:bg-surface-container-high'
@@ -423,20 +446,43 @@ function StepNurtureFocus({
         })}
       </div>
 
-      {/* Time setting */}
-      <div className="w-full rounded-full px-5 py-4 mb-2 flex items-center justify-between bg-surface-container border border-outline-variant/20">
-        <div>
-          <p className="text-xs font-medium text-on-surface-variant">Time</p>
-          <p className="text-lg font-bold text-on-surface">09:00 AM</p>
+      {/* Cron Preview Panel */}
+      <div className="w-full mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>
+            schedule
+          </span>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant">
+            What you'll receive
+          </p>
         </div>
-        <span className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/12 text-primary border border-primary/20">
-          Edit
-        </span>
+        <div className="space-y-2.5">
+          {CRON_PREVIEW[frequency]?.map((job, i) => (
+            <div
+              key={`${frequency}-${i}`}
+              className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-container-low border border-outline-variant/10"
+            >
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-primary/10">
+                <span
+                  className="material-symbols-outlined text-primary"
+                  style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}
+                >
+                  {job.icon}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-on-surface">{job.name}</p>
+                  <span className="text-[10px] font-semibold text-primary/60 uppercase tracking-wide">
+                    {job.time}
+                  </span>
+                </div>
+                <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{job.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <p className="text-xs text-center mb-6 text-on-surface-variant/40">
-        Local time based on your current region.
-      </p>
 
       <CTAButton onClick={onNext}>Next</CTAButton>
 
@@ -559,6 +605,7 @@ export default function OnboardingPage() {
           email: `${slug}@greenplot.app`,
           password,
           city: city.trim() || undefined,
+          digest_frequency: digestFrequency,
         }),
       })
 
