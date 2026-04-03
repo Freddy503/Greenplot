@@ -218,6 +218,55 @@ def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: S
         raise HTTPException(status_code=404, detail="Seed not found")
     return seed
 
+class BulkSeedItem(BaseModel):
+    title: str
+    content: str
+    source: Optional[str] = 'chat_harvest'
+
+class BulkSeedRequest(BaseModel):
+    seeds: List[BulkSeedItem]
+
+class BulkSeedResponse(BaseModel):
+    created: int
+    seed_ids: List[str]
+
+@app.post("/api/v1/seeds/bulk", response_model=BulkSeedResponse)
+def create_seeds_bulk(
+    req: BulkSeedRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create multiple seeds at once (from harvest / Add to Garden)."""
+    seed_ids = []
+    for item in req.seeds[:10]:  # Limit to 10 at a time
+        seed = Seed(
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            title=item.title[:200],
+            content=item.content[:5000],
+            seed_metadata={"source": item.source or "chat_harvest"},
+        )
+        db.add(seed)
+        db.flush()
+        seed_ids.append(str(seed.id))
+
+        # Store in Weaviate (non-blocking)
+        try:
+            from app.enricher import embed_text
+            embedding = embed_text(f"{item.title} {item.content}")
+            weaviate_client.store_seed(
+                tenant_id=str(current_user.tenant_id),
+                title=item.title,
+                content=item.content,
+                embedding=embedding,
+                metadata={"source": item.source or "chat_harvest"},
+            )
+        except Exception:
+            pass  # Weaviate is best-effort for harvested seeds
+
+    db.commit()
+    return BulkSeedResponse(created=len(seed_ids), seed_ids=seed_ids)
+
 # --- Daily Spark & Briefing ---
 
 @app.post("/api/v1/spark", response_model=SparkResponse)
@@ -1104,3 +1153,60 @@ def harvest_chat(
         "session_id": session.session_id,
         "messages_harvested": len(assistant_texts),
     }
+
+# --- Extract Insights (for Add to Garden) ---
+
+class ExtractInsightsRequest(BaseModel):
+    conversation: str = Field(..., min_length=10, max_length=20000)
+
+class ExtractedInsight(BaseModel):
+    title: str
+    content: str
+
+class ExtractInsightsResponse(BaseModel):
+    insights: List[ExtractedInsight]
+
+@app.post("/api/v1/chat/extract-insights", response_model=ExtractInsightsResponse)
+def extract_insights(
+    req: ExtractInsightsRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Extract discrete seed-worthy insights from a conversation using LLM."""
+    import openai
+
+    openai_client = openai.OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+    )
+
+    response = openai_client.chat.completions.create(
+        model="meta-llama/llama-3.1-8b-instruct:free",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an insight extractor. Given a conversation, identify the most valuable "
+                    "insights, ideas, or learnings worth preserving as standalone knowledge seeds. "
+                    "Extract 1-5 discrete insights. Each should be self-contained and meaningful on its own. "
+                    "Skip greetings, small talk, and trivial exchanges. "
+                    "Respond in JSON: {\"insights\": [{\"title\": string, \"content\": string}]}"
+                ),
+            },
+            {"role": "user", "content": req.conversation[:6000]},
+        ],
+        temperature=0.5,
+        max_tokens=800,
+    )
+
+    text = response.choices[0].message.content or '{"insights": []}'
+
+    try:
+        data = json.loads(text)
+        insights = [
+            ExtractedInsight(title=i.get("title", "Untitled"), content=i.get("content", ""))
+            for i in data.get("insights", [])
+            if i.get("title") and i.get("content")
+        ]
+        return ExtractInsightsResponse(insights=insights[:5])
+    except (json.JSONDecodeError, AttributeError):
+        return ExtractInsightsResponse(insights=[])
