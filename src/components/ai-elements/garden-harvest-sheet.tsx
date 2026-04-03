@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 
 interface Insight {
@@ -36,10 +36,12 @@ export function GardenHarvestSheet({
 
   const selectedCount = insights.filter((i) => i.selected).length
 
-  // Sync with parent when insights change
-  if (insights !== initialInsights && initialInsights.length > 0 && insights.length === 0) {
-    setInsights(initialInsights)
-  }
+  // Sync with parent when insights arrive
+  useEffect(() => {
+    if (initialInsights.length > 0 && insights.length === 0) {
+      setInsights(initialInsights)
+    }
+  }, [initialInsights, insights.length])
 
   return (
     <>
@@ -51,7 +53,7 @@ export function GardenHarvestSheet({
 
       {/* Sheet */}
       <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom duration-300">
-        <div className="max-w-lg mx-auto bg-surface-container-high rounded-t-3xl p-6 pb-8 shadow-2xl border-t border-outline-variant/10">
+        <div className="max-w-lg mx-auto bg-surface-container-high rounded-t-3xl p-6 pb-8 shadow-2xl border-t border-outline-variant/10" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
           {/* Handle */}
           <div className="w-10 h-1 rounded-full bg-on-surface-variant/20 mx-auto mb-5" />
 
