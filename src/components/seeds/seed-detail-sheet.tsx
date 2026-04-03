@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +10,8 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent } from '@/components/ui/card'
+import { toast } from 'sonner'
 
 interface SeedDetail {
   id: string
@@ -26,6 +27,14 @@ interface SeedDetail {
   url?: string
   created_at?: string
   created?: string
+}
+
+interface RelatedLink {
+  id: string
+  title: string
+  url: string
+  domain: string
+  summary: string
 }
 
 interface SeedDetailSheetProps {
@@ -55,6 +64,8 @@ function getDomainIcon(domain: string) {
 export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetProps) {
   const [loadingSearch, setLoadingSearch] = useState(false)
   const [searchResults, setSearchResults] = useState<string[]>([])
+  const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>([])
+  const [loadingLinks, setLoadingLinks] = useState(false)
 
   if (!seed) return null
 
@@ -62,6 +73,32 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
   const entities = seed.entities ? seed.entities.split(',').map(e => e.trim()).filter(Boolean) : []
   const domain = seed.domain || ''
   const energy = seed.energy || ''
+
+  // Fetch related Hub links when sheet opens
+  useEffect(() => {
+    if (!open || !seed) return
+    setLoadingLinks(true)
+    const token = localStorage.getItem('greenplot_token')
+    fetch('/api/links', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : { links: [] })
+      .then(data => {
+        const links = data.links || []
+        // Match by domain overlap or exact URL
+        const related = links.filter((l: any) => {
+          if (seed.url && l.url === seed.url) return true
+          if (l.garden_seed_id && l.garden_seed_id === seed.id) return true
+          if (domain && l.domain && l.domain.toLowerCase() === domain.toLowerCase()) return true
+          const seedTags = tags.map(t => t.toLowerCase())
+          const linkTags = (l.tags || []).map((t: string) => t.toLowerCase())
+          return seedTags.some(t => linkTags.includes(t))
+        })
+        setRelatedLinks(related.slice(0, 5))
+      })
+      .catch(() => setRelatedLinks([]))
+      .finally(() => setLoadingLinks(false))
+  }, [open, seed?.id])
 
   const handleWebSearch = async () => {
     setLoadingSearch(true)
@@ -162,6 +199,38 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
             </a>
           </div>
         )}
+
+        {/* Cross-Tab: Related Hub Links */}
+        <div className="mb-6">
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-2 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>link</span>
+            From Hub
+          </h3>
+          {loadingLinks ? (
+            <div className="h-10 bg-surface-container-high rounded-xl animate-pulse" />
+          ) : relatedLinks.length > 0 ? (
+            <div className="space-y-2">
+              {relatedLinks.map((link, i) => (
+                <Card key={i} className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all">
+                  <CardContent className="p-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-blue-400 shrink-0" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>link</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-on-surface truncate">{link.title}</p>
+                      <p className="text-[10px] text-on-surface-variant/60">{link.domain}</p>
+                    </div>
+                    {link.url && (
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full hover:bg-surface-container text-on-surface-variant/40 hover:text-primary transition-colors">
+                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>open_in_new</span>
+                      </a>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-on-surface-variant/40 italic">No Hub links connected yet.</p>
+          )}
+        </div>
 
         {/* Related Seeds (from garden search) */}
         <div className="mb-6">
