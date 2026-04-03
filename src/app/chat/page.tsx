@@ -656,6 +656,38 @@ export default function ChatPage() {
                               <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
                             </button>
                           )}
+                          {/* Save as Wiki Article button */}
+                          {message.parts.some(p => p.type === 'text') && (
+                            <button
+                              onClick={() => {
+                                const textPart = message.parts.find(p => p.type === 'text')
+                                if (textPart && 'text' in textPart) {
+                                  const token = localStorage.getItem('greenplot_token')
+                                  toast.loading('Compiling wiki article...', { id: 'wiki-save' })
+                                  fetch('/api/wiki', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                    },
+                                    body: JSON.stringify({
+                                      text: textPart.text,
+                                      title: textPart.text.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 80),
+                                    }),
+                                  })
+                                    .then(r => r.ok ? r.json() : Promise.reject())
+                                    .then(data => {
+                                      toast.success(`Wiki article created: ${data.title || 'New Article'} 📖`, { id: 'wiki-save' })
+                                    })
+                                    .catch(() => toast.error('Failed to create wiki article', { id: 'wiki-save' }))
+                                }
+                              }}
+                              className="p-1 rounded-full hover:bg-blue-500/10 text-on-surface-variant/40 hover:text-blue-400 transition-colors"
+                              title="Save as Wiki Article"
+                            >
+                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>auto_stories</span>
+                            </button>
+                          )}
                         </div>
 
                         {/* Create Image button — only on reflection responses */}
