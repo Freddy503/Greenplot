@@ -8,6 +8,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     city: Optional[str] = None
+    digest_frequency: Optional[str] = 'once-daily'
 
 class LoginRequest(BaseModel):
     email: EmailStr
