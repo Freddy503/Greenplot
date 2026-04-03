@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
   { href: '/garden', label: 'Garden', icon: 'eco' },
+  { href: '/links', label: 'Links', icon: 'link' },
+  { href: '/wiki', label: 'Wiki', icon: 'auto_stories' },
 ]
 
 export default function Header() {
