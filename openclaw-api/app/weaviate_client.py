@@ -81,7 +81,7 @@ class WeaviateClient:
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
             ["title", "text", "source", "url", "created", "notion_id",
-             "summary", "tags", "entities", "backlinks", "domain", "energy", "metadata", "tenant_id"]
+             "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"]
         ).with_near_vector(nearVector).with_where({
             "path": ["tenant_id"],
             "operator": "Equal",
