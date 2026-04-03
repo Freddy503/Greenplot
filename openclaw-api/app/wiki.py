@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Header
 from pydantic import BaseModel
 from typing import Optional, List
 from app.auth import get_current_user
@@ -577,3 +577,279 @@ async def export_obsidian(request: Request):
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="greenplot-wiki.zip"'},
     )
+
+
+@router.post("/auto-compile")
+async def auto_compile(request: Request, x_api_key: str = Header(default="")):
+    """Auto-compile wiki articles from enriched link clusters not yet in wiki.
+
+    Supports both JWT auth and X-API-Key (for cron jobs).
+    """
+    # Try API key first (for cron jobs)
+    import os
+    harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
+    if x_api_key == harvest_key:
+        # Use first available tenant for API key auth
+        # In production, you'd want a dedicated cron tenant
+        try:
+            from app.database import get_db
+            from app.models import User
+            db = next(get_db())
+            user = db.query(User).first()
+            tenant_id = str(user.tenant_id)
+            user_id = str(user.id)
+            db.close()
+        except Exception:
+            raise HTTPException(status_code=500, detail="No users found for API key auth")
+    else:
+        user = await get_current_user(request)
+        tenant_id = str(user.tenant_id)
+        user_id = str(user.id)
+
+    # 1. Get all enriched links
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
+    enriched = [l for l in links if l.get("status") == "enriched" and l.get("summary")]
+    if not enriched:
+        return {"ok": True, "compiled": 0, "message": "No enriched links available"}
+
+    # 2. Get existing wiki articles and their source link IDs
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
+    covered_link_ids = set()
+    for article in articles:
+        for lid in article.get("sourceLinkIds", []):
+            covered_link_ids.add(lid)
+        # Also check by domain — don't create duplicate domain articles
+        pass
+
+    # 3. Find enriched links NOT yet in any wiki article
+    uncovered = [l for l in enriched if l.get("id") not in covered_link_ids]
+    if not uncovered:
+        return {"ok": True, "compiled": 0, "message": "All enriched links already in wiki"}
+
+    # 4. Group by domain
+    domain_groups = {}
+    for l in uncovered:
+        d = l.get("domain", "").strip().lower()
+        if not d:
+            d = "general"
+        if d not in domain_groups:
+            domain_groups[d] = []
+        domain_groups[d].append(l)
+
+    # 5. Skip domains that already have a wiki article
+    existing_domains = set()
+    for article in articles:
+        cat = article.get("category", "").strip().lower()
+        if cat:
+            existing_domains.add(cat)
+
+    # 6. Compile eligible clusters (3+ links, no existing article)
+    compiled = 0
+    results = []
+
+    for domain, group in domain_groups.items():
+        if len(group) < 3:
+            continue
+        if domain in existing_domains:
+            continue
+
+        # Build content from links
+        contents = []
+        source_link_ids = []
+        for l in group[:8]:
+            contents.append(f"## {l.get('title', 'Untitled')}\n\n{l.get('summary', '')}")
+            source_link_ids.append(l.get("id", ""))
+
+        if not contents:
+            continue
+
+        raw_content = "\n\n---\n\n".join(contents)
+        title = f"{domain.title()} — Compiled Insights"
+        category = _detect_category(domain, group)
+
+        # LLM synthesis
+        api_key = getattr(settings, "OPENROUTER_API_KEY", None)
+        article_content = f"# {title}\n\nAuto-compiled from {len(group)} enriched links.\n\n{raw_content}"
+
+        if api_key:
+            try:
+                async with httpx.AsyncClient(timeout=45) as client:
+                    resp = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                            "messages": [
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "You are a knowledge synthesizer. Given multiple source materials, "
+                                        "write a structured wiki article in markdown. Include:\n"
+                                        "- A compelling title\n"
+                                        "- A 2-3 sentence overview/summary\n"
+                                        "- Key themes as ## headings with bullet points\n"
+                                        "- Connections between sources\n"
+                                        "- A 'Key Takeaways' section at the end\n"
+                                        "Write in clear, concise prose. Use markdown formatting."
+                                    ),
+                                },
+                                {"role": "user", "content": f"Synthesize these {len(contents)} sources about {domain}:\n\n{raw_content}"},
+                            ],
+                            "temperature": 0.4,
+                            "max_tokens": 2000,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        llm_content = resp.json()["choices"][0]["message"]["content"]
+                        if llm_content and len(llm_content) > 100:
+                            article_content = llm_content
+            except Exception:
+                pass  # Fallback to basic content
+
+        # Extract summary (first paragraph or first 200 chars)
+        lines = article_content.split("\n")
+        summary_lines = []
+        for line in lines:
+            if line.strip() and not line.startswith("#"):
+                summary_lines.append(line.strip())
+                if len(" ".join(summary_lines)) > 200:
+                    break
+        summary = " ".join(summary_lines)[:300]
+
+        # Create wiki article
+        try:
+            article_id = weaviate_client.add_wiki_article(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                title=title,
+                category=category,
+                summary=summary,
+                content=article_content,
+                source_seed_ids="",
+                source_link_ids=",".join(source_link_ids),
+                backlinks="",
+                status="published",
+            )
+            compiled += 1
+            results.append({"id": article_id, "title": title, "links": len(source_link_ids)})
+        except Exception:
+            continue
+
+    return {"ok": True, "compiled": compiled, "articles": results}
+
+
+@router.post("/from-text")
+async def create_from_text(body: dict, request: Request):
+    """Create a wiki article from raw text (e.g., chat response)."""
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+    user_id = str(user.id)
+
+    text = body.get("text", "").strip()
+    if not text or len(text) < 50:
+        raise HTTPException(status_code=400, detail="Text too short (min 50 chars)")
+
+    title = body.get("title") or text.split("\n")[0].replace("#", "").strip()[:80] or "Chat Insight"
+    source_seed_ids = body.get("source_seed_ids", [])
+    source_link_ids = body.get("source_link_ids", [])
+
+    # LLM synthesis to structure the content
+    api_key = getattr(settings, "OPENROUTER_API_KEY", None)
+    article_content = f"# {title}\n\n{text}"
+
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "Turn this raw text into a well-structured wiki article in markdown. "
+                                    "Add a clear title, organize into sections, extract key points as bullets. "
+                                    "Keep all substantive content. Use markdown formatting."
+                                ),
+                            },
+                            {"role": "user", "content": text},
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 1500,
+                    },
+                )
+                if resp.status_code == 200:
+                    llm_content = resp.json()["choices"][0]["message"]["content"]
+                    if llm_content and len(llm_content) > 100:
+                        article_content = llm_content
+        except Exception:
+            pass
+
+    # Extract summary
+    plain = article_content.replace("#", "").replace("*", "").replace("_", "")
+    summary = plain[:300].strip()
+
+    # Detect category from content
+    category = _detect_category(title.lower(), [{"domain": text[:200].lower()}])
+
+    # Create article
+    article_id = weaviate_client.add_wiki_article(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        title=title,
+        category=category,
+        summary=summary,
+        content=article_content,
+        source_seed_ids=",".join(source_seed_ids) if isinstance(source_seed_ids, list) else str(source_seed_ids),
+        source_link_ids=",".join(source_link_ids) if isinstance(source_link_ids, list) else str(source_link_ids),
+        backlinks="",
+        status="published",
+    )
+
+    return {"ok": True, "id": article_id, "title": title}
+
+
+@router.get("/stale")
+async def get_stale_articles(request: Request):
+    """Find wiki articles that may need recompilation (new content since last compile)."""
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=200)
+
+    stale = []
+
+    for article in articles:
+        source_link_ids = set(article.get("sourceLinkIds", []))
+        category = article.get("category", "").lower()
+        updated_at = article.get("updatedAt", "")
+
+        # Find new links in same domain that aren't in this article
+        new_related = [
+            l for l in links
+            if l.get("domain", "").lower() == category
+            and l.get("id") not in source_link_ids
+            and l.get("status") == "enriched"
+        ]
+
+        if new_related:
+            stale.append({
+                "id": article["id"],
+                "title": article["title"],
+                "category": category,
+                "new_links": len(new_related),
+                "last_updated": updated_at,
+                "suggestion": f"Recompile to include {len(new_related)} new {category} links",
+            })
+
+    return {"stale": stale, "total_articles": len(articles)}
