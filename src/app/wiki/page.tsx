@@ -220,15 +220,22 @@ export default function WikiPage() {
   const [filter, setFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
 
-  // Load wiki articles from localStorage
+  // Load wiki articles from API
   useEffect(() => {
-    const stored = localStorage.getItem('greenplot_wiki')
-    if (stored) {
-      try {
-        setArticles(JSON.parse(stored))
-      } catch {}
-    }
-    setLoading(false)
+    const token = localStorage.getItem('greenplot_token')
+    fetch('/api/wiki', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then(data => {
+        setArticles(data.articles || [])
+      })
+      .catch(() => {
+        // Fallback to localStorage
+        const stored = localStorage.getItem('greenplot_wiki')
+        if (stored) { try { setArticles(JSON.parse(stored)) } catch {} }
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   // Get unique categories
