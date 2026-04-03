@@ -187,8 +187,16 @@ export default function ChatPage() {
     if (!restored) return
     if (messages.length > 0) {
       try {
-        localStorage.setItem('greenplot_chat_messages', JSON.stringify(messages))
-      } catch {}
+        // Cap at 50 messages to prevent localStorage quota exceeded
+        const toStore = messages.slice(-50)
+        localStorage.setItem('greenplot_chat_messages', JSON.stringify(toStore))
+      } catch {
+        // If still too large, try clearing old data
+        try {
+          localStorage.removeItem('greenplot_chat_messages')
+          localStorage.setItem('greenplot_chat_messages', JSON.stringify(messages.slice(-20)))
+        } catch {}
+      }
     }
   }, [messages, restored])
 

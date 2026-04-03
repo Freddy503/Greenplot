@@ -15,12 +15,15 @@ const tabs = [
 export default function Header() {
   const pathname = usePathname()
   const [nickname, setNickname] = useState('')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
+    setMounted(true)
   }, [])
 
-  const initial = nickname ? nickname[0].toUpperCase() : 'G'
+  // Use 'G' as default until mounted to avoid hydration mismatch
+  const initial = mounted && nickname ? nickname[0].toUpperCase() : 'G'
 
   return (
     <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-surface/80 backdrop-blur-2xl border-b border-outline-variant/10">
