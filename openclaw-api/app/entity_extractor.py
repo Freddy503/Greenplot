@@ -65,7 +65,7 @@ def extract_entities(text: str) -> dict:
                 {"role": "user", "content": text[:3000]}  # Cap input to avoid token waste
             ],
             temperature=0.3,  # Low temp for consistent extraction
-            max_tokens=400
+            max_tokens=800
         )
 
         raw = response.choices[0].message.content.strip()
@@ -76,6 +76,17 @@ def extract_entities(text: str) -> dict:
             if raw.startswith('json'):
                 raw = raw[4:]
         raw = raw.strip()
+
+        # Fix truncated JSON (LLM may cut off mid-response)
+        if raw.startswith('{') and not raw.endswith('}'):
+            # Close open brackets/braces
+            open_brackets = raw.count('[') - raw.count(']')
+            open_braces = raw.count('{') - raw.count('}')
+            # Truncate to last complete entry
+            last_complete = raw.rfind('},')
+            if last_complete > 0:
+                raw = raw[:last_complete + 1]
+            raw += ']' * open_brackets + '}' * open_braces
 
         data = json.loads(raw)
 

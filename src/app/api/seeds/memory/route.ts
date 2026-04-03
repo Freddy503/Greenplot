@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 
 // ── In-memory store (per serverless instance) ──────────
+// NOTE: Falls back to backend persistence for cross-instance continuity
 
 interface MemoryItem {
   id: string
@@ -27,7 +28,6 @@ interface MemoryItem {
   created: string
 }
 
-const memoryStores = new Map<string, MemoryItem[]>()
 const sessionCache = new Map<string, { sessions: unknown[]; timestamp: number }>()
 
 // ── Helpers ────────────────────────────────────────────
@@ -83,33 +83,56 @@ function extractMemories(text: string, source: string): MemoryItem[] {
   })
 }
 
-// ── Stage 2: Update (dedup + merge) ───────────────────
+// ── Fetch memories from backend ────────────────────────
 
-function decideUpdates(existing: MemoryItem[], candidates: MemoryItem[]): { op: string; item: MemoryItem }[] {
-  const existingKeys = new Set(existing.map(i => i.key.toLowerCase()))
-  const operations: { op: string; item: MemoryItem }[] = []
-
-  for (const candidate of candidates) {
-    const keyLower = candidate.key.toLowerCase()
-
-    if (existingKeys.has(keyLower)) {
-      // Reinforce existing
-      const existingItem = existing.find(i => i.key.toLowerCase() === keyLower)
-      if (existingItem) {
-        existingItem.stability_score = Math.min(existingItem.stability_score + 0.15, 3.0)
-        existingItem.access_count++
-      }
-    } else {
-      operations.push({ op: 'ADD', item: candidate })
-    }
+async function fetchBackendMemories(token: string): Promise<MemoryItem[]> {
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/memory`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.items || []).map((i: Record<string, unknown>, idx: number) => ({
+      id: md5short(String(i.key || '') + String(idx)),
+      key: String(i.key || ''),
+      value: String(i.value || ''),
+      memory_type: String(i.memory_type || 'UserMemory') as MemoryItem['memory_type'],
+      tags: Array.isArray(i.tags) ? i.tags : [],
+      stability_score: Number(i.stability_score) || 1.0,
+      access_count: Number(i.access_count) || 0,
+      created: String(i.created || new Date().toISOString()),
+    }))
+  } catch {
+    return []
   }
+}
 
-  return operations
+async function storeBackendMemories(token: string, items: MemoryItem[]): Promise<void> {
+  try {
+    await fetch(`${BACKEND}/api/v1/memory/store`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        items: items.map(i => ({
+          key: i.key,
+          value: i.value,
+          memory_type: i.memory_type,
+          tags: i.tags,
+          stability_score: i.stability_score,
+        })),
+      }),
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch {}
 }
 
 // ── Fetch sessions ─────────────────────────────────────
 
-async function fetchSessions(userId: string): Promise<{ messages: unknown[]; summaries: string[] }> {
+async function fetchSessions(userId: string, token: string): Promise<{ messages: unknown[]; summaries: string[] }> {
   const cacheKey = userId
   const cached = sessionCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < 30000) {
@@ -118,7 +141,7 @@ async function fetchSessions(userId: string): Promise<{ messages: unknown[]; sum
 
   try {
     const res = await fetch(`${BACKEND}/api/v1/sessions?limit=5`, {
-      headers: { Authorization: `Bearer ${userId}` },
+      headers: { Authorization: `Bearer ${token || userId}` },
       signal: AbortSignal.timeout(5000),
     })
     if (!res.ok) return { messages: [], summaries: [] }
@@ -133,7 +156,7 @@ async function fetchSessions(userId: string): Promise<{ messages: unknown[]; sum
     for (const session of sessions.slice(0, 3)) {
       try {
         const detailRes = await fetch(`${BACKEND}/api/v1/sessions/${session.id}`, {
-          headers: { Authorization: `Bearer ${userId}` },
+          headers: { Authorization: `Bearer ${token || userId}` },
           signal: AbortSignal.timeout(3000),
         })
         if (!detailRes.ok) continue
@@ -230,55 +253,31 @@ function retrieveWithWeights(
   }
 }
 
-// ── Main pipeline: Extract → Update → Store ───────────
-
-function runPipeline(userId: string, sessionId: string, messages: Array<Record<string, unknown>>): {
-  extracted: number
-  operations: number
-  summary: string
-} {
-  const store = memoryStores.get(userId) || []
-
-  // Stage 1: Extract
-  const conversationText = messages
-    .map(m => `${m.role || 'user'}: ${typeof m.content === 'string' ? m.content : ''}`)
-    .join('\n')
-  const candidates = extractMemories(conversationText, sessionId)
-
-  // Stage 2: Update decisions
-  const operations = decideUpdates(store, candidates)
-
-  // Stage 3: Apply
-  for (const op of operations) {
-    if (op.op === 'ADD') {
-      store.push(op.item)
-    }
-  }
-
-  memoryStores.set(userId, store)
-
-  const sentences = conversationText.split(/[.!?]+/).filter((s: string) => s.trim().length > 20)
-
-  return {
-    extracted: candidates.length,
-    operations: operations.length,
-    summary: sentences.slice(0, 3).join('. ').slice(0, 300),
-  }
-}
-
 // ── Route handler ──────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { query, user_id, consolidate, messages } = body
-
+    const token = req.headers.get('authorization') || ''
     const userId = user_id || 'default'
 
     // Consolidation mode: run full pipeline
     if (consolidate && messages && Array.isArray(messages)) {
-      const result = runPipeline(userId, `session_${Date.now()}`, messages)
-      return NextResponse.json({ pipeline_result: result })
+      const conversationText = messages
+        .map((m: Record<string, unknown>) => `${m.role || 'user'}: ${typeof m.content === 'string' ? m.content : ''}`)
+        .join('\n')
+      const candidates = extractMemories(conversationText, `session_${Date.now()}`)
+
+      // Store to backend (persistent)
+      await storeBackendMemories(token, candidates)
+
+      return NextResponse.json({
+        pipeline_result: {
+          extracted: candidates.length,
+          stored: candidates.length,
+        },
+      })
     }
 
     // Retrieval mode
@@ -286,19 +285,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ context: '', weights: {}, reason: 'too_short' })
     }
 
-    // Fetch session data
-    const { messages: workingMessages, summaries } = await fetchSessions(userId)
-
-    // Get memory store
-    const store = memoryStores.get(userId) || []
+    // Fetch from both in-memory and backend in parallel
+    const [sessionData, backendMemories] = await Promise.all([
+      fetchSessions(userId, token),
+      fetchBackendMemories(token),
+    ])
 
     // Build enriched context
-    const workingTexts = (workingMessages as Array<Record<string, unknown>>)
+    const workingTexts = (sessionData.messages as Array<Record<string, unknown>>)
       .map(m => typeof m.content === 'string' ? m.content : '')
 
-    const { context, weights } = retrieveWithWeights(query, store, workingTexts, summaries)
+    const { context, weights } = retrieveWithWeights(query, backendMemories, workingTexts, sessionData.summaries)
 
-    return NextResponse.json({ context, weights, memory_items: store.length })
+    return NextResponse.json({ context, weights, memory_items: backendMemories.length })
   } catch (err) {
     return NextResponse.json({ context: '', weights: {}, error: String(err) }, { status: 500 })
   }
