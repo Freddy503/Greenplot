@@ -21,6 +21,10 @@ import {
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder'
 import { pollNotifications } from '@/hooks/use-push-notifications'
 
+// Reflection detection & image generation
+import { isReflection } from '@/lib/reflection-detect'
+import { CreateImageButton } from '@/components/ai-elements/create-image-button'
+
 // Layout
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
@@ -130,6 +134,8 @@ export default function ChatPage() {
   const [msgTimes] = useState<Record<string, string>>({})
   const [gardenEnriching, setGardenEnriching] = useState(false)
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
+  // Track generated images keyed by the message ID they relate to
+  const [generatedImages, setGeneratedImages] = useState<Record<string, { url: string; prompt: string }>>({})
   useEffect(() => {
     try {
       setAuthToken(localStorage.getItem('greenplot_token') || '')
@@ -483,6 +489,54 @@ export default function ChatPage() {
                             <ThumbsRating messageId={message.id} />
                           )}
                         </div>
+
+                        {/* Create Image button — only on reflection responses */}
+                        {(() => {
+                          // Find the preceding user message
+                          const prevUserMsg = msgIdx > 0 ? messages[msgIdx - 1] : null
+                          const userText = prevUserMsg?.role === 'user'
+                            ? prevUserMsg.parts
+                                .filter((p) => p.type === 'text')
+                                .map((p) => (p as any).text || '')
+                                .join('')
+                            : ''
+                          const isLastAssistant = msgIdx === messages.length - 1
+                          const img = generatedImages[message.id]
+
+                          if (!isLastAssistant || !userText || !isReflection(userText)) return null
+
+                          return (
+                            <div className="mt-2 pl-2 space-y-3">
+                              {!img && (
+                                <CreateImageButton
+                                  reflectionText={userText}
+                                  authToken={authToken}
+                                  onImageGenerated={(url, prompt) => {
+                                    setGeneratedImages((prev) => ({
+                                      ...prev,
+                                      [message.id]: { url, prompt },
+                                    }))
+                                  }}
+                                />
+                              )}
+                              {img && (
+                                <div className="rounded-2xl overflow-hidden border border-outline-variant/10 max-w-sm">
+                                  <img
+                                    src={img.url}
+                                    alt="Visualization of your idea"
+                                    className="w-full h-auto"
+                                    loading="lazy"
+                                  />
+                                  <div className="px-4 py-2 bg-surface-container/50">
+                                    <p className="text-[10px] text-on-surface-variant/50 truncate">
+                                      {img.prompt}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
