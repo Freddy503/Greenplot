@@ -227,6 +227,107 @@ def get_briefing(current_user: User = Depends(get_current_user)):
     image_url = None  # BFL image generation can be added
     return BriefingResponse(text=text, image_url=image_url)
 
+# --- Image Generation (BFL/FLUX) ---
+
+BFL_API_KEY = os.environ.get("BFL_API_KEY", "")
+BFL_BASE_URL = "https://api.bfl.ai"
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=1024, ge=256, le=2048)
+
+class ImageGenerateResponse(BaseModel):
+    url: str
+    prompt: str
+
+@app.post("/api/v1/images/generate", response_model=ImageGenerateResponse)
+async def generate_image(
+    req: ImageGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate an image via BFL FLUX.2 [pro] — async submit → poll → return URL."""
+    if not BFL_API_KEY:
+        raise HTTPException(status_code=503, detail="Image generation not configured (missing BFL_API_KEY)")
+
+    import httpx
+    import asyncio
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-key": BFL_API_KEY,
+    }
+
+    # 1. Submit generation task
+    async with httpx.AsyncClient(timeout=30) as client:
+        submit_resp = await client.post(
+            f"{BFL_BASE_URL}/v1/flux-2-pro",
+            headers=headers,
+            json={
+                "prompt": req.prompt,
+                "width": req.width,
+                "height": req.height,
+            },
+        )
+
+        if submit_resp.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"BFL submit failed ({submit_resp.status_code}): {submit_resp.text[:200]}"
+            )
+
+        task = submit_resp.json()
+        task_id = task.get("id")
+        if not task_id:
+            raise HTTPException(status_code=502, detail=f"BFL response missing task id: {task}")
+
+        # 2. Poll for result (max ~30s)
+        for _ in range(30):
+            await asyncio.sleep(1)
+            poll_resp = await client.get(
+                f"{BFL_BASE_URL}/v1/get_result",
+                headers={"x-key": BFL_API_KEY},
+                params={"id": task_id},
+            )
+
+            if poll_resp.status_code != 200:
+                continue
+
+            result = poll_resp.json()
+            status = result.get("status", "")
+
+            if status == "Ready":
+                sample = result.get("result", {}).get("sample")
+                if sample:
+                    # Track usage
+                    today = date.today()
+                    usage = db.query(Usage).filter(
+                        Usage.tenant_id == current_user.tenant_id,
+                        Usage.date >= today
+                    ).first()
+                    if not usage:
+                        usage = Usage(
+                            tenant_id=current_user.tenant_id,
+                            user_id=current_user.id,
+                            date=today,
+                            images_generated=1,
+                        )
+                        db.add(usage)
+                    else:
+                        usage.images_generated = (usage.images_generated or 0) + 1
+                    db.commit()
+
+                    return ImageGenerateResponse(url=sample, prompt=req.prompt)
+
+                raise HTTPException(status_code=502, detail="BFL returned Ready but no sample URL")
+
+            if status == "Error":
+                error_msg = result.get("result", "Unknown BFL error")
+                raise HTTPException(status_code=502, detail=f"BFL generation failed: {error_msg}")
+
+        raise HTTPException(status_code=504, detail="Image generation timed out (30s)")
+
 # --- Usage ---
 
 @app.get("/api/v1/usage/month", response_model=UsageResponse)
