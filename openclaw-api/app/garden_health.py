@@ -336,3 +336,144 @@ async def prompt_suggestions(body: PromptSuggestionRequest, request: Request):
             suggestions.append(g)
 
     return {"suggestions": suggestions[:body.count]}
+
+
+# ── C2: Training Data Export ───────────────────────────
+
+@router.get("/export-training")
+async def export_training(request: Request):
+    """Export garden as structured Q&A pairs for fine-tuning (JSONL format)."""
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=500)
+
+    pairs = []
+
+    # Generate Q&A from wiki articles
+    for article in articles:
+        title = article.get("title", "")
+        summary = article.get("summary", "")
+        content = article.get("content", "")
+        category = article.get("category", "")
+
+        if summary and len(content) > 100:
+            pairs.append({
+                "question": f"What is {title}?",
+                "answer": summary,
+                "sources": [f"wiki:{title}"],
+                "category": category,
+            })
+
+        # Generate from content sections
+        sections = content.split("## ")
+        for section in sections[1:]:  # Skip first (before any ##)
+            lines = section.strip().split("\n")
+            section_title = lines[0].strip() if lines else ""
+            section_content = "\n".join(lines[1:]).strip()
+            if section_title and len(section_content) > 50:
+                pairs.append({
+                    "question": f"Explain the '{section_title}' aspect of {title}.",
+                    "answer": section_content[:500],
+                    "sources": [f"wiki:{title}"],
+                    "category": category,
+                })
+
+    # Generate Q&A from enriched links
+    for link in links:
+        if link.get("status") == "enriched" and link.get("summary"):
+            pairs.append({
+                "question": f"What is {link.get('title', '')}?",
+                "answer": link.get("summary", ""),
+                "sources": [f"link:{link.get('url', '')}"],
+                "category": link.get("domain", ""),
+            })
+
+    # Return as JSONL
+    import json as _json
+    jsonl = "\n".join(_json.dumps(p, ensure_ascii=False) for p in pairs)
+
+    from fastapi.responses import Response
+    return Response(
+        content=jsonl,
+        media_type="application/jsonl",
+        headers={"Content-Disposition": 'attachment; filename="greenplot-training.jsonl"'},
+    )
+
+
+# ── C3: Linting Auto-Fix ──────────────────────────────
+
+@router.post("/lint")
+async def lint_garden(request: Request):
+    """Run health checks and auto-fix common issues."""
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=500)
+
+    issues_found = []
+    issues_fixed = []
+
+    # Check 1: Links with empty summaries
+    empty_summaries = [l for l in links if l.get("status") == "enriched" and not l.get("summary")]
+    for link in empty_summaries:
+        issues_found.append(f"Link '{link.get('title', '')}' has no summary")
+        # Mark for re-enrichment
+        if link.get("id"):
+            weaviate_client.update_link(link["id"], status="pending")
+            issues_fixed.append(f"Marked '{link.get('title', '')}' for re-enrichment")
+
+    # Check 2: Links with no tags
+    no_tags = [l for l in links if l.get("status") == "enriched" and not l.get("tags")]
+    for link in no_tags:
+        issues_found.append(f"Link '{link.get('title', '')}' has no tags")
+        # Auto-tag from domain
+        domain = link.get("domain", "")
+        if domain:
+            tags = domain.split(".")[0]  # e.g., "github" from "github.com"
+            weaviate_client.update_link(link["id"], tags=tags)
+            issues_fixed.append(f"Auto-tagged '{link.get('title', '')}' with '{tags}'")
+
+    # Check 3: Wiki articles with no source links
+    no_sources = [a for a in articles if not a.get("sourceLinkIds")]
+    for article in no_sources:
+        issues_found.append(f"Wiki article '{article.get('title', '')}' has no source links")
+
+    # Check 4: Duplicate links (same URL)
+    seen_urls = {}
+    for link in links:
+        url = link.get("url", "").lower()
+        if url in seen_urls:
+            issues_found.append(f"Duplicate link: {link.get('title', '')}")
+            if link.get("id"):
+                weaviate_client.delete_link(link["id"])
+                issues_fixed.append(f"Removed duplicate: {link.get('title', '')}")
+        else:
+            seen_urls[url] = link.get("id", "")
+
+    # Check 5: Orphan links (no connections, no wiki)
+    wiki_source_ids = set()
+    for a in articles:
+        for lid in a.get("sourceLinkIds", []):
+            wiki_source_ids.add(lid)
+
+    orphans = [
+        l for l in links
+        if l.get("id") not in wiki_source_ids
+        and l.get("connection_count", 0) == 0
+        and not l.get("related_ids")
+        and l.get("status") == "enriched"
+    ]
+    for link in orphans:
+        issues_found.append(f"Orphan link: '{link.get('title', '')}' has no connections")
+
+    return {
+        "issues_found": len(issues_found),
+        "issues_fixed": len(issues_fixed),
+        "details": {
+            "found": issues_found[:50],
+            "fixed": issues_fixed[:50],
+        },
+    }

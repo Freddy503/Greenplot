@@ -338,9 +338,119 @@ async def update_article(article_id: str, body: WikiUpdate, request: Request):
 
 @router.post("/{article_id}/regenerate")
 async def regenerate_article(article_id: str, request: Request):
+    """Re-run LLM synthesis on an existing wiki article's source links."""
     user = await get_current_user(request)
-    # Placeholder: would re-run LLM synthesis on source seeds
-    return {"ok": True, "message": "Regeneration queued"}
+    tenant_id = str(user.tenant_id)
+
+    # Fetch existing article
+    try:
+        obj = weaviate_client.client.data_object.get_by_id(
+            uuid=article_id, class_name="WikiArticle"
+        )
+        props = obj.get("properties", {})
+    except Exception:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    source_link_ids_str = props.get("source_link_ids", "")
+    source_link_ids = [s.strip() for s in source_link_ids_str.split(",") if s.strip()]
+
+    if not source_link_ids:
+        return {"ok": False, "message": "No source links to regenerate from"}
+
+    # Fetch source link content
+    contents = []
+    for lid in source_link_ids:
+        try:
+            lobj = weaviate_client.client.data_object.get_by_id(uuid=lid, class_name="Link")
+            lp = lobj.get("properties", {})
+            contents.append(f"## {lp.get('title', 'Link')}\n\n{lp.get('summary', '')}")
+        except:
+            pass
+
+    if not contents:
+        return {"ok": False, "message": "Source links not found"}
+
+    title = props.get("title", "Regenerated Article")
+    raw_content = "\n\n---\n\n".join(contents)
+
+    # LLM synthesis
+    api_key = getattr(settings, "OPENROUTER_API_KEY", None)
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=45) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are a knowledge synthesizer. Given multiple source materials, "
+                                    "write a structured wiki article in markdown. Include:\n"
+                                    "- A compelling title\n"
+                                    "- A 2-3 sentence overview/summary\n"
+                                    "- Key themes as ## headings with bullet points\n"
+                                    "- Connections between sources\n"
+                                    "- A 'Key Takeaways' section at the end\n"
+                                    "Write in clear, concise prose. Use markdown formatting."
+                                ),
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Regenerate and improve this wiki article: {title}\n\nSources:\n{raw_content}",
+                            },
+                        ],
+                        "max_tokens": 1000,
+                        "temperature": 0.7,
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    synthesized = data["choices"][0]["message"]["content"]
+                    for line in synthesized.split("\n"):
+                        if line.startswith("# "):
+                            title = line[2:].strip()
+                            break
+                    content = synthesized
+                    summary_lines = []
+                    in_content = False
+                    for line in synthesized.split("\n"):
+                        if line.startswith("#"):
+                            in_content = True
+                            continue
+                        if in_content and line.strip():
+                            summary_lines.append(line.strip())
+                            if len(summary_lines) >= 2:
+                                break
+                    summary = " ".join(summary_lines)[:300]
+                else:
+                    content = raw_content
+                    summary = contents[0][:200]
+        except Exception:
+            content = raw_content
+            summary = contents[0][:200]
+    else:
+        content = raw_content
+        summary = contents[0][:200]
+
+    # Update article in place
+    from datetime import datetime
+    weaviate_client.update_wiki_article(
+        article_id,
+        title=title,
+        content=content,
+        summary=summary,
+        updated_at=datetime.utcnow().isoformat(),
+        last_regenerated_at=datetime.utcnow().isoformat(),
+        status="published",
+    )
+
+    return {"ok": True, "title": title}
 
 
 @router.delete("/{article_id}")
@@ -374,3 +484,96 @@ def _detect_category(domain: str, links: list) -> str:
     if "business" in all_tags or "startup" in all_tags:
         return "Business"
     return "General"
+
+
+@router.get("/{article_id}/export")
+async def export_article(article_id: str, request: Request):
+    """Export wiki article as clean markdown."""
+    user = await get_current_user(request)
+
+    try:
+        obj = weaviate_client.client.data_object.get_by_id(
+            uuid=article_id, class_name="WikiArticle"
+        )
+        props = obj.get("properties", {})
+        title = props.get("title", "Untitled")
+        content = props.get("content", "")
+        category = props.get("category", "")
+        summary = props.get("summary", "")
+
+        slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+
+        md = f"# {title}\n\n"
+        if summary:
+            md += f"> {summary}\n\n"
+        if category:
+            md += f"**Category:** {category}\n\n---\n\n"
+        md += content
+        md += f"\n\n---\n*Exported from GreenPlot Wiki*\n"
+
+        from fastapi.responses import Response
+        return Response(
+            content=md,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f'attachment; filename="{slug}.md"'},
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+
+@router.get("/export/obsidian")
+async def export_obsidian(request: Request):
+    """Export entire wiki as Obsidian-compatible markdown with wikilinks."""
+    import zipfile
+    import io
+
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=500)
+
+    if not articles:
+        raise HTTPException(status_code=404, detail="No articles to export")
+
+    # Build ID→title map for wikilinks
+    id_to_title = {a["id"]: a["title"] for a in articles}
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Create folder structure by category
+        for article in articles:
+            category = article.get("category", "General")
+            title = article["title"]
+            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+            filename = f"{category}/{slug}.md"
+
+            # Convert backlink IDs to wikilinks
+            content = article.get("content", "")
+            for bl_id in article.get("backlinks", []):
+                bl_title = id_to_title.get(bl_id, "")
+                if bl_title:
+                    content = content.replace(bl_id, f"[[{bl_title}]]")
+
+            md = f"# {title}\n\n"
+            if article.get("summary"):
+                md += f"> {article['summary']}\n\n"
+            md += content
+            md += "\n"
+
+            zf.writestr(filename, md)
+
+        # Add index file
+        index = "# GreenPlot Wiki Index\n\n"
+        for article in sorted(articles, key=lambda a: a.get("category", "")):
+            cat = article.get("category", "General")
+            slug = re.sub(r'[^a-z0-9]+', '-', article["title"].lower()).strip('-')
+            index += f"- [[{article['title']}]] ({cat})\n"
+        zf.writestr("INDEX.md", index)
+
+    zip_buffer.seek(0)
+    from fastapi.responses import Response
+    return Response(
+        content=zip_buffer.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="greenplot-wiki.zip"'},
+    )
