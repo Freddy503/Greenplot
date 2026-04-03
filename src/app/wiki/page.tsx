@@ -140,6 +140,54 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   // Find linked articles
   const linked = allArticles.filter(a => article.backlinks.includes(a.id))
 
+  // Source Hub links + Garden seeds
+  const [sourceLinks, setSourceLinks] = useState<Array<{id: string; title: string; url: string; domain: string}>>([])
+  const [sourceSeeds, setSourceSeeds] = useState<Array<{id: string; title: string}>>([])
+  const [loadingSources, setLoadingSources] = useState(false)
+
+  useEffect(() => {
+    const token = localStorage.getItem('greenplot_token')
+    const linkIds = article.sourceLinkIds || []
+    const seedIds = article.sourceSeedIds || []
+
+    if (linkIds.length === 0 && seedIds.length === 0) return
+
+    setLoadingSources(true)
+
+    const fetches: Promise<void>[] = []
+
+    if (linkIds.length > 0) {
+      fetches.push(
+        fetch('/api/links', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+          .then(r => r.ok ? r.json() : { links: [] })
+          .then(data => {
+            const matched = (data.links || []).filter((l: any) => linkIds.includes(l.id))
+            setSourceLinks(matched.map((l: any) => ({ id: l.id, title: l.title, url: l.url, domain: l.domain })))
+          })
+          .catch(() => {})
+      )
+    }
+
+    if (seedIds.length > 0) {
+      fetches.push(
+        fetch(`/api/seeds?limit=50`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+          .then(r => r.ok ? r.json() : { seeds: [] })
+          .then(data => {
+            const seeds = data.seeds || data || []
+            const matched = Array.isArray(seeds) ? seeds.filter((s: any) => seedIds.includes(s.id || s._additional?.id)) : []
+            setSourceSeeds(matched.map((s: any) => ({ id: s.id || s._additional?.id, title: s.title || s.content?.split('\n')[0]?.slice(0, 60) || 'Untitled' })))
+          })
+          .catch(() => {})
+      )
+    }
+
+    Promise.all(fetches).finally(() => setLoadingSources(false))
+  }, [article.id])
+
   return (
     <div className="animate-in slide-in-from-right duration-200">
       {/* Back button */}
@@ -216,6 +264,54 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
                 <span className="material-symbols-outlined text-sm text-on-surface-variant/40">{getCategoryIcon(a.category)}</span>
                 <span className="text-sm font-medium text-on-surface">{a.title}</span>
                 <span className="text-[9px] text-on-surface-variant/40 ml-auto">{a.category}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Cross-Tab: Source Hub Links */}
+      {sourceLinks.length > 0 && (
+        <section className="px-2 mt-6">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>language</span>
+            Source Links (from Hub)
+          </h3>
+          <div className="space-y-2">
+            {sourceLinks.map(link => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/10 hover:border-blue-400/20 transition-all"
+              >
+                <span className="material-symbols-outlined text-blue-400 shrink-0" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>link</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-on-surface truncate">{link.title}</p>
+                  <p className="text-[10px] text-on-surface-variant/60">{link.domain}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Cross-Tab: Source Garden Seeds */}
+      {sourceSeeds.length > 0 && (
+        <section className="px-2 mt-6">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>eco</span>
+            Source Seeds (from Garden)
+          </h3>
+          <div className="space-y-2">
+            {sourceSeeds.map(seed => (
+              <div
+                key={seed.id}
+                className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/10"
+              >
+                <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>eco</span>
+                <span className="text-xs font-medium text-on-surface">{seed.title}</span>
               </div>
             ))}
           </div>

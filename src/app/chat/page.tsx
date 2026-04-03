@@ -240,8 +240,30 @@ export default function ChatPage() {
       let linkContext = ''
 
       if (urls.length > 0) {
+        // Fetch existing links to detect duplicates
+        let existingLinks: any[] = []
+        try {
+          const existingRes = await fetch('/api/links', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+          if (existingRes.ok) {
+            const existingData = await existingRes.json()
+            existingLinks = existingData.links || []
+          }
+        } catch {}
+
         // Create links in background, don't block chat
         const linkPromises = urls.slice(0, 3).map(async (url) => {
+          // Check if this URL already exists in Hub
+          const existing = existingLinks.find((l: any) => l.url === url)
+          if (existing) {
+            toast(`🔗 Already in your Hub: ${existing.title || existing.url}`, {
+              description: 'Want me to expand on it?',
+            })
+            // Still return the existing link's summary for context
+            return existing
+          }
+
           try {
             const res = await fetch('/api/links', {
               method: 'POST',
