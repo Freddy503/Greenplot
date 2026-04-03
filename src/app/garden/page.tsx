@@ -160,7 +160,15 @@ export default function GardenPage() {
     fetch('/api/seeds?limit=50', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          // Token expired — redirect to login
+          localStorage.removeItem('greenplot_token')
+          window.location.href = '/login'
+          return { seeds: [] }
+        }
+        return r.json()
+      })
       .then((data) => {
         const raw = data.seeds || data || []
         setSeeds(Array.isArray(raw) ? raw.map(parseSeed) : [])
