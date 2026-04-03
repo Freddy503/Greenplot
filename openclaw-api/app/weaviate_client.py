@@ -745,5 +745,39 @@ class WeaviateClient:
 
         return stats
 
+    def get_seeds_by_tenant(self, tenant_id: str, limit: int = 50) -> list[dict]:
+        """Get all seeds for a tenant (no vector search, just tenant filter)."""
+        where = {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id}
+        query = self.client.query.get(settings.WEAVIATE_CLASS, [
+            "title", "text", "source", "url", "created", "notion_id",
+            "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"
+        ]).with_where(where).with_limit(limit)
+        result = query.do()
+        objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, []) or []
+
+        seeds = []
+        for o in objects:
+            metadata = o.get("metadata") or {}
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except:
+                    metadata = {}
+            seeds.append({
+                "id": o.get("_additional", {}).get("id", ""),
+                "title": o.get("title", ""),
+                "content": o.get("text", ""),
+                "created_at": o.get("created", ""),
+                "source": o.get("source", ""),
+                "url": o.get("url", ""),
+                "summary": o.get("summary") or metadata.get("summary", ""),
+                "tags": o.get("tags") or metadata.get("tags", ""),
+                "entities": o.get("entities") or metadata.get("entities", ""),
+                "backlinks": o.get("backlinks") or metadata.get("backlinks", ""),
+                "domain": o.get("domain") or metadata.get("domain", ""),
+                "energy": o.get("energy") or metadata.get("energy", ""),
+            })
+        return seeds
+
 # Singleton instance
 weaviate_client = WeaviateClient()
