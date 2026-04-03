@@ -1656,3 +1656,202 @@ def list_push_subscriptions(
     subs = _load_subs()
     tenant_subs = [s for s in subs if s.get("tenant_id") == str(current_user.tenant_id)]
     return {"subscriptions": tenant_subs}
+
+
+# --- Memory Persistence ---
+
+_MEM_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "memory_store.json")
+
+def _load_mem() -> dict:
+    try:
+        with open(_MEM_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def _save_mem(data: dict):
+    os.makedirs(os.path.dirname(_MEM_FILE), exist_ok=True)
+    with open(_MEM_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+class MemoryItemRequest(BaseModel):
+    key: str
+    value: str
+    memory_type: str = "UserMemory"
+    tags: list[str] = []
+    stability_score: float = 1.0
+
+class MemoryStoreRequest(BaseModel):
+    items: list[MemoryItemRequest]
+    user_id: Optional[str] = None
+
+@app.post("/api/v1/memory/store")
+def sto<RESEND_API_KEY>(
+    req: MemoryStoreRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Store memory items to persistent JSON file (survives cold starts)."""
+    mem = _load_mem()
+    tenant_id = str(current_user.tenant_id)
+    if tenant_id not in mem:
+        mem[tenant_id] = []
+
+    existing_keys = {i["key"].lower() for i in mem[tenant_id]}
+    added = 0
+    for item in req.items:
+        if item.key.lower() in existing_keys:
+            # Reinforce existing
+            for existing in mem[tenant_id]:
+                if existing["key"].lower() == item.key.lower():
+                    existing["stability_score"] = min(existing.get("stability_score", 1.0) + 0.15, 3.0)
+                    existing["access_count"] = existing.get("access_count", 0) + 1
+                    break
+        else:
+            mem[tenant_id].append({
+                "key": item.key,
+                "value": item.value,
+                "memory_type": item.memory_type,
+                "tags": item.tags,
+                "stability_score": item.stability_score,
+                "access_count": 0,
+                "created": datetime.utcnow().isoformat(),
+            })
+            existing_keys.add(item.key.lower())
+            added += 1
+
+    _save_mem(mem)
+    return {"success": True, "added": added, "total": len(mem[tenant_id])}
+
+@app.get("/api/v1/memory")
+def get_memories(
+    current_user: User = Depends(get_current_user),
+):
+    """Get all memory items for the current tenant."""
+    mem = _load_mem()
+    tenant_id = str(current_user.tenant_id)
+    return {"items": mem.get(tenant_id, []), "count": len(mem.get(tenant_id, []))}
+
+
+# --- Batch Enrichment ---
+
+class EnrichBatchRequest(BaseModel):
+    limit: int = Field(default=10, le=50, description="Max seeds to enrich per batch")
+
+@app.post("/api/v1/seeds/enrich-batch")
+def enrich_seeds_batch(
+    req: EnrichBatchRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Enrich seeds that are missing enrichment fields (domain, tags, summary, energy).
+    Processes a batch at a time to avoid overwhelming the LLM.
+    Run multiple times until all seeds are enriched.
+    """
+    tenant_id = str(current_user.tenant_id)
+
+    # Find unenriched seeds in Weaviate (IsNull requires indexNullState, so filter client-side)
+    try:
+        result = weaviate_client.client.query.get(
+            settings.WEAVIATE_CLASS,
+            ["title", "text", "content", "domain", "tags", "summary", "tenant_id"]
+        ).with_additional(["id"]).with_where({
+            "path": ["tenant_id"],
+            "operator": "Equal",
+            "valueText": tenant_id,
+        }).with_limit(250).do()
+
+        all_seeds = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, []) or []
+        # Filter to only unenriched (domain is null or empty)
+        seeds = [s for s in all_seeds if not s.get("domain")][:req.limit]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Weaviate query failed: {e}")
+
+    if not seeds:
+        return {"enriched": 0, "remaining": 0, "message": "All seeds already enriched"}
+
+    from app.entity_extractor import extract_entities
+    enriched = 0
+    errors = 0
+
+    for seed in seeds:
+        content = seed.get("text") or seed.get("content") or seed.get("title", "")
+        if not content or len(content.strip()) < 20:
+            continue
+
+        try:
+            # Extract via LLM
+            extraction = extract_entities(content[:3000])
+            summary = extraction.get("summary", "")
+            topics = extraction.get("topics", [])
+            entities = extraction.get("entities", [])
+
+            # Derive domain from topics
+            domain_map = {
+                "ai": "AI/ML", "agent": "AI/ML", "llm": "AI/ML", "rag": "AI/ML",
+                "vector": "AI/ML", "embedding": "AI/ML", "prompt": "AI/ML",
+                "web": "Web Dev", "frontend": "Web Dev", "react": "Web Dev", "next": "Web Dev",
+                "api": "Backend", "server": "Backend", "database": "Backend",
+                "career": "Career", "interview": "Career", "fde": "Career",
+                "design": "Design", "ux": "Design", "ui": "Design",
+                "product": "Product", "startup": "Product", "business": "Product",
+                "devops": "DevOps", "docker": "DevOps", "deploy": "DevOps",
+            }
+            domain = "General"
+            all_text = f"{summary} {' '.join(topics)} {seed.get('title', '')}".lower()
+            for key, val in domain_map.items():
+                if key in all_text:
+                    domain = val
+                    break
+
+            # Energy heuristic
+            energy = "medium"
+            if any(w in all_text for w in ["breakthrough", "amazing", "exciting", "novel"]):
+                energy = "high"
+            elif any(w in all_text for w in ["todo", "fix", "bug", "issue"]):
+                energy = "low"
+
+            tags_str = ", ".join(topics[:5])
+            entity_names = ", ".join([e["name"] for e in entities[:5]])
+
+            # Update Weaviate object
+            obj_id = seed.get("_additional", {}).get("id") if seed.get("_additional") else None
+            if obj_id:
+                weaviate_client.client.data_object.update(
+                    uuid=obj_id,
+                    class_name=settings.WEAVIATE_CLASS,
+                    data_object={
+                        "summary": summary[:300],
+                        "tags": tags_str,
+                        "domain": domain,
+                        "energy": energy,
+                        "entities": entity_names,
+                    },
+                )
+            enriched += 1
+
+        except Exception as e:
+            errors += 1
+            print(f"Enrichment error for seed '{seed.get('title', '?')}': {e}")
+            continue
+
+    # Count remaining unenriched (client-side since IsNull requires indexNullState)
+    try:
+        count_result = weaviate_client.client.query.get(
+            settings.WEAVIATE_CLASS,
+            ["domain", "tenant_id"]
+        ).with_where({
+            "path": ["tenant_id"],
+            "operator": "Equal",
+            "valueText": tenant_id,
+        }).with_limit(250).do()
+        all_for_count = count_result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, []) or []
+        remaining = sum(1 for s in all_for_count if not s.get("domain"))
+    except:
+        remaining = -1
+
+    return {
+        "enriched": enriched,
+        "errors": errors,
+        "remaining": remaining,
+        "message": f"Enriched {enriched} seeds" + (f", {remaining} remaining" if remaining > 0 else " — all done!")
+    }
