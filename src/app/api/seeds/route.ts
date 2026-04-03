@@ -34,11 +34,35 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Create a seed via the thoughts endpoint (backend creates seeds through thoughts)
+// POST: Create seeds — supports both single (via thoughts) and bulk (via seeds/bulk)
 export async function POST(req: NextRequest) {
   const token = req.headers.get('authorization') || ''
   const body = await req.json()
 
+  // Bulk seed creation (from harvest)
+  if (body.seeds && Array.isArray(body.seeds)) {
+    try {
+      const res = await fetch(`${BACKEND}/api/v1/seeds/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: token } : {}),
+        },
+        body: JSON.stringify({ seeds: body.seeds }),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      const data = await res.json()
+      return NextResponse.json(data, { status: res.status })
+    } catch (err) {
+      return NextResponse.json(
+        { detail: `Backend unreachable: ${(err as Error).message}` },
+        { status: 502 }
+      )
+    }
+  }
+
+  // Single seed via thoughts endpoint
   try {
     const res = await fetch(`${BACKEND}/api/v1/thoughts`, {
       method: 'POST',

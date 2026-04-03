@@ -24,6 +24,7 @@ import { pollNotifications } from '@/hooks/use-push-notifications'
 // Reflection detection & image generation
 import { isReflection } from '@/lib/reflection-detect'
 import { CreateImageButton } from '@/components/ai-elements/create-image-button'
+import { AddToGardenButton } from '@/components/ai-elements/add-to-garden-button'
 
 // Layout
 import Header from '@/components/layout/header'
@@ -543,6 +544,35 @@ export default function ChatPage() {
                 )
               })
             )}
+
+            {/* Add to Garden button — appears after substantive conversations */}
+            {!isStreaming && messages.length >= 6 && (() => {
+              // Check if any tool was used in the conversation
+              const hasToolUse = messages.some((m) =>
+                m.role === 'assistant' && m.parts.some((p) => p.type.startsWith('tool-'))
+              )
+              // Or if the conversation is long enough
+              const totalText = messages.reduce((acc, m) => {
+                return acc + m.parts
+                  .filter((p) => p.type === 'text')
+                  .map((p) => (p as any).text || '')
+                  .join('').length
+              }, 0)
+
+              if (!hasToolUse && totalText < 800) return null
+
+              return (
+                <div className="flex justify-center my-4 animate-in fade-in">
+                  <AddToGardenButton
+                    messages={messages.map((m) => ({
+                      role: m.role,
+                      parts: m.parts as Array<{ type: string; text?: string }>,
+                    }))}
+                    authToken={authToken}
+                  />
+                </div>
+              )
+            })()}
 
             {/* Garden enrichment indicator */}
             {gardenEnriching && (
