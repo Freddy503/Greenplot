@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from app.auth import get_current_user
 from app.weaviate_client import weaviate_client
+from app.config import settings
+import httpx
 
 router = APIRouter(prefix="/api/v1/wiki", tags=["wiki"])
 
@@ -229,9 +231,74 @@ async def compile_article(body: WikiCompileRequest, request: Request):
     if not contents:
         return {"ok": False, "message": "No content found to compile"}
 
-    # Generate article with LLM
-    content = "\n\n---\n\n".join(contents)
-    summary = contents[0][:200] if contents else ""
+    # LLM synthesis: generate a structured wiki article from source content
+    raw_content = "\n\n---\n\n".join(contents)
+
+    api_key = getattr(settings, "OPENROUTER_API_KEY", None)
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=45) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are a knowledge synthesizer. Given multiple source materials, "
+                                    "write a structured wiki article in markdown. Include:\n"
+                                    "- A compelling title\n"
+                                    "- A 2-3 sentence overview/summary\n"
+                                    "- Key themes as ## headings with bullet points\n"
+                                    "- Connections between sources\n"
+                                    "- A 'Key Takeaways' section at the end\n"
+                                    "Write in clear, concise prose. Use markdown formatting."
+                                ),
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Compile these sources into a wiki article about: {title}\n\nSources:\n{raw_content}",
+                            },
+                        ],
+                        "max_tokens": 1000,
+                        "temperature": 0.7,
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    synthesized = data["choices"][0]["message"]["content"]
+                    # Extract title from first # heading if present
+                    for line in synthesized.split("\n"):
+                        if line.startswith("# "):
+                            title = line[2:].strip()
+                            break
+                    content = synthesized
+                    # Extract summary: first paragraph after headings
+                    summary_lines = []
+                    in_content = False
+                    for line in synthesized.split("\n"):
+                        if line.startswith("#"):
+                            in_content = True
+                            continue
+                        if in_content and line.strip():
+                            summary_lines.append(line.strip())
+                            if len(summary_lines) >= 2:
+                                break
+                    summary = " ".join(summary_lines)[:300] if summary_lines else contents[0][:200]
+                else:
+                    content = raw_content
+                    summary = contents[0][:200] if contents else ""
+        except Exception:
+            content = raw_content
+            summary = contents[0][:200] if contents else ""
+    else:
+        content = raw_content
+        summary = contents[0][:200] if contents else ""
 
     article_id = weaviate_client.add_wiki_article(
         tenant_id=tenant_id,
