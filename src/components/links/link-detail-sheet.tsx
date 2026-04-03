@@ -205,8 +205,8 @@ function LinkDetailSheet({
                           ...(token ? { Authorization: `Bearer ${token}` } : {}),
                         },
                         body: JSON.stringify({
-                          link_id: link.id,
-                          related_ids: related.map(r => r.id),
+                          link_ids: [link.id],
+                          seed_ids: related.filter(r => r.type === 'seed').map(r => r.id),
                         }),
                       })
                       toast.success('Wiki article compiling... 📖')

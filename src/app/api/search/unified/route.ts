@@ -44,7 +44,7 @@ async function searchSeeds(query: string, token: string): Promise<UnifiedResult[
 
 async function searchLinks(query: string, token: string): Promise<UnifiedResult[]> {
   try {
-    const res = await fetch(`${BACKEND}/api/v1/links`, {
+    const res = await fetch(`${BACKEND}/api/v1/links?search=${encodeURIComponent(query)}&limit=5`, {
       headers: {
         ...(token ? { Authorization: token } : {}),
       },
@@ -52,22 +52,15 @@ async function searchLinks(query: string, token: string): Promise<UnifiedResult[
     })
     if (!res.ok) return []
     const data = await res.json()
-    const q = query.toLowerCase()
-    return (data.links || [])
-      .filter((l: any) => {
-        const text = `${l.title || ''} ${l.summary || ''} ${l.domain || ''} ${l.tags?.join(' ') || ''}`.toLowerCase()
-        return q.split(/\s+/).some((w: string) => text.includes(w))
-      })
-      .slice(0, 5)
-      .map((l: any) => ({
-        id: l.id,
-        type: 'link' as const,
-        title: l.title || l.url,
-        summary: l.summary || l.domain || '',
-        domain: l.domain || '',
-        url: l.url,
-        created_at: l.added_at || l.created_at || '',
-      }))
+    return (data.links || []).map((l: any) => ({
+      id: l.id,
+      type: 'link' as const,
+      title: l.title || l.url,
+      summary: l.summary || l.domain || '',
+      domain: l.domain || '',
+      url: l.url,
+      created_at: l.added_at || l.addedAt || l.created_at || '',
+    }))
   } catch {
     return []
   }
@@ -75,7 +68,7 @@ async function searchLinks(query: string, token: string): Promise<UnifiedResult[
 
 async function searchWiki(query: string, token: string): Promise<UnifiedResult[]> {
   try {
-    const res = await fetch(`${BACKEND}/api/v1/wiki`, {
+    const res = await fetch(`${BACKEND}/api/v1/wiki?search=${encodeURIComponent(query)}&limit=5`, {
       headers: {
         ...(token ? { Authorization: token } : {}),
       },
@@ -83,21 +76,14 @@ async function searchWiki(query: string, token: string): Promise<UnifiedResult[]
     })
     if (!res.ok) return []
     const data = await res.json()
-    const q = query.toLowerCase()
-    return (data.articles || [])
-      .filter((a: any) => {
-        const text = `${a.title || ''} ${a.content || ''} ${a.category || ''}`.toLowerCase()
-        return q.split(/\s+/).some((w: string) => text.includes(w))
-      })
-      .slice(0, 5)
-      .map((a: any) => ({
-        id: a.id,
-        type: 'wiki' as const,
-        title: a.title,
-        summary: a.content?.replace(/[#*_`]/g, '').slice(0, 150) || '',
-        domain: a.category || '',
-        created_at: a.updated_at || a.created_at || '',
-      }))
+    return (data.articles || []).map((a: any) => ({
+      id: a.id,
+      type: 'wiki' as const,
+      title: a.title,
+      summary: a.summary || a.content?.replace(/[#*_`]/g, '').slice(0, 150) || '',
+      domain: a.category || '',
+      created_at: a.updated_at || a.updatedAt || a.created_at || '',
+    }))
   } catch {
     return []
   }
