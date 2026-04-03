@@ -134,6 +134,7 @@ export default function ChatPage() {
   const [authToken, setAuthToken] = useState('')
   const msgTimesRef = useRef<Record<string, string>>({})
   const [gardenEnriching, setGardenEnriching] = useState(false)
+  const [detectedUrls, setDetectedUrls] = useState<string[]>([])
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
   // Track generated images keyed by the message ID they relate to
   const [generatedImages, setGeneratedImages] = useState<Record<string, { url: string; prompt: string }>>({})
@@ -233,7 +234,48 @@ export default function ChatPage() {
       // Read token fresh at call time (not from closure)
       const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
-      // Call both garden search and memory retrieval in parallel
+      // ── URL Detection: auto-create Hub links ──────────
+      const urlRegex = /https?:\/\/[^\s<>\]\)"']+/g
+      const urls = text.match(urlRegex) || []
+      let linkContext = ''
+
+      if (urls.length > 0) {
+        // Create links in background, don't block chat
+        const linkPromises = urls.slice(0, 3).map(async (url) => {
+          try {
+            const res = await fetch('/api/links', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ url }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              return data
+            }
+          } catch {}
+          return null
+        })
+
+        const linkResults = await Promise.all(linkPromises)
+        const created = linkResults.filter(Boolean)
+
+        if (created.length > 0) {
+          // Show toast notification
+          const titles = created.map(l => l?.title || l?.url).join(', ')
+          toast.success(`📎 Link${created.length > 1 ? 's' : ''} added to Hub: ${titles.slice(0, 80)}`)
+
+          // Build link context for the AI
+          linkContext = created
+            .filter(l => l?.summary)
+            .map(l => `\n[Linked content: ${l.title}]\n${l.summary}`)
+            .join('\n')
+        }
+      }
+
+      // ── Garden + Memory search ────────────────────────
       const [gardenRes, memoryRes] = await Promise.allSettled([
         fetch('/api/seeds/search', {
           method: 'POST',
@@ -260,6 +302,9 @@ export default function ChatPage() {
 
       // Build combined context
       const parts: string[] = []
+      if (linkContext) {
+        parts.push(linkContext)
+      }
       if (gardenData?.enriched && gardenData?.context) {
         parts.push(gardenData.context)
       }
@@ -638,6 +683,18 @@ export default function ChatPage() {
               )
             })()}
 
+            {/* URL detection + Link capture indicator */}
+            {detectedUrls.length > 0 && !gardenEnriching && (
+              <div className="flex justify-center my-3">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15">
+                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>link</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                    {detectedUrls.length === 1 ? 'Link detected — will add to Hub' : `${detectedUrls.length} links detected`}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Garden enrichment indicator */}
             {gardenEnriching && (
               <div className="flex justify-center my-4">
@@ -727,6 +784,12 @@ export default function ChatPage() {
             isProcessingVoice={voiceState === 'processing'}
             recordingDuration={voiceDuration}
             onToggleVoice={toggleRecording}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+              const text = e.target.value
+              const urlRegex = /https?:\/\/[^\s<>\]\)"']+/g
+              const urls = text.match(urlRegex) || []
+              setDetectedUrls(urls)
+            }}
             onSubmit={async (text: string) => {
               if (text?.trim() && status === 'ready') {
                 const enrichedText = await enrichWithGarden(text.trim())
