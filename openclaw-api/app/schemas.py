@@ -40,11 +40,12 @@ class SeedResponse(BaseModel):
     title: str
     content: str
     image_url: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = Field(None, alias='seed_metadata')
     created_at: datetime
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 class SeedSearchResponse(BaseModel):
     seeds: List[SeedResponse]
