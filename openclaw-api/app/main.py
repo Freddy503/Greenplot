@@ -229,6 +229,59 @@ def list_seeds(
         ).order_by(Seed.created_at.desc()).limit(limit).all()
         return SeedSearchResponse(seeds=seeds, query=None, total=len(seeds))
 
+class SeedSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    limit: int = Field(default=5, ge=1, le=20)
+
+@app.post("/api/v1/seeds/search", response_model=SeedSearchResponse)
+def search_seeds_endpoint(
+    req: SeedSearchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Semantic search over user's seeds via Weaviate."""
+    from app.enricher import embed_text
+
+    try:
+        embedding = embed_text(req.query)
+    except Exception:
+        # Fallback to BM25 if embedding fails
+        embedding = None
+
+    if embedding:
+        hits = weaviate_client.search_seeds(
+            tenant_id=str(current_user.tenant_id),
+            embedding=embedding,
+            limit=req.limit,
+        )
+    else:
+        hits = []
+
+    seeds = []
+    for hit in hits:
+        seed = Seed(
+            id=uuid.uuid4(),
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            thought_id=None,
+            title=hit.get("title") or "Untitled",
+            content=hit.get("content") or hit.get("summary") or hit.get("text") or "",
+            embedding_ref="",
+            image_url=None,
+            metadata={
+                "summary": hit.get("summary") or "",
+                "tags": hit.get("tags") or "",
+                "domain": hit.get("domain") or "",
+                "energy": hit.get("energy") or "",
+                "source": hit.get("source") or "",
+                "url": hit.get("url") or "",
+            },
+            created_at=datetime.utcnow(),
+        )
+        seeds.append(seed)
+
+    return SeedSearchResponse(seeds=seeds, query=req.query, total=len(seeds))
+
 @app.get("/api/v1/seeds/{seed_id}", response_model=SeedResponse)
 def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     seed = db.query(Seed).filter(
@@ -888,6 +941,28 @@ async def chat_v2_endpoint(
             recent_seeds=recent_titles,
             domains=[],
         )
+
+        # Inject briefing context for new sessions (weather + recent seeds)
+        if not session_id or not (agent_session and agent_session.messages):
+            briefing_parts = []
+            if current_user.city:
+                try:
+                    import httpx as _httpx
+                    weather_resp = _httpx.get(
+                        f"https://wttr.in/{current_user.city}",
+                        params={"format": "%c+%t+%C", "lang": "en"},
+                        timeout=5,
+                    )
+                    if weather_resp.status_code == 200:
+                        briefing_parts.append(f"☀️ Weather in {current_user.city}: {weather_resp.text.strip()}")
+                except Exception:
+                    pass
+            if recent_titles:
+                briefing_parts.append(f"🌱 Recent seeds: {', '.join(recent_titles[:3])}")
+            if briefing_parts:
+                prompt_builder = prompt_builder.with_context(
+                    "Daily Context:\n" + "\n".join(briefing_parts)
+                )
     except Exception:
         pass
 
