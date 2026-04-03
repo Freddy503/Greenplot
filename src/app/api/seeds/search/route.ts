@@ -156,39 +156,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'intent_skip' })
     }
 
-    // Step 2: Search garden — try direct Weaviate first, then backend fallback
+    // Step 2: Search garden — use backend fallback (has proper tenant filtering)
     let seeds: WeaviateSeed[] = []
 
-    // Try direct Weaviate (works on server / local dev)
-    seeds = await searchWeaviate(query, Math.min(limit, 5))
-
-    // Fallback: call backend search endpoint (works on Vercel)
-    if (seeds.length === 0) {
-      try {
-        const backendRes = await fetch(`${BACKEND}/api/v1/seeds/search`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: token } : {}),
-          },
-          body: JSON.stringify({ query, limit: Math.min(limit, 5) }),
-          signal: AbortSignal.timeout(8000),
-        })
-        if (backendRes.ok) {
-          const data = await backendRes.json()
-          const backendSeeds = data.seeds || []
-          // Convert backend format to WeaviateSeed format
-          seeds = backendSeeds.map((s: { title: string; content?: string; metadata?: { summary?: string; tags?: string; domain?: string; energy?: string } }) => ({
-            title: s.title,
-            text: s.content || '',
-            summary: s.metadata?.summary || '',
-            tags: s.metadata?.tags || '',
-            domain: s.metadata?.domain || '',
-            energy: s.metadata?.energy || '',
-          }))
-        }
-      } catch {}
-    }
+    // Skip direct Weaviate on Vercel (can't reach localhost, and lacks tenant filter)
+    // Use backend endpoint which properly filters by authenticated user's tenant
+    try {
+      const backendRes = await fetch(`${BACKEND}/api/v1/seeds/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: token } : {}),
+        },
+        body: JSON.stringify({ query, limit: Math.min(limit, 5) }),
+        signal: AbortSignal.timeout(8000),
+      })
+      if (backendRes.ok) {
+        const data = await backendRes.json()
+        const backendSeeds = data.seeds || []
+        // Convert backend format to WeaviateSeed format
+        seeds = backendSeeds.map((s: { title: string; content?: string; metadata?: { summary?: string; tags?: string; domain?: string; energy?: string } }) => ({
+          title: s.title,
+          text: s.content || '',
+          summary: s.metadata?.summary || '',
+          tags: s.metadata?.tags || '',
+          domain: s.metadata?.domain || '',
+          energy: s.metadata?.energy || '',
+        }))
+      }
+    } catch {}
 
     // Step 3: Relevance gate
     if (!isRelevantEnough(seeds, query)) {

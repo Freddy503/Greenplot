@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const BACKEND = 'https://api.greenplot.ink'
+const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get('authorization') || ''

@@ -31,9 +31,25 @@ class WeaviateClient:
                 {"name": "thought_id", "dataType": ["text"]},
                 {"name": "title", "dataType": ["text"]},
                 {"name": "content", "dataType": ["text"]},
+                {"name": "text", "dataType": ["text"]},
+                {"name": "summary", "dataType": ["text"]},
+                {"name": "tags", "dataType": ["text"]},
+                {"name": "entities", "dataType": ["text"]},
+                {"name": "backlinks", "dataType": ["text"]},
+                {"name": "domain", "dataType": ["text"]},
+                {"name": "energy", "dataType": ["text"]},
+                {"name": "source", "dataType": ["text"]},
+                {"name": "url", "dataType": ["text"]},
+                {"name": "source_url", "dataType": ["text"]},
+                {"name": "notion_id", "dataType": ["text"]},
+                {"name": "status", "dataType": ["text"]},
+                {"name": "enrichment_version", "dataType": ["text"]},
+                {"name": "parent_id", "dataType": ["text"]},
+                {"name": "chunk_idx", "dataType": ["int"]},
                 {"name": "metadata", "dataType": ["text"]},
+                {"name": "image_url", "dataType": ["text"]},
                 {"name": "created_at", "dataType": ["date"]},
-                {"name": "image_url", "dataType": ["text"]}
+                {"name": "created", "dataType": ["date"]},
             ],
             "vectorIndexConfig": {
                 "vector": {"dimensions": 1024, "distance": "cosine"}
@@ -65,7 +81,7 @@ class WeaviateClient:
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
             ["title", "text", "source", "url", "created", "notion_id",
-             "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"]
+             "summary", "tags", "entities", "backlinks", "domain", "energy", "metadata", "tenant_id"]
         ).with_near_vector(nearVector).with_where({
             "path": ["tenant_id"],
             "operator": "Equal",
@@ -82,18 +98,28 @@ class WeaviateClient:
                 nid = o.get("title", "")
             if nid in seen:
                 continue
+
+            # Parse metadata JSON blob as fallback for enrichment fields
+            metadata = o.get("metadata") or {}
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except:
+                    metadata = {}
+
             seen[nid] = {
                 "title": o.get("title", ""),
                 "content": o.get("text", ""),
                 "created_at": o.get("created", ""),
                 "source": o.get("source", ""),
                 "url": o.get("url", ""),
-                "summary": o.get("summary", ""),
-                "tags": o.get("tags", ""),
-                "entities": o.get("entities", ""),
-                "backlinks": o.get("backlinks", ""),
-                "domain": o.get("domain", ""),
-                "energy": o.get("energy", ""),
+                # Prefer top-level fields, fallback to metadata JSON
+                "summary": o.get("summary") or metadata.get("summary", ""),
+                "tags": o.get("tags") or metadata.get("tags", ""),
+                "entities": o.get("entities") or metadata.get("entities", ""),
+                "backlinks": o.get("backlinks") or metadata.get("backlinks", ""),
+                "domain": o.get("domain") or metadata.get("domain", ""),
+                "energy": o.get("energy") or metadata.get("energy", ""),
             }
             if len(seen) >= limit:
                 break

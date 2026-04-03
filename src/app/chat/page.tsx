@@ -2,12 +2,12 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PromptBox } from '@/components/ui/chatgpt-prompt-input'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
 import {
   Empty,
   EmptyContent,
@@ -132,7 +132,7 @@ function ThumbsRating({ messageId }: { messageId: string }) {
 
 export default function ChatPage() {
   const [authToken, setAuthToken] = useState('')
-  const [msgTimes] = useState<Record<string, string>>({})
+  const msgTimesRef = useRef<Record<string, string>>({})
   const [gardenEnriching, setGardenEnriching] = useState(false)
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
   // Track generated images keyed by the message ID they relate to
@@ -201,6 +201,9 @@ export default function ChatPage() {
     try {
       setGardenEnriching(true)
 
+      // Read token fresh at call time (not from closure)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
+
       // Call both garden search and memory retrieval in parallel
       const [gardenRes, memoryRes] = await Promise.allSettled([
         fetch('/api/seeds/search', {
@@ -211,7 +214,7 @@ export default function ChatPage() {
         fetch('/api/seeds/memory', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: text, user_id: authToken || 'default' }),
+          body: JSON.stringify({ query: text, user_id: token || 'default' }),
         }).then(r => r.ok ? r.json() : null),
       ])
 
@@ -333,10 +336,10 @@ export default function ChatPage() {
                 const isUser = message.role === 'user'
                 const isLastAssistant = !isUser && msgIdx === messages.length - 1
 
-                if (!msgTimes[message.id]) {
-                  msgTimes[message.id] = formatTime()
+                if (!msgTimesRef.current[message.id]) {
+                  msgTimesRef.current[message.id] = formatTime()
                 }
-                const timeStr = msgTimes[message.id]
+                const timeStr = msgTimesRef.current[message.id]
 
                 return (
                   <div key={message.id}>
@@ -656,34 +659,23 @@ export default function ChatPage() {
           </div>
         )}
         <div className="max-w-2xl mx-auto">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              const formData = new FormData(e.currentTarget)
-              const text = formData.get('message') as string
+          <PromptBox
+            name="message"
+            disabled={isStreaming}
+            isRecording={voiceState === 'recording'}
+            isProcessingVoice={voiceState === 'processing'}
+            recordingDuration={voiceDuration}
+            onToggleVoice={toggleRecording}
+            onSubmit={async (text: string) => {
               if (text?.trim() && status === 'ready') {
-                sendMessage({ text: text.trim() })
+                const enrichedText = await enrichWithGarden(text.trim())
+                sendMessage({ text: enrichedText })
               }
             }}
-          >
-            <PromptBox
-              name="message"
-              disabled={isStreaming}
-              isRecording={voiceState === 'recording'}
-              isProcessingVoice={voiceState === 'processing'}
-              recordingDuration={voiceDuration}
-              onToggleVoice={toggleRecording}
-              onSubmit={(text) => {
-                if (text?.trim() && status === 'ready') {
-                  sendMessage({ text: text.trim() })
-                }
-              }}
-            />
-          </form>
+          />
         </div>
       </div>
 
-      <Toaster theme="dark" position="top-center" richColors closeButton />
       <BottomNav />
     </div>
   )
