@@ -19,6 +19,10 @@ export async function GET(req: Request) {
       { redirect: 'manual' }
     )
 
+    if (!res.ok) {
+      return NextResponse.redirect(new URL('/chat?calendar_error=exchange_failed', req.url))
+    }
+
     // Redirect to chat with success
     return NextResponse.redirect(new URL('/chat?calendar_connected=true', req.url))
   } catch {

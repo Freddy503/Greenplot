@@ -240,8 +240,8 @@ def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: S
     return seed
 
 class BulkSeedItem(BaseModel):
-    title: str
-    content: str
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=5000)
     source: Optional[str] = 'chat_harvest'
 
 class BulkSeedRequest(BaseModel):
@@ -338,7 +338,7 @@ async def generate_image(
     }
 
     # 1. Submit generation task
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         submit_resp = await client.post(
             f"{BFL_BASE_URL}/v1/flux-2-pro",
             headers=headers,
@@ -349,6 +349,10 @@ async def generate_image(
             },
         )
 
+        if submit_resp.status_code == 402:
+            raise HTTPException(status_code=502, detail="BFL credits exhausted")
+        if submit_resp.status_code == 429:
+            raise HTTPException(status_code=429, detail="BFL rate limited, try again later")
         if submit_resp.status_code != 200:
             raise HTTPException(
                 status_code=502,
@@ -369,8 +373,13 @@ async def generate_image(
                 params={"id": task_id},
             )
 
+            # Non-retryable errors
+            if poll_resp.status_code == 402:
+                raise HTTPException(status_code=502, detail="BFL credits exhausted")
+            if poll_resp.status_code == 429:
+                raise HTTPException(status_code=429, detail="BFL rate limited")
             if poll_resp.status_code != 200:
-                continue
+                continue  # Transient error, retry
 
             result = poll_resp.json()
             status = result.get("status", "")
@@ -1200,24 +1209,27 @@ def extract_insights(
         api_key=os.environ.get("OPENROUTER_API_KEY", ""),
     )
 
-    response = openai_client.chat.completions.create(
-        model="meta-llama/llama-3.1-8b-instruct:free",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are an insight extractor. Given a conversation, identify the most valuable "
-                    "insights, ideas, or learnings worth preserving as standalone knowledge seeds. "
-                    "Extract 1-5 discrete insights. Each should be self-contained and meaningful on its own. "
-                    "Skip greetings, small talk, and trivial exchanges. "
-                    "Respond in JSON: {\"insights\": [{\"title\": string, \"content\": string}]}"
-                ),
-            },
-            {"role": "user", "content": req.conversation[:6000]},
-        ],
-        temperature=0.5,
-        max_tokens=800,
-    )
+    try:
+        response = openai_client.chat.completions.create(
+            model="meta-llama/llama-3.1-8b-instruct:free",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an insight extractor. Given a conversation, identify the most valuable "
+                        "insights, ideas, or learnings worth preserving as standalone knowledge seeds. "
+                        "Extract 1-5 discrete insights. Each should be self-contained and meaningful on its own. "
+                        "Skip greetings, small talk, and trivial exchanges. "
+                        "Respond in JSON: {\"insights\": [{\"title\": string, \"content\": string}]}"
+                    ),
+                },
+                {"role": "user", "content": req.conversation[:6000]},
+            ],
+            temperature=0.5,
+            max_tokens=800,
+        )
+    except Exception:
+        return ExtractInsightsResponse(insights=[])
 
     text = response.choices[0].message.content or '{"insights": []}'
 
@@ -1297,6 +1309,17 @@ def calendar_callback(
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
+    # Validate state parameter (must be a real user ID)
+    import uuid as _uuid
+    try:
+        user_id = _uuid.UUID(state)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
+
+    state_user = db.query(User).filter(User.id == user_id).first()
+    if not state_user:
+        raise HTTPException(status_code=400, detail="Invalid state: user not found")
+
     import httpx
 
     # Exchange code for tokens
@@ -1335,14 +1358,9 @@ def calendar_callback(
         pass
 
     # Save or update connection
-    user_id = state
     conn = db.query(CalendarConnection).filter(
         CalendarConnection.user_id == user_id
     ).first()
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
 
     if conn:
         conn.access_token = access_token
@@ -1354,7 +1372,7 @@ def calendar_callback(
     else:
         conn = CalendarConnection(
             user_id=user_id,
-            tenant_id=user.tenant_id,
+            tenant_id=state_user.tenant_id,
             provider='google',
             access_token=access_token,
             refresh_token=refresh_token,
