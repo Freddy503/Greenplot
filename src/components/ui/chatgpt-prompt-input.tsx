@@ -177,6 +177,36 @@ export const PromptBox = React.forwardRef<
     }
   }
 
+  // Dynamic input hints
+  const getHint = (): { icon: string; text: string; color: string } | null => {
+    const trimmed = value.trim()
+    if (!trimmed || trimmed.length < 3) return null
+
+    // URL detected
+    if (/^https?:\/\/\S+/.test(trimmed)) {
+      return { icon: 'link', text: 'Link detected — will be added to Hub', color: 'text-blue-400' }
+    }
+    // Question detected
+    if (/^(what|how|why|when|where|who|can|could|should|would|is|are|do|does|did)\b/i.test(trimmed) || /\?$/.test(trimmed)) {
+      return { icon: 'search', text: 'Searching your garden...', color: 'text-secondary' }
+    }
+    // Long thought/reflection
+    if (trimmed.length > 80 && !trimmed.includes('?')) {
+      return { icon: 'eco', text: 'Capturing as seed...', color: 'text-primary' }
+    }
+    // /save command
+    if (/^\/save\b/i.test(trimmed)) {
+      return { icon: 'eco', text: 'Save last response to garden', color: 'text-primary' }
+    }
+    // /wiki command
+    if (/^\/wiki\b/i.test(trimmed)) {
+      return { icon: 'auto_stories', text: 'Compile wiki from related seeds', color: 'text-blue-400' }
+    }
+    return null
+  }
+
+  const hint = getHint()
+
   const handleSubmit = () => {
     if (value.trim() || imagePreview) {
       onSubmit?.(value)
@@ -233,6 +263,16 @@ export const PromptBox = React.forwardRef<
         className="custom-scrollbar w-full resize-none border-0 bg-transparent p-3 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-0 focus-visible:outline-none min-h-12"
         {...props}
       />
+
+      {/* Dynamic hint bar */}
+      {hint && (
+        <div className="px-3 pb-1">
+          <div className={`flex items-center gap-1.5 text-[11px] font-medium ${hint.color}`}>
+            <span className="material-symbols-outlined" style={{ fontSize: '13px', fontVariationSettings: '"FILL" 1' }}>{hint.icon}</span>
+            {hint.text}
+          </div>
+        </div>
+      )}
 
       <div className="mt-0.5 p-1 pt-0">
         <TooltipProvider delayDuration={100}>

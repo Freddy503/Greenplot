@@ -1,5 +1,6 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import UniversalAdd from "@/components/layout/universal-add";
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
@@ -53,6 +54,7 @@ export default function RootLayout({
         style={{ fontFamily: "Plus Jakarta Sans, Be Vietnam Pro, sans-serif" }}
       >
         <TooltipProvider>{children}</TooltipProvider>
+        <UniversalAdd />
         <Toaster theme="dark" position="top-center" richColors closeButton />
       </body>
     </html>
