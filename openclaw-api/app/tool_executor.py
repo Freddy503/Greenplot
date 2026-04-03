@@ -103,7 +103,7 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
 
 
 async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
-    """Return a daily briefing with weather, recent seeds, and a creative prompt."""
+    """Return a daily briefing with weather, calendar, recent seeds, and a creative prompt."""
     try:
         from datetime import timedelta
         import httpx
@@ -126,12 +126,60 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
                     if resp.status_code == 200:
                         weather_str = resp.text.strip()
             except Exception:
-                pass  # weather is nice-to-have, not critical
+                pass
+
+        # Calendar events (if connected)
+        calendar_str = ""
+        try:
+            from app.models import CalendarConnection
+            conn = db.query(CalendarConnection).filter(
+                CalendarConnection.user_id == user.id,
+                CalendarConnection.enabled == True,
+            ).first()
+            if conn and conn.refresh_token:
+                from app.calendar_helper import get_fresh_token, GOOGLE_CALENDAR_API
+                token = get_fresh_token(conn, db)
+                if token:
+                    now = datetime.utcnow()
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        cal_resp = await client.get(
+                            f"{GOOGLE_CALENDAR_API}/calendars/primary/events",
+                            headers={"Authorization": f"Bearer {token}"},
+                            params={
+                                "timeMin": now.isoformat() + "Z",
+                                "timeMax": (now + timedelta(hours=12)).isoformat() + "Z",
+                                "singleEvents": "true",
+                                "orderBy": "startTime",
+                                "maxResults": 5,
+                            },
+                        )
+                        if cal_resp.status_code == 200:
+                            events = cal_resp.json().get("items", [])
+                            if events:
+                                lines = []
+                                for ev in events[:3]:
+                                    summary = ev.get("summary", "(No title)")
+                                    start = ev.get("start", {}).get("dateTime", "")
+                                    if start:
+                                        try:
+                                            from datetime import datetime as dt
+                                            t = dt.fromisoformat(start.replace("Z", "+00:00"))
+                                            time_str = t.strftime("%H:%M")
+                                        except Exception:
+                                            time_str = "??:??"
+                                        lines.append(f"  • {time_str} — {summary}")
+                                    else:
+                                        lines.append(f"  • {summary}")
+                                calendar_str = "\n".join(lines)
+        except Exception:
+            pass
 
         # Build briefing
         parts = [f"Good morning! 🌱"]
         if weather_str:
             parts.append(f"☀️ Weather in {user.city}: {weather_str}")
+        if calendar_str:
+            parts.append(f"📅 Today's schedule:\n{calendar_str}")
         parts.append(f"You have {recent} seeds from the past 7 days.")
         parts.append("Your knowledge garden is healthy. Ready to capture new ideas!")
 
@@ -140,6 +188,7 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
             "city": user.city,
             "weather": weather_str or None,
+            "calendar": calendar_str or None,
             "recent_seeds_7d": recent,
             "message": " ".join(parts)
         }

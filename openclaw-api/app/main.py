@@ -10,7 +10,7 @@ import os
 import base64
 import mimetypes
 from app.database import engine, get_db
-from app.models import Base, User, Thought, Seed, Usage
+from app.models import Base, User, Thought, Seed, Usage, CalendarConnection
 from app.schemas import (
     RegisterRequest, LoginRequest, AuthResponse,
     ThoughtCreate, ThoughtResponse, SeedResponse, SeedSearchResponse,
@@ -49,6 +49,26 @@ with engine.connect() as conn:
     result2 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='digest_frequency'"))
     if not result2.fetchone():
         conn.execute(text("ALTER TABLE users ADD COLUMN digest_frequency VARCHAR DEFAULT 'once-daily'"))
+        conn.commit()
+    # Create calendar_connections table if it doesn't exist
+    result3 = conn.execute(text("SELECT tablename FROM pg_tables WHERE tablename='calendar_connections'"))
+    if not result3.fetchone():
+        conn.execute(text("""
+            CREATE TABLE calendar_connections (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID NOT NULL REFERENCES users(id) UNIQUE,
+                tenant_id UUID NOT NULL,
+                provider VARCHAR(32) DEFAULT 'google',
+                access_token TEXT,
+                refresh_token TEXT,
+                token_expiry TIMESTAMP,
+                calendar_timezone VARCHAR(64),
+                enabled BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("CREATE INDEX idx_calendar_tenant ON calendar_connections(tenant_id)"))
         conn.commit()
 
 app = FastAPI(title="OpenClaw API", version="0.1.0")
@@ -1211,3 +1231,283 @@ def extract_insights(
         return ExtractInsightsResponse(insights=insights[:5])
     except (json.JSONDecodeError, AttributeError):
         return ExtractInsightsResponse(insights=[])
+
+# --- Google Calendar Integration ---
+
+import json as _json
+from urllib.parse import urlencode
+from app.calendar_helper import get_fresh_token, GOOGLE_CALENDAR_API as _CAL_API
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+SCOPES = "https://www.googleapis.com/auth/calendar.readonly"
+
+class CalendarStatusResponse(BaseModel):
+    connected: bool
+    provider: Optional[str] = None
+    timezone: Optional[str] = None
+
+@app.get("/api/v1/calendar/status", response_model=CalendarStatusResponse)
+def calendar_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check if user has connected Google Calendar."""
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == current_user.id
+    ).first()
+    if not conn:
+        return CalendarStatusResponse(connected=False)
+    return CalendarStatusResponse(
+        connected=True,
+        provider=conn.provider,
+        timezone=conn.calendar_timezone,
+    )
+
+@app.get("/api/v1/calendar/auth")
+def calendar_auth_url(
+    current_user: User = Depends(get_current_user),
+):
+    """Get Google OAuth2 authorization URL."""
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google Calendar not configured (missing GOOGLE_CLIENT_ID)")
+
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": SCOPES,
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": str(current_user.id),  # Pass user ID to link callback
+    }
+    url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
+    return {"url": url}
+
+@app.get("/api/v1/calendar/callback")
+def calendar_callback(
+    code: str = None,
+    state: str = None,
+    error: str = None,
+    db: Session = Depends(get_db)
+):
+    """Handle Google OAuth2 callback — exchange code for tokens."""
+    if error:
+        raise HTTPException(status_code=400, detail=f"OAuth error: {error}")
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state")
+
+    import httpx
+
+    # Exchange code for tokens
+    token_resp = httpx.post(GOOGLE_TOKEN_URL, data={
+        "code": code,
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "grant_type": "authorization_code",
+    })
+
+    if token_resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Token exchange failed: {token_resp.text[:200]}")
+
+    tokens = token_resp.json()
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    expires_in = tokens.get("expires_in", 3600)
+
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=502, detail="Missing tokens in Google response")
+
+    from datetime import timedelta
+    token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+
+    # Get calendar timezone
+    calendar_tz = None
+    try:
+        cal_resp = httpx.get(
+            f"{_CAL_API}/users/me/calendarList/primary",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if cal_resp.status_code == 200:
+            calendar_tz = cal_resp.json().get("timeZone")
+    except Exception:
+        pass
+
+    # Save or update connection
+    user_id = state
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == user_id
+    ).first()
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if conn:
+        conn.access_token = access_token
+        conn.refresh_token = refresh_token
+        conn.token_expiry = token_expiry
+        conn.calendar_timezone = calendar_tz
+        conn.enabled = True
+        conn.updated_at = datetime.utcnow()
+    else:
+        conn = CalendarConnection(
+            user_id=user_id,
+            tenant_id=user.tenant_id,
+            provider='google',
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_expiry=token_expiry,
+            calendar_timezone=calendar_tz,
+            enabled=True,
+        )
+        db.add(conn)
+
+    db.commit()
+
+    # Redirect back to frontend settings
+    frontend_url = settings.APP_URL or settings.FRONTEND_URL
+    return {"status": "ok", "message": "Calendar connected", "timezone": calendar_tz}
+
+@app.delete("/api/v1/calendar/disconnect")
+def calendar_disconnect(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Disconnect Google Calendar."""
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == current_user.id
+    ).first()
+    if conn:
+        db.delete(conn)
+        db.commit()
+    return {"status": "ok", "message": "Calendar disconnected"}
+
+# Token refresh is handled by app.calendar_helper.get_fresh_token
+
+class FreeBusyRequest(BaseModel):
+    time_min: Optional[str] = None  # ISO 8601, defaults to now
+    time_max: Optional[str] = None  # ISO 8601, defaults to +24h
+
+class FreeBusySlot(BaseModel):
+    start: str
+    end: str
+
+class FreeBusyResponse(BaseModel):
+    busy: List[FreeBusySlot]
+    timezone: Optional[str] = None
+    has_free_slots: bool
+
+@app.post("/api/v1/calendar/free-busy", response_model=FreeBusyResponse)
+def get_free_busy(
+    req: FreeBusyRequest = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get free/busy slots from user's Google Calendar."""
+    import httpx
+
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == current_user.id,
+        CalendarConnection.enabled == True,
+    ).first()
+
+    if not conn:
+        raise HTTPException(status_code=404, detail="No calendar connected")
+
+    token = get_fresh_token(conn, db)
+    if not token:
+        raise HTTPException(status_code=401, detail="Calendar token expired. Please reconnect.")
+
+    now = datetime.utcnow()
+    time_min = req.time_min if req and req.time_min else now.isoformat() + "Z"
+    time_max = req.time_max if req and req.time_max else (now + timedelta(hours=24)).isoformat() + "Z"
+
+    resp = httpx.post(
+        f"{_CAL_API}/freeBusy",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "timeMin": time_min,
+            "timeMax": time_max,
+            "items": [{"id": "primary"}],
+        },
+    )
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Calendar API error: {resp.text[:200]}")
+
+    data = resp.json()
+    busy_raw = data.get("calendars", {}).get("primary", {}).get("busy", [])
+
+    busy = [FreeBusySlot(start=b.get("start", ""), end=b.get("end", "")) for b in busy_raw]
+
+    # Check if there are gaps (free slots)
+    has_free = True
+    if busy:
+        # Simple check: if all 24h are busy, no free slots
+        # More nuanced check could be done on frontend
+        pass
+
+    return FreeBusyResponse(
+        busy=busy,
+        timezone=conn.calendar_timezone,
+        has_free_slots=has_free,
+    )
+
+@app.get("/api/v1/calendar/events")
+def get_upcoming_events(
+    hours: int = 24,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get upcoming calendar events for context injection."""
+    import httpx
+
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == current_user.id,
+        CalendarConnection.enabled == True,
+    ).first()
+
+    if not conn:
+        return {"events": [], "connected": False}
+
+    token = get_fresh_token(conn, db)
+    if not token:
+        return {"events": [], "connected": True, "error": "Token expired"}
+
+    now = datetime.utcnow()
+    time_min = now.isoformat() + "Z"
+    time_max = (now + timedelta(hours=hours)).isoformat() + "Z"
+
+    resp = httpx.get(
+        f"{_CAL_API}/calendars/primary/events",
+        headers={"Authorization": f"Bearer {token}"},
+        params={
+            "timeMin": time_min,
+            "timeMax": time_max,
+            "singleEvents": "true",
+            "orderBy": "startTime",
+            "maxResults": 10,
+        },
+    )
+
+    if resp.status_code != 200:
+        return {"events": [], "connected": True, "error": f"API error ({resp.status_code})"}
+
+    data = resp.json()
+    events = []
+    for item in data.get("items", []):
+        start = item.get("start", {})
+        events.append({
+            "summary": item.get("summary", "(No title)"),
+            "start": start.get("dateTime", start.get("date", "")),
+            "end": item.get("end", {}).get("dateTime", ""),
+            "location": item.get("location", ""),
+            "status": item.get("status", ""),
+        })
+
+    return {"events": events, "connected": True, "timezone": conn.calendar_timezone}

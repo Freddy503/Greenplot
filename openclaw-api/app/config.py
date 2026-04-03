@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     ALLOWED_DOC_TYPES: str = "application/pdf,text/plain,text/markdown"
     ATTACHMENTS_DIR: str = "/tmp/openclaw-attachments"
 
+    # Google Calendar
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: str = "https://api.greenplot.ink/api/v1/calendar/callback"
+
     class Config:
         env_file = ".env"
 
