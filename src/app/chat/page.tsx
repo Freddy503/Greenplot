@@ -526,6 +526,33 @@ export default function ChatPage() {
                           {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
                             <ThumbsRating messageId={message.id} />
                           )}
+                          {/* Save to Garden button */}
+                          {message.parts.some(p => p.type === 'text') && (
+                            <button
+                              onClick={() => {
+                                const textPart = message.parts.find(p => p.type === 'text')
+                                if (textPart && 'text' in textPart) {
+                                  const token = localStorage.getItem('greenplot_token')
+                                  fetch('/api/seeds', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                    },
+                                    body: JSON.stringify({
+                                      text: textPart.text.slice(0, 500),
+                                      title: textPart.text.split('\n')[0].slice(0, 60),
+                                    }),
+                                  })
+                                  toast.success('Saved to garden 🌱')
+                                }
+                              }}
+                              className="p-1 rounded-full hover:bg-primary/10 text-on-surface-variant/40 hover:text-primary transition-colors"
+                              title="Save to Garden"
+                            >
+                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
+                            </button>
+                          )}
                         </div>
 
                         {/* Create Image button — only on reflection responses */}

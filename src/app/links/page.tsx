@@ -166,6 +166,9 @@ export default function LinksPage() {
   const [links, setLinks] = useState<LinkItem[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkImporting, setBulkImporting] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState<'all' | 'starred'>('all')
@@ -310,6 +313,69 @@ export default function LinksPage() {
     } catch {}
   }
 
+  // Bulk import: parse URLs from text (one per line or Chrome bookmark JSON)
+  const handleBulkImport = async () => {
+    if (!bulkText.trim()) return
+    setBulkImporting(true)
+
+    let urls: string[] = []
+
+    // Try parsing as Chrome bookmark JSON
+    try {
+      const json = JSON.parse(bulkText)
+      const extractUrls = (node: any): string[] => {
+        const result: string[] = []
+        if (node.url) result.push(node.url)
+        if (node.children) node.children.forEach((c: any) => result.push(...extractUrls(c)))
+        return result
+      }
+      if (json.roots) {
+        Object.values(json.roots).forEach((root: any) => urls.push(...extractUrls(root)))
+      } else if (Array.isArray(json)) {
+        json.forEach((item: any) => { if (item.url) urls.push(item.url) })
+      }
+    } catch {
+      // Plain text: one URL per line
+      urls = bulkText.split('\n').map(l => l.trim()).filter(l => l && (l.startsWith('http') || l.includes('.')))
+    }
+
+    if (urls.length === 0) {
+      setBulkImporting(false)
+      return
+    }
+
+    // Cap at 20
+    urls = urls.slice(0, 20)
+
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch('/api/links', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ urls }), // Will hit bulk endpoint
+      })
+
+      if (res.ok) {
+        // Refresh links
+        const listRes = await fetch('/api/links', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        const data = await listRes.json()
+        if (data.links) {
+          setLinks(data.links)
+          saveLinksCache(data.links)
+        }
+      }
+    } catch {}
+
+    setBulkText('')
+    setBulkOpen(false)
+    setBulkImporting(false)
+  }
+
   // Filter
   const filtered = links
     .filter(l => filter === 'starred' ? l.starred : true)
@@ -332,13 +398,23 @@ export default function LinksPage() {
             <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
               Link <span className="text-primary">Hub</span>
             </h1>
-            <Button
-              onClick={() => setAddOpen(true)}
-              className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm px-5"
-            >
-              <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>add_link</span>
-              Add
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setBulkOpen(true)}
+                variant="outline"
+                className="rounded-full text-sm px-4"
+              >
+                <span className="material-symbols-outlined text-lg mr-1">upload</span>
+                Import
+              </Button>
+              <Button
+                onClick={() => setAddOpen(true)}
+                className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm px-5"
+              >
+                <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>add_link</span>
+                Add
+              </Button>
+            </div>
           </div>
           <p className="text-sm leading-relaxed max-w-xs text-on-surface-variant">
             Drop links. Auto-enrich. Grow your knowledge garden.
@@ -465,6 +541,48 @@ export default function LinksPage() {
                 <>
                   <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
                   Add Link
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Import Dialog */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="sm:max-w-lg bg-surface-container border-outline-variant/10">
+          <DialogHeader>
+            <DialogTitle className="text-on-surface font-extrabold">Import Links</DialogTitle>
+            <DialogDescription className="text-on-surface-variant">
+              Paste URLs (one per line) or Chrome bookmark JSON export.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <textarea
+              placeholder={"https://example.com/article\nhttps://another-link.com\n\nOr paste Chrome bookmarks JSON..."}
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              className="w-full h-40 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/10 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/30 transition-colors resize-none font-mono"
+            />
+            <p className="text-[10px] text-on-surface-variant/50 mt-2">
+              {bulkText.split('\n').filter(l => l.trim()).length} URLs detected · Max 20 per batch
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkOpen(false)} className="rounded-full">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkImport}
+              disabled={!bulkText.trim() || bulkImporting}
+              className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold"
+            >
+              {bulkImporting ? (
+                <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>upload</span>
+                  Import
                 </>
               )}
             </Button>

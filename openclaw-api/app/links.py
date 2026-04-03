@@ -188,6 +188,50 @@ async def update_link(link_id: str, body: LinkUpdate, request: Request):
     if not success:
         raise HTTPException(status_code=404, detail="Link not found")
 
+    # Auto-trigger connection detection when status changes to "enriched"
+    if body.status == "enriched":
+        try:
+            # Run connection detection for this single link in background
+            links = weaviate_client.get_links(tenant_id=str(user.tenant_id), limit=200)
+            target = next((l for l in links if l.get("id") == link_id), None)
+            if target:
+                tag_index = {}
+                domain_index = {}
+                for l in links:
+                    lid = l.get("id", "")
+                    tags = l.get("tags", [])
+                    if isinstance(tags, str):
+                        tags = [t.strip() for t in tags.split(",") if t.strip()]
+                    for tag in tags:
+                        key = tag.lower()
+                        if key not in tag_index:
+                            tag_index[key] = []
+                        tag_index[key].append(lid)
+                    domain = l.get("domain", "").lower()
+                    if domain:
+                        if domain not in domain_index:
+                            domain_index[domain] = []
+                        domain_index[domain].append(lid)
+
+                scores = {}
+                target_tags = target.get("tags", [])
+                if isinstance(target_tags, str):
+                    target_tags = [t.strip() for t in target_tags.split(",") if t.strip()]
+                for tag in target_tags:
+                    for rid in tag_index.get(tag.lower(), []):
+                        if rid != link_id:
+                            scores[rid] = scores.get(rid, 0) + 2
+                target_domain = target.get("domain", "").lower()
+                for rid in domain_index.get(target_domain, []):
+                    if rid != link_id:
+                        scores[rid] = scores.get(rid, 0) + 3
+
+                strong = [rid for rid, s in scores.items() if s >= 3][:10]
+                if strong:
+                    weaviate_client.update_link(link_id, related_ids=",".join(strong))
+        except Exception:
+            pass  # Non-blocking
+
     return {"ok": True}
 
 

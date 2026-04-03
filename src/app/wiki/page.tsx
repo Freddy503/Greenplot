@@ -143,13 +143,25 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   return (
     <div className="animate-in slide-in-from-right duration-200">
       {/* Back button */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary transition-colors mb-4 px-2"
-      >
-        <span className="material-symbols-outlined text-lg">arrow_back</span>
-        <span className="font-bold">Wiki</span>
-      </button>
+      <div className="flex items-center justify-between mb-4 px-2">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary transition-colors"
+        >
+          <span className="material-symbols-outlined text-lg">arrow_back</span>
+          <span className="font-bold">Wiki</span>
+        </button>
+        <button
+          onClick={() => {
+            const token = localStorage.getItem('greenplot_token')
+            window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')
+          }}
+          className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
+          title="Download as Markdown"
+        >
+          <span className="material-symbols-outlined text-lg">download</span>
+        </button>
+      </div>
 
       {/* Article header */}
       <div className="flex items-start gap-3 mb-6 px-2">
@@ -322,9 +334,33 @@ export default function WikiPage() {
       <main className="pt-20 pb-28 px-4 max-w-2xl mx-auto w-full">
         {/* Hero */}
         <section className="mb-6 px-2">
-          <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
-            Knowledge <span className="text-primary">Wiki</span>
-          </h1>
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
+              Knowledge <span className="text-primary">Wiki</span>
+            </h1>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  const token = localStorage.getItem('greenplot_token')
+                  window.open(`/api/wiki/export/obsidian?token=${token}`, '_blank')
+                }}
+                className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant/60 hover:text-primary"
+                title="Export as Obsidian vault"
+              >
+                <span className="material-symbols-outlined text-lg">folder_zip</span>
+              </button>
+              <button
+                onClick={() => {
+                  const token = localStorage.getItem('greenplot_token')
+                  window.open(`/api/garden/export-training?token=${token}`, '_blank')
+                }}
+                className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant/60 hover:text-primary"
+                title="Export training data"
+              >
+                <span className="material-symbols-outlined text-lg">model_training</span>
+              </button>
+            </div>
+          </div>
           <p className="text-sm leading-relaxed max-w-xs text-on-surface-variant mt-1">
             Compiled articles from your garden seeds. Auto-maintained by your agents.
           </p>
