@@ -275,18 +275,39 @@ async def prompt_suggestions(body: PromptSuggestionRequest, request: Request):
     user = await get_current_user(request)
     tenant_id = str(user.tenant_id)
 
+    # Gather data from all sources
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=100)
     articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=50)
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=100)
 
     suggestions = []
+    used_titles = set()
 
-    # Strategy 1: Recently starred items → "Tell me more about X"
+    # ── Strategy 1: High-energy seeds → creative prompts ──
+    energy_seeds = [s for s in seeds if s.get("energy") and "hot" in s.get("energy", "").lower() or "fire" in s.get("energy", "").lower()]
+    if not energy_seeds:
+        # Fallback: enriched seeds with content
+        energy_seeds = [s for s in seeds if s.get("summary") and len(s.get("summary", "")) > 50]
+
+    for seed in energy_seeds[:2]:
+        title = seed.get("title", "").strip()
+        if title and title not in used_titles:
+            used_titles.add(title)
+            domain = seed.get("domain", "")
+            if domain:
+                suggestions.append(f"How does '{title}' connect to my {domain} research?")
+            else:
+                suggestions.append(f"Expand on this idea: {title}")
+
+    # ── Strategy 2: Recently starred links → explore more ──
     starred = [l for l in links if l.get("starred")]
-    for link in starred[:2]:
-        title = link.get("title", "your recent interest")
-        suggestions.append(f"Tell me more about: {title}")
+    for link in starred[:1]:
+        title = link.get("title", "").strip()
+        if title and title not in used_titles:
+            used_titles.add(title)
+            suggestions.append(f"Deep dive into: {title}")
 
-    # Strategy 2: Enriched links with no wiki article → "Compile insights about X"
+    # ── Strategy 3: Enriched links with no wiki → synthesis opportunity ──
     wiki_source_ids = set()
     for a in articles:
         for lid in a.get("sourceLinkIds", []):
@@ -303,30 +324,89 @@ async def prompt_suggestions(body: PromptSuggestionRequest, request: Request):
                 domains[d] = domains.get(d, 0) + 1
         if domains:
             top_domain = max(domains, key=domains.get)
-            suggestions.append(f"What patterns do you see in my {top_domain} links?")
+            count = domains[top_domain]
+            if count >= 3:
+                suggestions.append(f"I have {count} {top_domain} links — compile them into an article")
+            else:
+                suggestions.append(f"What patterns do you see in my {top_domain} links?")
 
-    # Strategy 3: Pending links → "Help me enrich this link"
+    # ── Strategy 4: Cross-domain connections from seeds ──
+    domain_seeds = {}
+    for s in seeds:
+        d = s.get("domain", "").strip()
+        if d and "," in d:
+            parts = [p.strip() for p in d.split(",") if p.strip()]
+            if len(parts) >= 2:
+                key = f"{parts[0]} + {parts[1]}"
+                domain_seeds[key] = domain_seeds.get(key, 0) + 1
+
+    if domain_seeds:
+        top_combo = max(domain_seeds, key=domain_seeds.get)
+        suggestions.append(f"Explore the connection between {top_combo}")
+
+    # ── Strategy 5: Pending links → organization prompt ──
     pending = [l for l in links if l.get("status") == "pending"]
-    if pending:
-        suggestions.append(f"I have {len(pending)} unprocessed links — help me organize them")
+    if pending and len(pending) >= 3:
+        suggestions.append(f"Help me organize {len(pending)} unprocessed links")
 
-    # Strategy 4: Wiki articles → "Expand on X article"
-    if articles:
-        recent = articles[0]
-        suggestions.append(f"Expand on: {recent.get('title', 'your recent article')}")
+    # ── Strategy 6: Recent seeds without enrichment ──
+    raw_seeds = [s for s in seeds if not s.get("summary") and not s.get("energy")]
+    if raw_seeds:
+        recent_raw = raw_seeds[0]
+        title = recent_raw.get("title", "").strip()
+        if title and title not in used_titles:
+            used_titles.add(title)
+            suggestions.append(f"Enrich and expand this seed: {title}")
 
-    # Strategy 5: General garden prompts
-    general = [
-        "What's the most interesting connection in my garden?",
-        "Plant a seed about today's biggest AI breakthrough",
-        "Summarize my research interests in 3 sentences",
+    # ── Strategy 7: Domain-specific prompts from garden content ──
+    all_domains = set()
+    for s in seeds:
+        d = s.get("domain", "").strip()
+        if d:
+            for part in d.split(","):
+                p = part.strip()
+                if p:
+                    all_domains.add(p)
+    for l in links:
+        d = l.get("domain", "").strip()
+        if d:
+            all_domains.add(d)
+
+    domain_prompts = {
+        "ai": "What's the latest on agentic AI workflows?",
+        "tech": "How would I architect a system that does X?",
+        "design": "Sketch a user flow for my newest feature idea",
+        "business": "What market gaps does my garden suggest?",
+        "career": "How can I leverage my garden for professional growth?",
+        "creative": "Turn one of my seeds into a story concept",
+        "science": "What research questions emerge from my garden?",
+    }
+    for domain_key, prompt in domain_prompts.items():
+        if any(domain_key in d.lower() for d in all_domains):
+            if prompt not in suggestions:
+                suggestions.append(prompt)
+                break
+
+    # ── Fill remaining slots with contextual general prompts ──
+    seed_count = len(seeds)
+    link_count = len(links)
+    wiki_count = len(articles)
+
+    general = []
+    if seed_count > 50:
+        general.append(f"My garden has {seed_count} seeds — what themes emerge?")
+    if wiki_count > 0:
+        general.append(f"Which wiki article should I update or expand?")
+    if seed_count > 0 and link_count > 0:
+        general.append("What's the most interesting connection between my seeds and links?")
+    general.extend([
+        "Plant a seed about today's biggest insight",
         "What gaps exist in my knowledge garden?",
-        "Create a seed from this idea: ",
-        "Find related links I might have missed",
         "What should I explore next based on my garden?",
-    ]
+        "Find related links I might have missed",
+        "Create a concept map of my top 5 ideas",
+    ])
 
-    # Fill remaining slots from general
     import random
     random.shuffle(general)
     for g in general:
