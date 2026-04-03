@@ -216,12 +216,17 @@ export default function ChatPage() {
       const [gardenRes, memoryRes] = await Promise.allSettled([
         fetch('/api/seeds/search', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ query: text, limit: 3 }),
         }).then(r => r.ok ? r.json() : null),
         fetch('/api/seeds/memory', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({ query: text, user_id: token || 'default' }),
         }).then(r => r.ok ? r.json() : null),
       ])
