@@ -26,9 +26,9 @@ async def search_seeds(args: dict, user: User, db: Session) -> str:
         results = []
         for hit in hits:
             entry = {
-                "title": hit.get("title", ""),
-                "content": hit.get("content", "")[:400],
-                "created_at": hit.get("created_at", ""),
+                "title": hit.get("title") or "Untitled",
+                "content": (hit.get("content") or "")[:400],
+                "created_at": hit.get("created_at") or "",
             }
             # Add enrichment metadata if available
             if hit.get("summary"):

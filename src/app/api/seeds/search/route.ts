@@ -144,6 +144,7 @@ function isRelevantEnough(seeds: WeaviateSeed[], query: string): boolean {
 export async function POST(req: NextRequest) {
   try {
     const { query, limit = 3 } = await req.json()
+    const token = req.headers.get('authorization') || ''
 
     if (!query || typeof query !== 'string' || query.length < 5) {
       return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'too_short' })
@@ -155,10 +156,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'intent_skip' })
     }
 
-    // Step 2: Search garden
-    const seeds = await searchWeaviate(query, Math.min(limit, 5))
+    // Step 2: Search garden — try direct Weaviate first, then backend fallback
+    let seeds: WeaviateSeed[] = []
 
-    // Step 3: Relevance gate — only enrich if results actually match
+    // Try direct Weaviate (works on server / local dev)
+    seeds = await searchWeaviate(query, Math.min(limit, 5))
+
+    // Fallback: call backend search endpoint (works on Vercel)
+    if (seeds.length === 0) {
+      try {
+        const backendRes = await fetch(`${BACKEND}/api/v1/seeds/search`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: token } : {}),
+          },
+          body: JSON.stringify({ query, limit: Math.min(limit, 5) }),
+          signal: AbortSignal.timeout(8000),
+        })
+        if (backendRes.ok) {
+          const data = await backendRes.json()
+          const backendSeeds = data.seeds || []
+          // Convert backend format to WeaviateSeed format
+          seeds = backendSeeds.map((s: { title: string; content?: string; metadata?: { summary?: string; tags?: string; domain?: string; energy?: string } }) => ({
+            title: s.title,
+            text: s.content || '',
+            summary: s.metadata?.summary || '',
+            tags: s.metadata?.tags || '',
+            domain: s.metadata?.domain || '',
+            energy: s.metadata?.energy || '',
+          }))
+        }
+      } catch {}
+    }
+
+    // Step 3: Relevance gate
     if (!isRelevantEnough(seeds, query)) {
       return NextResponse.json({ context: '', seeds: [], enriched: false, reason: 'no_relevant_seeds' })
     }
