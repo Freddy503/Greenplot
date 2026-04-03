@@ -7,6 +7,7 @@ from uuid import UUID
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    city: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: EmailStr

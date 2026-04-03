@@ -39,6 +39,13 @@ def extract_text(msg: dict) -> str:
 # Create tables (in production use Alembic)
 Base.metadata.create_all(bind=engine)
 
+# Lightweight migration: add columns that didn't exist when tables were first created
+with engine.connect() as conn:
+    result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='city'"))
+    if not result.fetchone():
+        conn.execute(text("ALTER TABLE users ADD COLUMN city VARCHAR"))
+        conn.commit()
+
 app = FastAPI(title="OpenClaw API", version="0.1.0")
 
 app.add_middleware(
@@ -65,7 +72,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     user = User(
         email=req.email,
         password_hash=get_password_hash(req.password),
-        tenant_id=uuid.uuid4()
+        tenant_id=uuid.uuid4(),
+        city=req.city
     )
     db.add(user)
     db.commit()
@@ -81,6 +89,23 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token(data={"sub": str(user.id), "tenant_id": str(user.tenant_id)})
     return AuthResponse(access_token=token, refresh_token=token, tenant_id=user.tenant_id)
+
+# --- Profile ---
+
+class ProfileUpdate(BaseModel):
+    city: Optional[str] = None
+
+@app.patch("/api/v1/profile")
+def update_profile(
+    req: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if req.city is not None:
+        current_user.city = req.city
+    db.commit()
+    db.refresh(current_user)
+    return {"status": "ok", "city": current_user.city}
 
 # --- Thoughts ---
 

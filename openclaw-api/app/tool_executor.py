@@ -103,23 +103,45 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
 
 
 async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
-    """Return a simple daily briefing."""
-    # Simplified version; full version uses map-reduce
+    """Return a daily briefing with weather, recent seeds, and a creative prompt."""
     try:
-        # Count recent seeds
         from datetime import timedelta
+        import httpx
+
         cutoff = datetime.utcnow() - timedelta(days=7)
         recent = db.query(Seed).filter(
             Seed.tenant_id == user.tenant_id,
             Seed.created_at >= cutoff
         ).count()
 
+        # Weather for user's city (from onboarding)
+        weather_str = ""
+        if user.city:
+            try:
+                async with httpx.AsyncClient(timeout=8) as client:
+                    resp = await client.get(
+                        f"https://wttr.in/{user.city}",
+                        params={"format": "%c+%t+%C", "lang": "en"}
+                    )
+                    if resp.status_code == 200:
+                        weather_str = resp.text.strip()
+            except Exception:
+                pass  # weather is nice-to-have, not critical
+
+        # Build briefing
+        parts = [f"Good morning! 🌱"]
+        if weather_str:
+            parts.append(f"☀️ Weather in {user.city}: {weather_str}")
+        parts.append(f"You have {recent} seeds from the past 7 days.")
+        parts.append("Your knowledge garden is healthy. Ready to capture new ideas!")
+
         briefing = {
             "status": "ok",
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "city": user.city,
+            "weather": weather_str or None,
             "recent_seeds_7d": recent,
-            "message": f"Good morning! You have {recent} seeds from the past 7 days. "
-                       f"Your Weaviate index is healthy. Ready to capture new ideas!"
+            "message": " ".join(parts)
         }
         return json.dumps(briefing)
     except Exception as e:

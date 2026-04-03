@@ -13,6 +13,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     tenant_id = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
+    city = Column(String, nullable=True)  # from onboarding — used for weather in daily briefing
     created_at = Column(DateTime, default=datetime.utcnow)
     stripe_customer_id = Column(String, nullable=True)
     subscription_status = Column(String, nullable=True, default='inactive')  # active, trialing, inactive
