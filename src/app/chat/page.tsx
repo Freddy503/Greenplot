@@ -234,7 +234,7 @@ export default function ChatPage() {
       // Read token fresh at call time (not from closure)
       const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
-      // ── URL Detection: auto-create Hub links ──────────
+      // ── URL Detection: auto-create Dung links ──────────
       const urlRegex = /https?:\/\/[^\s<>\]\)"']+/g
       const urls = text.match(urlRegex) || []
       let linkContext = ''
@@ -254,10 +254,10 @@ export default function ChatPage() {
 
         // Create links in background, don't block chat
         const linkPromises = urls.slice(0, 3).map(async (url) => {
-          // Check if this URL already exists in Hub
+          // Check if this URL already exists in Dung
           const existing = existingLinks.find((l: any) => l.url === url)
           if (existing) {
-            toast(`🔗 Already in your Hub: ${existing.title || existing.url}`, {
+            toast(`🔗 Already in your Dung: ${existing.title || existing.url}`, {
               description: 'Want me to expand on it?',
             })
             // Still return the existing link's summary for context
@@ -287,7 +287,7 @@ export default function ChatPage() {
         if (created.length > 0) {
           // Show toast notification
           const titles = created.map(l => l?.title || l?.url).join(', ')
-          toast.success(`📎 Link${created.length > 1 ? 's' : ''} added to Hub: ${titles.slice(0, 80)}`)
+          toast.success(`📎 Link${created.length > 1 ? 's' : ''} added to Dung: ${titles.slice(0, 80)}`)
 
           // Build link context for the AI
           linkContext = created
@@ -656,38 +656,6 @@ export default function ChatPage() {
                               <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
                             </button>
                           )}
-                          {/* Save as Wiki Article button */}
-                          {message.parts.some(p => p.type === 'text') && (
-                            <button
-                              onClick={() => {
-                                const textPart = message.parts.find(p => p.type === 'text')
-                                if (textPart && 'text' in textPart) {
-                                  const token = localStorage.getItem('greenplot_token')
-                                  toast.loading('Compiling wiki article...', { id: 'wiki-save' })
-                                  fetch('/api/wiki', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                    },
-                                    body: JSON.stringify({
-                                      text: textPart.text,
-                                      title: textPart.text.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 80),
-                                    }),
-                                  })
-                                    .then(r => r.ok ? r.json() : Promise.reject())
-                                    .then(data => {
-                                      toast.success(`Wiki article created: ${data.title || 'New Article'} 📖`, { id: 'wiki-save' })
-                                    })
-                                    .catch(() => toast.error('Failed to create wiki article', { id: 'wiki-save' }))
-                                }
-                              }}
-                              className="p-1 rounded-full hover:bg-blue-500/10 text-on-surface-variant/40 hover:text-blue-400 transition-colors"
-                              title="Save as Wiki Article"
-                            >
-                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>auto_stories</span>
-                            </button>
-                          )}
                         </div>
 
                         {/* Create Image button — only on reflection responses */}
@@ -779,7 +747,7 @@ export default function ChatPage() {
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15">
                   <span className="material-symbols-outlined text-primary" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>link</span>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
-                    {detectedUrls.length === 1 ? 'Link detected — will add to Hub' : `${detectedUrls.length} links detected`}
+                    {detectedUrls.length === 1 ? 'Link detected — will add to Dung' : `${detectedUrls.length} links detected`}
                   </span>
                 </div>
               </div>
