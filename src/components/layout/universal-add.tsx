@@ -31,7 +31,7 @@ function detectContentType(text: string): DetectedType {
 function getTypeInfo(type: DetectedType) {
   switch (type) {
     case 'link':
-      return { icon: 'link', label: 'Link', color: 'text-blue-400', bg: 'bg-blue-500/10', action: 'Add to Hub' }
+      return { icon: 'link', label: 'Link', color: 'text-blue-400', bg: 'bg-blue-500/10', action: 'Add to Dung' }
     case 'seed':
       return { icon: 'eco', label: 'Seed', color: 'text-primary', bg: 'bg-primary/10', action: 'Plant in Garden' }
     default:
@@ -147,7 +147,7 @@ export default function UniversalAdd() {
                   Detected: {typeInfo.label}
                 </span>
                 <span className="text-[10px] text-on-surface-variant/50 ml-auto">
-                  {detectedType === 'link' ? '→ Hub tab' : detectedType === 'seed' ? '→ Garden tab' : ''}
+                  {detectedType === 'link' ? '→ Dung tab' : detectedType === 'seed' ? '→ Garden tab' : ''}
                 </span>
               </div>
             )}

@@ -410,7 +410,7 @@ export default function LinksPage() {
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
-              Link <span className="text-primary">Hub</span>
+              Link <span className="text-primary">Dung</span>
             </h1>
             <div className="flex items-center gap-2">
               <Button

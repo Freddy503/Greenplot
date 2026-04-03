@@ -188,9 +188,9 @@ function LinkDetailSheet({
             <CardContent className="p-4 flex items-start gap-3">
               <span className="material-symbols-outlined text-blue-400 mt-0.5" style={{ fontVariationSettings: '"FILL" 1' }}>auto_stories</span>
               <div className="flex-1">
-                <p className="text-xs font-bold text-blue-400 mb-0.5">Compile Wiki Article?</p>
+                <p className="text-xs font-bold text-blue-400 mb-0.5">Compile Plant?</p>
                 <p className="text-[10px] text-on-surface-variant/60 mb-3">
-                  {related.length} connected items found. We can synthesize them into a wiki article.
+                  {related.length} connected items found. We can synthesize them into a plant.
                 </p>
                 <Button
                   size="sm"
@@ -209,14 +209,14 @@ function LinkDetailSheet({
                           seed_ids: related.filter(r => r.type === 'seed').map(r => r.id),
                         }),
                       })
-                      toast.success('Wiki article compiling... 📖')
+                      toast.success('Plant compiling... 📖')
                     } catch {
                       toast.error('Failed to start compilation')
                     }
                   }}
                 >
                   <span className="material-symbols-outlined mr-1" style={{ fontSize: '14px' }}>auto_stories</span>
-                  Compile Wiki
+                  Compile Plant
                 </Button>
               </div>
             </CardContent>

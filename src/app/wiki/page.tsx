@@ -197,7 +197,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
           className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary transition-colors"
         >
           <span className="material-symbols-outlined text-lg">arrow_back</span>
-          <span className="font-bold">Wiki</span>
+          <span className="font-bold">Plants</span>
         </button>
         <button
           onClick={() => {
@@ -275,7 +275,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
         <section className="px-2 mt-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>language</span>
-            Source Links (from Hub)
+            Source Links (from Dung)
           </h3>
           <div className="space-y-2">
             {sourceLinks.map(link => (
@@ -432,7 +432,7 @@ export default function WikiPage() {
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
-              Knowledge <span className="text-primary">Wiki</span>
+              Knowledge <span className="text-primary">Plants</span>
             </h1>
             <div className="flex items-center gap-1">
               <button
@@ -517,7 +517,7 @@ export default function WikiPage() {
                     </div>
                     <div>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-on-surface-variant">Wiki Coverage</span>
+                        <span className="text-on-surface-variant">Plants Coverage</span>
                         <span className="font-bold text-secondary">{health.coverage?.wiki || 0}%</span>
                       </div>
                       <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
@@ -646,7 +646,7 @@ export default function WikiPage() {
                       <CardContent className="p-3 flex items-center gap-3">
                         <Badge variant="outline" className={`text-[9px] border-0 ${
                           src.type === 'wiki' ? 'bg-blue-500/10 text-blue-400' : 'bg-primary/10 text-primary'
-                        }`}>{src.type}</Badge>
+                        }`}>{src.type === 'wiki' ? 'plant' : src.type}</Badge>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-on-surface truncate">{src.title}</p>
                           <p className="text-[10px] text-on-surface-variant/60 truncate">{src.summary}</p>
@@ -665,7 +665,7 @@ export default function WikiPage() {
           <div className="relative flex-1 min-w-[140px]">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-lg">search</span>
             <input
-              placeholder="Search wiki..."
+              placeholder="Search plants..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-full bg-surface-container-low border border-outline-variant/10 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/30 transition-colors"
@@ -718,9 +718,9 @@ export default function WikiPage() {
               <EmptyMedia variant="default">
                 <span className="material-symbols-outlined text-5xl text-on-surface-variant">auto_stories</span>
               </EmptyMedia>
-              <EmptyTitle>No wiki articles yet</EmptyTitle>
+              <EmptyTitle>No plants yet</EmptyTitle>
               <EmptyDescription>
-                Wiki articles are compiled automatically from your enriched garden seeds. Drop some links and ideas first, then let the agents synthesize them.
+                Plants are compiled automatically from your enriched garden seeds. Drop some links and ideas first, then let the agents synthesize them.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
