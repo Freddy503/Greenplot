@@ -1604,3 +1604,55 @@ def get_upcoming_events(
         })
 
     return {"events": events, "connected": True, "timezone": conn.calendar_timezone}
+
+
+# --- Push Subscriptions ---
+
+_SUBS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "push_subscriptions.json")
+
+def _load_subs() -> list:
+    try:
+        with open(_SUBS_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+def _save_subs(subs: list):
+    os.makedirs(os.path.dirname(_SUBS_FILE), exist_ok=True)
+    with open(_SUBS_FILE, "w") as f:
+        json.dump(subs, f, indent=2)
+
+class PushSubscriptionRequest(BaseModel):
+    subscription: dict
+    userId: Optional[str] = None
+
+@app.post("/api/v1/push/subscribe")
+def register_push_subscription(
+    req: PushSubscriptionRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Register a Web Push subscription — stored in dedicated file, not thoughts/Weaviate."""
+    subscription = req.subscription
+    if not subscription:
+        raise HTTPException(status_code=400, detail="No subscription provided")
+
+    subs = _load_subs()
+    # Deduplicate by endpoint
+    endpoint = subscription.get("endpoint", "")
+    subs = [s for s in subs if s.get("subscription", {}).get("endpoint") != endpoint]
+    subs.append({
+        "user_id": str(current_user.id),
+        "tenant_id": str(current_user.tenant_id),
+        "subscription": subscription,
+    })
+    _save_subs(subs)
+    return {"success": True}
+
+@app.get("/api/v1/push/subscriptions")
+def list_push_subscriptions(
+    current_user: User = Depends(get_current_user),
+):
+    """List push subscriptions for the current tenant (used by cron to deliver notifications)."""
+    subs = _load_subs()
+    tenant_subs = [s for s in subs if s.get("tenant_id") == str(current_user.tenant_id)]
+    return {"subscriptions": tenant_subs}
