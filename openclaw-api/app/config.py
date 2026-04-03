@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # LLM & APIs
     OPENROUTER_API_KEY: Optional[str] = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: Optional[str] = None
     # Model for enrichment (LLM)
     ENRICH_MODEL: str = "openai/gpt-4o-mini"

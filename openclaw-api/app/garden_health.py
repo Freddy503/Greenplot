@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from app.auth import get_current_user
 from app.weaviate_client import weaviate_client
 from app.config import settings
 import httpx
-import json
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/v1/garden", tags=["garden"])
@@ -208,41 +207,47 @@ async def ask_garden(body: AskRequest, request: Request):
     context = "\n\n".join(context_parts)
 
     # Call LLM for answer
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{settings.OPENROUTER_BASE_URL or 'https://openrouter.ai/api/v1'}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant answering questions based on the user's personal knowledge garden. Use the provided sources to answer. Reference sources by number like [1], [2]. Be concise and insightful.",
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Sources:\n{context}\n\nQuestion: {question}",
-                        },
-                    ],
-                    "max_tokens": 500,
-                    "temperature": 0.7,
-                },
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                answer = data["choices"][0]["message"]["content"]
-            else:
-                answer = f"Based on your garden, I found {len(top_sources)} relevant items. Here's what I found:\n\n" + "\n".join(
-                    f"• {s['title']}: {s.get('summary', '')[:100]}" for s in top_sources[:5]
-                )
-    except Exception:
+    api_key = getattr(settings, "OPENROUTER_API_KEY", None)
+    if not api_key:
         answer = f"Based on your garden, I found {len(top_sources)} relevant items:\n\n" + "\n".join(
             f"• {s['title']}: {s.get('summary', '')[:100]}" for s in top_sources[:5]
         )
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a helpful assistant answering questions based on the user's personal knowledge garden. Use the provided sources to answer. Reference sources by number like [1], [2]. Be concise and insightful.",
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Sources:\n{context}\n\nQuestion: {question}",
+                            },
+                        ],
+                        "max_tokens": 500,
+                        "temperature": 0.7,
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    answer = data["choices"][0]["message"]["content"]
+                else:
+                    answer = f"Based on your garden, I found {len(top_sources)} relevant items. Here's what I found:\n\n" + "\n".join(
+                        f"• {s['title']}: {s.get('summary', '')[:100]}" for s in top_sources[:5]
+                    )
+        except Exception:
+            answer = f"Based on your garden, I found {len(top_sources)} relevant items:\n\n" + "\n".join(
+                f"• {s['title']}: {s.get('summary', '')[:100]}" for s in top_sources[:5]
+            )
 
     # Format sources for frontend
     formatted_sources = []

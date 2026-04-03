@@ -1,12 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 from typing import Optional, List
 from app.auth import get_current_user
 from app.weaviate_client import weaviate_client
-from app.config import settings
-import httpx
-import json
-import re
 
 router = APIRouter(prefix="/api/v1/wiki", tags=["wiki"])
 

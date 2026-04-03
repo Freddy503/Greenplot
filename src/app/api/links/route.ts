@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({ links: [] })
+    return NextResponse.json({ links: [], error: 'Backend unreachable' }, { status: 503 })
   }
 }
 
