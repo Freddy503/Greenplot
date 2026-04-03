@@ -1894,5 +1894,7 @@ def enrich_seeds_batch(
 # --- Links & Wiki routers ---
 from app.links import router as links_router
 from app.wiki import router as wiki_router
+from app.garden_health import router as garden_router
 app.include_router(links_router)
 app.include_router(wiki_router)
+app.include_router(garden_router)

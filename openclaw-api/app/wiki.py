@@ -6,6 +6,7 @@ from app.weaviate_client import weaviate_client
 from app.config import settings
 import httpx
 import json
+import re
 
 router = APIRouter(prefix="/api/v1/wiki", tags=["wiki"])
 
