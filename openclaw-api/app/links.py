@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.auth import get_current_user, get_tenant_id
 from app.weaviate_client import weaviate_client
+from app.config import settings
 import httpx
 import json
 import re
@@ -30,6 +31,10 @@ class LinkUpdate(BaseModel):
 
 class LinkBulkCreate(BaseModel):
     urls: List[str]
+
+
+class ConnectionDetectRequest(BaseModel):
+    link_ids: Optional[List[str]] = None  # If empty, auto-detect for all pending
 
 
 def extract_domain(url: str) -> str:
@@ -235,3 +240,107 @@ async def bulk_create_links(body: LinkBulkCreate, request: Request):
         results.append({"id": link_id, "url": url, "title": title})
 
     return {"created": len(results), "links": results}
+
+
+# ── P1: Connection Detection ──────────────────────────
+
+@router.post("/detect-connections")
+async def detect_connections(body: ConnectionDetectRequest, request: Request):
+    """Detect connections between links based on tag overlap, domain, and vector similarity."""
+    user = await get_current_user(request)
+    tenant_id = str(user.tenant_id)
+
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
+
+    if body.link_ids:
+        links = [l for l in links if l.get("id") in body.link_ids]
+
+    # Build tag index: tag -> [link_ids]
+    tag_index = {}
+    domain_index = {}
+    for link in links:
+        lid = link.get("id", "")
+        tags = link.get("tags", [])
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        for tag in tags:
+            key = tag.lower()
+            if key not in tag_index:
+                tag_index[key] = []
+            tag_index[key].append(lid)
+
+        domain = link.get("domain", "").lower()
+        if domain:
+            if domain not in domain_index:
+                domain_index[domain] = []
+            domain_index[domain].append(lid)
+
+    # Detect connections: shared tags (weight 2) or shared domain (weight 3)
+    connections = {}  # link_id -> {related_id: score}
+    for link in links:
+        lid = link.get("id", "")
+        if not lid:
+            continue
+        scores = {}
+
+        tags = link.get("tags", [])
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        for tag in tags:
+            for related_id in tag_index.get(tag.lower(), []):
+                if related_id != lid:
+                    scores[related_id] = scores.get(related_id, 0) + 2
+
+        domain = link.get("domain", "").lower()
+        for related_id in domain_index.get(domain, []):
+            if related_id != lid:
+                scores[related_id] = scores.get(related_id, 0) + 3
+
+        # Keep connections with score >= 3
+        strong = [rid for rid, s in scores.items() if s >= 3]
+        if strong:
+            connections[lid] = strong
+
+    # Store connections as related_ids field
+    updated = 0
+    for lid, related in connections.items():
+        related_str = ",".join(related[:10])  # Cap at 10
+        if weaviate_client.update_link(lid, related_ids=related_str):
+            updated += 1
+
+    return {"detected": len(connections), "updated": updated}
+
+
+@router.get("/{link_id}/related")
+async def get_related(link_id: str, request: Request):
+    """Get related links/seeds for a given link."""
+    user = await get_current_user(request)
+
+    try:
+        obj = weaviate_client.client.data_object.get_by_id(
+            uuid=link_id, class_name="Link"
+        )
+        props = obj.get("properties", {})
+        related_str = props.get("related_ids", "")
+        related_ids = [r.strip() for r in related_str.split(",") if r.strip()] if related_str else []
+
+        related_items = []
+        for rid in related_ids[:10]:
+            try:
+                robj = weaviate_client.client.data_object.get_by_id(
+                    uuid=rid, class_name="Link"
+                )
+                rp = robj.get("properties", {})
+                related_items.append({
+                    "id": rid,
+                    "title": rp.get("title", ""),
+                    "domain": rp.get("domain", ""),
+                    "summary": rp.get("summary", ""),
+                    "type": "link",
+                })
+            except:
+                pass
+
+        return {"related": related_items}
+    except Exception:
+        raise HTTPException(status_code=404, detail="Link not found")

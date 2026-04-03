@@ -74,6 +74,7 @@ class WeaviateClient:
                     {"name": "raw_text", "dataType": ["text"]},
                     {"name": "status", "dataType": ["text"]},
                     {"name": "starred", "dataType": ["boolean"]},
+                    {"name": "related_ids", "dataType": ["text"]},
                     {"name": "connection_count", "dataType": ["int"]},
                     {"name": "garden_seed_id", "dataType": ["text"]},
                     {"name": "created_at", "dataType": ["date"]},

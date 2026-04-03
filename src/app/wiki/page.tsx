@@ -220,6 +220,17 @@ export default function WikiPage() {
   const [filter, setFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
 
+  // Health dashboard state
+  const [health, setHealth] = useState<any>(null)
+  const [healthOpen, setHealthOpen] = useState(false)
+
+  // Ask Garden state
+  const [askQuestion, setAskQuestion] = useState('')
+  const [askAnswer, setAskAnswer] = useState('')
+  const [askSources, setAskSources] = useState<any[]>([])
+  const [asking, setAsking] = useState(false)
+  const [askOpen, setAskOpen] = useState(false)
+
   // Load wiki articles from API
   useEffect(() => {
     const token = localStorage.getItem('greenplot_token')
@@ -231,12 +242,45 @@ export default function WikiPage() {
         setArticles(data.articles || [])
       })
       .catch(() => {
-        // Fallback to localStorage
         const stored = localStorage.getItem('greenplot_wiki')
         if (stored) { try { setArticles(JSON.parse(stored)) } catch {} }
       })
       .finally(() => setLoading(false))
+
+    // Load health data
+    fetch('/api/garden/health', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then(data => { if (!data.error) setHealth(data) })
+      .catch(() => {})
   }, [])
+
+  // Ask garden
+  const handleAsk = async () => {
+    if (!askQuestion.trim()) return
+    setAsking(true)
+    setAskAnswer('')
+    setAskSources([])
+
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch('/api/garden/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ question: askQuestion }),
+      })
+      const data = await res.json()
+      setAskAnswer(data.answer || 'No answer found.')
+      setAskSources(data.sources || [])
+    } catch {
+      setAskAnswer('Could not reach the garden. Try again later.')
+    }
+    setAsking(false)
+  }
 
   // Get unique categories
   const categories = Array.from(new Set(articles.map(a => a.category)))
@@ -300,6 +344,186 @@ export default function WikiPage() {
             </div>
           </div>
         )}
+
+        {/* Garden Health Dashboard (P1) */}
+        {health && (
+          <div className="mb-5">
+            <button
+              onClick={() => setHealthOpen(!healthOpen)}
+              className="w-full flex items-center justify-between p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: '"FILL" 1' }}>monitoring</span>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-on-surface">Garden Health</p>
+                  <p className="text-[10px] text-on-surface-variant">
+                    {health.coverage?.enrichment || 0}% enriched · {health.coverage?.wiki || 0}% in wiki · {health.summary?.orphan_links || 0} orphans
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-on-surface-variant/40 transition-transform" style={{ transform: healthOpen ? 'rotate(180deg)' : '' }}>
+                expand_more
+              </span>
+            </button>
+
+            {healthOpen && (
+              <div className="mt-3 space-y-3 animate-in slide-in-from-top duration-200">
+                {/* Coverage bars */}
+                <Card className="bg-surface-container-low border-outline-variant/10">
+                  <CardContent className="p-4 space-y-3">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-on-surface-variant">Enrichment Coverage</span>
+                        <span className="font-bold text-primary">{health.coverage?.enrichment || 0}%</span>
+                      </div>
+                      <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${health.coverage?.enrichment || 0}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-on-surface-variant">Wiki Coverage</span>
+                        <span className="font-bold text-secondary">{health.coverage?.wiki || 0}%</span>
+                      </div>
+                      <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
+                        <div className="h-full bg-secondary rounded-full transition-all" style={{ width: `${health.coverage?.wiki || 0}%` }} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Quick stats grid */}
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { label: 'Links', value: health.summary?.total_links || 0, icon: 'link', color: 'text-primary' },
+                    { label: 'Enriched', value: health.summary?.enriched_links || 0, icon: 'auto_fix_high', color: 'text-secondary' },
+                    { label: 'Starred', value: health.summary?.starred_links || 0, icon: 'star', color: 'text-amber-400' },
+                    { label: 'Articles', value: health.summary?.total_articles || 0, icon: 'auto_stories', color: 'text-blue-400' },
+                  ].map((stat, i) => (
+                    <Card key={i} className="bg-surface-container-low border-outline-variant/10">
+                      <CardContent className="p-3 text-center">
+                        <span className={`material-symbols-outlined text-lg ${stat.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>{stat.icon}</span>
+                        <p className="text-lg font-extrabold text-on-surface mt-1">{stat.value}</p>
+                        <p className="text-[9px] text-on-surface-variant uppercase tracking-wider">{stat.label}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Top domains */}
+                {health.top_domains?.length > 0 && (
+                  <Card className="bg-surface-container-low border-outline-variant/10">
+                    <CardContent className="p-4">
+                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Top Domains</p>
+                      <div className="space-y-2">
+                        {health.top_domains.slice(0, 5).map((d: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between">
+                            <span className="text-sm text-on-surface">{d.domain}</span>
+                            <Badge variant="outline" className="text-[10px] bg-surface-container-high border-outline-variant/20">{d.count}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Suggestions */}
+                {health.suggestions?.length > 0 && (
+                  <div className="space-y-2">
+                    {health.suggestions.map((s: any, i: number) => (
+                      <Card key={i} className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all cursor-pointer">
+                        <CardContent className="p-3 flex items-center gap-3">
+                          <span className="material-symbols-outlined text-primary">{s.icon}</span>
+                          <span className="text-sm text-on-surface flex-1">{s.text}</span>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full ${
+                            s.priority === 'high' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'
+                          }`}>{s.priority}</span>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Ask Garden (P2) */}
+        <div className="mb-5">
+          <button
+            onClick={() => setAskOpen(!askOpen)}
+            className="w-full flex items-center justify-between p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: '"FILL" 1' }}>psychology</span>
+              <div className="text-left">
+                <p className="text-sm font-bold text-on-surface">Ask Your Garden</p>
+                <p className="text-[10px] text-on-surface-variant">Questions grounded in your knowledge base</p>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-on-surface-variant/40 transition-transform" style={{ transform: askOpen ? 'rotate(180deg)' : '' }}>
+              expand_more
+            </span>
+          </button>
+
+          {askOpen && (
+            <div className="mt-3 space-y-3 animate-in slide-in-from-top duration-200">
+              {/* Input */}
+              <div className="flex gap-2">
+                <input
+                  placeholder="What do I know about X?"
+                  value={askQuestion}
+                  onChange={(e) => setAskQuestion(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+                  className="flex-1 px-4 py-2.5 rounded-full bg-surface-container-low border border-outline-variant/10 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/30 transition-colors"
+                />
+                <Button
+                  onClick={handleAsk}
+                  disabled={!askQuestion.trim() || asking}
+                  className="rounded-full bg-secondary text-on-primary hover:bg-secondary/90 font-bold px-5"
+                >
+                  {asking ? (
+                    <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>search</span>
+                  )}
+                </Button>
+              </div>
+
+              {/* Answer */}
+              {askAnswer && (
+                <Card className="bg-surface-container-low border-outline-variant/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="material-symbols-outlined text-secondary mt-0.5" style={{ fontVariationSettings: '"FILL" 1' }}>psychology</span>
+                      <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap flex-1">{askAnswer}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Sources */}
+              {askSources.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60 px-2">Sources</p>
+                  {askSources.map((src, i) => (
+                    <Card key={i} className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all cursor-pointer">
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <Badge variant="outline" className={`text-[9px] border-0 ${
+                          src.type === 'wiki' ? 'bg-blue-500/10 text-blue-400' : 'bg-primary/10 text-primary'
+                        }`}>{src.type}</Badge>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-on-surface truncate">{src.title}</p>
+                          <p className="text-[10px] text-on-surface-variant/60 truncate">{src.summary}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Search + Category filter */}
         <div className="flex items-center gap-2 mb-5 px-2 flex-wrap">
