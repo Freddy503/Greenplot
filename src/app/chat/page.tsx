@@ -321,7 +321,7 @@ export default function ChatPage() {
                         key={s}
                         suggestion={s}
                         onClick={handleSuggestion}
-                        className="rounded-full bg-surface-container border-outline-variant/15 text-on-surface-variant"
+                        className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
                       />
                     ))}
                   </Suggestions>
@@ -364,7 +364,7 @@ export default function ChatPage() {
                       <div className="flex flex-col items-end gap-2 pl-12 mb-8">
                         <Message from="user">
                           <MessageContent
-                            className="user-bubble bg-surface-container-high text-on-surface px-6 py-4 shadow-sm"
+                            className="user-bubble bg-surface-container-high text-on-surface px-5 py-3 shadow-sm"
                           >
                             {message.parts.map((part, i) => {
                               if (part.type === 'text') {
@@ -393,7 +393,7 @@ export default function ChatPage() {
                       <div className="flex flex-col items-start gap-3 pr-12 mb-8">
                         <Message from="assistant">
                           <MessageContent
-                            className="assistant-bubble bg-surface-container-high text-on-surface px-8 py-6 border border-outline-variant/10 relative overflow-hidden"
+                            className="assistant-bubble bg-surface-container-high text-on-surface px-6 py-5 border border-outline-variant/10 relative overflow-hidden"
                           >
                             {/* Decorative bg icon */}
                             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none" aria-hidden>

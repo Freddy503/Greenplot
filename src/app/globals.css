@@ -4,22 +4,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Greenplot / Stitch Design System ──────────────── */
+/* ── Greenplot Design System v2 ──────────────────── */
 :root {
-  --background: #01120b;
-  --foreground: #e4fcf0;
-  --surface: #01120b;
-  --surface-dim: #01120b;
-  --surface-container: #051e15;
-  --surface-container-low: #021710;
-  --surface-container-high: #09241b;
-  --surface-container-highest: #0d2b21;
-  --surface-bright: #123227;
-  --surface-variant: #0d2b21;
+  --background: #0a0f0d;
+  --foreground: #f0f0f0;
+  --surface: #0a0f0d;
+  --surface-dim: #0a0f0d;
+  --surface-container: #141a17;
+  --surface-container-low: #0f1512;
+  --surface-container-high: #1a2220;
+  --surface-container-highest: #202a27;
+  --surface-bright: #253029;
+  --surface-variant: #202a27;
   --surface-tint: #69f6b8;
   --primary: #69f6b8;
-  --on-primary: #005a3c;
-  --primary-foreground: #005a3c;
+  --on-primary: #003d28;
+  --primary-foreground: #003d28;
   --primary-dim: #58e7ab;
   --primary-container: #06b77f;
   --primary-fixed: #69f6b8;
@@ -34,35 +34,35 @@
   --on-tertiary: #006948;
   --tertiary-container: #6bffc1;
   --on-tertiary-container: #006042;
-  --on-surface: #e4fcf0;
-  --on-surface-variant: #9ab0a5;
-  --on-background: #e4fcf0;
-  --outline: #657a70;
-  --outline-variant: #384c43;
-  --border: #384c43;
+  --on-surface: #f0f0f0;
+  --on-surface-variant: #a0a8a4;
+  --on-background: #f0f0f0;
+  --outline: #6b7872;
+  --outline-variant: #2a3632;
+  --border: #2a3632;
   --error: #ff716c;
   --destructive: #ff716c;
   --error-container: #9f0519;
-  --inverse-surface: #e7fff2;
-  --inverse-on-surface: #455950;
-  --card: #051e15;
-  --card-foreground: #e4fcf0;
-  --popover: #051e15;
-  --popover-foreground: #e4fcf0;
-  --accent: #09241b;
-  --accent-foreground: #e4fcf0;
-  --muted: #051e15;
-  --muted-foreground: #9ab0a5;
-  --input: #0d2b21;
+  --inverse-surface: #f0f0f0;
+  --inverse-on-surface: #0a0f0d;
+  --card: #141a17;
+  --card-foreground: #f0f0f0;
+  --popover: #141a17;
+  --popover-foreground: #f0f0f0;
+  --accent: #1a2220;
+  --accent-foreground: #f0f0f0;
+  --muted: #141a17;
+  --muted-foreground: #a0a8a4;
+  --input: #202a27;
   --ring: #69f6b8;
-  --radius: 1rem;
-  --sidebar: #01120b;
-  --sidebar-foreground: #e4fcf0;
+  --radius: 0.5rem;
+  --sidebar: #0a0f0d;
+  --sidebar-foreground: #f0f0f0;
   --sidebar-primary: #69f6b8;
-  --sidebar-primary-foreground: #005a3c;
-  --sidebar-accent: #051e15;
-  --sidebar-accent-foreground: #e4fcf0;
-  --sidebar-border: #384c43;
+  --sidebar-primary-foreground: #003d28;
+  --sidebar-accent: #141a17;
+  --sidebar-accent-foreground: #f0f0f0;
+  --sidebar-border: #2a3632;
   --sidebar-ring: #69f6b8;
 }
 
@@ -79,28 +79,28 @@ body {
   font-family: "Plus Jakarta Sans", sans-serif;
 }
 
-/* ── Chat Bubble Shapes (Stitch exact) ────────────── */
+/* ── Chat Message Shapes — rectangular, clean ─────── */
 .user-bubble {
-  border-radius: 2rem 2rem 0.25rem 2rem !important;
+  border-radius: 0.75rem !important;
 }
 .assistant-bubble {
-  border-radius: 0.25rem 2rem 2rem 2rem !important;
+  border-radius: 0.75rem !important;
 }
 
-/* ── Glass Morphism (Stitch design system) ─────────── */
+/* ── Glass Morphism ───────────────────────────────── */
 .glass-morphism {
-  background: rgba(16, 34, 28, 0.6);
+  background: rgba(20, 26, 23, 0.7);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(105, 246, 184, 0.15);
 }
 
-/* ── Seed Shape ──────────────────────────────────── */
+/* ── Seed Shape ───────────────────────────────────── */
 .seed-shape {
   border-radius: 9999px;
 }
 
-/* ── Material Symbols ────────────────────────────── */
+/* ── Material Symbols ─────────────────────────────── */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
@@ -108,13 +108,13 @@ body {
   font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
-/* ── Hide scrollbar utility ──────────────────────── */
+/* ── Hide scrollbar utility ───────────────────────── */
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ── shadcn theme bridge ─────────────────────────── */
+/* ── shadcn theme bridge ──────────────────────────── */
 @theme inline {
   --font-heading: var(--font-jakarta);
   --font-sans: var(--font-jakarta);
@@ -144,13 +144,13 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: 0.5rem;
-  --radius-md: 1rem;
-  --radius-lg: 2rem;
-  --radius-xl: 3rem;
-  --radius-2xl: 9999px;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
 
-  /* ── Stitch extended palette ──────────────────── */
+  /* ── Extended palette ──────────────────────────── */
   --color-surface: var(--surface);
   --color-surface-container: var(--surface-container);
   --color-surface-container-low: var(--surface-container-low);
@@ -165,7 +165,7 @@ body {
   --color-error: var(--error);
 }
 
-/* Streamdown styles (for MessageResponse markdown rendering) */
+/* Streamdown styles */
 @source "../node_modules/streamdown/dist/*.js";
 
 @layer base {
