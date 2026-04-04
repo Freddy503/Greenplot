@@ -288,7 +288,7 @@ export default function SettingsPage() {
                   <p className="text-xs font-medium text-on-surface mb-1">📱 Install to Home Screen first</p>
                   <p className="text-[11px] text-on-surface-variant leading-relaxed">
                     Safari requires the app installed to your home screen for notifications.
-                    Tap the <span className="material-symbols-outlined text-[12px] align-middle" style={{"{{"}}fontSize: '14px'{{"}}}}>ios_share</span> icon → Add to Home Screen.
+                    Tap the <span className="material-symbols-outlined text-[12px] align-middle" style={{ fontSize: '14px' }}>ios_share</span> icon → Add to Home Screen.
                   </p>
                 </div>
               )}
