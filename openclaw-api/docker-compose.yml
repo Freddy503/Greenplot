@@ -71,6 +71,30 @@ services:
       redis:
         condition: service_started
 
+  enrichment-worker:
+    build: .
+    container_name: openclaw-worker
+    command: python -m app.task_worker
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+      - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+      - WEAVIATE_URL=http://weaviate:8080
+      - REDIS_URL=redis://redis:6379/0
+      - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
+      - NVIDIA_API_KEY=<NVIDIA_API_KEY>
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BFL_API_KEY=${BFL_API_KEY}
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      weaviate:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   weaviate_data:

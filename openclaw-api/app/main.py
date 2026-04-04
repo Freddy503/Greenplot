@@ -159,14 +159,20 @@ def create_thought(
     db.commit()
     db.refresh(thought)
 
-    # Enrichment pipeline v2: chunk → extract entities → embed → store → backlink
-    from app.enricher_v2 import enrich_thought_v2
+    # Enrichment: queue via Redis (non-blocking, processed by task worker)
     try:
-        result = enrich_thought_v2(str(thought.id), str(current_user.tenant_id), db)
-        thought.status = 'processed'
-    except Exception as e:
-        thought.status = 'error'
-        thought.error_message = str(e)
+        from app.task_broker import enqueue_enrichment
+        task_id = enqueue_enrichment(str(thought.id), str(current_user.tenant_id))
+        thought.status = 'processing'
+    except Exception:
+        # Fallback: inline enrichment if Redis is down
+        from app.enricher_v2 import enrich_thought_v2
+        try:
+            result = enrich_thought_v2(str(thought.id), str(current_user.tenant_id), db)
+            thought.status = 'processed'
+        except Exception as e:
+            thought.status = 'error'
+            thought.error_message = str(e)
     db.commit()
 
     return thought
@@ -193,12 +199,20 @@ def list_seeds(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    tenant_id = str(current_user.tenant_id)
+
     if query:
+        # Check Redis cache first
+        from app.cache import get_cached_search, cache_search
+        cached = get_cached_search(tenant_id, query)
+        if cached is not None:
+            return SeedSearchResponse(seeds=cached, total=len(cached))
+
         # Vector search via Weaviate
         from app.enricher import embed_text
         embedding = embed_text(query)
         weaviate_hits = weaviate_client.search_seeds(
-            tenant_id=str(current_user.tenant_id),
+            tenant_id=tenant_id,
             embedding=embedding,
             limit=limit
         )
@@ -224,12 +238,26 @@ def list_seeds(
                 created_at=datetime.utcnow()
             )
             seeds.append(seed)
+        # Cache search results
+        cache_search(tenant_id, query, [vars(s) for s in seeds])
         return SeedSearchResponse(seeds=seeds, query=query, total=len(seeds))
     else:
+        # Check Redis cache for recent seeds
+        from app.cache import get_cached_seeds, cache_seeds
+        cached = get_cached_seeds(tenant_id)
+        if cached is not None:
+            seeds = [Seed(**s) if isinstance(s, dict) else s for s in cached]
+            return SeedSearchResponse(seeds=seeds[:limit], query=None, total=len(seeds))
+
         # Return recent seeds from Postgres
         seeds = db.query(Seed).filter(
             Seed.tenant_id == current_user.tenant_id
         ).order_by(Seed.created_at.desc()).limit(limit).all()
+
+        # Cache for next time
+        cache_seeds(tenant_id, [{"id": str(s.id), "title": s.title, "content": s.content[:500],
+                                  "created_at": s.created_at.isoformat() if s.created_at else None}
+                                 for s in seeds])
         return SeedSearchResponse(seeds=seeds, query=None, total=len(seeds))
 
 class SeedSearchRequest(BaseModel):
@@ -295,6 +323,143 @@ def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: S
         raise HTTPException(status_code=404, detail="Seed not found")
     return seed
 
+
+@app.get("/api/v1/seeds/garden/intelligence")
+def garden_intelligence(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Garden Intelligence: trending, stale, top-rated, needing attention.
+    Gives the Garden page curation and opinion.
+    """
+    from app.models import SeedLink, Rating
+    from datetime import timedelta
+    from sqlalchemy import func
+
+    tenant_id = current_user.tenant_id
+    now = datetime.utcnow()
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+
+    all_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).all()
+    total = len(all_seeds)
+
+    # ── Trending: most connections created this week ──
+    trending_ids = db.query(
+        SeedLink.source_seed_id,
+        func.count(SeedLink.id).label('link_count')
+    ).join(Seed, SeedLink.source_seed_id == Seed.id).filter(
+        Seed.tenant_id == tenant_id,
+        SeedLink.created_at >= week_ago
+    ).group_by(SeedLink.source_seed_id).order_by(
+        func.count(SeedLink.id).desc()
+    ).limit(5).all()
+
+    trending_seeds = []
+    for seed_id, count in trending_ids:
+        s = db.query(Seed).filter(Seed.id == seed_id).first()
+        if s:
+            trending_seeds.append({"id": str(s.id), "title": s.title, "connections": count, "created": s.created_at.isoformat() if s.created_at else ""})
+
+    # ── Stale: oldest, unrated, no recent connections ──
+    rated_ids = set()
+    try:
+        ratings = db.query(Rating.message_id).filter(Rating.tenant_id == tenant_id).all()
+        rated_ids = {r[0] for r in ratings}
+    except:
+        pass
+
+    stale_seeds = []
+    for s in sorted(all_seeds, key=lambda x: x.created_at or now):
+        if str(s.id) in rated_ids:
+            continue
+        age_days = (now - s.created_at).days if s.created_at else 999
+        if age_days >= 7:
+            stale_seeds.append({
+                "id": str(s.id),
+                "title": s.title,
+                "age_days": age_days,
+                "source": (s.seed_metadata or {}).get("source", "manual"),
+            })
+        if len(stale_seeds) >= 5:
+            break
+
+    # ── Top rated ──
+    top_rated = []
+    try:
+        top_ratings = db.query(Rating).filter(
+            Rating.tenant_id == tenant_id,
+            Rating.score >= 4
+        ).order_by(Rating.score.desc()).limit(5).all()
+        for r in top_ratings:
+            top_rated.append({
+                "message_id": r.message_id,
+                "score": r.score,
+                "created": r.created_at.isoformat() if r.created_at else "",
+            })
+    except:
+        pass
+
+    # ── Recent: newest seeds this week ──
+    recent_seeds = [s for s in all_seeds if s.created_at and s.created_at >= week_ago]
+    recent_seeds.sort(key=lambda x: x.created_at, reverse=True)
+    recent_items = [{"id": str(s.id), "title": s.title, "source": (s.seed_metadata or {}).get("source", "manual"),
+                      "created": s.created_at.isoformat()} for s in recent_seeds[:5]]
+
+    # ── By source type ──
+    source_counts = {}
+    for s in all_seeds:
+        src = (s.seed_metadata or {}).get("source", "manual")
+        source_counts[src] = source_counts.get(src, 0) + 1
+
+    # ── Domain distribution ──
+    domain_counts = {}
+    for s in all_seeds:
+        domain = (s.seed_metadata or {}).get("domain", "")
+        if domain:
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+    # ── Needs attention: pending thoughts ──
+    pending = db.query(Thought).filter(
+        Thought.tenant_id == tenant_id,
+        Thought.status == 'pending'
+    ).count()
+
+    # ── Connections count ──
+    total_connections = db.query(SeedLink).join(Seed, SeedLink.source_seed_id == Seed.id).filter(
+        Seed.tenant_id == tenant_id
+    ).count()
+
+    return {
+        "total_seeds": total,
+        "total_connections": total_connections,
+        "pending_enrichment": pending,
+        "trending": trending_seeds,
+        "stale": stale_seeds,
+        "top_rated": top_rated,
+        "recent": recent_items,
+        "sources_breakdown": source_counts,
+        "domains": domain_counts,
+        "health_score": min(100, int(
+            (len(recent_seeds) * 10) +          # recent activity
+            (len(trending_seeds) * 5) +          # connections
+            (len(top_rated) * 8) -               # engagement
+            (len(stale_seeds) * 3) -             # decay penalty
+            (pending * 2)                        # pending penalty
+        )),
+    }
+
+
+@app.get("/api/v1/activity")
+def get_activity_feed(
+    limit: int = 20,
+    hours: int = 48,
+    current_user: User = Depends(get_current_user)
+):
+    """Get recent system activity: seeds created, sources found, connections made."""
+    from app.activity import get_activity_feed as _get_feed
+    events = _get_feed(str(current_user.tenant_id), limit=limit, hours=hours)
+    return {"events": events, "count": len(events)}
+
+
 class BulkSeedItem(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     content: str = Field(..., min_length=1, max_length=5000)
@@ -342,24 +507,116 @@ def create_seeds_bulk(
             pass  # Weaviate is best-effort for harvested seeds
 
     db.commit()
+
+    # Activity log
+    try:
+        from app.activity import log_seed_created
+        for item in req.seeds[:10]:
+            log_seed_created(str(current_user.tenant_id), item.title, item.source or "chat_harvest")
+    except:
+        pass
+
     return BulkSeedResponse(created=len(seed_ids), seed_ids=seed_ids)
 
 # --- Daily Spark & Briefing ---
 
 @app.post("/api/v1/spark", response_model=SparkResponse)
-def get_spark(current_user: User = Depends(get_current_user)):
-    # For now, a simple deterministic prompt. Later, use intent router.
-    from app.enricher import get_intent_router_prompt
-    routing = get_intent_router_prompt()
-    spark_text = f"What if your {routing} strengths could be combined in a new way? Think about a recent seed that excites you and ask: How might this be applied to a completely different domain?"
+def get_spark(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Contextual creative spark based on recent seeds."""
+    # Get a recent seed to reference
+    recent = db.query(Seed).filter(
+        Seed.tenant_id == current_user.tenant_id
+    ).order_by(Seed.created_at.desc()).first()
+
+    if recent:
+        spark_text = f"Your latest seed is \"{recent.title}\". What if you combined this with something from a completely different domain? Think about how the core idea could be applied somewhere unexpected."
+    else:
+        spark_text = "What's one idea from today that surprised you? Capture it as a seed — the best insights come from noticing what you didn't expect."
     return SparkResponse(text=spark_text)
 
 @app.post("/api/v1/briefing", response_model=BriefingResponse)
-def get_briefing(current_user: User = Depends(get_current_user)):
-    # Build briefing text (simplified)
-    text = "Good morning! Here's your daily update:\n- Weather: Light snow +1°C in Munich\n- News: Notion Custom Agents are now live\n- Insight: Link from Linke Tree about Odoo PoC\n- Creative exercise: What if your brain had 10x more connections?"
-    image_url = None  # BFL image generation can be added
-    return BriefingResponse(text=text, image_url=image_url)
+def get_briefing(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Actionable daily briefing: seeds to review, new sources, connections, suggested actions."""
+    from datetime import timedelta
+    from app.models import SeedLink
+
+    now = datetime.utcnow()
+    today_cutoff = now - timedelta(hours=24)
+    week_cutoff = now - timedelta(days=7)
+    tenant_id = current_user.tenant_id
+
+    # Seeds to review (oldest unreviewed)
+    seeds_to_review = db.query(Seed).filter(
+        Seed.tenant_id == tenant_id,
+    ).order_by(Seed.created_at.asc()).limit(3).all()
+
+    review_lines = []
+    for s in seeds_to_review:
+        age = (now - s.created_at).days if s.created_at else 0
+        review_lines.append(f"• {s.title} ({age}d old)")
+
+    # New seeds (last 24h)
+    new_seeds = db.query(Seed).filter(
+        Seed.tenant_id == tenant_id,
+        Seed.created_at >= today_cutoff
+    ).order_by(Seed.created_at.desc()).limit(5).all()
+
+    # New sources
+    try:
+        all_links = weaviate_client.get_links(tenant_id=str(tenant_id), limit=20)
+        new_sources = [l for l in all_links if l.get("created_at", "") >= today_cutoff.isoformat()]
+    except:
+        new_sources = []
+
+    # Connections this week
+    try:
+        connections = db.query(SeedLink).join(Seed, SeedLink.source_seed_id == Seed.id).filter(
+            Seed.tenant_id == tenant_id,
+            SeedLink.created_at >= week_cutoff
+        ).count()
+    except:
+        connections = 0
+
+    # Pending
+    pending = db.query(Thought).filter(
+        Thought.tenant_id == tenant_id,
+        Thought.status == 'pending'
+    ).count()
+
+    total_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).count()
+
+    # Build text
+    parts = ["Good morning! 🌱 Here's your knowledge briefing:\n"]
+
+    if review_lines:
+        parts.append(f"🔍 Seeds to review:\n" + "\n".join(review_lines))
+
+    if new_seeds:
+        parts.append(f"\n🌱 {len(new_seeds)} new seeds in the last 24h:")
+        for s in new_seeds[:3]:
+            source = (s.seed_metadata or {}).get("source", "manual")
+            parts.append(f"  • {s.title} [{source}]")
+
+    if new_sources:
+        parts.append(f"\n📎 {len(new_sources)} new sources discovered:")
+        for l in new_sources[:3]:
+            parts.append(f"  • {l.get('title', '')[:50]} ({l.get('domain', '')})")
+
+    if connections:
+        parts.append(f"\n🔗 {connections} connections made this week")
+
+    if pending:
+        parts.append(f"\n⏳ {pending} thoughts pending enrichment")
+
+    parts.append(f"\n📊 Garden: {total_seeds} seeds | {len(new_sources)} sources")
+
+    if review_lines:
+        parts.append(f"\n💡 Suggested: Review \"{seeds_to_review[0].title}\" — hasn't been rated yet.")
+    else:
+        parts.append(f"\n💡 Suggested: Search for a topic and create a new seed.")
+
+    image_url = None
+    return BriefingResponse(text="\n".join(parts), image_url=image_url)
 
 # --- Image Generation (BFL/FLUX) ---
 
@@ -517,6 +774,14 @@ def submit_rating(
     db.add(rating)
     db.commit()
     db.refresh(rating)
+
+    # Activity log
+    try:
+        from app.activity import log_seed_rated
+        log_seed_rated(str(current_user.tenant_id), req.message_id[:50], req.score)
+    except:
+        pass
+
     return rating
 
 # --- Unified GreenPlotNode API ---
@@ -657,8 +922,8 @@ def migrate_nodes(
 
 @app.get("/api/v1/admin/health")
 def admin_health():
-    # Check Weaviate, Postgres, LLM APIs
-    status = {"weaviate": "unknown", "postgres": "unknown", "openrouter": "unknown"}
+    # Check Weaviate, Postgres, LLM APIs, Redis
+    status = {"weaviate": "unknown", "postgres": "unknown", "openrouter": "unknown", "redis": "unknown"}
     try:
         # Weaviate (v4 client)
         weaviate_client.client.is_live()
@@ -680,8 +945,24 @@ def admin_health():
         status["openrouter"] = "ok" if r.status_code == 200 else "down"
     except:
         status["openrouter"] = "down"
-    overall = "ok" if all(status[k] == "ok" for k in ["weaviate", "postgres", "openrouter"]) else "degraded"
-    return HealthResponse(status=overall, checks=status)
+    # Redis + Task Queue
+    queue_depth = 0
+    cache_stats = {}
+    try:
+        from app.task_broker import get_queue_depth
+        from app.cache import get_cache_stats
+        queue_depth = get_queue_depth()
+        cache_stats = get_cache_stats()
+        status["redis"] = "ok"
+    except:
+        status["redis"] = "down"
+    overall = "ok" if all(status[k] == "ok" for k in ["weaviate", "postgres", "openrouter", "redis"]) else "degraded"
+    return {
+        "status": overall,
+        "checks": status,
+        "queue_depth": queue_depth,
+        "cache": cache_stats,
+    }
 
 @app.get("/api/v1/admin/tenants", response_model=TenantsListResponse)
 def admin_list_tenants(db: Session = Depends(get_db)):
@@ -796,10 +1077,45 @@ async def chat_endpoint(
             for round_num in range(max_tool_rounds + 1):
                 is_final_round = round_num == max_tool_rounds
 
+                # Inject source context into system prompt for first round
+                system_msg = None
+                if round_num == 0 and current_user:
+                    source_parts = []
+                    # Garden stats
+                    try:
+                        seed_count = db.query(Seed).filter(Seed.tenant_id == current_user.tenant_id).count()
+                        source_parts.append(f"You have access to {seed_count} seeds in the Garden.")
+                    except:
+                        pass
+                    # Relevant sources
+                    try:
+                        user_sources = weaviate_client.get_links(tenant_id=str(current_user.tenant_id), limit=100)
+                        if user_sources:
+                            last_user_text = extract_text(messages[-1]) if messages else ""
+                            prompt_words = set(last_user_text.lower().split())
+                            matched = []
+                            for link in user_sources:
+                                title = (link.get("title") or "").lower()
+                                tags = (link.get("tags") or "").lower()
+                                domain = (link.get("domain") or "").lower()
+                                combined = f"{title} {tags} {domain}"
+                                overlap = len(prompt_words & set(combined.split()))
+                                if overlap >= 2:
+                                    matched.append((overlap, link))
+                            matched.sort(key=lambda x: -x[0])
+                            if matched:
+                                source_lines = [f"  • {l.get('title','')[:50]} ({l.get('domain','')}) — {l.get('url','')}" for _, l in matched[:3]]
+                                source_parts.append(f"Relevant saved sources:\n" + "\n".join(source_lines))
+                                source_parts.append("Mention these when relevant — the user may not remember they saved them. Use read_source to fetch full content when answering complex questions about these topics.")
+                    except:
+                        pass
+                    if source_parts:
+                        system_msg = {"role": "system", "content": "You are a helpful assistant with access to the user's knowledge base. " + "\n".join(source_parts)}
+
                 # Request: with tools (except final round, force content)
                 payload = {
                     "model": settings.ENRICH_MODEL,
-                    "messages": openai_messages,
+                    "messages": ([system_msg] if system_msg else []) + openai_messages,
                     "stream": True,
                 }
                 if not is_final_round and TOOLS:
@@ -1103,6 +1419,39 @@ async def chat_v2_endpoint(
     except Exception as e:
         pass
 
+    # ── Source Context: auto-surface relevant sources for the conversation ──
+    if current_user and last_prompt:
+        try:
+            user_sources = weaviate_client.get_links(tenant_id=str(current_user.tenant_id), limit=100)
+            if user_sources:
+                # Match sources to the user's message by keyword overlap
+                prompt_words = set(last_prompt.lower().split())
+                scored = []
+                for link in user_sources:
+                    title = (link.get("title") or "").lower()
+                    domain = (link.get("domain") or "").lower()
+                    tags = (link.get("tags") or "").lower()
+                    summary = (link.get("summary") or "").lower()
+                    source_text = f"{title} {domain} {tags} {summary}"
+                    source_words = set(source_text.split())
+                    overlap = len(prompt_words & source_words)
+                    if overlap >= 2:
+                        scored.append((overlap, link))
+                scored.sort(key=lambda x: -x[0])
+
+                if scored:
+                    source_lines = []
+                    for _, link in scored[:3]:
+                        source_lines.append(f"  • {link.get('title', '')[:60]} ({link.get('domain', '')}) — {link.get('url', '')}")
+                    source_context = (
+                        f"📎 The user has {len(user_sources)} saved sources. "
+                        f"Relevant sources for this topic:\n" + "\n".join(source_lines) +
+                        "\nMention these when relevant — the user may not remember they saved them. Use read_source to fetch full content when answering complex questions about these topics."
+                    )
+                    prompt_builder = prompt_builder.with_context(source_context)
+        except Exception:
+            pass
+
     system_prompt = prompt_builder.render()
 
     # ── Setup Agent ───────────────────────────────────────────────
@@ -1306,13 +1655,20 @@ def harvest_all(
                 )
                 db.add(harvest)
                 db.flush()
-                from app.enricher_v2 import enrich_thought_v2
+                # Queue enrichment via Redis (non-blocking)
                 try:
-                    enrich_thought_v2(str(harvest.id), str(thought.tenant_id), db)
-                    harvest.status = 'processed'
-                except Exception as e:
-                    harvest.status = 'error'
-                    harvest.error_message = str(e)
+                    from app.task_broker import enqueue_enrichment
+                    enqueue_enrichment(str(harvest.id), str(thought.tenant_id))
+                    harvest.status = 'processing'
+                except Exception:
+                    # Fallback: inline if Redis is down
+                    from app.enricher_v2 import enrich_thought_v2
+                    try:
+                        enrich_thought_v2(str(harvest.id), str(thought.tenant_id), db)
+                        harvest.status = 'processed'
+                    except Exception as e:
+                        harvest.status = 'error'
+                        harvest.error_message = str(e)
                 db.commit()
                 harvested += 1
             except Exception:
@@ -1357,6 +1713,13 @@ def harvest_all(
             )
             db.add(thought)
             db.flush()
+            # Queue enrichment via Redis (non-blocking)
+            try:
+                from app.task_broker import enqueue_enrichment
+                enqueue_enrichment(str(thought.id), str(session_row.tenant_id))
+                thought.status = 'processing'
+            except Exception:
+                pass  # Worker will pick up pending thoughts
             db.commit()
             harvested += 1
         except Exception as e:
@@ -1427,14 +1790,20 @@ def harvest_chat(
     db.commit()
     db.refresh(thought)
 
-    # Run enrichment pipeline
-    from app.enricher_v2 import enrich_thought_v2
+    # Queue enrichment via Redis (non-blocking)
     try:
-        enrich_thought_v2(str(thought.id), str(current_user.tenant_id), db)
-        thought.status = 'processed'
-    except Exception as e:
-        thought.status = 'error'
-        thought.error_message = str(e)
+        from app.task_broker import enqueue_enrichment
+        task_id = enqueue_enrichment(str(thought.id), str(current_user.tenant_id))
+        thought.status = 'processing'
+    except Exception:
+        # Fallback: inline if Redis is down
+        from app.enricher_v2 import enrich_thought_v2
+        try:
+            enrich_thought_v2(str(thought.id), str(current_user.tenant_id), db)
+            thought.status = 'processed'
+        except Exception as e:
+            thought.status = 'error'
+            thought.error_message = str(e)
     db.commit()
 
     return {

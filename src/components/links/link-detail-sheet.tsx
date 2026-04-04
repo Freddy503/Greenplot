@@ -48,6 +48,8 @@ function LinkDetailSheet({
 }) {
   const [related, setRelated] = useState<RelatedItem[]>([])
   const [loadingRelated, setLoadingRelated] = useState(false)
+  const [creatingSeed, setCreatingSeed] = useState(false)
+  const [spawnedSeed, setSpawnedSeed] = useState<{id: string; title: string} | null>(null)
 
   useEffect(() => {
     if (link && open) {
@@ -60,6 +62,21 @@ function LinkDetailSheet({
         .then(data => setRelated(data.related || []))
         .catch(() => {})
         .finally(() => setLoadingRelated(false))
+
+      // Load spawned seeds from this source
+      setSpawnedSeed(null)
+      const token2 = localStorage.getItem('greenplot_token')
+      fetch(`/api/links/${link.id}/seeds`, {
+        headers: token2 ? { Authorization: `Bearer ${token2}` } : {},
+      })
+        .then(r => r.ok ? r.json() : { seeds: [] })
+        .then(data => {
+          if (data.seeds && data.seeds.length > 0) {
+            const s = data.seeds[0]
+            setSpawnedSeed({ id: s.id, title: s.title || 'In Garden' })
+          }
+        })
+        .catch(() => {})
     }
   }, [link, open])
 
@@ -223,6 +240,29 @@ function LinkDetailSheet({
           </Card>
         )}
 
+        {/* Bridge: Spawned Seed */}
+        {spawnedSeed && (
+          <div className="mb-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-2">🌱 Spawned Seed</p>
+            <Card className="bg-primary/5 border-primary/15">
+              <CardContent className="p-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>eco</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-on-surface truncate">{spawnedSeed.title}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-[10px] h-6 text-primary"
+                  onClick={() => window.open(`/garden?seed=${spawnedSeed.id}`, '_blank')}
+                >
+                  View
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex gap-2">
           <Button
@@ -252,6 +292,40 @@ function LinkDetailSheet({
             {link.starred ? 'Unstar' : 'Star'}
           </Button>
         </div>
+        {/* Bridge: Create Seed from Source */}
+        {!spawnedSeed && (
+          <div className="mt-3">
+            <Button
+              className="w-full rounded-full text-xs bg-primary/10 text-primary hover:bg-primary/20 border-0"
+              disabled={creatingSeed}
+              onClick={async () => {
+                setCreatingSeed(true)
+                const token = localStorage.getItem('greenplot_token')
+                try {
+                  const res = await fetch(`/api/links/${link.id}/create-seed`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                  })
+                  const data = await res.json()
+                  if (data.seed_id) {
+                    setSpawnedSeed({ id: data.seed_id, title: data.title })
+                    toast.success('Seed created from source 🌱')
+                  }
+                } catch {
+                  toast.error('Failed to create seed')
+                } finally {
+                  setCreatingSeed(false)
+                }
+              }}
+            >
+              <span className="material-symbols-outlined text-sm mr-1">eco</span>
+              {creatingSeed ? 'Creating...' : 'Create Seed from Source'}
+            </Button>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   )
