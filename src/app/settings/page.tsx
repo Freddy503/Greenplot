@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { usePushNotifications } from '@/hooks/use-push-notifications'
 import { toast } from 'sonner'
 
 const BACKEND = '/api'
@@ -26,56 +27,59 @@ const DIGEST_OPTIONS = [
   { value: 'weekly', label: 'Weekly', desc: 'Monday digest only' },
 ]
 
-// ── Cron helpers ───────────────────────────────
-function cronToHuman(expr: string): string {
-  const parts = expr.split(' ')
-  if (parts.length < 5) return expr
-  const [min, hour, dayOfMonth, month, dayOfWeek] = parts
-  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    if (min.startsWith('*/')) return `Every ${min.slice(2)} minutes`
-    if (hour === '*') return `At minute ${min} every hour`
-    return `Daily at ${hour}:${min.padStart(2, '0')}`
-  }
-  if (dayOfWeek !== '*' && dayOfMonth === '*') {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const d = dayOfWeek.split(',').map(i => days[parseInt(i)] || i).join(', ')
-    return `${d} at ${hour}:${min.padStart(2, '0')}`
-  }
-  if (dayOfMonth.startsWith('*/')) return `Every ${dayOfMonth.slice(2)} days at ${hour}:${min.padStart(2, '0')}`
-  return expr
-}
-
-function getStatusColor(status: string, errors: number): string {
-  if (errors > 0) return 'text-error'
-  if (status === 'ok') return 'text-primary'
-  if (status === 'error') return 'text-error'
-  return 'text-on-surface-variant'
-}
-
 export default function SettingsPage() {
   const router = useRouter()
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [digestFrequency, setDigestFrequency] = useState('once-daily')
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
-  // Cron jobs state
-  const [cronJobs, setCronJobs] = useState<Array<{
-    id: string
-    name: string
-    enabled: boolean
-    schedule: string
-    nextRun: string
-    lastRun: string
-    lastStatus: string
-    consecutiveErrors: number
-  }>>([])
-  const [cronLoading, setCronLoading] = useState(true)
-  const [runningJob, setRunningJob] = useState<string | null>(null)
+  // Notification pipeline jobs — pre-defined, no gateway dependency
+  const PIPELINE_JOBS = [
+    {
+      id: 'morning-spark',
+      name: 'Morning Idea Spark',
+      icon: '💡',
+      description: 'Generates a bold "What if…" question from your enriched seeds',
+      schedule: 'Daily at 8:30 AM CET',
+      cadence: 'daily',
+    },
+    {
+      id: 'daily-briefing',
+      name: 'Daily Briefing',
+      icon: '☀️',
+      description: 'Weather, agentic architecture insight, academic spotlight & enterprise AI news',
+      schedule: 'Daily at 8:30 AM CET',
+      cadence: 'daily',
+    },
+    {
+      id: 'daily-reflection',
+      name: 'Daily Reflection',
+      icon: '📓',
+      description: 'Afternoon journaling prompt with Notion link',
+      schedule: 'Daily at 4:00 PM CET',
+      cadence: 'daily',
+    },
+    {
+      id: 'weekly-eval',
+      name: 'Weekly Content Eval',
+      icon: '📊',
+      description: 'Reviews your rated seeds, identifies patterns, suggests enrichment adjustments',
+      schedule: 'Sundays at 6:00 PM CET',
+      cadence: 'weekly',
+    },
+    {
+      id: 'biweekly-challenge',
+      name: 'Biweekly Challenge',
+      icon: '🎯',
+      description: 'Cross-pollination challenge: identifies knowledge gaps and proposes experiments',
+      schedule: '1st & 15th at 10:00 AM CET',
+      cadence: 'biweekly',
+    },
+  ]
 
   // Edit modes
   const [editingCity, setEditingCity] = useState(false)
@@ -93,50 +97,7 @@ export default function SettingsPage() {
       setDigestFrequency(profile.digest_frequency || 'once-daily')
     } catch {}
 
-    // Check push notification status
-    if ('Notification' in window) {
-      setNotificationsEnabled(Notification.permission === 'granted')
-    }
-
-    // Fetch cron jobs — only notification-triggering pipeline jobs
-    const NOTIFICATION_JOBS = [
-      'Morning Idea Spark',
-      'Daily Briefing with Weather',
-      'Daily Reflection Prompt',
-      'Weekly Content Eval Review (Sun 18:00 CET)',
-      'Biweekly Challenge Agent',
-    ]
-    fetch('/api/cron')
-      .then(r => r.json())
-      .then(data => {
-        const jobs = (data.jobs || [])
-          .filter((j: any) => NOTIFICATION_JOBS.some(n => (j.name || '').toLowerCase().includes(n.toLowerCase().split(' (')[0])))
-          .map((j: any) => {
-            const sched = j.schedule || {}
-            let scheduleDesc = ''
-            if (sched.kind === 'cron') {
-              scheduleDesc = cronToHuman(sched.expr)
-              if (sched.tz) scheduleDesc += ` (${sched.tz})`
-            } else if (sched.kind === 'every') {
-              const mins = Math.round(sched.everyMs / 60000)
-              scheduleDesc = mins >= 60 ? `Every ${mins / 60}h` : `Every ${mins}m`
-            }
-            const fmt = (ms: number | undefined) => ms ? new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
-            return {
-              id: j.id,
-              name: j.name || 'Unnamed',
-              enabled: j.enabled !== false,
-              schedule: scheduleDesc,
-              nextRun: fmt(j.state?.nextRunAtMs),
-              lastRun: fmt(j.state?.lastRunAtMs),
-              lastStatus: j.state?.lastStatus || '—',
-              consecutiveErrors: j.state?.consecutiveErrors || 0,
-            }
-          })
-        setCronJobs(jobs)
-      })
-      .catch(() => {})
-      .finally(() => setCronLoading(false))
+    // (Pipeline jobs are pre-defined — no fetch needed)
   }, [])
 
   const authHeaders = () => ({
@@ -199,49 +160,20 @@ export default function SettingsPage() {
     }
   }
 
-  // ── Toggle notifications ────────────────────
+  // ── Push notifications (via hook) ──────────
+  const { status: pushStatus, requestPermission } = usePushNotifications()
+  const notificationsEnabled = pushStatus === 'subscribed' || pushStatus === 'granted'
+
   const handleToggleNotifications = async (enabled: boolean) => {
     if (enabled) {
-      try {
-        const reg = await navigator.serviceWorker.ready
-        const sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: undefined, // Will use existing VAPID key
-        })
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({ subscription: sub.toJSON(), userId: token }),
-        })
-        setNotificationsEnabled(true)
+      const ok = await requestPermission()
+      if (ok) {
         toast.success('Notifications enabled')
-      } catch {
+      } else {
         toast.error('Could not enable notifications. Check browser permissions.')
       }
     } else {
-      setNotificationsEnabled(false)
       toast.info('Notifications disabled. Re-enable from browser settings if needed.')
-    }
-  }
-
-  // ── Run cron job ────────────────────────────
-  const handleRunNow = async (jobId: string, jobName: string) => {
-    setRunningJob(jobId)
-    try {
-      const res = await fetch('/api/cron', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'run', jobId }),
-      })
-      if (res.ok) {
-        toast.success(`Triggered: ${jobName}`)
-      } else {
-        toast.error(`Failed to trigger: ${jobName}`)
-      }
-    } catch {
-      toast.error('Could not reach cron service')
-    } finally {
-      setRunningJob(null)
     }
   }
 
@@ -422,64 +354,37 @@ export default function SettingsPage() {
           <CalendarConnectCard />
         </section>
 
-        {/* ── Scheduled Jobs ──────────────────── */}
+        {/* ── Notification Pipelines ──────────── */}
         <section className="mb-8">
           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
             Notification Pipelines
           </h2>
-          {cronLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-20 rounded-2xl bg-surface-container border border-outline-variant/10 animate-pulse" />
-              ))}
-            </div>
-          ) : cronJobs.length === 0 ? (
-            <div className="px-5 py-6 rounded-2xl bg-surface-container border border-outline-variant/10 text-center">
-              <span className="material-symbols-outlined text-on-surface-variant/40 text-3xl mb-2">schedule</span>
-              <p className="text-sm text-on-surface-variant">No scheduled jobs configured</p>
-              <p className="text-[10px] text-on-surface-variant/60 mt-1">Configure via OpenClaw CLI</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {cronJobs.map((job) => (
-                <div
-                  key={job.id}
-                  className="px-4 py-3 rounded-2xl bg-surface-container border border-outline-variant/10"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${job.enabled ? 'bg-primary' : 'bg-on-surface-variant/30'}`} />
-                        <p className="text-sm font-bold text-on-surface truncate">{job.name}</p>
-                      </div>
-                      <p className="text-[10px] text-on-surface-variant/60 mt-0.5 ml-4">{job.schedule}</p>
-                      <div className="flex items-center gap-3 mt-1.5 ml-4">
-                        <span className="text-[9px] text-on-surface-variant/50">
-                          Next: {job.nextRun}
-                        </span>
-                        <span className={`text-[9px] ${getStatusColor(job.lastStatus, job.consecutiveErrors)}`}>
-                          Last: {job.lastRun} · {job.lastStatus}
-                          {job.consecutiveErrors > 0 && ` (${job.consecutiveErrors} err)`}
-                        </span>
-                      </div>
+          <div className="space-y-2">
+            {PIPELINE_JOBS.map((job) => (
+              <div
+                key={job.id}
+                className="px-4 py-3 rounded-2xl bg-surface-container border border-outline-variant/10"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-lg mt-0.5 flex-shrink-0">{job.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-on-surface">{job.name}</p>
+                    <p className="text-[10px] text-on-surface-variant mt-0.5">{job.description}</p>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: '12px' }}>schedule</span>
+                      <span className="text-[9px] text-on-surface-variant/60">{job.schedule}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">
+                        {job.cadence}
+                      </span>
                     </div>
-                    <button
-                      onClick={() => handleRunNow(job.id, job.name)}
-                      disabled={runningJob === job.id}
-                      className="flex-shrink-0 p-2 rounded-full hover:bg-primary/10 text-on-surface-variant/50 hover:text-primary transition-colors disabled:opacity-50"
-                      title="Run now"
-                    >
-                      {runningJob === job.id ? (
-                        <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-                      ) : (
-                        <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>play_arrow</span>
-                      )}
-                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-on-surface-variant/40 mt-3 px-1">
+            Pipelines run automatically via OpenClaw cron. Deliveries go to your connected Telegram.
+          </p>
         </section>
 
         {/* ── Account ────────────────────────── */}
