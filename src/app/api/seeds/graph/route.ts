@@ -144,14 +144,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ nodes: seeds, links: [], method: 'none' })
     }
 
-    // Try vector-based graph first
-    try {
-      const result = await buildVectorGraph(seeds, maxEdges)
-      if (result.links.length > 0) {
-        return NextResponse.json({ ...result, method: 'vector' })
+    // Try vector-based graph first (only if Weaviate is reachable, skip on Vercel)
+    const isRemote = !WEAVIATE_URL.includes('localhost')
+    if (isRemote) {
+      try {
+        const result = await buildVectorGraph(seeds, maxEdges)
+        if (result.links.length > 0) {
+          return NextResponse.json({ ...result, method: 'vector' })
+        }
+      } catch {
+        // Vector search failed — fall back
       }
-    } catch {
-      // Vector search failed — fall back
     }
 
     // Fallback to text-based connections

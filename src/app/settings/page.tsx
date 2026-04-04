@@ -26,6 +26,32 @@ const DIGEST_OPTIONS = [
   { value: 'weekly', label: 'Weekly', desc: 'Monday digest only' },
 ]
 
+// ── Cron helpers ───────────────────────────────
+function cronToHuman(expr: string): string {
+  const parts = expr.split(' ')
+  if (parts.length < 5) return expr
+  const [min, hour, dayOfMonth, month, dayOfWeek] = parts
+  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    if (min.startsWith('*/')) return `Every ${min.slice(2)} minutes`
+    if (hour === '*') return `At minute ${min} every hour`
+    return `Daily at ${hour}:${min.padStart(2, '0')}`
+  }
+  if (dayOfWeek !== '*' && dayOfMonth === '*') {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const d = dayOfWeek.split(',').map(i => days[parseInt(i)] || i).join(', ')
+    return `${d} at ${hour}:${min.padStart(2, '0')}`
+  }
+  if (dayOfMonth.startsWith('*/')) return `Every ${dayOfMonth.slice(2)} days at ${hour}:${min.padStart(2, '0')}`
+  return expr
+}
+
+function getStatusColor(status: string, errors: number): string {
+  if (errors > 0) return 'text-error'
+  if (status === 'ok') return 'text-primary'
+  if (status === 'error') return 'text-error'
+  return 'text-on-surface-variant'
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const [nickname, setNickname] = useState('')
@@ -36,6 +62,20 @@ export default function SettingsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+
+  // Cron jobs state
+  const [cronJobs, setCronJobs] = useState<Array<{
+    id: string
+    name: string
+    enabled: boolean
+    schedule: string
+    nextRun: string
+    lastRun: string
+    lastStatus: string
+    consecutiveErrors: number
+  }>>([])
+  const [cronLoading, setCronLoading] = useState(true)
+  const [runningJob, setRunningJob] = useState<string | null>(null)
 
   // Edit modes
   const [editingCity, setEditingCity] = useState(false)
@@ -57,6 +97,37 @@ export default function SettingsPage() {
     if ('Notification' in window) {
       setNotificationsEnabled(Notification.permission === 'granted')
     }
+
+    // Fetch cron jobs
+    fetch('/api/cron')
+      .then(r => r.json())
+      .then(data => {
+        const jobs = (data.jobs || []).map((j: any) => {
+          const sched = j.schedule || {}
+          let scheduleDesc = ''
+          if (sched.kind === 'cron') {
+            scheduleDesc = cronToHuman(sched.expr)
+            if (sched.tz) scheduleDesc += ` (${sched.tz})`
+          } else if (sched.kind === 'every') {
+            const mins = Math.round(sched.everyMs / 60000)
+            scheduleDesc = mins >= 60 ? `Every ${mins / 60}h` : `Every ${mins}m`
+          }
+          const fmt = (ms: number | undefined) => ms ? new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+          return {
+            id: j.id,
+            name: j.name || 'Unnamed',
+            enabled: j.enabled !== false,
+            schedule: scheduleDesc,
+            nextRun: fmt(j.state?.nextRunAtMs),
+            lastRun: fmt(j.state?.lastRunAtMs),
+            lastStatus: j.state?.lastStatus || '—',
+            consecutiveErrors: j.state?.consecutiveErrors || 0,
+          }
+        })
+        setCronJobs(jobs)
+      })
+      .catch(() => {})
+      .finally(() => setCronLoading(false))
   }, [])
 
   const authHeaders = () => ({
@@ -144,6 +215,27 @@ export default function SettingsPage() {
     }
   }
 
+  // ── Run cron job ────────────────────────────
+  const handleRunNow = async (jobId: string, jobName: string) => {
+    setRunningJob(jobId)
+    try {
+      const res = await fetch('/api/cron', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'run', jobId }),
+      })
+      if (res.ok) {
+        toast.success(`Triggered: ${jobName}`)
+      } else {
+        toast.error(`Failed to trigger: ${jobName}`)
+      }
+    } catch {
+      toast.error('Could not reach cron service')
+    } finally {
+      setRunningJob(null)
+    }
+  }
+
   // ── Logout ──────────────────────────────────
   const handleLogout = () => {
     localStorage.removeItem('greenplot_token')
@@ -152,7 +244,7 @@ export default function SettingsPage() {
     localStorage.removeItem('greenplot_chat_messages')
     localStorage.removeItem('greenplot_profile')
     toast.success('Logged out')
-    router.push('/login')
+    router.push('/onboarding')
   }
 
   // ── Delete account ──────────────────────────
@@ -319,6 +411,66 @@ export default function SettingsPage() {
             Integrations
           </h2>
           <CalendarConnectCard />
+        </section>
+
+        {/* ── Scheduled Jobs ──────────────────── */}
+        <section className="mb-8">
+          <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
+            Scheduled Jobs
+          </h2>
+          {cronLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-20 rounded-2xl bg-surface-container border border-outline-variant/10 animate-pulse" />
+              ))}
+            </div>
+          ) : cronJobs.length === 0 ? (
+            <div className="px-5 py-6 rounded-2xl bg-surface-container border border-outline-variant/10 text-center">
+              <span className="material-symbols-outlined text-on-surface-variant/40 text-3xl mb-2">schedule</span>
+              <p className="text-sm text-on-surface-variant">No scheduled jobs configured</p>
+              <p className="text-[10px] text-on-surface-variant/60 mt-1">Configure via OpenClaw CLI</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {cronJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="px-4 py-3 rounded-2xl bg-surface-container border border-outline-variant/10"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${job.enabled ? 'bg-primary' : 'bg-on-surface-variant/30'}`} />
+                        <p className="text-sm font-bold text-on-surface truncate">{job.name}</p>
+                      </div>
+                      <p className="text-[10px] text-on-surface-variant/60 mt-0.5 ml-4">{job.schedule}</p>
+                      <div className="flex items-center gap-3 mt-1.5 ml-4">
+                        <span className="text-[9px] text-on-surface-variant/50">
+                          Next: {job.nextRun}
+                        </span>
+                        <span className={`text-[9px] ${getStatusColor(job.lastStatus, job.consecutiveErrors)}`}>
+                          Last: {job.lastRun} · {job.lastStatus}
+                          {job.consecutiveErrors > 0 && ` (${job.consecutiveErrors} err)`}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRunNow(job.id, job.name)}
+                      disabled={runningJob === job.id}
+                      className="flex-shrink-0 p-2 rounded-full hover:bg-primary/10 text-on-surface-variant/50 hover:text-primary transition-colors disabled:opacity-50"
+                      title="Run now"
+                    >
+                      {runningJob === job.id ? (
+                        <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>play_arrow</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* ── Account ────────────────────────── */}
