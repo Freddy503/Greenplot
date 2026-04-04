@@ -29,6 +29,7 @@ import { AddToGardenButton } from '@/components/ai-elements/add-to-garden-button
 // Layout
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+import { ActivitySummary } from '@/components/activity-summary'
 
 // AI Elements
 import {
@@ -481,7 +482,11 @@ export default function ChatPage() {
                 </div>
               </ConversationEmptyState>
             ) : (
-              messages.map((message, msgIdx) => {
+              <>
+                {/* Activity Summary - shows at top when there are messages */}
+                <ActivitySummary token={authToken} />
+                
+                {messages.map((message, msgIdx) => {
                 const sourceParts = message.parts.filter((p) => p.type === 'source-url')
                 const isUser = message.role === 'user'
                 const isLastAssistant = !isUser && msgIdx === messages.length - 1
@@ -826,6 +831,8 @@ export default function ChatPage() {
                 <span className="material-symbols-outlined text-sm">error</span>
                 Something went wrong. Try again.
               </div>
+            )}
+              </>
             )}
           </ConversationContent>
           <ConversationScrollButton />
