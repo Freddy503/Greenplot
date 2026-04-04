@@ -469,6 +469,7 @@ export default function ChatPage() {
                   </div>
 
                   {/* Suggestion chips */}
+                  <ActivitySummary token={authToken} />
                   <Suggestions>
                     {dynamicSuggestions.map((s) => (
                       <Suggestion
