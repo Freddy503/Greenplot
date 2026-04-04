@@ -351,7 +351,10 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     if not enriched:
         return {"ok": True, "compiled": 0, "message": "No enriched links available"}
 
-    # 2. Get existing wiki articles and their source link IDs
+    # 1b. Also get seeds — they contain your actual thinking
+    all_seeds = weaviate_client.get_seeds_by_tenant(tenant_id, limit=200)
+
+    # 2. Get existing wiki articles and their source IDs
     articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
     covered_link_ids = set()
     for article in articles:
@@ -398,6 +401,29 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         for l in group[:8]:
             contents.append(f"## {l.get('title', 'Untitled')}\n\n{l.get('summary', '')}")
             source_link_ids.append(l.get("id", ""))
+
+        # Also pull related seeds by tag/domain overlap — your actual thinking
+        source_seed_ids = []
+        link_tags = set()
+        for l in group:
+            for t in (l.get("tags", "") or "").split(","):
+                t = t.strip().lower()
+                if t:
+                    link_tags.add(t)
+
+        for seed in all_seeds:
+            seed_tags = set(t.strip().lower() for t in (seed.get("tags", "") or "").split(",") if t.strip())
+            seed_domain = (seed.get("domain", "") or "").lower()
+            
+            # Match: shared tags or same domain
+            tag_overlap = link_tags & seed_tags
+            domain_match = seed_domain and seed_domain == domain
+            
+            if tag_overlap or domain_match:
+                seed_title = seed.get("title", "Untitled")
+                seed_content = (seed.get("content", "") or "")[:300]
+                contents.append(f"## 💡 {seed_title} *(from Garden)*\n\n{seed_content}")
+                source_seed_ids.append(seed.get("id", ""))
 
         if not contents:
             continue
@@ -473,13 +499,13 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
                 category=category,
                 summary=summary,
                 content=article_content,
-                source_seed_ids="",
+                source_seed_ids=",".join(source_seed_ids),
                 source_link_ids=",".join(source_link_ids),
                 backlinks="",
                 status="published",
             )
             compiled += 1
-            results.append({"id": article_id, "title": title, "links": len(source_link_ids)})
+            results.append({"id": article_id, "title": title, "links": len(source_link_ids), "seeds": len(source_seed_ids)})
         except Exception:
             continue
 
