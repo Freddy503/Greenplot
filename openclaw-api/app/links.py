@@ -201,6 +201,68 @@ def _auto_connect_link_to_seeds(link_id: str, tenant_id: str, title: str, summar
         top_seeds = sorted(scores.items(), key=lambda x: -x[1])[:5]
         related_str = ",".join(sid for sid, _ in top_seeds)
         weaviate_client.update_link(link_id, garden_seed_id=related_str)
+    else:
+        # AUTO-BRIDGE: No related seeds found → auto-create a seed from this source
+        # This connects Sources → Garden automatically
+        _auto_create_seed_from_link(link_id, tenant_id, title, summary, tags, domain)
+
+
+def _auto_create_seed_from_link(link_id: str, tenant_id: str, title: str, summary: str, tags: str, domain: str):
+    """Auto-create a seed from an enriched link when no related seeds exist.
+    This is the Sources → Garden auto-bridge."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        from app.enricher import embed_text
+        
+        # Build seed content
+        seed_content = f"Source: {title}\n\n{summary}" if summary else f"Source: {title}"
+        
+        # Generate embedding
+        try:
+            embedding = embed_text(f"{title} {summary}")
+        except Exception:
+            embedding = [0.0] * 1536
+        
+        # Get user_id from tenant (simplified - use first user)
+        from app.database import get_db
+        from app.models import User
+        db = next(get_db())
+        user = db.query(User).filter(User.tenant_id == tenant_id).first()
+        if not user:
+            return
+        
+        # Create seed
+        seed_id = weaviate_client.add_seed(
+            tenant_id=tenant_id,
+            user_id=str(user.id),
+            thought_id=None,
+            title=f"📌 {title}",
+            content=seed_content,
+            embedding=embedding,
+            metadata={
+                "source": "auto_bridge",
+                "source_link_id": link_id,
+                "domain": domain,
+                "tags": tags,
+            },
+        )
+        
+        # Update link with seed reference
+        weaviate_client.update_link(link_id, garden_seed_id=seed_id)
+        
+        logger.info(f"🔗→🌱 Auto-bridged source to seed: {title[:50]}")
+        
+        # Log activity
+        try:
+            from app.activity import log_seed_created
+            log_seed_created(tenant_id, f"📌 {title}", "auto_bridge")
+        except Exception:
+            pass
+            
+    except Exception as e:
+        logger.debug(f"Auto-bridge failed for link {link_id}: {e}")
 
 
 @router.post("/enrich-pending")
