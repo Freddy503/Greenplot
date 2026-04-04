@@ -1420,12 +1420,19 @@ async def chat_v2_endpoint(
         pass
 
     # ── Source Context: auto-surface relevant sources for the conversation ──
-    if current_user and last_prompt:
+    # Extract last user prompt for source matching
+    _last_prompt = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            _last_prompt = extract_text(msg)
+            break
+
+    if current_user and _last_prompt:
         try:
             user_sources = weaviate_client.get_links(tenant_id=str(current_user.tenant_id), limit=100)
             if user_sources:
                 # Match sources to the user's message by keyword overlap
-                prompt_words = set(last_prompt.lower().split())
+                prompt_words = set(_last_prompt.lower().split())
                 scored = []
                 for link in user_sources:
                     title = (link.get("title") or "").lower()

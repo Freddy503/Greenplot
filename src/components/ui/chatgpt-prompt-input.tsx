@@ -134,6 +134,7 @@ export const PromptBox = React.forwardRef<
   const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [value, setValue] = React.useState('')
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
   const [imagePreview, setImagePreview] = React.useState<string | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = React.useState(false)
 
@@ -152,6 +153,17 @@ export const PromptBox = React.forwardRef<
     setValue(e.target.value)
     if (props.onChange) props.onChange(e)
   }
+
+  // Mobile Safari fallback: listen to native input event
+  React.useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    const handler = () => {
+      if (ta.value !== value) setValue(ta.value)
+    }
+    ta.addEventListener('input', handler, { passive: true })
+    return () => ta.removeEventListener('input', handler)
+  }, [value])
 
   const handlePlusClick = () => {
     fileInputRef.current?.click()
@@ -208,9 +220,11 @@ export const PromptBox = React.forwardRef<
   const hint = getHint()
 
   const handleSubmit = () => {
-    if (value.trim() || imagePreview) {
-      onSubmit?.(value)
+    const currentValue = textareaRef.current?.value ?? value
+    if (currentValue.trim() || imagePreview) {
+      onSubmit?.(currentValue)
       setValue('')
+      if (textareaRef.current) textareaRef.current.value = ''
     }
   }
 
@@ -221,7 +235,7 @@ export const PromptBox = React.forwardRef<
     }
   }
 
-  const hasValue = value.trim().length > 0 || imagePreview
+  const hasValue = (textareaRef.current?.value ?? value).trim().length > 0 || imagePreview
 
   return (
     <div
@@ -254,13 +268,19 @@ export const PromptBox = React.forwardRef<
       )}
 
       <textarea
-        ref={internalTextareaRef}
+        ref={(el) => {
+          textareaRef.current = el
+          if (internalTextareaRef && 'current' in (internalTextareaRef as object)) {
+            (internalTextareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el
+          }
+        }}
         rows={1}
-        value={value}
+        defaultValue=""
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         placeholder="Nurture a new idea..."
         className="custom-scrollbar w-full resize-none border-0 bg-transparent p-3 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-0 focus-visible:outline-none min-h-12"
+        suppressHydrationWarning
         {...props}
       />
 
