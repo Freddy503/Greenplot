@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.auth import get_current_user
+from app.models import User
 from app.weaviate_client import weaviate_client
 import httpx
 from urllib.parse import urlparse
@@ -104,8 +105,8 @@ async def fetch_page_metadata(url: str) -> dict:
 
 
 @router.post("")
-async def create_link(body: LinkCreate, request: Request):
-    user = await get_current_user(request)
+async def create_link(body: LinkCreate, request: Request, current_user = Depends(get_current_user)):
+    user = current_user
     tenant_id = str(user.tenant_id)
     user_id = str(user.id)
 
@@ -151,8 +152,9 @@ async def list_links(
     starred: Optional[bool] = None,
     sort: str = "recent",
     limit: int = 50,
+    current_user = Depends(get_current_user),
 ):
-    user = await get_current_user(request)
+    user = current_user
     tenant_id = str(user.tenant_id)
 
     links = weaviate_client.get_links(
@@ -167,8 +169,8 @@ async def list_links(
 
 
 @router.patch("/{link_id}")
-async def update_link(link_id: str, body: LinkUpdate, request: Request):
-    user = await get_current_user(request)
+async def update_link(link_id: str, body: LinkUpdate, request: Request, current_user = Depends(get_current_user)):
+    user = current_user
 
     updates = {}
     if body.title is not None:
@@ -236,8 +238,8 @@ async def update_link(link_id: str, body: LinkUpdate, request: Request):
 
 
 @router.delete("/{link_id}")
-async def delete_link(link_id: str, request: Request):
-    user = await get_current_user(request)
+async def delete_link(link_id: str, request: Request, current_user = Depends(get_current_user)):
+    user = current_user
 
     success = weaviate_client.delete_link(link_id)
     if not success:
@@ -247,8 +249,8 @@ async def delete_link(link_id: str, request: Request):
 
 
 @router.post("/bulk")
-async def bulk_create_links(body: LinkBulkCreate, request: Request):
-    user = await get_current_user(request)
+async def bulk_create_links(body: LinkBulkCreate, request: Request, current_user = Depends(get_current_user)):
+    user = current_user
     tenant_id = str(user.tenant_id)
     user_id = str(user.id)
 
@@ -289,9 +291,9 @@ async def bulk_create_links(body: LinkBulkCreate, request: Request):
 # ── P1: Connection Detection ──────────────────────────
 
 @router.post("/detect-connections")
-async def detect_connections(body: ConnectionDetectRequest, request: Request):
+async def detect_connections(body: ConnectionDetectRequest, request: Request, current_user = Depends(get_current_user)):
     """Detect connections between links based on tag overlap, domain, and vector similarity."""
-    user = await get_current_user(request)
+    user = current_user
     tenant_id = str(user.tenant_id)
 
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
@@ -356,9 +358,9 @@ async def detect_connections(body: ConnectionDetectRequest, request: Request):
 
 
 @router.get("/{link_id}/related")
-async def get_related(link_id: str, request: Request):
+async def get_related(link_id: str, request: Request, current_user = Depends(get_current_user)):
     """Get related links/seeds for a given link."""
-    user = await get_current_user(request)
+    user = current_user
 
     try:
         obj = weaviate_client.client.data_object.get_by_id(
