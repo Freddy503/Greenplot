@@ -449,10 +449,10 @@ export default function ChatPage() {
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="pt-16 flex-1 min-h-0 overflow-hidden md:max-h-[calc(100dvh-3.5rem)]">
+      <main className="pt-16 flex-1 min-h-0 overflow-hidden">
         <Conversation className="h-full">
           <ConversationContent>
-            {/* Always show suggestions at top, regardless of messages */}
+            {/* Always show suggestions at top */}
             <div className="max-w-2xl mx-auto w-full px-2 mb-4">
               <Suggestions>
                 {dynamicSuggestions.map((s) => (
