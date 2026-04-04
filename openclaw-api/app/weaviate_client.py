@@ -407,7 +407,7 @@ class WeaviateClient:
             "title", "category", "summary", "content", "source_seed_ids",
             "source_link_ids", "backlinks", "status", "health_score",
             "created_at", "updated_at", "last_regenerated_at", "imageUrl"
-        ]).with_where(where).with_limit(limit)
+        ]).with_where(where).with_additional(["id"]).with_limit(limit)
 
         result = query.do()
         objects = result.get("data", {}).get("Get", {}).get("WikiArticle", []) or []
