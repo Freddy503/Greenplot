@@ -5,6 +5,7 @@ from app.auth import get_current_user
 from app.weaviate_client import weaviate_client
 from app.config import settings
 import httpx
+import asyncio
 import json
 import logging
 
@@ -73,6 +74,31 @@ WIKI_SYSTEM_PROMPT = """You are a senior encyclopedic writer creating personal k
 8. Minimum 800 words for substantial topics"""
 
 WIKI_MODEL = "qwen/qwen3.6-plus:free"
+
+async def _auto_generate_image(article_id: str, title: str, category: str = "", domain: str = "", tenant_id: str = ""):
+    """Generate and store a hero image for a wiki article in the background."""
+    try:
+        from app.ingest import generate_concept_image
+        tags = [t.strip() for t in (category or "").split(",") if t.strip()]
+        if domain:
+            tags.append(domain)
+        if title and title not in tags:
+            tags.insert(0, title)
+        image_url = await generate_concept_image(title or "Concept", tags)
+        if image_url:
+            # Store imageUrl in the article
+            try:
+                weaviate_client.client.data_object.update(
+                    data_object={"imageUrl": image_url},
+                    class_name="WikiArticle",
+                    uuid=article_id,
+                )
+                logger.info(f"Auto-generated image for {title}: {image_url}")
+            except Exception as e:
+                logger.warning(f"Failed to store image URL for {title}: {e}")
+    except Exception as e:
+        logger.warning(f"Auto image generation failed for {title}: {e}")
+
 WIKI_FALLBACK_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"  # Fallback if primary is rate-limited
 WIKI_MAX_TOKENS = 4000
 WIKI_TEMPERATURE = 0.5
@@ -644,7 +670,6 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             article_content += f"\n---\n*Auto-compiled from {len(group)} links and {len(source_seed_ids)} seeds*"
         
         # Rate limit protection between articles
-        import asyncio
         await asyncio.sleep(3)
 
         # Extract summary (first paragraph or first 200 chars)
@@ -673,6 +698,8 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             )
             compiled += 1
             results.append({"id": article_id, "title": title, "links": len(source_link_ids), "seeds": len(source_seed_ids)})
+            # Auto-generate hero image in background (fire & forget)
+            asyncio.ensure_future(_auto_generate_image(article_id, title, category=category, domain=domain, tenant_id=tenant_id))
         except Exception:
             continue
 
@@ -747,7 +774,6 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             article_content += f"\n---\n*Compiled from {len(uncovered_seeds)} seeds*"
         
         # Rate limit protection
-        import asyncio
         await asyncio.sleep(3)
         
         # Extract summary
@@ -775,6 +801,9 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             )
             compiled += 1
             results.append({"id": article_id, "title": title, "links": 0, "seeds": len(source_seed_ids)})
+
+            # Auto-generate hero image in background (fire & forget)
+            asyncio.ensure_future(_auto_generate_image(article_id, title, category=category, domain=domain, tenant_id=tenant_id))
         except Exception:
             continue
 
@@ -1247,10 +1276,11 @@ async def generate_article_image(
         # Update article with image URL
         try:
             weaviate_client.client.data_object.update(
-                uuid=article_id,
+                data_object={"imageUrl": image_url},
                 class_name="WikiArticle",
-                properties={"imageUrl": image_url},
+                uuid=article_id,
             )
+            logger.info(f"Image generated and stored for article {article_id}")
         except Exception as e:
             logger.warning(f"Failed to update article image: {e}")
 
