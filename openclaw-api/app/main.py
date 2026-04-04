@@ -1357,14 +1357,6 @@ def harvest_all(
             )
             db.add(thought)
             db.flush()
-
-            from app.enricher_v2 import enrich_thought_v2
-            try:
-                enrich_thought_v2(str(thought.id), str(session_row.tenant_id), db)
-                thought.status = 'processed'
-            except Exception as e:
-                thought.status = 'error'
-                thought.error_message = str(e)
             db.commit()
             harvested += 1
         except Exception as e:
