@@ -729,7 +729,7 @@ export default function ChatPage() {
                   </div>
                 )
               })
-            )}
+            }
 
             {/* Add to Garden button — appears after substantive conversations */}
             {!isStreaming && messages.length >= 6 && (() => {
