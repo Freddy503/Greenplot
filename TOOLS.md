@@ -45,6 +45,29 @@ Things like:
 
 Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
 
+## Exa Web Search
+- **API key stored at:** `~/.config/exa/api_key`
+- **Endpoint:** `https://api.exa.ai/search`
+- **Usage:**
+  ```bash
+  EXA_KEY=$(cat ~/.config/exa/api_key)
+  curl -s -X POST "https://api.exa.ai/search" \
+    -H "x-api-key: $EXA_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"query": "your search", "numResults": 5}'
+  ```
+
+## Notion
+- **API key stored at:** `~/.config/notion/api_key`
+- **API version:** `2025-09-03`
+- **Usage:**
+  ```bash
+  NOTION_KEY=$(cat ~/.config/notion/api_key)
+  curl -s "https://api.notion.com/v1/blocks/{page_id}/children" \
+    -H "Authorization: Bearer $NOTION_KEY" \
+    -H "Notion-Version: 2025-09-03"
+  ```
+
 ---
 
 Add whatever helps you do your job. This is your cheat sheet.
