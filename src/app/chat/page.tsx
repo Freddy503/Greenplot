@@ -155,28 +155,36 @@ export default function ChatPage() {
   // Dynamic suggestions from garden
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
 
+  // Fetch garden-based suggestions on every mount (every login/page load)
   useEffect(() => {
-    try {
+    const fetchSuggestions = async () => {
       const token = localStorage.getItem('greenplot_token') || ''
       setAuthToken(token)
 
-      // Fetch dynamic suggestions from garden
-      fetch('/api/garden/prompt-suggestions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ count: 4 }),
-      })
-        .then(r => r.json())
-        .then(data => {
+      try {
+        // Get seeds from garden to generate contextual suggestions
+        const res = await fetch('/api/garden/prompt-suggestions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ count: 4 }),
+        })
+        if (res.ok) {
+          const data = await res.json()
           if (data.suggestions?.length > 0) {
             setDynamicSuggestions(data.suggestions)
+            return
           }
-        })
-        .catch(() => {}) // Keep fallback suggestions
-    } catch {}
+        }
+      } catch {}
+
+      // Fallback if API fails or no suggestions
+      setDynamicSuggestions(FALLBACK_SUGGESTIONS)
+    }
+
+    fetchSuggestions()
   }, [])
 
   const { messages, sendMessage, status, setMessages } = useChat({

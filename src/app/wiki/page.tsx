@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
-import * as d3 from 'd3'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -319,141 +318,6 @@ function Infobox({ data, article }: { data: Record<string, string>; article: Wik
 }
 
 
-
-// ── Concept Map Component (D3.js) ────────────────────
-
-function ConceptMap({ articleId, token }: { articleId: string; token: string | null }) {
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const [data, setData] = useState<{ nodes: ConceptNode[]; links: ConceptLink[] } | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch(`/api/wiki/${articleId}/concept-map`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.nodes) setData(d)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [articleId, token])
-
-  useEffect(() => {
-    if (!data || !canvasRef.current) return
-
-    const container = canvasRef.current
-    const width = container.clientWidth
-    const height = 250
-
-    // Clear previous
-    d3.select(container).selectAll('*').remove()
-
-    const svg = d3.select(container)
-      .append('svg')
-      .attr('width', width)
-      .attr('height', height)
-
-    // Color by type
-    const color = (type: string) => {
-      if (type === 'article') return '#16a34a'
-      if (type === 'seed') return '#f59e0b'
-      return '#6366f1'
-    }
-
-    // Create simulation — cast nodes to SimulationNodeDatum since D3 mutates x/y properties
-    const simulation = d3.forceSimulation<any>(data.nodes)
-      .force('link', d3.forceLink(data.links).id((d: any) => d.id).distance(60))
-      .force('charge', d3.forceManyBody().strength(-100))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-
-    // Draw links
-    const link = svg.append('g')
-      .selectAll('line')
-      .data(data.links)
-      .enter()
-      .append('line')
-      .attr('stroke', '#334155')
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', (d: any) => d.type === 'shared-source' ? '4,2' : 'none')
-
-    // Draw nodes
-    const node = svg.append('g')
-      .selectAll('circle')
-      .data(data.nodes)
-      .enter()
-      .append('circle')
-      .attr('r', (d: any) => d.size)
-      .attr('fill', (d: any) => d.type === 'article' ? '#16a34a' : d.type === 'seed' ? '#f59e0b' : '#6366f1')
-      .attr('stroke', '#0f172a')
-      .attr('stroke-width', 2)
-      .style('cursor', 'pointer')
-
-    // Draw labels
-    const label = svg.append('g')
-      .selectAll('text')
-      .data(data.nodes)
-      .enter()
-      .append('text')
-      .text((d: any) => truncate(d.label, 20))
-      .attr('font-size', '10px')
-      .attr('fill', '#94a3b8')
-      .attr('text-anchor', 'middle')
-      .attr('dy', (d: any) => (d.size || 10) + 12)
-
-    // Simulation tick
-    simulation.on('tick', () => {
-      link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y)
-
-      node
-        .attr('cx', (d: any) => d.x)
-        .attr('cy', (d: any) => d.y)
-
-      label
-        .attr('x', (d: any) => d.x)
-        .attr('y', (d: any) => d.y)
-    })
-
-    return () => { simulation.stop() }
-  }, [data])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[250px] bg-surface-container rounded-xl">
-        <span className="material-symbols-outlined animate-spin text-on-surface-variant/40">progress_activity</span>
-      </div>
-    )
-  }
-
-  if (!data || data.nodes.length <= 1) {
-    return (
-      <div className="flex items-center justify-center h-[150px] bg-surface-container rounded-xl text-on-surface-variant/40 text-xs">
-        No connections yet
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-surface-container rounded-xl overflow-hidden border border-outline-variant/10">
-      <div ref={canvasRef} className="w-full" />
-      <div className="flex items-center justify-center gap-4 px-3 py-2 border-t border-outline-variant/10">
-        <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-primary" /> Article
-        </span>
-        <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-amber-400" /> Seed
-        </span>
-        <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-indigo-400" /> Source
-        </span>
-      </div>
-    </div>
-  )
-}
 
 // ── Wikipedia-Style Markdown Renderer ─────────────────
 
@@ -824,7 +688,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
           <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
           Knowledge Graph
         </h3>
-        <ConceptMap articleId={article.id} token={token} />
+        {/* Concept maps removed — D3 dependency removed */}
       </section>
 
       {/* Backlinks */}
