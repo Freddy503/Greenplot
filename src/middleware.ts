@@ -30,6 +30,7 @@ const PUBLIC_PREFIXES = [
   '/api/login',
   '/api/register',
   '/api/push/notifications',  // GET is called by PWA before auth
+  '/api/push/subscribe',  // POST is called before auth in subscription flow
   '/login',
   '/onboarding',
   '/setup',
