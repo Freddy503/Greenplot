@@ -49,9 +49,29 @@ export function usePushNotifications() {
     if (status === 'unsupported') return false
 
     try {
-      // Register service worker
-      const reg = await navigator.serviceWorker.register('/sw.js')
-      await navigator.serviceWorker.ready
+      // Register service worker (idempotent — skips if already registered)
+      const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.register('/sw.js') : null
+      if (!registration) {
+        setStatus('unsupported')
+        return false
+      }
+
+      // Wait for SW to be ready
+      const reg = await navigator.serviceWorker.ready
+
+      // Check if already subscribed on this device
+      const existingSub = await reg.pushManager.getSubscription()
+      if (existingSub) {
+        setSubscription(existingSub)
+        setStatus('subscribed')
+        return true
+      }
+
+      // Check if permission already denied
+      if (Notification.permission === 'denied') {
+        setStatus('denied')
+        return false
+      }
 
       // Request notification permission
       const permission = await Notification.requestPermission()
@@ -69,21 +89,33 @@ export function usePushNotifications() {
       setSubscription(sub)
       setStatus('subscribed')
 
-      // Store subscription for cron job delivery
-      localStorage.setItem('greenplot_push_sub', JSON.stringify(sub.toJSON()))
-
       // Send subscription to server
       const userId = localStorage.getItem('greenplot_token') || 'default'
-      await fetch('/api/push/subscribe', {
+      const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub.toJSON(), userId }),
       })
 
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        console.error('[push] Server rejected subscription:', errData)
+        return false
+      }
+
+      console.log('[push] Successfully subscribed for push notifications')
       return true
-    } catch (err) {
-      console.error('[push] Failed:', err)
-      setStatus('error')
+    } catch (err: any) {
+      const msg = err?.message || 'Unknown error'
+      console.error('[push] Failed:', msg, err)
+
+      // Specific error handling
+      if (msg.includes('permission')) {
+        setStatus('denied')
+      } else if (msg.includes('subscribe')) {
+        setStatus('error')
+      }
+
       return false
     }
   }, [status])

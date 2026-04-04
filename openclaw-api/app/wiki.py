@@ -5,8 +5,169 @@ from app.auth import get_current_user
 from app.weaviate_client import weaviate_client
 from app.config import settings
 import httpx
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/wiki", tags=["wiki"])
+
+# ── High-Quality Wiki Synthesis Prompts ──────────────
+
+WIKI_SYSTEM_PROMPT = """You are a senior encyclopedic writer creating personal knowledge base articles. Your writing quality must match GrokPedia/Wikipedia standards.
+
+## ARTICLE STRUCTURE (follow strictly):
+
+### 1. LEAD SECTION (most important)
+- Start with a bold definition sentence: "**{Topic}** is/are/refers to..."
+- 3-5 sentences that tell the complete story
+- Include: WHAT it is, WHY it matters, HOW it connects to broader themes
+- Write as if explaining to a smart friend who's never heard of it
+
+### 2. TABLE OF CONTENTS
+```
+## Contents
+- [Overview](#overview)
+- [Background & Context](#background--context)
+- [Key Insights](#key-insights)
+- [Practical Applications](#practical-applications)
+- [Connections & Patterns](#connections--patterns)
+- [Critical Analysis](#critical-analysis)
+- [See Also](#see-also)
+- [Sources](#sources)
+```
+
+### 3. OVERVIEW (2-3 paragraphs)
+- Expand on the lead with specific examples, data points, quotes from sources
+- Make it scannable with clear topic sentences
+
+### 4. BACKGROUND & CONTEXT
+- Where did this come from? What problem does it solve?
+
+### 5. KEY INSIGHTS (the meat — 3-5 subsections with ### headers)
+- Each subsection: claim + evidence + analysis
+- Reference specific sources: [1], [2], etc.
+- Include your own thinking/observations marked as 💭
+
+### 6. PRACTICAL APPLICATIONS
+- Real-world uses, how to implement, case studies
+
+### 7. CONNECTIONS & PATTERNS
+- How this links to other topics, recurring themes
+
+### 8. CRITICAL ANALYSIS
+- Strengths, weaknesses, open questions, future directions
+
+### 9. SEE ALSO with [[wikilinks]]
+
+### 10. SOURCES (numbered with URLs)
+
+## QUALITY RULES:
+1. NEVER just concatenate source content — synthesize and add value
+2. Every major claim needs a citation [1]
+3. Use specific examples, not vague generalities
+4. Write in third person encyclopedic tone
+5. Bold key terms on first use
+6. Include "💭 Analysis:" sections for your own insights
+7. End with "What to explore next" suggestions
+8. Minimum 800 words for substantial topics"""
+
+WIKI_MODEL = "qwen/qwen3.6-plus:free"
+WIKI_FALLBACK_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"  # Fallback if primary is rate-limited
+WIKI_MAX_TOKENS = 4000
+WIKI_TEMPERATURE = 0.5
+
+
+def build_wiki_user_prompt(title: str, category: str, links_content: str, seeds_content: str) -> str:
+    """Build the user prompt for wiki synthesis."""
+    return f"""Write a comprehensive wiki article about: {title}
+
+Category: {category}
+Personal context: This is for a knowledge management system used by a technical founder building AI products.
+
+## Source Materials:
+
+### Links (external references):
+{links_content if links_content else "No external links provided."}
+
+### Seeds (personal ideas and observations):
+{seeds_content if seeds_content else "No personal notes provided."}
+
+## Instructions:
+1. Synthesize ALL sources into a coherent narrative
+2. Add your own analysis and connections
+3. Reference sources by number [1], [2], etc.
+4. Mark personal insights with 💭
+5. Make it actionable — what should the reader do with this knowledge?
+6. Connect to broader themes in AI, product development, and knowledge management
+7. Follow the article structure exactly as specified in the system prompt
+8. Write at least 800 words of substantive content"""
+
+
+def prepa<RESEND_API_KEY>(links: list, seeds: list) -> tuple[str, str]:
+    """Prepare link and seed content for the LLM prompt."""
+    links_parts = []
+    for i, l in enumerate(links[:8], 1):
+        title = l.get("title", "Untitled")
+        url = l.get("url", "")
+        summary = l.get("summary", "")[:400]
+        domain = l.get("domain", "")
+        tags = l.get("tags", "")
+        if isinstance(tags, list):
+            tags = ", ".join(tags)
+        links_parts.append(f"[{i}] {title}\nURL: {url}\nDomain: {domain}\nTags: {tags}\nSummary: {summary}\n")
+    
+    seeds_parts = []
+    for i, s in enumerate(seeds[:8], len(links_parts) + 1):
+        title = s.get("title", "Untitled")
+        content = (s.get("content", "") or "")[:400]
+        tags = s.get("tags", "")
+        seeds_parts.append(f"[{i}] 💡 {title}\nTags: {tags}\nContent: {content}\n")
+    
+    return "\n---\n".join(links_parts), "\n---\n".join(seeds_parts)
+
+
+async def synthesize_with_llm(system_prompt: str, user_prompt: str) -> str | None:
+    """Call the LLM for wiki synthesis. Tries primary model, falls back to secondary."""
+    api_key = getattr(settings, "OPENROUTER_API_KEY", None)
+    if not api_key:
+        logger.error("LLM synthesis: No OPENROUTER_API_KEY configured")
+        return None
+    
+    models_to_try = [WIKI_MODEL, WIKI_FALLBACK_MODEL]
+    
+    for model in models_to_try:
+        try:
+            async with httpx.AsyncClient(timeout=90) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "max_tokens": WIKI_MAX_TOKENS,
+                        "temperature": WIKI_TEMPERATURE,
+                    },
+                )
+                if resp.status_code == 200:
+                    result = resp.json()["choices"][0]["message"]["content"]
+                    logger.info(f"LLM synthesis: got {len(result)} chars from {model}")
+                    return result
+                elif resp.status_code == 429:
+                    logger.warning(f"LLM synthesis: {model} rate-limited, trying next...")
+                    continue
+                else:
+                    logger.error(f"LLM synthesis: {model} HTTP {resp.status_code} — {resp.text[:200]}")
+        except Exception as e:
+            logger.error(f"LLM synthesis: {model} failed: {e}")
+    
+    return None
 
 
 class WikiCompileRequest(BaseModel):
@@ -220,7 +381,7 @@ async def compile_article(body: WikiCompileRequest, request: Request, current_us
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "model": WIKI_MODEL,
                         "messages": [
                             {
                                 "role": "system",
@@ -457,57 +618,34 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         if not contents:
             continue
 
-        raw_content = "\n\n---\n\n".join(contents)
-        title = f"{domain.title()} — Compiled Insights"
+        # Prepare sources for LLM
+        links_data = [{"title": l.get("title", ""), "url": l.get("url", ""), 
+                        "summary": l.get("summary", ""), "domain": l.get("domain", ""),
+                        "tags": l.get("tags", "")} for l in group[:8]]
+        seeds_data = [{"title": s.get("title", ""), "content": s.get("content", ""),
+                        "tags": s.get("tags", "")} for s in all_seeds 
+                        if s.get("id") in source_seed_ids][:8]
+        
+        links_content, seeds_content = prepa<RESEND_API_KEY>(links_data, seeds_data)
+        title = f"{domain.title()} — Insights"
         category = _detect_category(domain, group)
 
-        # LLM synthesis
-        api_key = getattr(settings, "OPENROUTER_API_KEY", None)
-        article_content = f"# {title}\n\nAuto-compiled from {len(group)} enriched links.\n\n{raw_content}"
-
-        if api_key:
-            try:
-                async with httpx.AsyncClient(timeout=45) as client:
-                    resp = await client.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
-                            "messages": [
-                                {
-                                    "role": "system",
-                                    "content": (
-                                        "You are a wiki article writer following Wikipedia/GrokPedia structure. "
-                                        "Given source materials, write a comprehensive article.\n\n"
-                                        "STRUCTURE:\n"
-                                        "1. Title with bold definition sentence\n"
-                                        "2. Lead paragraph (2-4 sentences overview)\n"
-                                        "3. Table of Contents\n"
-                                        "4. Background section\n"
-                                        "5. Key Concepts (2-4 subsections)\n"
-                                        "6. Applications/Examples\n"
-                                        "7. Connections to other topics\n"
-                                        "8. See Also with wikilinks [[Topic]]\n"
-                                        "9. References with numbered sources\n"
-                                        "10. Footer with metadata\n\n"
-                                        "Write in encyclopedic tone. Bold subject on first mention. Include citations [1], [2]."
-                                    ),
-                                },
-                                {"role": "user", "content": f"Write a wiki article about: {domain}\nCategory: {category}\n\nSources:\n{raw_content}"},
-                            ],
-                            "temperature": 0.5,
-                            "max_tokens": 2500,
-                        },
-                    )
-                    if resp.status_code == 200:
-                        llm_content = resp.json()["choices"][0]["message"]["content"]
-                        if llm_content and len(llm_content) > 100:
-                            article_content = llm_content
-            except Exception:
-                pass  # Fallback to basic content
+        # High-quality LLM synthesis
+        user_prompt = build_wiki_user_prompt(title, category, links_content, seeds_content)
+        article_content = await synthesize_with_llm(WIKI_SYSTEM_PROMPT, user_prompt)
+        
+        if not article_content:
+            # Fallback: create structured article from sources
+            article_content = f"# {title}\n\n"
+            article_content += f"**{title}** is a knowledge cluster compiled from {len(group)} sources and {len(source_seed_ids)} personal notes.\n\n"
+            article_content += "## Contents\n- [Sources](#sources)\n- [Personal Notes](#personal-notes)\n\n"
+            article_content += "## Sources\n\n" + links_content + "\n\n"
+            article_content += "## Personal Notes\n\n" + seeds_content + "\n\n"
+            article_content += f"\n---\n*Auto-compiled from {len(group)} links and {len(source_seed_ids)} seeds*"
+        
+        # Rate limit protection between articles
+        import asyncio
+        await asyncio.sleep(3)
 
         # Extract summary (first paragraph or first 200 chars)
         lines = article_content.split("\n")
@@ -552,9 +690,13 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     # Find seed groups not yet covered by wiki
     covered_seed_ids = set()
     for article in articles:
-        for sid in (article.get("sourceSeedIds", "") or "").split(","):
-            if sid.strip():
-                covered_seed_ids.add(sid.strip())
+        seed_ids_raw = article.get("sourceSeedIds", "") or ""
+        if isinstance(seed_ids_raw, list):
+            covered_seed_ids.update(s.strip() for s in seed_ids_raw if s.strip())
+        else:
+            for sid in seed_ids_raw.split(","):
+                if sid.strip():
+                    covered_seed_ids.add(sid.strip())
 
     for domain, seeds_group in seed_groups.items():
         if len(seeds_group) < 2:  # Need at least 2 seeds for a cluster
@@ -586,69 +728,37 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         if not contents:
             continue
 
-        raw_content = "\n\n---\n\n".join(contents)
+        # Prepare seeds for LLM
+        seeds_data = [{"title": s.get("title", ""), "content": s.get("content", ""),
+                        "tags": s.get("tags", "")} for s in uncovered_seeds[:8]]
+        _, seeds_content = prepa<RESEND_API_KEY>([], seeds_data)
+        
         title = f"{domain.title()} — Garden Insights"
         category = _detect_category(domain, [])
 
-        # LLM synthesis
-        article_content = f"# {title}\n\nCompiled from {len(uncovered_seeds)} seeds in your Garden.\n\n{raw_content}"
-        summary = contents[0][:200] if contents else ""
-
-        if api_key:
-            try:
-                async with httpx.AsyncClient(timeout=45) as client:
-                    resp = await client.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
-                            "messages": [
-                                {
-                                    "role": "system",
-                                    "content": (
-                                        "You are a wiki article writer following Wikipedia/GrokPedia structure. "
-                                        "Given seeds (personal ideas/notes), write a comprehensive article.\n\n"
-                                        "STRUCTURE:\n"
-                                        "1. Title with bold definition sentence\n"
-                                        "2. Lead paragraph (2-4 sentences overview)\n"
-                                        "3. Table of Contents\n"
-                                        "4. Key Ideas (from the seeds)\n"
-                                        "5. Connections and Patterns\n"
-                                        "6. See Also with [[wikilinks]]\n"
-                                        "7. Footer\n\n"
-                                        "Write in encyclopedic tone. Reference each seed as a source."
-                                    ),
-                                },
-                                {"role": "user", "content": f"Write a wiki article about: {title}\n\nSeeds (ideas):\n{raw_content}"},
-                            ],
-                            "temperature": 0.5,
-                            "max_tokens": 2500,
-                        },
-                    )
-                    if resp.status_code == 200:
-                        llm_content = resp.json()["choices"][0]["message"]["content"]
-                        if llm_content and len(llm_content) > 100:
-                            article_content = llm_content
-                            for line in llm_content.split("\n"):
-                                if line.startswith("# "):
-                                    title = line[2:].strip()
-                                    break
-                            summary_lines = []
-                            in_content = False
-                            for line in llm_content.split("\n"):
-                                if line.startswith("#"):
-                                    in_content = True
-                                    continue
-                                if in_content and line.strip():
-                                    summary_lines.append(line.strip())
-                                    if len(summary_lines) >= 2:
-                                        break
-                            summary = " ".join(summary_lines)[:300]
-            except Exception:
-                pass
+        # High-quality LLM synthesis
+        user_prompt = build_wiki_user_prompt(title, category.title(), "", seeds_content)
+        article_content = await synthesize_with_llm(WIKI_SYSTEM_PROMPT, user_prompt)
+        
+        if not article_content:
+            # Fallback
+            article_content = f"# {title}\n\n**{title}** represents a cluster of {len(uncovered_seeds)} related ideas from the Garden.\n\n"
+            article_content += "## Contents\n- [Ideas](#ideas)\n\n## Ideas\n\n" + seeds_content
+            article_content += f"\n---\n*Compiled from {len(uncovered_seeds)} seeds*"
+        
+        # Rate limit protection
+        import asyncio
+        await asyncio.sleep(3)
+        
+        # Extract summary
+        lines = article_content.split("\n")
+        summary_lines = []
+        for line in lines:
+            if line.strip() and not line.startswith("#") and not line.startswith("```"):
+                summary_lines.append(line.strip())
+                if len(" ".join(summary_lines)) > 200:
+                    break
+        summary = " ".join(summary_lines)[:300]
 
         try:
             article_id = weaviate_client.add_wiki_article(
@@ -701,7 +811,7 @@ async def create_from_text(body: dict, request: Request, current_user = Depends(
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "model": WIKI_MODEL,
                         "messages": [
                             {
                                 "role": "system",
@@ -959,7 +1069,7 @@ async def regenerate_article(article_id: str, request: Request, current_user = D
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "model": WIKI_MODEL,
                         "messages": [
                             {
                                 "role": "system",
