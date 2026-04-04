@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
+import * as d3 from 'd3'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -317,6 +318,8 @@ function Infobox({ data, article }: { data: Record<string, string>; article: Wik
   )
 }
 
+
+
 // ── Concept Map Component (D3.js) ────────────────────
 
 function ConceptMap({ articleId, token }: { articleId: string; token: string | null }) {
@@ -339,7 +342,6 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
   useEffect(() => {
     if (!data || !canvasRef.current) return
 
-    const d3 = require('d3')
     const container = canvasRef.current
     const width = container.clientWidth
     const height = 250
@@ -574,8 +576,10 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
 function renderInlineFormatting(text: string): React.ReactNode {
   // Bold
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  // Links
+  // Links [text](url)
   text = text.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener" class="text-primary hover:underline">$1</a>')
+  // Bare URLs (https://...)
+  text = text.replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" rel="noopener" class="text-primary hover:underline">$1</a>')
   // Citations [1], [2]
   text = text.replace(/\[(\d+)\]/g, '<span class="text-primary text-[10px] font-bold">[$1]</span>')
 
