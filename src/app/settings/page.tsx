@@ -272,15 +272,42 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-3">
             {/* Push toggle */}
-            <div className="flex items-center justify-between px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
-              <div>
-                <p className="text-sm font-bold text-on-surface">Push Notifications</p>
-                <p className="text-xs text-on-surface-variant">Receive daily briefings and reminders</p>
+            <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-bold text-on-surface">Push Notifications</p>
+                  <p className="text-xs text-on-surface-variant">Daily briefings and reminders</p>
+                </div>
+                <Switch
+                  checked={notificationsEnabled}
+                  onCheckedChange={handleToggleNotifications}
+                />
               </div>
-              <Switch
-                checked={notificationsEnabled}
-                onCheckedChange={handleToggleNotifications}
-              />
+              {pushStatus === 'not-installed' && (
+                <div className="mt-3 p-3 rounded-xl bg-tertiary-container/20 border border-tertiary/20">
+                  <p className="text-xs font-medium text-on-surface mb-1">📱 Install to Home Screen first</p>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Safari requires the app installed to your home screen for notifications.
+                    Tap the <span className="material-symbols-outlined text-[12px] align-middle" style={{"{{"}}fontSize: '14px'{{"}}}}>ios_share</span> icon → Add to Home Screen.
+                  </p>
+                </div>
+              )}
+              {pushStatus === 'denied' && (
+                <div className="mt-3 p-3 rounded-xl bg-error/10 border border-error/20">
+                  <p className="text-xs font-medium text-error mb-1">🚫 Notifications blocked</p>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Go to Settings → Safari → Notifications → Allow, or in Settings app → Greenplot → toggle Notifications on.
+                  </p>
+                </div>
+              )}
+              {pushStatus === 'error' && (
+                <div className="mt-3 p-3 rounded-xl bg-error/10 border border-error/20">
+                  <p className="text-xs font-medium text-error mb-1">⚠ Could not enable notifications</p>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Make sure you've allowed notification permission when prompted. Try toggling again.
+                  </p>
+                </div>
+              )}
             </div>
 
           </div>

@@ -169,3 +169,16 @@ body {
   body { @apply bg-background text-foreground; }
   html { @apply font-sans; }
 }
+
+/* ── User chat bubble — light green ─────────────── */
+.user-bubble {
+  background-color: rgba(34, 197, 94, 0.10) !important;
+  color: #15803d !important;
+}
+
+/* ── Assistant chat bubble ───────────────────────── */
+.assistant-bubble {
+  background-color: #ffffff !important;
+  color: #141413 !important;
+  border: 1px solid var(--outline-variant) !important;
+}

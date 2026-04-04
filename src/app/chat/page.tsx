@@ -531,7 +531,7 @@ export default function ChatPage() {
                       <div className="flex flex-col items-end gap-2 pl-12 mb-8">
                         <Message from="user">
                           <MessageContent
-                            className="user-bubble bg-surface-container-high text-on-surface px-5 py-3 shadow-sm"
+                            className="user-bubble bg-primary/10 text-primary-dark px-5 py-3 shadow-sm border border-primary/15"
                           >
                             {message.parts.map((part, i) => {
                               if (part.type === 'text') {

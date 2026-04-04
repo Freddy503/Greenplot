@@ -15,16 +15,29 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray
 }
 
-export type PushStatus = 'unsupported' | 'denied' | 'default' | 'granted' | 'subscribed' | 'error'
+export type PushStatus = 'unsupported' | 'denied' | 'error' | 'default' | 'granted' | 'subscribed' | 'not-installed'
 
 export function usePushNotifications() {
   const [status, setStatus] = useState<PushStatus>('default')
   const [subscription, setSubscription] = useState<PushSubscription | null>(null)
 
+  // Detect iOS Safari (not home screen installed)
+  const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isStandalone = typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+  )
+
   // Check current status on mount
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       setStatus('unsupported')
+      return
+    }
+
+    // Safari iOS: check if app is installed to home screen
+    if (isIOS && !isStandalone) {
+      setStatus('not-installed')
       return
     }
 
@@ -43,10 +56,13 @@ export function usePushNotifications() {
         setStatus('granted')
       }
     })
-  }, [])
+  }, [isIOS, isStandalone])
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
     if (status === 'unsupported') return false
+
+    // Safari iOS: must be installed to home screen first
+    if (status === 'not-installed') return false
 
     try {
       // Register service worker (idempotent — skips if already registered)
@@ -90,29 +106,33 @@ export function usePushNotifications() {
       setStatus('subscribed')
 
       // Send subscription to server
-      const userId = localStorage.getItem('greenplot_token') || 'default'
+      const token = localStorage.getItem('greenplot_token') || ''
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub.toJSON(), userId }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ subscription: sub.toJSON(), userId: token || 'default' }),
       })
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        console.error('[push] Server rejected subscription:', errData)
+        console.error('[push] Server rejected subscription:', res.status)
         return false
       }
 
       console.log('[push] Successfully subscribed for push notifications')
       return true
     } catch (err: any) {
-      const msg = err?.message || 'Unknown error'
-      console.error('[push] Failed:', msg, err)
+      const msg = err?.message || String(err)
+      console.error('[push] Failed:', msg)
 
-      // Specific error handling
-      if (msg.includes('permission')) {
+      // iOS Safari gives a very specific error for non-home-screen installs
+      if (msg.includes('NotAllowedError') || msg.includes('not allowed')) {
+        setStatus('not-installed')
+      } else if (msg.includes('permission') || msg.includes('denied')) {
         setStatus('denied')
-      } else if (msg.includes('subscribe')) {
+      } else {
         setStatus('error')
       }
 
@@ -120,7 +140,7 @@ export function usePushNotifications() {
     }
   }, [status])
 
-  return { status, subscription, requestPermission }
+  return { status, subscription, requestPermission, isIOS, isStandalone }
 }
 
 // Poll for queued notifications (called from service worker or app)
