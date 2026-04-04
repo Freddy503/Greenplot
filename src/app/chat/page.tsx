@@ -94,10 +94,23 @@ function formatTime() {
 type Rating = 'up' | 'down' | null
 
 function ThumbsRating({ messageId }: { messageId: string }) {
-  const [rating, setRating] = useState<Rating>(null)
+  const [rating, setRating] = useState<Rating>(() => {
+    if (typeof window === 'undefined') return null
+    const stored = localStorage.getItem(`greenplot_rating_${messageId}`)
+    return stored === 'up' || stored === 'down' ? stored : null
+  })
 
   const handleRate = (value: 'up' | 'down') => {
-    setRating((prev) => (prev === value ? null : value))
+    setRating((prev) => {
+      const next = prev === value ? null : value
+      if (next) {
+        localStorage.setItem(`greenplot_rating_${messageId}`, next)
+        toast(next === 'up' ? '👍 Rated positively' : '👎 Rated negatively')
+      } else {
+        localStorage.removeItem(`greenplot_rating_${messageId}`)
+      }
+      return next
+    })
   }
 
   return (

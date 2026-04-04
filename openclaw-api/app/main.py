@@ -244,7 +244,7 @@ def search_seeds_endpoint(
 
     try:
         embedding = embed_text(req.query)
-    except Exception:
+    except Exception as e:
         # Fallback to BM25 if embedding fails
         embedding = None
 
@@ -335,7 +335,7 @@ def create_seeds_bulk(
                 embedding=embedding,
                 metadata={"source": item.source or "chat_harvest"},
             )
-        except Exception:
+        except Exception as e:
             pass  # Weaviate is best-effort for harvested seeds
 
     db.commit()
@@ -591,7 +591,7 @@ def search_nodes_endpoint(
             timeout=30,
         )
         embedding = resp.json()["data"][0]["embedding"]
-    except Exception:
+    except Exception as e:
         return {"nodes": [], "total": 0, "error": "embedding_failed"}
 
     nodes = weaviate_client.search_nodes(
@@ -721,7 +721,7 @@ def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
                     "type": "text",
                     "text": f"[File: {filename}]\n{text[:5000]}"
                 })
-            except Exception:
+            except Exception as e:
                 content_parts.append({
                     "type": "text",
                     "text": f"[File: {filename} ({mime}) - binary, not displayable]"
@@ -849,7 +849,7 @@ async def chat_endpoint(
                                         tool_calls_acc[idx]["name"] = fn["name"]
                                     if fn.get("arguments"):
                                         tool_calls_acc[idx]["arguments"] += fn["arguments"]
-                            except Exception:
+                            except Exception as e:
                                 continue
 
                     # If we got tool_calls, execute them
@@ -1089,7 +1089,7 @@ async def chat_v2_endpoint(
                     )
                     if weather_resp.status_code == 200:
                         briefing_parts.append(f"☀️ Weather in {current_user.city}: {weather_resp.text.strip()}")
-                except Exception:
+                except Exception as e:
                     pass
             if recent_titles:
                 briefing_parts.append(f"🌱 Recent seeds: {', '.join(recent_titles[:3])}")
@@ -1097,7 +1097,7 @@ async def chat_v2_endpoint(
                 prompt_builder = prompt_builder.with_context(
                     "Daily Context:\n" + "\n".join(briefing_parts)
                 )
-    except Exception:
+    except Exception as e:
         pass
 
     system_prompt = prompt_builder.render()
@@ -1176,7 +1176,7 @@ async def chat_v2_endpoint(
                         title=last_prompt[:50] if last_prompt else None,
                     )
                     db.commit()
-        except Exception:
+        except Exception as e:
             pass
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -1261,9 +1261,47 @@ def harvest_all(
     from app.models import ChatSession as ChatSessionModel
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(hours=2)
+    fallback_cutoff = datetime.utcnow() - timedelta(hours=48)
     sessions = db.query(ChatSessionModel).filter(
         ChatSessionModel.updated_at >= cutoff
     ).order_by(ChatSessionModel.updated_at.desc()).limit(10).all()
+
+    # Fallback: if no chat sessions, harvest from recent Thoughts
+    if not sessions:
+        recent_thoughts = db.query(Thought).filter(
+            Thought.created_at >= fallback_cutoff,
+            Thought.source.in_(['chat', 'manual', 'pwa', 'voice', 'onboarding']),
+            Thought.status == 'processed'
+        ).order_by(Thought.created_at.desc()).limit(10).all()
+        
+        harvested = 0
+        for thought in recent_thoughts:
+            try:
+                seed_content = thought.content[:1500] if thought.content else ""
+                if len(seed_content) < 20:
+                    continue
+                harvest = Thought(
+                    tenant_id=thought.tenant_id,
+                    user_id=thought.user_id,
+                    content=f"Chat Insights:\n\n{seed_content}",
+                    source='auto_harvest',
+                    status='pending'
+                )
+                db.add(harvest)
+                db.flush()
+                from app.enricher_v2 import enrich_thought_v2
+                try:
+                    enrich_thought_v2(str(harvest.id), str(thought.tenant_id), db)
+                    harvest.status = 'processed'
+                except Exception as e:
+                    harvest.status = 'error'
+                    harvest.error_message = str(e)
+                db.commit()
+                harvested += 1
+            except Exception:
+                db.rollback()
+                continue
+        return {"harvested": harvested, "sessions_checked": len(recent_thoughts), "source": "thoughts"}
 
     harvested = 0
     for session_row in sessions:
@@ -1308,7 +1346,7 @@ def harvest_all(
                 thought.error_message = str(e)
             db.commit()
             harvested += 1
-        except Exception:
+        except Exception as e:
             db.rollback()
             continue
 
@@ -1437,7 +1475,7 @@ def extract_insights(
             temperature=0.5,
             max_tokens=800,
         )
-    except Exception:
+    except Exception as e:
         return ExtractInsightsResponse(insights=[])
 
     text = response.choices[0].message.content or '{"insights": []}'
@@ -1563,7 +1601,7 @@ def calendar_callback(
         )
         if cal_resp.status_code == 200:
             calendar_tz = cal_resp.json().get("timeZone")
-    except Exception:
+    except Exception as e:
         pass
 
     # Save or update connection
