@@ -2377,6 +2377,111 @@ def list_push_subscriptions(
     return {"subscriptions": tenant_subs}
 
 
+# --- Activity Summary (What's New) ---
+
+@app.get("/api/v1/activity/summary")
+def get_activity_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a summary of recent garden activity for display on login."""
+    from datetime import timedelta
+    from app.models import SeedLink
+
+    tenant_id = current_user.tenant_id
+    now = datetime.utcnow()
+    day_ago = now - timedelta(hours=24)
+    week_ago = now - timedelta(days=7)
+
+    # Seeds in last 24h
+    recent_seeds = db.query(Seed).filter(
+        Seed.tenant_id == tenant_id,
+        Seed.created_at >= day_ago
+    ).count()
+
+    # Total seeds
+    total_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).count()
+
+    # New connections this week
+    recent_connections = db.query(SeedLink).join(
+        Seed, SeedLink.source_seed_id == Seed.id
+    ).filter(
+        Seed.tenant_id == tenant_id,
+        SeedLink.created_at >= week_ago
+    ).count()
+
+    # Links from Weaviate
+    try:
+        all_links = weaviate_client.get_links(tenant_id=str(tenant_id), limit=200)
+        total_links = len(all_links)
+        new_links_today = len([l for l in all_links if l.get("created_at", "") >= day_ago.isoformat()])
+    except Exception:
+        total_links = 0
+        new_links_today = 0
+
+    # Wiki articles
+    try:
+        articles = weaviate_client.get_wiki_articles(tenant_id=str(tenant_id), limit=200)
+        total_articles = len(articles)
+    except Exception:
+        total_articles = 0
+
+    # Pending enrichment
+    pending = db.query(Thought).filter(
+        Thought.tenant_id == tenant_id,
+        Thought.status == 'pending'
+    ).count()
+
+    # Recent activity items
+    activities = []
+    if recent_seeds > 0:
+        activities.append({
+            "icon": "eco",
+            "text": f"{recent_seeds} new seed{'s' if recent_seeds > 1 else ''} added",
+            "color": "text-primary",
+        })
+    if new_links_today > 0:
+        activities.append({
+            "icon": "link",
+            "text": f"{new_links_today} new source{'s' if new_links_today > 1 else ''} discovered",
+            "color": "text-blue-400",
+        })
+    if recent_connections > 0:
+        activities.append({
+            "icon": "hub",
+            "text": f"{recent_connections} connection{'s' if recent_connections > 1 else ''} made this week",
+            "color": "text-secondary",
+        })
+    if pending > 0:
+        activities.append({
+            "icon": "pending",
+            "text": f"{pending} items pending enrichment",
+            "color": "text-amber-400",
+        })
+
+    # If nothing happened, show a positive message
+    if not activities:
+        activities.append({
+            "icon": "check_circle",
+            "text": "Garden is up to date",
+            "color": "text-primary",
+        })
+
+    return {
+        "timestamp": now.isoformat(),
+        "stats": {
+            "total_seeds": total_seeds,
+            "total_links": total_links,
+            "total_articles": total_articles,
+            "seeds_today": recent_seeds,
+            "links_today": new_links_today,
+            "connections_week": recent_connections,
+            "pending": pending,
+        },
+        "activities": activities,
+    }
+
+
 # --- Memory Persistence ---
 
 _MEM_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "memory_store.json")
