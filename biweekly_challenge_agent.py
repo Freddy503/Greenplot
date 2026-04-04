@@ -119,6 +119,9 @@ Keep it under 200 words. Be sharp, not generic.
         max_tokens=500,
         temperature=0.8
     )
+    # response may be a dict with choices[] OR a raw string depending on the client
+    if isinstance(response, str):
+        return response.strip()
     return response.choices[0].message.content.strip()
 
 def create_notion_challenge_page(challenge_text, stats):
