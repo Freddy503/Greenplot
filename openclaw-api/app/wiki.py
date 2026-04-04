@@ -330,13 +330,18 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     import os
     harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
     if x_api_key == harvest_key:
-        # Use first available tenant for API key auth
-        # In production, you'd want a dedicated cron tenant
+        # Use Freddy's tenant (the main user with content)
         try:
             from app.database import get_db
             from app.models import User
             db = next(get_db())
-            user = db.query(User).first()
+            # Look for Freddy's account first, fall back to user with most seeds
+            user = db.query(User).filter(User.email == "contact@example.com").first()
+            if not user:
+                # Fallback: find user with content
+                user = db.query(User).filter(User.email.like("%@greenplot.%")).first()
+            if not user:
+                user = db.query(User).first()
             tenant_id = str(user.tenant_id)
             user_id = str(user.id)
             db.close()
@@ -402,27 +407,51 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             contents.append(f"## {l.get('title', 'Untitled')}\n\n{l.get('summary', '')}")
             source_link_ids.append(l.get("id", ""))
 
-        # Also pull related seeds by tag/domain overlap — your actual thinking
+        # Also pull related seeds — your actual thinking
         source_seed_ids = []
+        
+        # Build link tags and keywords (handle both string and list formats)
         link_tags = set()
+        link_keywords = set()
         for l in group:
-            for t in (l.get("tags", "") or "").split(","):
-                t = t.strip().lower()
-                if t:
-                    link_tags.add(t)
+            tags = l.get("tags", "")
+            if isinstance(tags, list):
+                for t in tags:
+                    t = str(t).strip().lower()
+                    if t and len(t) > 2:
+                        link_tags.add(t)
+            elif isinstance(tags, str):
+                for t in tags.split(","):
+                    t = t.strip().lower()
+                    if t and len(t) > 2:
+                        link_tags.add(t)
+            # Keywords from title
+            title_words = (l.get("title", "") or "").lower().split()
+            for w in title_words:
+                w = w.strip(".,;:!?()[]{}\"'")
+                if len(w) > 3 and w not in {"with", "from", "this", "that", "have", "will", "your", "about"}:
+                    link_keywords.add(w)
 
+        # Match seeds by tags, title keywords, or content mentions
         for seed in all_seeds:
-            seed_tags = set(t.strip().lower() for t in (seed.get("tags", "") or "").split(",") if t.strip())
-            seed_domain = (seed.get("domain", "") or "").lower()
+            seed_tags = set(t.strip().lower() for t in str(seed.get("tags", "")).split(",") if t.strip())
+            seed_title = (seed.get("title", "") or "").lower()
+            seed_content = (seed.get("content", "") or "").lower()[:500]
             
-            # Match: shared tags or same domain
+            # 1. Tag overlap
             tag_overlap = link_tags & seed_tags
-            domain_match = seed_domain and seed_domain == domain
             
-            if tag_overlap or domain_match:
-                seed_title = seed.get("title", "Untitled")
-                seed_content = (seed.get("content", "") or "")[:300]
-                contents.append(f"## 💡 {seed_title} *(from Garden)*\n\n{seed_content}")
+            # 2. Title keyword overlap (2+ words)
+            seed_words = set(w.strip(".,;:!?()[]{}\"'") for w in seed_title.split() if len(w) > 3)
+            title_overlap = link_keywords & seed_words
+            
+            # 3. Content mentions link keywords
+            content_match = any(kw in seed_content for kw in list(link_tags | link_keywords)[:5])
+            
+            if tag_overlap or len(title_overlap) >= 2 or content_match:
+                s_title = seed.get("title", "Untitled")
+                s_content = (seed.get("content", "") or "")[:300]
+                contents.append(f"## 💡 {s_title} *(from Garden)*\n\n{s_content}")
                 source_seed_ids.append(seed.get("id", ""))
 
         if not contents:
@@ -506,6 +535,136 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             )
             compiled += 1
             results.append({"id": article_id, "title": title, "links": len(source_link_ids), "seeds": len(source_seed_ids)})
+        except Exception:
+            continue
+
+    # ── Also compile from seed clusters (seeds without links) ──
+    # Group seeds by domain
+    seed_groups = {}
+    for seed in all_seeds:
+        domain = (seed.get("domain", "") or "").strip().lower()
+        if not domain or domain in ("none", "untagged", "general"):
+            continue
+        if domain not in seed_groups:
+            seed_groups[domain] = []
+        seed_groups[domain].append(seed)
+
+    # Find seed groups not yet covered by wiki
+    covered_seed_ids = set()
+    for article in articles:
+        for sid in (article.get("sourceSeedIds", "") or "").split(","):
+            if sid.strip():
+                covered_seed_ids.add(sid.strip())
+
+    for domain, seeds_group in seed_groups.items():
+        if len(seeds_group) < 2:  # Need at least 2 seeds for a cluster
+            continue
+        
+        # Skip if all seeds already covered
+        uncovered_seeds = [s for s in seeds_group if s.get("id", "") not in covered_seed_ids]
+        if not uncovered_seeds:
+            continue
+
+        # Check if we already have an article for this domain
+        domain_exists = any(
+            a.get("category", "").lower() == domain.lower() or 
+            domain.lower() in a.get("title", "").lower()
+            for a in articles
+        )
+        if domain_exists:
+            continue
+
+        # Build content from seeds
+        contents = []
+        source_seed_ids = []
+        for seed in uncovered_seeds[:8]:
+            s_title = seed.get("title", "Untitled")
+            s_content = (seed.get("content", "") or "")[:400]
+            contents.append(f"## 💡 {s_title}\n\n{s_content}")
+            source_seed_ids.append(seed.get("id", ""))
+
+        if not contents:
+            continue
+
+        raw_content = "\n\n---\n\n".join(contents)
+        title = f"{domain.title()} — Garden Insights"
+        category = _detect_category(domain, [])
+
+        # LLM synthesis
+        article_content = f"# {title}\n\nCompiled from {len(uncovered_seeds)} seeds in your Garden.\n\n{raw_content}"
+        summary = contents[0][:200] if contents else ""
+
+        if api_key:
+            try:
+                async with httpx.AsyncClient(timeout=45) as client:
+                    resp = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                            "messages": [
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "You are a wiki article writer following Wikipedia/GrokPedia structure. "
+                                        "Given seeds (personal ideas/notes), write a comprehensive article.\n\n"
+                                        "STRUCTURE:\n"
+                                        "1. Title with bold definition sentence\n"
+                                        "2. Lead paragraph (2-4 sentences overview)\n"
+                                        "3. Table of Contents\n"
+                                        "4. Key Ideas (from the seeds)\n"
+                                        "5. Connections and Patterns\n"
+                                        "6. See Also with [[wikilinks]]\n"
+                                        "7. Footer\n\n"
+                                        "Write in encyclopedic tone. Reference each seed as a source."
+                                    ),
+                                },
+                                {"role": "user", "content": f"Write a wiki article about: {title}\n\nSeeds (ideas):\n{raw_content}"},
+                            ],
+                            "temperature": 0.5,
+                            "max_tokens": 2500,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        llm_content = resp.json()["choices"][0]["message"]["content"]
+                        if llm_content and len(llm_content) > 100:
+                            article_content = llm_content
+                            for line in llm_content.split("\n"):
+                                if line.startswith("# "):
+                                    title = line[2:].strip()
+                                    break
+                            summary_lines = []
+                            in_content = False
+                            for line in llm_content.split("\n"):
+                                if line.startswith("#"):
+                                    in_content = True
+                                    continue
+                                if in_content and line.strip():
+                                    summary_lines.append(line.strip())
+                                    if len(summary_lines) >= 2:
+                                        break
+                            summary = " ".join(summary_lines)[:300]
+            except Exception:
+                pass
+
+        try:
+            article_id = weaviate_client.add_wiki_article(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                title=title,
+                category=category.title(),
+                summary=summary,
+                content=article_content,
+                source_seed_ids=",".join(source_seed_ids),
+                source_link_ids="",
+                backlinks="",
+                status="published",
+            )
+            compiled += 1
+            results.append({"id": article_id, "title": title, "links": 0, "seeds": len(source_seed_ids)})
         except Exception:
             continue
 
@@ -898,7 +1057,14 @@ def _detect_category(domain: str, links: list) -> str:
     if "notion" in d:
         return "Notes"
     # Check tags for hints
-    all_tags = " ".join(l.get("tags", "") for l in links).lower()
+    tag_parts = []
+    for l in links:
+        tags = l.get("tags", "")
+        if isinstance(tags, list):
+            tag_parts.extend(str(t) for t in tags)
+        elif isinstance(tags, str):
+            tag_parts.append(tags)
+    all_tags = " ".join(tag_parts).lower()
     if "ai" in all_tags or "ml" in all_tags or "llm" in all_tags:
         return "AI & ML"
     if "design" in all_tags or "ux" in all_tags:
