@@ -116,11 +116,12 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
 
         # ── Weather ──
         weather_str = ""
-        if user.city:
+        user_city = getattr(user, 'city', None)
+        if user_city:
             try:
                 async with httpx.AsyncClient(timeout=8) as client:
                     resp = await client.get(
-                        f"https://wttr.in/{user.city}",
+                        f"https://wttr.in/{user_city}",
                         params={"format": "%c+%t+%C", "lang": "en"}
                     )
                     if resp.status_code == 200:
@@ -255,7 +256,7 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
         parts = ["Good morning! 🌱 Here's your knowledge briefing:\n"]
 
         if weather_str:
-            parts.append(f"☀️ {user.city}: {weather_str}\n")
+            parts.append(f"☀️ {user_city}: {weather_str}\n")
         if calendar_str:
             parts.append(f"📅 Today:\n{calendar_str}\n")
 
@@ -299,7 +300,7 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
         return json.dumps({
             "status": "ok",
             "date": now.strftime("%Y-%m-%d"),
-            "city": user.city,
+            "city": user_city,
             "weather": weather_str or None,
             "calendar": calendar_str or None,
             "seeds_to_review": review_items,
@@ -502,6 +503,26 @@ async def get_seed_detail(args: dict, user: User, db: Session) -> str:
 
         if hits:
             h = hits[0]
+            # Track visit even when data comes from Weaviate
+            try:
+                notion_id = seed_id  # the seed_id passed in is the notion_id
+                seed = db.query(Seed).filter(
+                    Seed.tenant_id == user.tenant_id,
+                    Seed.id == seed_id
+                ).first()
+                if not seed:
+                    # Try by notion_id or embedding_ref
+                    seed = db.query(Seed).filter(
+                        Seed.tenant_id == user.tenant_id,
+                        Seed.embedding_ref == seed_id
+                    ).first()
+                if seed:
+                    seed.last_visited = datetime.utcnow()
+                    seed.visit_count = (seed.visit_count or 0) + 1
+                    db.commit()
+            except Exception:
+                pass  # non-blocking
+
             result = {
                 "status": "ok",
                 "source": "weaviate",

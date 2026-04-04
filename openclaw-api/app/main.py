@@ -2227,8 +2227,8 @@ def _save_subs(subs: list):
     with open(_SUBS_FILE, "w") as f:
         json.dump(subs, f, indent=2)
 
-def _send_web_push_to_all(subscription_info: dict, payload: str) -> bool:
-    """Send a Web Push notification to a single subscription. Returns True if successful."""
+def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
+    """Send a Web Push notification to a single subscription. Returns 'ok', 'expired', or 'error'."""
     try:
         from pywebpush import webpush, WebPushException
         response = webpush(
@@ -2237,16 +2237,17 @@ def _send_web_push_to_all(subscription_info: dict, payload: str) -> bool:
             vapid_private_key=VAPID_PRIVATE_KEY,
             vapid_claims=VAPID_CLAIMS.copy(),
         )
-        return response.status_code in (200, 201)
+        return "ok" if response.status_code in (200, 201) else "error"
     except WebPushException as e:
         if e.response and e.response.status_code in (404, 410):
-            logger.info(f"🗑️ Push subscription expired (endpoint gone), will be removed")
+            logger.info(f"🗑️ Push subscription expired (endpoint gone)")
+            return "expired"
         else:
             logger.error(f"❌ Web Push failed: {e}")
-        return False
+            return "error"
     except Exception as e:
         logger.error(f"❌ Web Push error: {e}")
-        return False
+        return "error"
 
 def _broadcast_push(title: str, body: str, url: str = "/chat"):
     """Send Web Push to all active subscriptions for all tenants."""
@@ -2268,16 +2269,17 @@ def _broadcast_push(title: str, body: str, url: str = "/chat"):
         if not sub_info.get("endpoint"):
             continue
         
-        success = _send_web_push_to_all(sub_info, payload)
-        if success:
+        result = _send_web_push_to_all(sub_info, payload)
+        if result == "ok":
             sent += 1
-        else:
-            # Mark for removal if 404/410
+        elif result == "expired":
+            # Only remove subscriptions that returned 404/410 (truly expired)
             endpoint = sub_info.get("endpoint", "")
             if endpoint:
                 expired.append(endpoint)
+        # result == "error" → keep subscription, might be temporary
 
-    # Remove expired subscriptions
+    # Remove expired subscriptions (404/410 only)
     if expired:
         subs = [s for s in subs if s.get("subscription", {}).get("endpoint") not in expired]
         _save_subs(subs)
