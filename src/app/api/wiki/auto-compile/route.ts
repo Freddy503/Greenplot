@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 
-export async function POST(req: NextRequest) {
-  const token = req.headers.get('authorization') || ''
-
+export async function POST(_req: NextRequest) {
   try {
     const res = await fetch(`${BACKEND}/api/v1/wiki/auto-compile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: token } : {}),
+        'X-API-Key': process.env.HARVEST_API_KEY || '<HARVEST_API_KEY>',
       },
       signal: AbortSignal.timeout(60000),
     })
