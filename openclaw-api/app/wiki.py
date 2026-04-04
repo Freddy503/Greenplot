@@ -206,6 +206,12 @@ async def compile_article(body: WikiCompileRequest, request: Request, current_us
     api_key = getattr(settings, "OPENROUTER_API_KEY", None)
     if api_key:
         try:
+            # Build source references for citation
+            source_refs = []
+            for i, c in enumerate(contents[:8], 1):
+                source_refs.append(f"[{i}] {c[:100]}...")
+            refs_text = "\n".join(source_refs)
+
             async with httpx.AsyncClient(timeout=45) as client:
                 resp = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
@@ -219,23 +225,51 @@ async def compile_article(body: WikiCompileRequest, request: Request, current_us
                             {
                                 "role": "system",
                                 "content": (
-                                    "You are a knowledge synthesizer. Given multiple source materials, "
-                                    "write a structured wiki article in markdown. Include:\n"
-                                    "- A compelling title\n"
-                                    "- A 2-3 sentence overview/summary\n"
-                                    "- Key themes as ## headings with bullet points\n"
-                                    "- Connections between sources\n"
-                                    "- A 'Key Takeaways' section at the end\n"
-                                    "Write in clear, concise prose. Use markdown formatting."
+                                    "You are a wiki article writer following Wikipedia/GrokPedia structure. "
+                                    "Given source materials, write a comprehensive, well-structured article.\n\n"
+                                    "REQUIRED STRUCTURE (follow exactly):\n\n"
+                                    "1. **Title**: Clear, descriptive (# Title)\n\n"
+                                    "2. **Lead Section**: Start with a bold definition sentence, then 2-4 sentences "
+                                    "providing a complete overview. The lead should stand alone as a summary.\n\n"
+                                    "3. **Table of Contents**: Use this format:\n"
+                                    "```\n"
+                                    "## Contents\n"
+                                    "- [Background](#background)\n"
+                                    "- [Key Concepts](#key-concepts)\n"
+                                    "- [Applications](#applications)\n"
+                                    "- [See Also](#see-also)\n"
+                                    "- [References](#references)\n"
+                                    "```\n\n"
+                                    "4. **Background**: Context, motivation, history\n\n"
+                                    "5. **Key Concepts**: 2-4 subsections (###) with clear explanations\n\n"
+                                    "6. **Applications**: Real-world uses, examples, implementations\n\n"
+                                    "7. **Connections**: How this relates to broader topics\n\n"
+                                    "8. **See Also**: Related topics as wikilinks [[Topic]]\n\n"
+                                    "9. **References**: Numbered list with source URLs\n\n"
+                                    "10. **Footer**: *Last updated: {date} • Sources: {n} • Category: {category}*\n\n"
+                                    "STYLE RULES:\n"
+                                    "- Write in third person, encyclopedic tone\n"
+                                    "- Bold the subject on first mention\n"
+                                    "- Use clear, concise prose\n"
+                                    "- Include specific examples and data when available\n"
+                                    "- Every major claim should reference a source [1], [2], etc.\n"
+                                    "- Use markdown formatting (headers, lists, tables, bold)\n"
+                                    "- Keep sections balanced in length\n"
+                                    "- End with actionable insights or next steps if applicable"
                                 ),
                             },
                             {
                                 "role": "user",
-                                "content": f"Compile these sources into a wiki article about: {title}\n\nSources:\n{raw_content}",
+                                "content": (
+                                    f"Write a wiki article about: {title}\n"
+                                    f"Category: {category}\n\n"
+                                    f"Source materials:\n{raw_content}\n\n"
+                                    f"Remember to follow the Wikipedia structure exactly."
+                                ),
                             },
                         ],
-                        "max_tokens": 1000,
-                        "temperature": 0.7,
+                        "max_tokens": 2000,
+                        "temperature": 0.6,
                     },
                 )
                 if resp.status_code == 200:
@@ -391,20 +425,26 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
                                 {
                                     "role": "system",
                                     "content": (
-                                        "You are a knowledge synthesizer. Given multiple source materials, "
-                                        "write a structured wiki article in markdown. Include:\n"
-                                        "- A compelling title\n"
-                                        "- A 2-3 sentence overview/summary\n"
-                                        "- Key themes as ## headings with bullet points\n"
-                                        "- Connections between sources\n"
-                                        "- A 'Key Takeaways' section at the end\n"
-                                        "Write in clear, concise prose. Use markdown formatting."
+                                        "You are a wiki article writer following Wikipedia/GrokPedia structure. "
+                                        "Given source materials, write a comprehensive article.\n\n"
+                                        "STRUCTURE:\n"
+                                        "1. Title with bold definition sentence\n"
+                                        "2. Lead paragraph (2-4 sentences overview)\n"
+                                        "3. Table of Contents\n"
+                                        "4. Background section\n"
+                                        "5. Key Concepts (2-4 subsections)\n"
+                                        "6. Applications/Examples\n"
+                                        "7. Connections to other topics\n"
+                                        "8. See Also with wikilinks [[Topic]]\n"
+                                        "9. References with numbered sources\n"
+                                        "10. Footer with metadata\n\n"
+                                        "Write in encyclopedic tone. Bold subject on first mention. Include citations [1], [2]."
                                     ),
                                 },
-                                {"role": "user", "content": f"Synthesize these {len(contents)} sources about {domain}:\n\n{raw_content}"},
+                                {"role": "user", "content": f"Write a wiki article about: {domain}\nCategory: {category}\n\nSources:\n{raw_content}"},
                             ],
-                            "temperature": 0.4,
-                            "max_tokens": 2000,
+                            "temperature": 0.5,
+                            "max_tokens": 2500,
                         },
                     )
                     if resp.status_code == 200:
@@ -481,15 +521,21 @@ async def create_from_text(body: dict, request: Request, current_user = Depends(
                             {
                                 "role": "system",
                                 "content": (
-                                    "Turn this raw text into a well-structured wiki article in markdown. "
-                                    "Add a clear title, organize into sections, extract key points as bullets. "
-                                    "Keep all substantive content. Use markdown formatting."
+                                    "Turn this raw text into a well-structured wiki article following Wikipedia format. "
+                                    "Structure:\n"
+                                    "1. # Title with bold definition\n"
+                                    "2. Lead paragraph (2-4 sentences overview)\n"
+                                    "3. Table of Contents\n"
+                                    "4. Organized ## sections with ### subsections\n"
+                                    "5. See Also with [[wikilinks]]\n"
+                                    "6. References\n"
+                                    "Keep all substantive content. Use encyclopedic tone. Add citations where possible."
                                 ),
                             },
                             {"role": "user", "content": text},
                         ],
                         "temperature": 0.3,
-                        "max_tokens": 1500,
+                        "max_tokens": 2500,
                     },
                 )
                 if resp.status_code == 200:
@@ -733,14 +779,20 @@ async def regenerate_article(article_id: str, request: Request, current_user = D
                             {
                                 "role": "system",
                                 "content": (
-                                    "You are a knowledge synthesizer. Given multiple source materials, "
-                                    "write a structured wiki article in markdown. Include:\n"
-                                    "- A compelling title\n"
-                                    "- A 2-3 sentence overview/summary\n"
-                                    "- Key themes as ## headings with bullet points\n"
-                                    "- Connections between sources\n"
-                                    "- A 'Key Takeaways' section at the end\n"
-                                    "Write in clear, concise prose. Use markdown formatting."
+                                    "You are a wiki article writer following Wikipedia/GrokPedia structure. "
+                                    "Given source materials, write a comprehensive article.\n\n"
+                                    "STRUCTURE:\n"
+                                    "1. # Title with bold definition sentence\n"
+                                    "2. Lead paragraph (2-4 sentences overview)\n"
+                                    "3. Table of Contents\n"
+                                    "4. Background section\n"
+                                    "5. Key Concepts (2-4 ### subsections)\n"
+                                    "6. Applications/Examples\n"
+                                    "7. Connections to other topics\n"
+                                    "8. See Also with wikilinks [[Topic]]\n"
+                                    "9. References with numbered sources\n"
+                                    "10. Footer with metadata\n\n"
+                                    "Write in encyclopedic tone. Bold subject on first mention. Include citations [1], [2]."
                                 ),
                             },
                             {
@@ -748,7 +800,7 @@ async def regenerate_article(article_id: str, request: Request, current_user = D
                                 "content": f"Regenerate and improve this wiki article: {title}\n\nSources:\n{raw_content}",
                             },
                         ],
-                        "max_tokens": 1000,
+                        "max_tokens": 2500,
                         "temperature": 0.7,
                     },
                 )
@@ -864,4 +916,156 @@ async def export_article(article_id: str, request: Request, current_user = Depen
         )
     except Exception:
         raise HTTPException(status_code=404, detail="Article not found")
+
+
+@router.post("/{article_id}/generate-image")
+async def generate_article_image(
+    article_id: str,
+    request: Request,
+    current_user=Depends(get_current_user),
+):
+    """Generate a BFL concept image for a wiki article."""
+    user = current_user
+    tenant_id = str(user.tenant_id)
+
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+    article = next((a for a in articles if a.get("id") == article_id), None)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    title = article.get("title", "")
+    tags = article.get("tags", "")
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+    from app.ingest import generate_concept_image
+    image_url = await generate_concept_image(title, tags)
+
+    if image_url:
+        # Update article with image URL
+        try:
+            weaviate_client.client.data_object.update(
+                uuid=article_id,
+                class_name="WikiArticle",
+                properties={"imageUrl": image_url},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update article image: {e}")
+
+        return {"ok": True, "image_url": image_url}
+    else:
+        return {"ok": False, "message": "Image generation failed"}
+
+
+@router.get("/{article_id}/concept-map")
+async def get_concept_map(
+    article_id: str,
+    request: Request,
+    current_user=Depends(get_current_user),
+):
+    """Get D3.js-compatible concept map data for an article and its connections."""
+    user = current_user
+    tenant_id = str(user.tenant_id)
+
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+    article = next((a for a in articles if a.get("id") == article_id), None)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    # Build nodes and links for D3 force graph
+    nodes = []
+    links = []
+    node_ids = set()
+
+    # Central node
+    nodes.append({
+        "id": article_id,
+        "label": article.get("title", "Article"),
+        "type": "article",
+        "category": article.get("category", "General"),
+        "size": 20,
+    })
+    node_ids.add(article_id)
+
+    # Backlinks (related articles)
+    backlinks = article.get("backlinks", [])
+    if isinstance(backlinks, str):
+        try:
+            backlinks = json.loads(backlinks)
+        except:
+            backlinks = []
+
+    for bl_id in backlinks:
+        if bl_id not in node_ids:
+            bl_article = next((a for a in articles if a.get("id") == bl_id), None)
+            if bl_article:
+                nodes.append({
+                    "id": bl_id,
+                    "label": bl_article.get("title", "Related"),
+                    "type": "article",
+                    "category": bl_article.get("category", "General"),
+                    "size": 12,
+                })
+                node_ids.add(bl_id)
+            links.append({"source": article_id, "target": bl_id, "type": "backlink"})
+
+    # Source seeds
+    source_seed_ids = article.get("sourceSeedIds", [])
+    if isinstance(source_seed_ids, str):
+        source_seed_ids = [s.strip() for s in source_seed_ids.split(",") if s.strip()]
+
+    for sid in source_seed_ids[:5]:
+        if sid not in node_ids:
+            nodes.append({
+                "id": sid,
+                "label": f"Seed {sid[:8]}",
+                "type": "seed",
+                "size": 8,
+            })
+            node_ids.add(sid)
+        links.append({"source": article_id, "target": sid, "type": "source"})
+
+    # Source links
+    source_link_ids = article.get("sourceLinkIds", [])
+    if isinstance(source_link_ids, str):
+        source_link_ids = [s.strip() for s in source_link_ids.split(",") if s.strip()]
+
+    for lid in source_link_ids[:5]:
+        if lid not in node_ids:
+            nodes.append({
+                "id": lid,
+                "label": f"Source {lid[:8]}",
+                "type": "link",
+                "size": 6,
+            })
+            node_ids.add(lid)
+        links.append({"source": article_id, "target": lid, "type": "source"})
+
+    # Find connections to other articles via shared seeds/links
+    article_seeds = set(source_seed_ids)
+    article_links = set(source_link_ids)
+
+    for other in articles:
+        if other.get("id") == article_id:
+            continue
+        other_seeds = set(other.get("sourceSeedIds", []))
+        other_links = set(other.get("sourceLinkIds", []))
+        shared = article_seeds & other_seeds | article_links & other_links
+        if shared and other.get("id") not in node_ids:
+            nodes.append({
+                "id": other["id"],
+                "label": other.get("title", "Related"),
+                "type": "article",
+                "category": other.get("category", "General"),
+                "size": 10,
+            })
+            node_ids.add(other["id"])
+            links.append({
+                "source": article_id,
+                "target": other["id"],
+                "type": "shared-source",
+                "shared_count": len(shared),
+            })
+
+    return {"nodes": nodes, "links": links}
 
