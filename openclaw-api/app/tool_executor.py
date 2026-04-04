@@ -206,6 +206,41 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
             SeedLink.created_at >= week_cutoff
         ).count()
 
+        # ── Connections you missed (unlinked seeds with shared tags from Weaviate) ──
+        missed_connections = []
+        try:
+            # Get seeds with tags from Weaviate
+            tagged_seeds = weaviate_client.get_seeds_by_tenant(tenant_id=str(user.tenant_id), limit=100)
+            if tagged_seeds:
+                # Build tag → seed mapping
+                tag_map = {}
+                for seed in tagged_seeds:
+                    tags_str = seed.get("tags", "")
+                    if tags_str:
+                        for tag in tags_str.lower().split(","):
+                            tag = tag.strip()
+                            if tag and len(tag) > 2:
+                                tag_map.setdefault(tag, []).append(seed)
+
+                # Find pairs with shared tags that don't have existing links
+                seen_pairs = set()
+                for tag, seeds_list in tag_map.items():
+                    if len(seeds_list) >= 2:
+                        for i in range(len(seeds_list)):
+                            for j in range(i + 1, len(seeds_list)):
+                                s1, s2 = seeds_list[i], seeds_list[j]
+                                pair_key = tuple(sorted([s1.get("notion_id", ""), s2.get("notion_id", "")]))
+                                if pair_key not in seen_pairs and pair_key[0] and pair_key[1]:
+                                    seen_pairs.add(pair_key)
+                                    missed_connections.append({
+                                        "seed_1": s1.get("title", "")[:50],
+                                        "seed_2": s2.get("title", "")[:50],
+                                        "shared_tag": tag,
+                                    })
+                missed_connections = missed_connections[:3]  # limit to 3
+        except Exception:
+            pass
+
         # ── Pending enrichment ──
         pending = db.query(Thought).filter(
             Thought.tenant_id == user.tenant_id,
@@ -243,6 +278,11 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
         if recent_connections:
             parts.append(f"\n🔗 **Connections this week**: {recent_connections}")
 
+        if missed_connections:
+            parts.append(f"\n🔍 **Connections you missed**:")
+            for mc in missed_connections:
+                parts.append(f"  • \"{mc['seed_1']}\" ↔ \"{mc['seed_2']}\" (shared: {mc['shared_tag']})")
+
         if pending:
             parts.append(f"\n⏳ **Pending enrichment**: {pending} thoughts queued")
 
@@ -266,6 +306,7 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
             "new_seeds": new_seed_items,
             "new_sources": source_items,
             "connections_week": recent_connections,
+            "missed_connections": missed_connections,
             "pending_enrichment": pending,
             "total_seeds": total_seeds,
             "total_sources": total_sources,
@@ -492,12 +533,18 @@ async def get_seed_detail(args: dict, user: User, db: Session) -> str:
             Seed.id == seed_id
         ).first()
         if seed:
+            # Track visit
+            seed.last_visited = datetime.utcnow()
+            seed.visit_count = (seed.visit_count or 0) + 1
+            db.commit()
             return json.dumps({
                 "status": "ok",
                 "source": "postgres",
                 "title": seed.title,
                 "content": seed.content[:500],
-                "created_at": seed.created_at.isoformat()
+                "created_at": seed.created_at.isoformat(),
+                "last_visited": seed.last_visited.isoformat(),
+                "visit_count": seed.visit_count,
             })
 
         return json.dumps({"status": "not_found", "message": f"Seed {seed_id} not found."})
@@ -765,10 +812,11 @@ TOOL_HANDLERS["get_knowledge_digest"] = get_knowledge_digest
 
 
 async def get_garden_intelligence(args: dict, user: User, db: Session) -> str:
-    """Garden intelligence: trending, stale, top-rated, health."""
+    """Garden intelligence: trending, stale (with decay), revisiting suggestions, health."""
     try:
         from app.models import SeedLink, Rating
         from datetime import timedelta
+        import math
 
         tenant_id = user.tenant_id
         now = datetime.utcnow()
@@ -797,16 +845,62 @@ async def get_garden_intelligence(args: dict, user: User, db: Session) -> str:
                 if s:
                     trending.append({"title": s.title, "connections": count})
 
-        # Stale: old unrated seeds
+        # Decay-based stale scoring: relevance = e^(-λt) * visit_count
+        # Higher decay_rate (λ) = faster decay
+        DECAY_RATE = 0.05  # ~14 days half-life
+        STALE_THRESHOLD = 0.3  # relevance below this = "needs attention"
+        REVISIT_DAYS = 30  # "hasn't been revisited in X days"
+
+        scored_seeds = []
+        for s in all_seeds:
+            if not s.created_at:
+                continue
+            age_days = (now - s.created_at).total_seconds() / 86400
+            visits = s.visit_count or 0
+            last_visit = s.last_visited
+
+            # Decay score: e^(-λ * age_days)
+            decay = math.exp(-DECAY_RATE * age_days)
+            # Relevance: weighted by visits + decay
+            relevance = decay * (1 + visits * 0.5)
+
+            # Days since last visit (or creation if never visited)
+            days_since_activity = (now - (last_visit or s.created_at)).days
+
+            scored_seeds.append({
+                "seed": s,
+                "relevance": relevance,
+                "decay": decay,
+                "age_days": int(age_days),
+                "visits": visits,
+                "days_since_activity": days_since_activity,
+            })
+
+        # Stale: low relevance, old, unrated
         stale = []
-        for s in sorted(all_seeds, key=lambda x: x.created_at or now):
-            age = (now - s.created_at).days if s.created_at else 999
-            if age >= 7:
-                meta = s.seed_metadata or {}
-                if not meta.get("rated"):
-                    stale.append({"title": s.title, "age_days": age})
-            if len(stale) >= 3:
+        for item in sorted(scored_seeds, key=lambda x: x["relevance"]):
+            s = item["seed"]
+            meta = s.seed_metadata or {}
+            if item["relevance"] < STALE_THRESHOLD and item["age_days"] >= 7 and not meta.get("rated"):
+                stale.append({
+                    "title": s.title,
+                    "age_days": item["age_days"],
+                    "relevance": round(item["relevance"], 2),
+                    "days_since_activity": item["days_since_activity"],
+                })
+            if len(stale) >= 5:
                 break
+
+        # Needs revisiting: not viewed in 30+ days, was visited before
+        needs_revisit = [
+            {
+                "title": item["seed"].title,
+                "days_since_activity": item["days_since_activity"],
+                "visits": item["visits"],
+            }
+            for item in scored_seeds
+            if item["days_since_activity"] >= REVISIT_DAYS and item["visits"] > 0
+        ][:3]
 
         # Recent (last 7 days)
         recent = [s for s in all_seeds if s.created_at and s.created_at >= week_ago]
@@ -822,10 +916,12 @@ async def get_garden_intelligence(args: dict, user: User, db: Session) -> str:
             Thought.status == 'pending'
         ).count()
 
-        # Health score
+        # Health score (improved with decay awareness)
+        avg_relevance = sum(item["relevance"] for item in scored_seeds) / max(len(scored_seeds), 1)
         health = min(100, int(
             (len(recent) * 10) +
-            (len(trending) * 5) -
+            (len(trending) * 5) +
+            (avg_relevance * 20) -
             (len(stale) * 3) -
             (pending * 2)
         ))
@@ -839,15 +935,20 @@ async def get_garden_intelligence(args: dict, user: User, db: Session) -> str:
                 parts.append(f"  • {t['title']} ({t['connections']} connections)")
 
         if stale:
-            parts.append("\n⏳ Stale (needs attention):")
+            parts.append("\n⏳ Stale (low relevance, needs attention):")
             for s in stale:
-                parts.append(f"  • {s['title']} ({s['age_days']}d old, unrated)")
+                parts.append(f"  • {s['title']} (relevance: {s['relevance']}, {s['age_days']}d old)")
+
+        if needs_revisit:
+            parts.append(f"\n🔄 Needs revisiting (not viewed in {REVISIT_DAYS}+ days):")
+            for r in needs_revisit:
+                parts.append(f"  • {r['title']} ({r['days_since_activity']}d since last visit, {r['visits']} views)")
 
         if recent:
             parts.append(f"\n🌱 {len(recent)} seeds added this week")
 
         if stale:
-            parts.append(f"\n💡 Suggested: Review \"{stale[0]['title']}\" — it's been sitting unrated for {stale[0]['age_days']} days.")
+            parts.append(f"\n💡 Suggested: Review \"{stale[0]['title']}\" — relevance is {stale[0]['relevance']} after {stale[0]['age_days']} days.")
 
         return json.dumps({
             "status": "ok",
@@ -855,6 +956,7 @@ async def get_garden_intelligence(args: dict, user: User, db: Session) -> str:
             "health_score": health,
             "trending": trending,
             "stale": stale,
+            "needs_revisit": needs_revisit,
             "recent_count": len(recent),
             "connections": total_connections,
             "pending": pending,

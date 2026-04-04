@@ -50,6 +50,8 @@ class Seed(Base):
     image_url = Column(String, nullable=True)
     seed_metadata = Column(JSON, nullable=True)  # renamed from metadata to avoid SQLAlchemy conflict
     created_at = Column(DateTime, default=datetime.utcnow)
+    last_visited = Column(DateTime, nullable=True)  # when user last viewed this seed
+    visit_count = Column(Integer, default=0)  # how many times user viewed this seed
 
     user = relationship("User", back_populates="seeds")
     thought = relationship("Thought", back_populates="seeds")
