@@ -381,7 +381,7 @@ class WeaviateClient:
                          source_link_ids: str = "", backlinks: str = "",
                          status: str = "published", health_score: int = 50) -> str:
         from datetime import datetime as dt
-        now = dt.utcnow().isoformat()
+        now = dt.utcnow().isoformat() + 'Z'
         obj = {
             "tenant_id": tenant_id,
             "user_id": user_id,
@@ -396,7 +396,7 @@ class WeaviateClient:
             "health_score": health_score,
             "created_at": now,
             "updated_at": now,
-            "last_regenerated_at": "",
+            "last_regenerated_at": now,
         }
         return self.client.data_object.create(class_name="WikiArticle", data_object=obj)
 
@@ -485,7 +485,7 @@ class WeaviateClient:
                  created_at: str = None) -> str:
         """Create a unified node (seed, link, wiki, or chat-insight)."""
         from datetime import datetime as dt
-        now = dt.utcnow().isoformat()
+        now = dt.utcnow().isoformat() + 'Z'
         obj = {
             "node_type": node_type,
             "tenant_id": tenant_id,

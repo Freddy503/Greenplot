@@ -98,32 +98,41 @@ export default function SettingsPage() {
       setNotificationsEnabled(Notification.permission === 'granted')
     }
 
-    // Fetch cron jobs
+    // Fetch cron jobs — only notification-triggering pipeline jobs
+    const NOTIFICATION_JOBS = [
+      'Morning Idea Spark',
+      'Daily Briefing with Weather',
+      'Daily Reflection Prompt',
+      'Weekly Content Eval Review (Sun 18:00 CET)',
+      'Biweekly Challenge Agent',
+    ]
     fetch('/api/cron')
       .then(r => r.json())
       .then(data => {
-        const jobs = (data.jobs || []).map((j: any) => {
-          const sched = j.schedule || {}
-          let scheduleDesc = ''
-          if (sched.kind === 'cron') {
-            scheduleDesc = cronToHuman(sched.expr)
-            if (sched.tz) scheduleDesc += ` (${sched.tz})`
-          } else if (sched.kind === 'every') {
-            const mins = Math.round(sched.everyMs / 60000)
-            scheduleDesc = mins >= 60 ? `Every ${mins / 60}h` : `Every ${mins}m`
-          }
-          const fmt = (ms: number | undefined) => ms ? new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
-          return {
-            id: j.id,
-            name: j.name || 'Unnamed',
-            enabled: j.enabled !== false,
-            schedule: scheduleDesc,
-            nextRun: fmt(j.state?.nextRunAtMs),
-            lastRun: fmt(j.state?.lastRunAtMs),
-            lastStatus: j.state?.lastStatus || '—',
-            consecutiveErrors: j.state?.consecutiveErrors || 0,
-          }
-        })
+        const jobs = (data.jobs || [])
+          .filter((j: any) => NOTIFICATION_JOBS.some(n => (j.name || '').toLowerCase().includes(n.toLowerCase().split(' (')[0])))
+          .map((j: any) => {
+            const sched = j.schedule || {}
+            let scheduleDesc = ''
+            if (sched.kind === 'cron') {
+              scheduleDesc = cronToHuman(sched.expr)
+              if (sched.tz) scheduleDesc += ` (${sched.tz})`
+            } else if (sched.kind === 'every') {
+              const mins = Math.round(sched.everyMs / 60000)
+              scheduleDesc = mins >= 60 ? `Every ${mins / 60}h` : `Every ${mins}m`
+            }
+            const fmt = (ms: number | undefined) => ms ? new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+            return {
+              id: j.id,
+              name: j.name || 'Unnamed',
+              enabled: j.enabled !== false,
+              schedule: scheduleDesc,
+              nextRun: fmt(j.state?.nextRunAtMs),
+              lastRun: fmt(j.state?.lastRunAtMs),
+              lastStatus: j.state?.lastStatus || '—',
+              consecutiveErrors: j.state?.consecutiveErrors || 0,
+            }
+          })
         setCronJobs(jobs)
       })
       .catch(() => {})
@@ -416,7 +425,7 @@ export default function SettingsPage() {
         {/* ── Scheduled Jobs ──────────────────── */}
         <section className="mb-8">
           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
-            Scheduled Jobs
+            Notification Pipelines
           </h2>
           {cronLoading ? (
             <div className="space-y-3">
