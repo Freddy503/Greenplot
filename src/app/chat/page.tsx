@@ -853,7 +853,7 @@ export default function ChatPage() {
       </main>
 
       {/* ── Input area ───────────────────────────────── */}
-      <div className="shrink-0 px-4 pb-28 md:pb-8 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative">
+      <div className="shrink-0 px-4 pb-36 md:pb-8 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative">
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
