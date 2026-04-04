@@ -565,7 +565,7 @@ export default function LinksPage() {
 
       {/* Bulk Import Dialog */}
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
-        <DialogContent className="sm:max-w-lg bg-surface-container border-outline-variant/10">
+        <DialogContent className="sm:max-w-2xl bg-surface-container border-outline-variant/10">
           <DialogHeader>
             <DialogTitle className="text-on-surface font-extrabold">Import Links</DialogTitle>
             <DialogDescription className="text-on-surface-variant">
