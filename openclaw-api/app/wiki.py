@@ -1366,7 +1366,7 @@ async def get_concept_map(
     def get_content_words(seed_ids):
         words = set()
         for sid in seed_ids:
-            seed = seed_map.get(seed, {})
+            seed = seed_map.get(sid, {})
             title = (seed.get("title") or "") + " " + (seed.get("content") or "")
             for w in re.sub(r'[^a-zA-Z ]', ' ', title.lower()).split():
                 if len(w) > 3:
