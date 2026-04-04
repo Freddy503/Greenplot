@@ -788,10 +788,14 @@ async def get_garden_intelligence(args: dict, user: User, db: Session) -> str:
         ).limit(3).all()
 
         trending = []
-        for seed_id, count in trending_ids:
-            s = db.query(Seed).filter(Seed.id == seed_id).first()
-            if s:
-                trending.append({"title": s.title, "connections": count})
+        if trending_ids:
+            trending_id_list = [seed_id for seed_id, _ in trending_ids]
+            trending_objects = db.query(Seed).filter(Seed.id.in_(trending_id_list)).all()
+            trending_by_id = {str(s.id): s for s in trending_objects}
+            for seed_id, count in trending_ids:
+                s = trending_by_id.get(str(seed_id))
+                if s:
+                    trending.append({"title": s.title, "connections": count})
 
         # Stale: old unrated seeds
         stale = []

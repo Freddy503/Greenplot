@@ -31,6 +31,20 @@ import json
 from datetime import datetime, date
 import uuid
 
+# --- Web Push (VAPID) ---
+VAPID_PRIVATE_KEY = None
+VAPID_CLAIMS = {"sub": "mailto:contact@example.com"}
+_vapid_key_path = os.environ.get("VAPID_PRIVATE_KEY_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), ".vapid_private.pem"))
+try:
+    if os.path.exists(_vapid_key_path):
+        with open(_vapid_key_path, "r") as f:
+            VAPID_PRIVATE_KEY = f.read().strip()
+        logger.info(f"✅ VAPID private key loaded from {_vapid_key_path}")
+    else:
+        logger.warning(f"⚠️ VAPID private key not found at {_vapid_key_path}")
+except Exception as e:
+    logger.error(f"❌ Failed to load VAPID key: {e}")
+
 def extract_text(msg: dict) -> str:
     if "content" in msg and msg["content"]:
         return msg["content"]
@@ -339,8 +353,8 @@ def garden_intelligence(current_user: User = Depends(get_current_user), db: Sess
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
 
-    all_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).all()
-    total = len(all_seeds)
+    all_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).order_by(Seed.created_at.desc()).limit(500).all()
+    total = db.query(Seed).filter(Seed.tenant_id == tenant_id).count()
 
     # ── Trending: most connections created this week ──
     trending_ids = db.query(
@@ -354,10 +368,15 @@ def garden_intelligence(current_user: User = Depends(get_current_user), db: Sess
     ).limit(5).all()
 
     trending_seeds = []
-    for seed_id, count in trending_ids:
-        s = db.query(Seed).filter(Seed.id == seed_id).first()
-        if s:
-            trending_seeds.append({"id": str(s.id), "title": s.title, "connections": count, "created": s.created_at.isoformat() if s.created_at else ""})
+    if trending_ids:
+        # Batch query: get all trending seeds at once instead of N queries
+        trending_id_list = [seed_id for seed_id, _ in trending_ids]
+        trending_objects = db.query(Seed).filter(Seed.id.in_(trending_id_list)).all()
+        trending_by_id = {str(s.id): s for s in trending_objects}
+        for seed_id, count in trending_ids:
+            s = trending_by_id.get(str(seed_id))
+            if s:
+                trending_seeds.append({"id": str(s.id), "title": s.title, "connections": count, "created": s.created_at.isoformat() if s.created_at else ""})
 
     # ── Stale: oldest, unrated, no recent connections ──
     rated_ids = set()
@@ -2170,6 +2189,7 @@ def get_upcoming_events(
 # --- Push Notifications (persistent store for PWA) ---
 
 _NOTIFS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "push_notifications.json")
+_SUBS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "push_subscriptions.json")
 
 def _load_notifs() -> list:
     try:
@@ -2185,6 +2205,77 @@ def _save_notifs(notifs: list):
     with open(_NOTIFS_FILE, "w") as f:
         json.dump(notifs[-50:], f, indent=2)
 
+def _load_subs() -> list:
+    try:
+        with open(_SUBS_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+def _save_subs(subs: list):
+    os.makedirs(os.path.dirname(_SUBS_FILE), exist_ok=True)
+    with open(_SUBS_FILE, "w") as f:
+        json.dump(subs, f, indent=2)
+
+def _send_web_push_to_all(subscription_info: dict, payload: str) -> bool:
+    """Send a Web Push notification to a single subscription. Returns True if successful."""
+    try:
+        from pywebpush import webpush, WebPushException
+        response = webpush(
+            subscription_info=subscription_info,
+            data=payload,
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims=VAPID_CLAIMS.copy(),
+        )
+        return response.status_code in (200, 201)
+    except WebPushException as e:
+        if e.response and e.response.status_code in (404, 410):
+            logger.info(f"🗑️ Push subscription expired (endpoint gone), will be removed")
+        else:
+            logger.error(f"❌ Web Push failed: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Web Push error: {e}")
+        return False
+
+def _broadcast_push(title: str, body: str, url: str = "/chat"):
+    """Send Web Push to all active subscriptions for all tenants."""
+    if not VAPID_PRIVATE_KEY:
+        logger.warning("⚠️ No VAPID key, skipping Web Push broadcast")
+        return 0
+
+    subs = _load_subs()
+    if not subs:
+        logger.info("📭 No push subscriptions registered")
+        return 0
+
+    payload = json.dumps({"title": title, "body": body or "", "url": url})
+    sent = 0
+    expired = []
+
+    for sub_entry in subs:
+        sub_info = sub_entry.get("subscription", {})
+        if not sub_info.get("endpoint"):
+            continue
+        
+        success = _send_web_push_to_all(sub_info, payload)
+        if success:
+            sent += 1
+        else:
+            # Mark for removal if 404/410
+            endpoint = sub_info.get("endpoint", "")
+            if endpoint:
+                expired.append(endpoint)
+
+    # Remove expired subscriptions
+    if expired:
+        subs = [s for s in subs if s.get("subscription", {}).get("endpoint") not in expired]
+        _save_subs(subs)
+        logger.info(f"🗑️ Removed {len(expired)} expired push subscriptions")
+
+    logger.info(f"📤 Web Push sent to {sent}/{len(subs)} subscriptions")
+    return sent
+
 class PushNotificationRequest(BaseModel):
     title: str
     body: Optional[str] = None
@@ -2192,7 +2283,8 @@ class PushNotificationRequest(BaseModel):
 
 @app.post("/api/v1/push/send")
 def send_push_notification(req: PushNotificationRequest):
-    """Store a push notification for PWA delivery. Called by cron jobs and internal services."""
+    """Store + push a notification for PWA delivery. Called by cron jobs and internal services."""
+    # 1. Store in JSON (for polling fallback)
     notifs = _load_notifs()
     notifs.append({
         "title": req.title,
@@ -2203,9 +2295,11 @@ def send_push_notification(req: PushNotificationRequest):
     })
     _save_notifs(notifs)
 
-    # Also forward to Next.js frontend (best-effort)
+    # 2. Send real Web Push (works even when PWA is closed)
+    push_sent = _broadcast_push(req.title, req.body or "", req.url or "/chat")
+
+    # 3. Also forward to Next.js frontend (best-effort, for in-app polling)
     try:
-        import httpx
         httpx.post(
             "https://seedify-six.vercel.app/api/push/notifications",
             json={"title": req.title, "body": req.body, "url": req.url},
@@ -2214,7 +2308,7 @@ def send_push_notification(req: PushNotificationRequest):
     except Exception:
         pass
 
-    return {"success": True, "total": len(notifs)}
+    return {"success": True, "total": len(notifs), "push_sent": push_sent}
 
 @app.get("/api/v1/push/notifications")
 def get_push_notifications(
@@ -2234,22 +2328,6 @@ def mark_notifications_read():
     _save_notifs(notifs)
     return {"success": True}
 
-# --- Push Subscriptions ---
-
-_SUBS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "push_subscriptions.json")
-
-def _load_subs() -> list:
-    try:
-        with open(_SUBS_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def _save_subs(subs: list):
-    os.makedirs(os.path.dirname(_SUBS_FILE), exist_ok=True)
-    with open(_SUBS_FILE, "w") as f:
-        json.dump(subs, f, indent=2)
-
 class PushSubscriptionRequest(BaseModel):
     subscription: dict
     userId: Optional[str] = None
@@ -2259,7 +2337,7 @@ def register_push_subscription(
     req: PushSubscriptionRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Register a Web Push subscription — stored in dedicated file, not thoughts/Weaviate."""
+    """Register a Web Push subscription."""
     subscription = req.subscription
     if not subscription:
         raise HTTPException(status_code=400, detail="No subscription provided")
@@ -2274,6 +2352,7 @@ def register_push_subscription(
         "subscription": subscription,
     })
     _save_subs(subs)
+    logger.info(f"✅ Push subscription registered for tenant {current_user.tenant_id}")
     return {"success": True}
 
 @app.get("/api/v1/push/subscriptions")
