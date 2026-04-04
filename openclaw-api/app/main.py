@@ -88,6 +88,16 @@ with engine.connect() as conn:
         conn.execute(text("CREATE INDEX idx_calendar_tenant ON calendar_connections(tenant_id)"))
         conn.commit()
 
+    # Seed visit tracking columns
+    result4 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='last_visited'"))
+    if not result4.fetchone():
+        conn.execute(text("ALTER TABLE seeds ADD COLUMN last_visited TIMESTAMP"))
+        conn.commit()
+    result5 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='visit_count'"))
+    if not result5.fetchone():
+        conn.execute(text("ALTER TABLE seeds ADD COLUMN visit_count INTEGER DEFAULT 0"))
+        conn.commit()
+
 app = FastAPI(title="OpenClaw API", version="0.1.0")
 
 app.add_middleware(
