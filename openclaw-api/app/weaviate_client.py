@@ -163,7 +163,7 @@ class WeaviateClient:
             "content": content,
             "metadata": metadata or {},
             "image_url": image_url,
-            "created_at": created_at or datetime.utcnow().isoformat()
+            "created_at": created_at or datetime.utcnow().isoformat() + 'Z'
         }
         uuid = self.client.data_object.create(
             class_name=settings.WEAVIATE_CLASS,
@@ -291,8 +291,8 @@ class WeaviateClient:
             "starred": starred,
             "connection_count": 0,
             "garden_seed_id": "",
-            "created_at": dt.utcnow().isoformat(),
-            "enriched_at": "",
+            "created_at": dt.utcnow().isoformat() + "Z",
+            "enriched_at": dt.utcnow().isoformat() + "Z",
         }
         return self.client.data_object.create(class_name="Link", data_object=obj)
 

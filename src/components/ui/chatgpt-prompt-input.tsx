@@ -184,7 +184,7 @@ export const PromptBox = React.forwardRef<
 
     // URL detected
     if (/^https?:\/\/\S+/.test(trimmed)) {
-      return { icon: 'link', text: 'Link detected — will be added to Dung', color: 'text-blue-400' }
+      return { icon: 'link', text: 'Link detected — will be added to Sources', color: 'text-blue-400' }
     }
     // Question detected
     if (/^(what|how|why|when|where|who|can|could|should|would|is|are|do|does|did)\b/i.test(trimmed) || /\?$/.test(trimmed)) {

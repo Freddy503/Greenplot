@@ -275,7 +275,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
         <section className="px-2 mt-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>language</span>
-            Source Links (from Dung)
+            Source Links (from Sources)
           </h3>
           <div className="space-y-2">
             {sourceLinks.map(link => (

@@ -74,7 +74,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
   const domain = seed.domain || ''
   const energy = seed.energy || ''
 
-  // Fetch related Dung links when sheet opens
+  // Fetch related Sources links when sheet opens
   useEffect(() => {
     if (!open || !seed) return
     setLoadingLinks(true)
@@ -198,11 +198,11 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
           </div>
         )}
 
-        {/* Cross-Tab: Related Dung Links */}
+        {/* Cross-Tab: Related Sources Links */}
         <div className="mb-6">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-2 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>link</span>
-            From Dung
+            From Sources
           </h3>
           {loadingLinks ? (
             <div className="h-10 bg-surface-container-high rounded-xl animate-pulse" />
@@ -226,7 +226,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
               ))}
             </div>
           ) : (
-            <p className="text-xs text-on-surface-variant/40 italic">No Dung links connected yet.</p>
+            <p className="text-xs text-on-surface-variant/40 italic">No Sources links connected yet.</p>
           )}
         </div>
 
