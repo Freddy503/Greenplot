@@ -302,7 +302,7 @@ class WeaviateClient:
         query = self.client.query.get("Link", [
             "url", "title", "summary", "domain", "tags", "favicon", "og_image",
             "status", "starred", "connection_count", "garden_seed_id", "created_at", "enriched_at"
-        ]).with_where(where).with_limit(limit)
+        ]).with_additional("id").with_where(where).with_limit(limit)
 
         if starred is not None:
             query = query.with_where({
@@ -751,7 +751,7 @@ class WeaviateClient:
         query = self.client.query.get(settings.WEAVIATE_CLASS, [
             "title", "text", "source", "url", "created", "notion_id",
             "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"
-        ]).with_where(where).with_limit(limit)
+        ]).with_additional("id").with_where(where).with_limit(limit)
         result = query.do()
         objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, []) or []
 
