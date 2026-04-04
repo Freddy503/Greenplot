@@ -1799,6 +1799,73 @@ def get_upcoming_events(
     return {"events": events, "connected": True, "timezone": conn.calendar_timezone}
 
 
+# --- Push Notifications (persistent store for PWA) ---
+
+_NOTIFS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "push_notifications.json")
+
+def _load_notifs() -> list:
+    try:
+        with open(_NOTIFS_FILE, "r") as f:
+            data = json.load(f)
+            # Only keep last 50
+            return data[-50:]
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+def _save_notifs(notifs: list):
+    os.makedirs(os.path.dirname(_NOTIFS_FILE), exist_ok=True)
+    with open(_NOTIFS_FILE, "w") as f:
+        json.dump(notifs[-50:], f, indent=2)
+
+class PushNotificationRequest(BaseModel):
+    title: str
+    body: Optional[str] = None
+    url: Optional[str] = "/chat"
+
+@app.post("/api/v1/push/send")
+def send_push_notification(req: PushNotificationRequest):
+    """Store a push notification for PWA delivery. Called by cron jobs and internal services."""
+    notifs = _load_notifs()
+    notifs.append({
+        "title": req.title,
+        "body": req.body or "",
+        "url": req.url or "/chat",
+        "timestamp": datetime.utcnow().isoformat(),
+        "read": False,
+    })
+    _save_notifs(notifs)
+
+    # Also forward to Next.js frontend (best-effort)
+    try:
+        import httpx
+        httpx.post(
+            "https://seedify-six.vercel.app/api/push/notifications",
+            json={"title": req.title, "body": req.body, "url": req.url},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+    return {"success": True, "total": len(notifs)}
+
+@app.get("/api/v1/push/notifications")
+def get_push_notifications(
+    current_user: User = Depends(get_optional_user),
+):
+    """Get pending push notifications for PWA."""
+    notifs = _load_notifs()
+    unread = [n for n in notifs if not n.get("read")]
+    return {"notifications": unread, "total": len(notifs)}
+
+@app.post("/api/v1/push/mark-read")
+def mark_notifications_read():
+    """Mark all notifications as read."""
+    notifs = _load_notifs()
+    for n in notifs:
+        n["read"] = True
+    _save_notifs(notifs)
+    return {"success": True}
+
 # --- Push Subscriptions ---
 
 _SUBS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "push_subscriptions.json")
