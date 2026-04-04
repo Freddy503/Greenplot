@@ -7,6 +7,9 @@ from sqlalchemy import text
 from typing import Optional, List
 from pydantic import BaseModel, Field
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 import base64
 import mimetypes
 from app.database import engine, get_db
@@ -1045,7 +1048,7 @@ async def chat_v2_endpoint(
 
     if agent_session is None:
         import uuid as _uuid
-        session_id = _uuid.uuid4().hex[:12]
+        session_id = str(_uuid.uuid4())
         agent_session = Session(session_id=session_id)
     else:
         session_id = agent_session.session_id
@@ -1161,23 +1164,37 @@ async def chat_v2_endpoint(
                 recorder.event("tool_result", d.get("id", ""), d.get("result", "")[:200])
 
             # SSE format
+            # SSE format
             yield f"data: {_json.dumps(d, ensure_ascii=False)}\n\n"
 
-        # Persist session after turn using the agent's full session
-        try:
-            if current_user:
-                actual_session = agent.last_session
-                if actual_session and actual_session.messages:
-                    store.save(
-                        session_id=session_id,
-                        messages=actual_session.messages,
-                        tenant_id=str(current_user.tenant_id),
-                        user_id=str(current_user.id),
-                        title=last_prompt[:50] if last_prompt else None,
-                    )
-                    db.commit()
-        except Exception as e:
-            pass
+            # Save session when done event fires
+            if event.type.value == "done" and current_user:
+                try:
+                    actual_session = agent.last_session
+                    if actual_session and actual_session.messages:
+                        from app.database import SessionLocal
+                        from app.agent.persist import ChatSessionStore
+                        save_db = SessionLocal()
+                        try:
+                            save_store = ChatSessionStore(save_db)
+                            save_store.save(
+                                session_id=session_id,
+                                messages=actual_session.messages,
+                                tenant_id=str(current_user.tenant_id),
+                                user_id=str(current_user.id),
+                                title=last_prompt[:50] if last_prompt else None,
+                            )
+                            save_db.commit()
+                            logger.info(f"Session {session_id} saved ({len(actual_session.messages)} messages)")
+                        except Exception as e:
+                            logger.error(f"Session save failed for {session_id}: {e}")
+                            save_db.rollback()
+                        finally:
+                            save_db.close()
+                    else:
+                        logger.warning(f"Session {session_id}: no session to save")
+                except Exception as e:
+                    logger.error(f"Session persistence error for {session_id}: {e}")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -1315,8 +1332,12 @@ def harvest_all(
             for msg in session.messages:
                 if hasattr(msg, 'role') and msg.role == 'assistant':
                     for block in (msg.content or []):
-                        if hasattr(block, 'type') and block.type == 'text':
+                        if hasattr(block, 'kind') and block.kind.value == 'text':
                             assistant_texts.append(block.text)
+                        elif hasattr(block, 'type') and block.type == 'text':
+                            assistant_texts.append(block.text)
+                        elif isinstance(block, dict) and block.get('kind') == 'text':
+                            assistant_texts.append(block.get('text', ''))
                         elif isinstance(block, dict) and block.get('type') == 'text':
                             assistant_texts.append(block.get('text', ''))
 
