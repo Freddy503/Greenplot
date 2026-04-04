@@ -241,7 +241,7 @@ export const PromptBox = React.forwardRef<
     <div
       className={cn(
         'flex flex-col rounded-[28px] p-2 shadow-sm transition-colors cursor-text',
-        'bg-surface-container-highest border border-outline-variant/10',
+        'bg-surface-container border border-outline-variant/10 focus-within:border-primary/30 focus-within:shadow-[0_0_0_3px_rgba(34,197,94,0.1)]',
         className
       )}
     >
