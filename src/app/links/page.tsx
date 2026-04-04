@@ -405,7 +405,7 @@ export default function LinksPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="pt-20 pb-28 px-4 max-w-2xl mx-auto w-full">
+      <main className="pt-20 pb-28 px-4 max-w-3xl mx-auto w-full">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">

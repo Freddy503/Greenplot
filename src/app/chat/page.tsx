@@ -441,12 +441,12 @@ export default function ChatPage() {
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="pt-14 flex-1 min-h-0 overflow-hidden">
+      <main className="pt-16 flex-1 min-h-0 overflow-hidden">
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
               <ConversationEmptyState>
-                <div className="flex flex-col items-center gap-6 max-w-lg mx-auto">
+                <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto">
                   {/* Brand icon */}
                   <div className="relative">
                     <div className="absolute inset-0 rounded-full blur-2xl opacity-30 bg-primary scale-[1.8]" />
