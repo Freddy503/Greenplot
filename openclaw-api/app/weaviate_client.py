@@ -406,7 +406,7 @@ class WeaviateClient:
         query = self.client.query.get("WikiArticle", [
             "title", "category", "summary", "content", "source_seed_ids",
             "source_link_ids", "backlinks", "status", "health_score",
-            "created_at", "updated_at", "last_regenerated_at"
+            "created_at", "updated_at", "last_regenerated_at", "imageUrl"
         ]).with_where(where).with_limit(limit)
 
         result = query.do()
@@ -444,6 +444,7 @@ class WeaviateClient:
                 "createdAt": obj.get("created_at", ""),
                 "updatedAt": obj.get("updated_at", ""),
                 "lastRegeneratedAt": obj.get("last_regenerated_at", ""),
+                "imageUrl": obj.get("imageUrl", ""),
             })
 
         if sort == "alpha":
