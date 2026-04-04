@@ -20,18 +20,11 @@ import { usePushNotifications } from '@/hooks/use-push-notifications'
 import { toast } from 'sonner'
 
 const BACKEND = '/api'
-const DIGEST_OPTIONS = [
-  { value: 'twice-daily', label: 'Twice a day', desc: 'Morning + evening digests' },
-  { value: 'once-daily', label: 'Once a day', desc: 'Morning digest only' },
-  { value: 'bi-weekly', label: 'Twice a week', desc: 'Mon & Thu digests' },
-  { value: 'weekly', label: 'Weekly', desc: 'Monday digest only' },
-]
 
 export default function SettingsPage() {
   const router = useRouter()
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
-  const [digestFrequency, setDigestFrequency] = useState('once-daily')
   const [saving, setSaving] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -94,7 +87,6 @@ export default function SettingsPage() {
     try {
       const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
       setCity(profile.city || '')
-      setDigestFrequency(profile.digest_frequency || 'once-daily')
     } catch {}
 
     // (Pipeline jobs are pre-defined — no fetch needed)
@@ -136,28 +128,6 @@ export default function SettingsPage() {
     localStorage.setItem('greenplot_nickname', editNickname.trim())
     setEditingNickname(false)
     toast.success('Nickname updated')
-  }
-
-  // ── Save digest frequency ───────────────────
-  const handleSaveFrequency = async (freq: string) => {
-    setSaving(true)
-    try {
-      const res = await fetch(`${BACKEND}/profile`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-        body: JSON.stringify({ digest_frequency: freq }),
-      })
-      if (!res.ok) throw new Error('Failed to save')
-      setDigestFrequency(freq)
-      const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
-      profile.digest_frequency = freq
-      localStorage.setItem('greenplot_profile', JSON.stringify(profile))
-      toast.success('Digest frequency updated')
-    } catch {
-      toast.error('Failed to save')
-    } finally {
-      setSaving(false)
-    }
   }
 
   // ── Push notifications (via hook) ──────────
@@ -313,36 +283,6 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* Digest frequency */}
-            <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
-              <p className="text-sm font-bold text-on-surface mb-3">Digest Frequency</p>
-              <div className="space-y-2">
-                {DIGEST_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleSaveFrequency(opt.value)}
-                    disabled={saving}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
-                      digestFrequency === opt.value
-                        ? 'bg-primary/10 border border-primary/30'
-                        : 'bg-surface-container-highest/50 border border-transparent hover:bg-surface-container-highest'
-                    }`}
-                  >
-                    <div className="text-left">
-                      <p className={`text-sm font-semibold ${digestFrequency === opt.value ? 'text-primary' : 'text-on-surface'}`}>
-                        {opt.label}
-                      </p>
-                      <p className="text-[10px] text-on-surface-variant">{opt.desc}</p>
-                    </div>
-                    {digestFrequency === opt.value && (
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>
-                        check_circle
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </section>
 
