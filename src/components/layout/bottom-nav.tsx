@@ -15,24 +15,15 @@ export default function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 py-1 px-2 md:hidden">
-      <div className="flex justify-around items-center">
+    <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/90 backdrop-blur-sm border-t border-border/50 md:hidden">
+      <div className="flex justify-around items-center py-1.5 px-2 max-w-lg mx-auto">
         {navItems.map((item) => {
           const active = pathname === item.href
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="no-underline"
-            >
-              <div className={`
-                flex flex-col items-center gap-0.5 py-1 px-3 min-w-[52px]
-                ${active ? 'text-primary' : 'text-gray-400'}
-              `}>
-                <span
-                  className="material-symbols-outlined text-xl"
-                  style={{ fontVariationSettings: active ? '"FILL" 1' : '"FILL" 0' }}
-                >
+            <Link key={item.href} href={item.href} className="no-underline">
+              <div className={`flex flex-col items-center gap-0.5 py-1 px-2 min-w-[56px] rounded-xl transition-colors
+                ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+                <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: active ? '"FILL" 1' : '"FILL" 0' }}>
                   {item.icon}
                 </span>
                 <span className="text-[10px] font-medium">{item.label}</span>
