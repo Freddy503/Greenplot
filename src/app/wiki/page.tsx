@@ -363,7 +363,7 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
 
     // Create simulation
     const simulation = d3.forceSimulation(data.nodes)
-      .force('link', d3.forceLink(data.links).id((d: ConceptNode) => d.id).distance(60))
+      .force('link', d3.forceLink(data.links).id((d: any) => d.id).distance(60))
       .force('charge', d3.forceManyBody().strength(-100))
       .force('center', d3.forceCenter(width / 2, height / 2))
 
@@ -375,7 +375,7 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
       .append('line')
       .attr('stroke', '#334155')
       .attr('stroke-width', 1)
-      .attr('stroke-dasharray', (d: ConceptLink) => d.type === 'shared-source' ? '4,2' : 'none')
+      .attr('stroke-dasharray', (d: any) => d.type === 'shared-source' ? '4,2' : 'none')
 
     // Draw nodes
     const node = svg.append('g')
@@ -383,8 +383,8 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
       .data(data.nodes)
       .enter()
       .append('circle')
-      .attr('r', (d: ConceptNode) => d.size)
-      .attr('fill', (d: ConceptNode) => color(d.type))
+      .attr('r', (d: any) => d.size)
+      .attr('fill', (d: any) => d.type === 'article' ? '#69f6b8' : d.type === 'seed' ? '#f59e0b' : '#6366f1')
       .attr('stroke', '#0f172a')
       .attr('stroke-width', 2)
       .style('cursor', 'pointer')
@@ -395,11 +395,11 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
       .data(data.nodes)
       .enter()
       .append('text')
-      .text((d: ConceptNode) => truncate(d.label, 20))
+      .text((d: any) => truncate(d.label, 20))
       .attr('font-size', '10px')
       .attr('fill', '#94a3b8')
       .attr('text-anchor', 'middle')
-      .attr('dy', (d: ConceptNode) => d.size + 12)
+      .attr('dy', (d: any) => (d.size || 10) + 12)
 
     // Simulation tick
     simulation.on('tick', () => {
@@ -546,17 +546,35 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
 
       {/* References */}
       {parsed.references.length > 0 && (
-        <section className="mb-6">
+        <section className="mb-6" id="source-links">
           <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
             References
           </h2>
           <ol className="space-y-1 text-xs text-on-surface-variant">
-            {parsed.references.map((ref, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-primary font-bold">[{i + 1}]</span>
-                <span>{renderInlineFormatting(ref.replace(/^\d+\.\s*/, ''))}</span>
-              </li>
-            ))}
+            {parsed.references.map((ref, i) => {
+              const refNum = i + 1
+              const refId = `reference-${refNum}`
+              // Bare URLs in references like: "Title. https://url"
+              const urlMatch = ref.match(/(https?:\/\/[^\s]+)/)
+              return (
+                <li key={i} id={refId} className="flex gap-2 scroll-mt-24">
+                  <span className="text-primary font-bold">[{refNum}]</span>
+                  <span className="leading-relaxed">
+                    {urlMatch ? (
+                      <>
+                        {renderInlineFormatting(ref.replace(/\bhttps?:\/\/[^\s]+\b/, '').trim())}
+                        {' '}
+                        <a href={urlMatch[1]} target="_blank" rel="noopener" className="text-primary hover:underline underline-offset-2 break-all">
+                          {urlMatch[1]}
+                        </a>
+                      </>
+                    ) : (
+                      renderInlineFormatting(ref.replace(/^\d+\.\s*/, ''))
+                    )}
+                  </span>
+                </li>
+              )
+            })}
           </ol>
         </section>
       )}
@@ -576,12 +594,14 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
 function renderInlineFormatting(text: string): React.ReactNode {
   // Bold
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  // Links [text](url)
+  // Markdown links [text](url)
   text = text.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener" class="text-primary hover:underline">$1</a>')
   // Bare URLs (https://...)
+  text = text.replace(/(https?:\/\/[^\s<>"')]+)/g, '<a href="$1" target="_blank" rel="noopener" class="text-primary hover:underline">$1</a>')
+  // Bare URLs (https://...)
   text = text.replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" rel="noopener" class="text-primary hover:underline">$1</a>')
-  // Citations [1], [2]
-  text = text.replace(/\[(\d+)\]/g, '<span class="text-primary text-[10px] font-bold">[$1]</span>')
+  // Citations [1], [2] - make them anchor links to references section
+  text = text.replace(/\[(\d+)\]/g, '<a href="#reference-$1" class="text-primary text-[10px] font-bold hover:underline">[$1]</a>')
 
   return <span dangerouslySetInnerHTML={{ __html: text }} />
 }
