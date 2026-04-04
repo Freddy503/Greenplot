@@ -140,7 +140,7 @@ export const PromptBox = React.forwardRef<
 
   React.useImperativeHandle(ref, () => internalTextareaRef.current!, [])
 
-  React.useLayoutEffect(() => {
+  typeof window !== 'undefined' && React.useEffect ? React.useEffect : React.useEffect(() => {
     const textarea = internalTextareaRef.current
     if (textarea) {
       textarea.style.height = 'auto'
