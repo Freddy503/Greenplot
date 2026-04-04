@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +32,22 @@ interface WikiArticle {
   sourceSeedIds?: string[]
   sourceLinkIds?: string[]
   summary?: string
+  imageUrl?: string
+}
+
+interface ConceptNode {
+  id: string
+  label: string
+  type: 'article' | 'seed' | 'link'
+  category?: string
+  size: number
+}
+
+interface ConceptLink {
+  source: string
+  target: string
+  type: string
+  shared_count?: number
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -77,12 +93,501 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max).trimEnd() + '…'
 }
 
+// ── Wikipedia-Style Content Parser ────────────────────
+
+interface ParsedSection {
+  id: string
+  level: number
+  title: string
+  content: string[]
+}
+
+interface ParsedArticle {
+  lead: string[]
+  toc: { id: string; title: string; level: number }[]
+  sections: ParsedSection[]
+  infobox: Record<string, string> | null
+  seeAlso: string[]
+  references: string[]
+  footer: string | null
+}
+
+function parseWikiContent(content: string): ParsedArticle {
+  const lines = content.split('\n')
+  const result: ParsedArticle = {
+    lead: [],
+    toc: [],
+    sections: [],
+    infobox: null,
+    seeAlso: [],
+    references: [],
+    footer: null,
+  }
+
+  let currentSection: ParsedSection | null = null
+  let inToc = false
+  let inInfobox = false
+  let inSeeAlso = false
+  let inReferences = false
+  let infoboxLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // Skip empty lines in certain contexts
+    if (!trimmed && !currentSection && result.lead.length === 0) continue
+
+    // Detect Table of Contents
+    if (trimmed.startsWith('## Contents') || trimmed.startsWith('## Table of Contents')) {
+      inToc = true
+      continue
+    }
+
+    // Detect TOC items
+    if (inToc && trimmed.startsWith('- [')) {
+      const match = trimmed.match(/- \[(.+?)\]\(#(.+?)\)/)
+      if (match) {
+        result.toc.push({ id: match[2], title: match[1], level: 1 })
+      }
+      continue
+    }
+
+    // Detect infobox (:::infobox or | Field | Value |)
+    if (trimmed.startsWith(':::infobox')) {
+      inInfobox = true
+      infoboxLines = []
+      continue
+    }
+    if (inInfobox && trimmed.startsWith(':::')) {
+      inInfobox = false
+      result.infobox = parseInfobox(infoboxLines)
+      continue
+    }
+    if (inInfobox) {
+      infoboxLines.push(trimmed)
+      continue
+    }
+
+    // Detect sections
+    const h2Match = trimmed.match(/^## (.+)/)
+    const h3Match = trimmed.match(/^### (.+)/)
+
+    if (h2Match) {
+      const title = h2Match[1].trim()
+      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+
+      // Check for special sections
+      if (title.toLowerCase().includes('see also')) {
+        inSeeAlso = true
+        inReferences = false
+        inToc = false
+        currentSection = null
+        continue
+      }
+      if (title.toLowerCase().includes('reference')) {
+        inReferences = true
+        inSeeAlso = false
+        inToc = false
+        currentSection = null
+        continue
+      }
+
+      inToc = false
+      inSeeAlso = false
+      inReferences = false
+
+      currentSection = { id, level: 2, title, content: [] }
+      result.sections.push(currentSection)
+      continue
+    }
+
+    if (h3Match && currentSection) {
+      const title = h3Match[1].trim()
+      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      currentSection.content.push(`### ${title}`)
+      continue
+    }
+
+    // Detect footer
+    if (trimmed.startsWith('*Last updated:') || trimmed.startsWith('*Exported from')) {
+      result.footer = trimmed.replace(/^\*|\*$/g, '')
+      continue
+    }
+
+    // Collect content
+    if (inSeeAlso) {
+      // Parse wikilinks [[Topic]]
+      const wikiMatch = trimmed.match(/\[\[(.+?)\]\]/g)
+      if (wikiMatch) {
+        wikiMatch.forEach(m => {
+          result.seeAlso.push(m.replace(/\[\[|\]\]/g, ''))
+        })
+      } else if (trimmed.startsWith('- ')) {
+        result.seeAlso.push(trimmed.slice(2))
+      }
+      continue
+    }
+
+    if (inReferences) {
+      if (trimmed.match(/^\d+\./)) {
+        result.references.push(trimmed)
+      }
+      continue
+    }
+
+    if (currentSection) {
+      currentSection.content.push(trimmed)
+    } else {
+      // Lead section (before any heading)
+      if (trimmed && !trimmed.startsWith('#')) {
+        result.lead.push(trimmed)
+      }
+    }
+  }
+
+  // If no explicit sections found, try to detect from content
+  if (result.sections.length === 0 && result.lead.length === 0) {
+    // Fallback: treat all content as lead
+    result.lead = lines.filter(l => l.trim() && !l.startsWith('#'))
+  }
+
+  return result
+}
+
+function parseInfobox(lines: string[]): Record<string, string> {
+  const infobox: Record<string, string> = {}
+  for (const line of lines) {
+    if (line.startsWith('|') && !line.startsWith('|---')) {
+      const parts = line.split('|').filter(p => p.trim())
+      if (parts.length >= 2) {
+        infobox[parts[0].trim()] = parts[1].trim()
+      }
+    }
+  }
+  return infobox
+}
+
+// ── Infobox Component ─────────────────────────────────
+
+function Infobox({ data, article }: { data: Record<string, string>; article: WikiArticle }) {
+  const entries = Object.entries(data)
+  if (entries.length === 0) {
+    // Auto-generate infobox from article metadata
+    return (
+      <div className="float-right ml-4 mb-4 w-56 bg-surface-container border border-outline-variant/10 rounded-xl overflow-hidden">
+        <div className="bg-primary/10 px-3 py-2 text-center">
+          <span className="text-xs font-bold text-primary uppercase tracking-wider">Quick Facts</span>
+        </div>
+        <div className="p-3 space-y-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-on-surface-variant">Category</span>
+            <span className="font-bold text-on-surface">{article.category}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-on-surface-variant">Updated</span>
+            <span className="font-bold text-on-surface">{new Date(article.updatedAt).toLocaleDateString()}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-on-surface-variant">Sources</span>
+            <span className="font-bold text-on-surface">{(article.sourceLinkIds || []).length}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-on-surface-variant">Connections</span>
+            <span className="font-bold text-on-surface">{article.backlinks.length}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="float-right ml-4 mb-4 w-56 bg-surface-container border border-outline-variant/10 rounded-xl overflow-hidden">
+      <div className="bg-primary/10 px-3 py-2 text-center">
+        <span className="text-xs font-bold text-primary uppercase tracking-wider">Quick Facts</span>
+      </div>
+      <div className="p-3 space-y-2 text-xs">
+        {entries.map(([key, value]) => (
+          <div key={key} className="flex justify-between">
+            <span className="text-on-surface-variant">{key}</span>
+            <span className="font-bold text-on-surface">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Concept Map Component (D3.js) ────────────────────
+
+function ConceptMap({ articleId, token }: { articleId: string; token: string | null }) {
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [data, setData] = useState<{ nodes: ConceptNode[]; links: ConceptLink[] } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/wiki/${articleId}/concept-map`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.nodes) setData(d)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [articleId, token])
+
+  useEffect(() => {
+    if (!data || !canvasRef.current) return
+
+    const d3 = require('d3')
+    const container = canvasRef.current
+    const width = container.clientWidth
+    const height = 250
+
+    // Clear previous
+    d3.select(container).selectAll('*').remove()
+
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height)
+
+    // Color by type
+    const color = (type: string) => {
+      if (type === 'article') return '#69f6b8'
+      if (type === 'seed') return '#f59e0b'
+      return '#6366f1'
+    }
+
+    // Create simulation
+    const simulation = d3.forceSimulation(data.nodes)
+      .force('link', d3.forceLink(data.links).id((d: ConceptNode) => d.id).distance(60))
+      .force('charge', d3.forceManyBody().strength(-100))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+
+    // Draw links
+    const link = svg.append('g')
+      .selectAll('line')
+      .data(data.links)
+      .enter()
+      .append('line')
+      .attr('stroke', '#334155')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', (d: ConceptLink) => d.type === 'shared-source' ? '4,2' : 'none')
+
+    // Draw nodes
+    const node = svg.append('g')
+      .selectAll('circle')
+      .data(data.nodes)
+      .enter()
+      .append('circle')
+      .attr('r', (d: ConceptNode) => d.size)
+      .attr('fill', (d: ConceptNode) => color(d.type))
+      .attr('stroke', '#0f172a')
+      .attr('stroke-width', 2)
+      .style('cursor', 'pointer')
+
+    // Draw labels
+    const label = svg.append('g')
+      .selectAll('text')
+      .data(data.nodes)
+      .enter()
+      .append('text')
+      .text((d: ConceptNode) => truncate(d.label, 20))
+      .attr('font-size', '10px')
+      .attr('fill', '#94a3b8')
+      .attr('text-anchor', 'middle')
+      .attr('dy', (d: ConceptNode) => d.size + 12)
+
+    // Simulation tick
+    simulation.on('tick', () => {
+      link
+        .attr('x1', (d: any) => d.source.x)
+        .attr('y1', (d: any) => d.source.y)
+        .attr('x2', (d: any) => d.target.x)
+        .attr('y2', (d: any) => d.target.y)
+
+      node
+        .attr('cx', (d: any) => d.x)
+        .attr('cy', (d: any) => d.y)
+
+      label
+        .attr('x', (d: any) => d.x)
+        .attr('y', (d: any) => d.y)
+    })
+
+    return () => { simulation.stop() }
+  }, [data])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[250px] bg-surface-container rounded-xl">
+        <span className="material-symbols-outlined animate-spin text-on-surface-variant/40">progress_activity</span>
+      </div>
+    )
+  }
+
+  if (!data || data.nodes.length <= 1) {
+    return (
+      <div className="flex items-center justify-center h-[150px] bg-surface-container rounded-xl text-on-surface-variant/40 text-xs">
+        No connections yet
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-surface-container rounded-xl overflow-hidden border border-outline-variant/10">
+      <div ref={canvasRef} className="w-full" />
+      <div className="flex items-center justify-center gap-4 px-3 py-2 border-t border-outline-variant/10">
+        <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
+          <span className="w-2 h-2 rounded-full bg-[#69f6b8]" /> Article
+        </span>
+        <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
+          <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> Seed
+        </span>
+        <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
+          <span className="w-2 h-2 rounded-full bg-[#6366f1]" /> Source
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Wikipedia-Style Markdown Renderer ─────────────────
+
+function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: WikiArticle }) {
+  return (
+    <div className="prose prose-sm prose-invert max-w-none">
+      {/* Infobox */}
+      <Infobox data={parsed.infobox || {}} article={article} />
+
+      {/* Lead section */}
+      {parsed.lead.map((line, i) => (
+        <p key={i} className="text-sm text-on-surface-variant leading-relaxed mb-2">{line}</p>
+      ))}
+
+      <div className="clear-both" />
+
+      {/* Table of Contents */}
+      {parsed.toc.length > 0 && (
+        <div className="my-4 p-4 bg-surface-container rounded-xl border border-outline-variant/10">
+          <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">Contents</p>
+          <nav className="space-y-1">
+            {parsed.toc.map((item, i) => (
+              <a
+                key={i}
+                href={`#${item.id}`}
+                className="block text-sm text-primary hover:text-primary/80 transition-colors py-0.5"
+              >
+                {i + 1}. {item.title}
+              </a>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {/* Sections */}
+      {parsed.sections.map((section) => (
+        <section key={section.id} id={section.id} className="mb-6 scroll-mt-24">
+          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
+            {section.title}
+          </h2>
+          {section.content.map((line, i) => {
+            if (line.startsWith('### ')) {
+              return (
+                <h3 key={i} className="text-base font-bold text-on-surface mt-4 mb-2">
+                  {line.slice(4)}
+                </h3>
+              )
+            }
+            if (line.startsWith('- ')) {
+              return (
+                <li key={i} className="text-sm text-on-surface-variant ml-4 mb-1 list-disc">
+                  {renderInlineFormatting(line.slice(2))}
+                </li>
+              )
+            }
+            if (line.match(/^\d+\./)) {
+              return (
+                <li key={i} className="text-sm text-on-surface-variant ml-4 mb-1 list-decimal">
+                  {renderInlineFormatting(line.slice(line.indexOf('.') + 1).trim())}
+                </li>
+              )
+            }
+            if (line.trim()) {
+              return (
+                <p key={i} className="text-sm text-on-surface-variant leading-relaxed mb-2">
+                  {renderInlineFormatting(line)}
+                </p>
+              )
+            }
+            return null
+          })}
+        </section>
+      ))}
+
+      {/* See Also */}
+      {parsed.seeAlso.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
+            See Also
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {parsed.seeAlso.map((topic, i) => (
+              <Badge key={i} variant="outline" className="bg-primary/10 text-primary border-0 cursor-pointer hover:bg-primary/20 transition-colors">
+                {topic}
+              </Badge>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* References */}
+      {parsed.references.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
+            References
+          </h2>
+          <ol className="space-y-1 text-xs text-on-surface-variant">
+            {parsed.references.map((ref, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-primary font-bold">[{i + 1}]</span>
+                <span>{renderInlineFormatting(ref.replace(/^\d+\.\s*/, ''))}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* Footer */}
+      {parsed.footer && (
+        <div className="mt-8 pt-4 border-t border-outline-variant/10 text-[10px] text-on-surface-variant/50 italic">
+          {parsed.footer}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Inline Formatting (bold, links, citations) ────────
+
+function renderInlineFormatting(text: string): React.ReactNode {
+  // Bold
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  // Links
+  text = text.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener" class="text-primary hover:underline">$1</a>')
+  // Citations [1], [2]
+  text = text.replace(/\[(\d+)\]/g, '<span class="text-primary text-[10px] font-bold">[$1]</span>')
+
+  return <span dangerouslySetInnerHTML={{ __html: text }} />
+}
+
 // ── Wiki Card ─────────────────────────────────────────
 
 function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => void }) {
   const icon = getCategoryIcon(article.category)
   const color = getCategoryColor(article.category)
-  const preview = truncate(article.content.replace(/[#*_`]/g, ''), 120)
+  const preview = truncate(article.summary || article.content.replace(/[#*_`]/g, ''), 120)
 
   return (
     <Card
@@ -91,15 +596,18 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
     >
       <CardContent className="p-4">
         <div className="flex gap-3">
-          {/* Icon */}
-          <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${color} flex items-center justify-center`}>
-            <span
-              className="material-symbols-outlined text-lg"
-              style={{ fontVariationSettings: '"FILL" 1' }}
-            >
-              {icon}
-            </span>
-          </div>
+          {/* Icon or Image */}
+          {article.imageUrl ? (
+            <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden">
+              <img src={article.imageUrl} alt={article.title} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${color} flex items-center justify-center`}>
+              <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>
+                {icon}
+              </span>
+            </div>
+          )}
 
           {/* Content */}
           <div className="flex-1 min-w-0">
@@ -117,7 +625,7 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
               {article.backlinks.length > 0 && (
                 <span className="flex items-center gap-0.5 text-[9px] text-secondary/60">
                   <span className="material-symbols-outlined" style={{ fontSize: '10px', fontVariationSettings: '"FILL" 1' }}>link</span>
-                  {article.backlinks.length} backlinks
+                  {article.backlinks.length}
                 </span>
               )}
               <span className="text-[9px] text-on-surface-variant/40 ml-auto">
@@ -131,11 +639,15 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
   )
 }
 
-// ── Article Detail View ───────────────────────────────
+// ── Article Detail View (Wikipedia-Style) ─────────────
 
 function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle; onBack: () => void; allArticles: WikiArticle[] }) {
   const icon = getCategoryIcon(article.category)
   const color = getCategoryColor(article.category)
+  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') : null
+
+  // Parse content
+  const parsed = useMemo(() => parseWikiContent(article.content), [article.content])
 
   // Find linked articles
   const linked = allArticles.filter(a => article.backlinks.includes(a.id))
@@ -145,8 +657,11 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   const [sourceSeeds, setSourceSeeds] = useState<Array<{id: string; title: string}>>([])
   const [loadingSources, setLoadingSources] = useState(false)
 
+  // Image generation
+  const [generatingImage, setGeneratingImage] = useState(false)
+  const [imageUrl, setImageUrl] = useState<string | null>(article.imageUrl || null)
+
   useEffect(() => {
-    const token = localStorage.getItem('greenplot_token')
     const linkIds = article.sourceLinkIds || []
     const seedIds = article.sourceSeedIds || []
 
@@ -188,6 +703,25 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
     Promise.all(fetches).finally(() => setLoadingSources(false))
   }, [article.id])
 
+  // Generate BFL image
+  const handleGenerateImage = async () => {
+    setGeneratingImage(true)
+    try {
+      const res = await fetch(`/api/wiki/${article.id}/generate-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+      const data = await res.json()
+      if (data.ok && data.image_url) {
+        setImageUrl(data.image_url)
+      }
+    } catch {}
+    setGeneratingImage(false)
+  }
+
   return (
     <div className="animate-in slide-in-from-right duration-200">
       {/* Back button */}
@@ -199,17 +733,37 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
           <span className="material-symbols-outlined text-lg">arrow_back</span>
           <span className="font-bold">Plants</span>
         </button>
-        <button
-          onClick={() => {
-            const token = localStorage.getItem('greenplot_token')
-            window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')
-          }}
-          className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
-          title="Download as Markdown"
-        >
-          <span className="material-symbols-outlined text-lg">download</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleGenerateImage}
+            disabled={generatingImage}
+            className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
+            title="Generate concept image"
+          >
+            {generatingImage ? (
+              <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+            ) : (
+              <span className="material-symbols-outlined text-lg">image</span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')
+            }}
+            className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
+            title="Download as Markdown"
+          >
+            <span className="material-symbols-outlined text-lg">download</span>
+          </button>
+        </div>
       </div>
+
+      {/* Hero Image */}
+      {imageUrl && (
+        <div className="mb-6 rounded-2xl overflow-hidden aspect-video">
+          <img src={imageUrl} alt={article.title} className="w-full h-full object-cover" />
+        </div>
+      )}
 
       {/* Article header */}
       <div className="flex items-start gap-3 mb-6 px-2">
@@ -233,24 +787,25 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
         </div>
       </div>
 
-      {/* Article content */}
+      {/* Wikipedia-Style Content */}
       <Card className="bg-surface-container-low border-outline-variant/10 mb-6">
         <CardContent className="p-5">
-          <div className="prose prose-sm prose-invert max-w-none">
-            {article.content.split('\n').map((line, i) => {
-              if (line.startsWith('# ')) return <h2 key={i} className="text-lg font-extrabold text-on-surface mt-4 mb-2">{line.slice(2)}</h2>
-              if (line.startsWith('## ')) return <h3 key={i} className="text-base font-bold text-on-surface mt-3 mb-1.5">{line.slice(3)}</h3>
-              if (line.startsWith('- ')) return <li key={i} className="text-sm text-on-surface-variant ml-4 mb-1">{line.slice(2)}</li>
-              if (line.trim() === '') return <div key={i} className="h-2" />
-              return <p key={i} className="text-sm text-on-surface-variant leading-relaxed mb-2">{line}</p>
-            })}
-          </div>
+          <WikiContent parsed={parsed} article={article} />
         </CardContent>
       </Card>
 
+      {/* Concept Map */}
+      <section className="mb-6 px-2">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
+          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
+          Knowledge Graph
+        </h3>
+        <ConceptMap articleId={article.id} token={token} />
+      </section>
+
       {/* Backlinks */}
       {linked.length > 0 && (
-        <section className="px-2">
+        <section className="px-2 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>link</span>
             Backlinks
@@ -270,12 +825,12 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
         </section>
       )}
 
-      {/* Cross-Tab: Source Hub Links */}
+      {/* Source Hub Links */}
       {sourceLinks.length > 0 && (
-        <section className="px-2 mt-6">
+        <section className="px-2 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>language</span>
-            Source Links (from Sources)
+            Sources
           </h3>
           <div className="space-y-2">
             {sourceLinks.map(link => (
@@ -297,12 +852,12 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
         </section>
       )}
 
-      {/* Cross-Tab: Source Garden Seeds */}
+      {/* Source Garden Seeds */}
       {sourceSeeds.length > 0 && (
-        <section className="px-2 mt-6">
+        <section className="px-2 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>eco</span>
-            Source Seeds (from Garden)
+            Garden Seeds
           </h3>
           <div className="space-y-2">
             {sourceSeeds.map(seed => (
@@ -321,7 +876,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   )
 }
 
-// ── Page ──────────────────────────────────────────────
+// ── Page (unchanged from here) ────────────────────────
 
 export default function WikiPage() {
   const router = useRouter()
@@ -480,7 +1035,7 @@ export default function WikiPage() {
           </div>
         )}
 
-        {/* Garden Health Dashboard (P1) */}
+        {/* Garden Health Dashboard */}
         {health && (
           <div className="mb-5">
             <button
@@ -503,7 +1058,6 @@ export default function WikiPage() {
 
             {healthOpen && (
               <div className="mt-3 space-y-3 animate-in slide-in-from-top duration-200">
-                {/* Coverage bars */}
                 <Card className="bg-surface-container-low border-outline-variant/10">
                   <CardContent className="p-4 space-y-3">
                     <div>
@@ -526,64 +1080,12 @@ export default function WikiPage() {
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Quick stats grid */}
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { label: 'Links', value: health.summary?.total_links || 0, icon: 'link', color: 'text-primary' },
-                    { label: 'Enriched', value: health.summary?.enriched_links || 0, icon: 'auto_fix_high', color: 'text-secondary' },
-                    { label: 'Starred', value: health.summary?.starred_links || 0, icon: 'star', color: 'text-amber-400' },
-                    { label: 'Articles', value: health.summary?.total_articles || 0, icon: 'auto_stories', color: 'text-blue-400' },
-                  ].map((stat, i) => (
-                    <Card key={i} className="bg-surface-container-low border-outline-variant/10">
-                      <CardContent className="p-3 text-center">
-                        <span className={`material-symbols-outlined text-lg ${stat.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>{stat.icon}</span>
-                        <p className="text-lg font-extrabold text-on-surface mt-1">{stat.value}</p>
-                        <p className="text-[9px] text-on-surface-variant uppercase tracking-wider">{stat.label}</p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                {/* Top domains */}
-                {health.top_domains?.length > 0 && (
-                  <Card className="bg-surface-container-low border-outline-variant/10">
-                    <CardContent className="p-4">
-                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Top Domains</p>
-                      <div className="space-y-2">
-                        {health.top_domains.slice(0, 5).map((d: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between">
-                            <span className="text-sm text-on-surface">{d.domain}</span>
-                            <Badge variant="outline" className="text-[10px] bg-surface-container-high border-outline-variant/20">{d.count}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Suggestions */}
-                {health.suggestions?.length > 0 && (
-                  <div className="space-y-2">
-                    {health.suggestions.map((s: any, i: number) => (
-                      <Card key={i} className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all cursor-pointer">
-                        <CardContent className="p-3 flex items-center gap-3">
-                          <span className="material-symbols-outlined text-primary">{s.icon}</span>
-                          <span className="text-sm text-on-surface flex-1">{s.text}</span>
-                          <span className={`text-[9px] px-2 py-0.5 rounded-full ${
-                            s.priority === 'high' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'
-                          }`}>{s.priority}</span>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Ask Garden (P2) */}
+        {/* Ask Garden */}
         <div className="mb-5">
           <button
             onClick={() => setAskOpen(!askOpen)}
@@ -603,7 +1105,6 @@ export default function WikiPage() {
 
           {askOpen && (
             <div className="mt-3 space-y-3 animate-in slide-in-from-top duration-200">
-              {/* Input */}
               <div className="flex gap-2">
                 <input
                   placeholder="What do I know about X?"
@@ -625,7 +1126,6 @@ export default function WikiPage() {
                 </Button>
               </div>
 
-              {/* Answer */}
               {askAnswer && (
                 <Card className="bg-surface-container-low border-outline-variant/10">
                   <CardContent className="p-4">
@@ -637,7 +1137,6 @@ export default function WikiPage() {
                 </Card>
               )}
 
-              {/* Sources */}
               {askSources.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60 px-2">Sources</p>
