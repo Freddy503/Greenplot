@@ -300,7 +300,7 @@ export default function GardenPage() {
               <p className="text-xs leading-relaxed text-on-surface-variant mb-4">
                 Your garden is currently enriching this seed. Estimated bloom soon.
               </p>
-              <Progress value={65} className="h-1.5 mt-4 bg-surface-container-low [&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-primary-container [&>div]:shadow-[0_0_8px_rgba(105,246,184,0.4)]" />
+              <Progress value={65} className="h-1.5 mt-4 bg-surface-container-low [&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-primary-container [&>div]:shadow-green-500/30 [&>div]:shadow-sm" />
             </CardContent>
           </Card>
         )}

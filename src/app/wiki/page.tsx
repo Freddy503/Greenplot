@@ -356,7 +356,7 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
 
     // Color by type
     const color = (type: string) => {
-      if (type === 'article') return '#69f6b8'
+      if (type === 'article') return '#16a34a'
       if (type === 'seed') return '#f59e0b'
       return '#6366f1'
     }
@@ -384,7 +384,7 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
       .enter()
       .append('circle')
       .attr('r', (d: any) => d.size)
-      .attr('fill', (d: any) => d.type === 'article' ? '#69f6b8' : d.type === 'seed' ? '#f59e0b' : '#6366f1')
+      .attr('fill', (d: any) => d.type === 'article' ? '#16a34a' : d.type === 'seed' ? '#f59e0b' : '#6366f1')
       .attr('stroke', '#0f172a')
       .attr('stroke-width', 2)
       .style('cursor', 'pointer')
@@ -442,13 +442,13 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
       <div ref={canvasRef} className="w-full" />
       <div className="flex items-center justify-center gap-4 px-3 py-2 border-t border-outline-variant/10">
         <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-[#69f6b8]" /> Article
+          <span className="w-2 h-2 rounded-full bg-primary" /> Article
         </span>
         <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> Seed
+          <span className="w-2 h-2 rounded-full bg-amber-400" /> Seed
         </span>
         <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-[#6366f1]" /> Source
+          <span className="w-2 h-2 rounded-full bg-indigo-400" /> Source
         </span>
       </div>
     </div>

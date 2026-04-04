@@ -25,13 +25,13 @@ interface Seed {
 
 function getDomainColor(domain: string): string {
   const d = domain?.toLowerCase() || ''
-  if (d.includes('agentic') || d.includes('ai')) return '#69f6b8'
-  if (d.includes('enterprise') || d.includes('business')) return '#f8a010'
-  if (d.includes('career') || d.includes('fde')) return '#cdffe3'
-  if (d.includes('creativ')) return '#b1fedc'
+  if (d.includes('agentic') || d.includes('ai')) return '#16a34a'
+  if (d.includes('enterprise') || d.includes('business')) return '#d97706'
+  if (d.includes('career') || d.includes('fde')) return '#7c3aed'
+  if (d.includes('creativ')) return '#0891b2'
   if (d.includes('system') || d.includes('architecture')) return '#58e7ab'
-  if (d.includes('knowledge')) return '#06b77f'
-  return '#9ab0a5'
+  if (d.includes('knowledge')) return '#0891b2'
+  return '#5c5d5c'
 }
 
 function getNodeRadius(d: GraphNode): number {
@@ -107,8 +107,8 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
 
     const defs = svg.append('defs')
     const glow = defs.append('radialGradient').attr('id', 'graphGlow')
-    glow.append('stop').attr('offset', '0%').attr('stop-color', '#69f6b8').attr('stop-opacity', '0.04')
-    glow.append('stop').attr('offset', '100%').attr('stop-color', '#01120b').attr('stop-opacity', '0')
+    glow.append('stop').attr('offset', '0%').attr('stop-color', '#16a34a').attr('stop-opacity', '0.04')
+    glow.append('stop').attr('offset', '100%').attr('stop-color', '#fafaf8').attr('stop-opacity', '0')
     svg.append('circle').attr('cx', width / 2).attr('cy', height / 2)
       .attr('r', Math.min(width, height) * 0.5).attr('fill', 'url(#graphGlow)')
 
@@ -126,7 +126,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
       .alphaDecay(0.015).velocityDecay(0.35)
 
     const link = g.append('g').selectAll('line').data(links).join('line')
-      .attr('stroke', '#384c43').attr('stroke-opacity', d => 0.1 + d.strength * 0.4)
+      .attr('stroke', '#e0dfdd').attr('stroke-opacity', d => 0.1 + d.strength * 0.4)
       .attr('stroke-width', d => 0.5 + d.strength * 2.5)
 
     const node = g.append('g').selectAll('g').data(nodes).join('g').style('cursor', 'pointer')
@@ -147,14 +147,14 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
         }).attr('stroke', l => {
           const sid = typeof l.source === 'string' ? l.source : l.source.id
           const tid = typeof l.target === 'string' ? l.target : l.target.id
-          return (sid === d.id || tid === d.id) ? '#69f6b8' : '#384c43'
+          return (sid === d.id || tid === d.id) ? '#16a34a' : '#e0dfdd'
         })
       })
       .on('mouseleave', (e, d) => {
         setHoveredNode(null)
         d3.select(e.currentTarget).select('circle:nth-child(2)').transition().duration(200)
           .attr('fill-opacity', 0.6).attr('r', getNodeRadius(d))
-        link.attr('stroke-opacity', l => 0.1 + l.strength * 0.4).attr('stroke', '#384c43')
+        link.attr('stroke-opacity', l => 0.1 + l.strength * 0.4).attr('stroke', '#e0dfdd')
       })
 
     node.append('circle').attr('r', d => getNodeRadius(d) + 12).attr('fill', d => getDomainColor(d.domain)).attr('opacity', 0.06)
@@ -162,7 +162,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
       .attr('stroke', d => getDomainColor(d.domain)).attr('stroke-width', 1).attr('stroke-opacity', 0.3)
     node.filter(d => d.connections > 1 || nodes.length < 30).append('text').text(d => truncateTitle(d.title, 25))
       .attr('x', d => getNodeRadius(d) + 8).attr('y', 4).attr('font-size', '11px').attr('font-weight', '600')
-      .attr('fill', '#9ab0a5').attr('font-family', 'Plus Jakarta Sans, sans-serif')
+      .attr('fill', '#5c5d5c').attr('font-family', 'Plus Jakarta Sans, sans-serif')
 
     simulation.on('tick', () => {
       link.attr('x1', d => (d.source as GraphNode).x || 0).attr('y1', d => (d.source as GraphNode).y || 0)
@@ -177,7 +177,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
   if (!open) return null
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[100] bg-[#01120b] flex flex-col">
+    <div ref={containerRef} className="fixed inset-0 z-[100] bg-[#fafaf8] flex flex-col">
       <div className="flex items-center justify-between px-6 py-4 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10 z-10">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-primary" style={{ fontSize: '24px', fontVariationSettings: '"FILL" 1' }}>hub</span>
@@ -215,7 +215,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
 
         <div className="absolute bottom-6 right-6 bg-surface-container-high/80 backdrop-blur-xl rounded-2xl p-3 border border-outline-variant/10">
           <p className="text-[9px] font-bold uppercase tracking-wider text-on-surface-variant/60 mb-2">Domains</p>
-          {[{ l: 'Agentic AI', c: '#69f6b8' }, { l: 'Enterprise', c: '#f8a010' }, { l: 'Career', c: '#cdffe3' }, { l: 'Creativity', c: '#b1fedc' }, { l: 'Knowledge', c: '#06b77f' }].map(({ l, c }) => (
+          {[{ l: 'Agentic AI', c: '#16a34a' }, { l: 'Enterprise', c: '#d97706' }, { l: 'Career', c: '#7c3aed' }, { l: 'Creativity', c: '#0891b2' }, { l: 'Knowledge', c: '#0891b2' }].map(({ l, c }) => (
             <div key={l} className="flex items-center gap-2 mb-1">
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
               <span className="text-[10px] text-on-surface-variant">{l}</span>
