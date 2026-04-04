@@ -240,8 +240,8 @@ export const PromptBox = React.forwardRef<
   return (
     <div
       className={cn(
-        'flex flex-col rounded-[28px] p-2 shadow-sm transition-colors cursor-text',
-        'bg-surface-container border border-outline-variant/10 focus-within:border-primary/30 focus-within:shadow-[0_0_0_3px_rgba(34,197,94,0.1)]',
+        'flex flex-col rounded-[24px] p-2 shadow-[0_2px_8px_rgba(22,163,74,0.08)] transition-all cursor-text',
+        'bg-primary/[0.04] border border-primary/15 hover:border-primary/30 hover:shadow-[0_4px_12px_rgba(22,163,74,0.12)] focus-within:border-primary/40 focus-within:shadow-[0_4px_16px_rgba(22,163,74,0.15)]',
         className
       )}
     >
