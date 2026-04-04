@@ -36,14 +36,12 @@ interface WikiArticle {
   imageUrl?: string
 }
 
-interface ConceptNode extends d3.SimulationNodeDatum {
+interface ConceptNode {
   id: string
   label: string
   type: 'article' | 'seed' | 'link'
   category?: string
   size: number
-  x?: number
-  y?: number
 }
 
 interface ConceptLink {
@@ -364,7 +362,7 @@ function ConceptMap({ articleId, token }: { articleId: string; token: string | n
     }
 
     // Create simulation — cast nodes to SimulationNodeDatum since D3 mutates x/y properties
-    const simulation = d3.forceSimulation(data.nodes as d3.SimulationNodeDatum[])
+    const simulation = d3.forceSimulation<any>(data.nodes)
       .force('link', d3.forceLink(data.links).id((d: any) => d.id).distance(60))
       .force('charge', d3.forceManyBody().strength(-100))
       .force('center', d3.forceCenter(width / 2, height / 2))
