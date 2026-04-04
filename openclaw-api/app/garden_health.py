@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional, List
-from app.auth import get_current_user
+from sqlalchemy.orm import Session
+from app.auth import get_current_user, oauth2_scheme
 from app.weaviate_client import weaviate_client
+from app.database import get_db
 from app.config import settings
 import httpx
 from datetime import datetime, timedelta
@@ -18,9 +20,9 @@ class AskRequest(BaseModel):
 # ── P1.2: Garden Health Dashboard ─────────────────────
 
 @router.get("/health")
-async def garden_health(request: Request):
+async def garden_health(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Combined health dashboard for links + seeds + wiki."""
-    user = await get_current_user(request)
+    user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
 
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
@@ -139,9 +141,9 @@ async def garden_health(request: Request):
 # ── P2.2: Chat Against Garden ─────────────────────────
 
 @router.post("/ask")
-async def ask_garden(body: AskRequest, request: Request):
+async def ask_garden(body: AskRequest, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Ask a question against the user's knowledge garden. Retrieves relevant items and generates a grounded answer."""
-    user = await get_current_user(request)
+    user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
 
     question = body.question.strip()
@@ -270,9 +272,9 @@ class PromptSuggestionRequest(BaseModel):
 
 
 @router.post("/prompt-suggestions")
-async def prompt_suggestions(body: PromptSuggestionRequest, request: Request):
+async def prompt_suggestions(body: PromptSuggestionRequest, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Generate 3-4 contextual prompt suggestions based on the user's garden content."""
-    user = await get_current_user(request)
+    user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
 
     # Gather data from all sources
@@ -421,9 +423,9 @@ async def prompt_suggestions(body: PromptSuggestionRequest, request: Request):
 # ── C2: Training Data Export ───────────────────────────
 
 @router.get("/export-training")
-async def export_training(request: Request):
+async def export_training(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Export garden as structured Q&A pairs for fine-tuning (JSONL format)."""
-    user = await get_current_user(request)
+    user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
 
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
@@ -485,9 +487,9 @@ async def export_training(request: Request):
 # ── C3: Linting Auto-Fix ──────────────────────────────
 
 @router.post("/lint")
-async def lint_garden(request: Request):
+async def lint_garden(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Run health checks and auto-fix common issues."""
-    user = await get_current_user(request)
+    user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
 
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
