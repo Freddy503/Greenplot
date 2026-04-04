@@ -354,6 +354,36 @@ export default function SettingsPage() {
           </p>
         </section>
 
+        {/* ── Support the Project ────────────── */}
+        <section className="mb-8">
+          <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
+            Support
+          </h2>
+          <a
+            href="https://buymeacoffee.com/freddy503"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full px-5 py-6 rounded-2xl bg-[#FFDD00] hover:bg-[#ffda00] transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-base font-bold text-[#1a1a1a]">Buy me a coffee ☕</p>
+                <p className="text-xs text-[#1a1a1a]/70 mt-0.5">Help keep the garden growing</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg width="32" height="32" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M15 20C15 20 15 10 25 10C35 10 35 20 35 20" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                  <path d="M17 22H33V34C33 37.3137 30.3137 40 27 40H23C19.6863 40 17 37.3137 17 34V22Z" fill="#1a1a1a"/>
+                  <path d="M12 26H17" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M33 26H38" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M30 17C30 17 35 15 36 10" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <span className="material-symbols-outlined text-[#1a1a1a]">arrow_forward</span>
+              </div>
+            </div>
+          </a>
+        </section>
+
         {/* ── Account ────────────────────────── */}
         <section className="mb-8">
           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
