@@ -20,7 +20,7 @@ class AskRequest(BaseModel):
 # ── P1.2: Garden Health Dashboard ─────────────────────
 
 @router.get("/health")
-async def garden_health(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def garden_health(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Combined health dashboard for links + seeds + wiki."""
     user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
@@ -272,7 +272,7 @@ class PromptSuggestionRequest(BaseModel):
 
 
 @router.post("/prompt-suggestions")
-async def prompt_suggestions(body: PromptSuggestionRequest, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def prompt_suggestions(body: PromptSuggestionRequest, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Generate 3-4 contextual prompt suggestions based on the user's garden content."""
     user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
@@ -423,7 +423,7 @@ async def prompt_suggestions(body: PromptSuggestionRequest, token: str = Depends
 # ── C2: Training Data Export ───────────────────────────
 
 @router.get("/export-training")
-async def export_training(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def export_training(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Export garden as structured Q&A pairs for fine-tuning (JSONL format)."""
     user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
@@ -487,7 +487,7 @@ async def export_training(token: str = Depends(oauth2_scheme), db: Session = Dep
 # ── C3: Linting Auto-Fix ──────────────────────────────
 
 @router.post("/lint")
-async def lint_garden(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def lint_garden(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Run health checks and auto-fix common issues."""
     user = get_current_user(token=token, db=db)
     tenant_id = str(user.tenant_id)
