@@ -41,3 +41,5 @@ yarn-error.log*
 next-env.d.ts
 *.pyc
 __pycache__/
+backups/
+openclaw-api/app/*.bak

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
-  { href: '/garden', label: 'Garden', icon: 'local_florist' },
+  { href: '/garden', label: 'Garden', icon: 'eco' },
   { href: '/links', label: 'Dung', icon: 'link' },
   { href: '/wiki', label: 'Plants', icon: 'auto_stories' },
   { href: '/settings', label: 'Settings', icon: 'settings' },

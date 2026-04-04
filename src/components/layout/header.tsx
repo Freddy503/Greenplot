@@ -12,6 +12,7 @@ const tabs = [
   { href: '/garden', label: 'Garden', icon: 'eco' },
   { href: '/links', label: 'Dung', icon: 'link' },
   { href: '/wiki', label: 'Plants', icon: 'auto_stories' },
+  { href: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
 export default function Header() {
