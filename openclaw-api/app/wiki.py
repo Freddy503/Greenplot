@@ -1307,12 +1307,12 @@ async def generate_article_image(
                     uuid=article_id,
                 )
                 logger.info(f"Image generated and stored for article {article_id}")
-        except Exception as e:
-            logger.warning(f"Failed to update article image: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to update article image: {e}")
 
-        return {"ok": True, "image_url": image_url}
-    else:
-        return {"ok": False, "message": "Image generation failed"}
+            return {"ok": True, "image_url": image_url}
+
+    return {"ok": False, "message": "Image generation failed"}
 
 
 @router.get("/{article_id}/concept-map")
@@ -1322,6 +1322,7 @@ async def get_concept_map(
     current_user=Depends(get_current_user),
 ):
     """Get D3.js-compatible concept map data for an article and its connections."""
+    import re
     user = current_user
     tenant_id = str(user.tenant_id)
 
@@ -1329,6 +1330,10 @@ async def get_concept_map(
     article = next((a for a in articles if a.get("id") == article_id), None)
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
+
+    # Fetch seeds for tag-based connections
+    all_seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+    seed_map = {s.get("id"): s for s in all_seeds}
 
     # Build nodes and links for D3 force graph
     nodes = []
@@ -1345,14 +1350,36 @@ async def get_concept_map(
     })
     node_ids.add(article_id)
 
-    # Backlinks (related articles)
+    # --- Helper: extract tags from seeds ---
+    def get_seed_tags(seed_ids):
+        tags = set()
+        for sid in seed_ids:
+            seed = seed_map.get(sid, {})
+            raw_tags = seed.get("tags") or seed.get("domain", "") or ""
+            for t in raw_tags.split(","):
+                t = t.strip().lower()
+                if t and t not in ("untitled", "none", ""):
+                    tags.add(t)
+        return tags
+
+    # --- Helper: extract content keywords ---
+    def get_content_words(seed_ids):
+        words = set()
+        for sid in seed_ids:
+            seed = seed_map.get(seed, {})
+            title = (seed.get("title") or "") + " " + (seed.get("content") or "")
+            for w in re.sub(r'[^a-zA-Z ]', ' ', title.lower()).split():
+                if len(w) > 3:
+                    words.add(w)
+        return words
+
+    # 1. Explicit backlinks (stored)
     backlinks = article.get("backlinks", [])
     if isinstance(backlinks, str):
         try:
             backlinks = json.loads(backlinks)
         except:
             backlinks = []
-
     for bl_id in backlinks:
         if bl_id not in node_ids:
             bl_article = next((a for a in articles if a.get("id") == bl_id), None)
@@ -1365,65 +1392,75 @@ async def get_concept_map(
                     "size": 12,
                 })
                 node_ids.add(bl_id)
-            links.append({"source": article_id, "target": bl_id, "type": "backlink"})
+                links.append({"source": article_id, "target": bl_id, "type": "backlink"})
 
-    # Source seeds
-    source_seed_ids = article.get("sourceSeedIds", [])
-    if isinstance(source_seed_ids, str):
-        source_seed_ids = [s.strip() for s in source_seed_ids.split(",") if s.strip()]
-
-    for sid in source_seed_ids[:5]:
+    # 2. Source seeds (shown as nodes)
+    source_seed_ids_raw = article.get("sourceSeedIds", [])
+    if isinstance(source_seed_ids_raw, str):
+        source_seed_ids_raw = [s.strip() for s in source_seed_ids_raw.split(",") if s.strip()]
+    for sid in source_seed_ids_raw[:6]:
         if sid not in node_ids:
+            seed = seed_map.get(sid, {})
+            seed_title = seed.get("title", "") or f"Seed {sid[:6]}"
             nodes.append({
                 "id": sid,
-                "label": f"Seed {sid[:8]}",
+                "label": seed_title[:30],
                 "type": "seed",
                 "size": 8,
             })
             node_ids.add(sid)
         links.append({"source": article_id, "target": sid, "type": "source"})
 
-    # Source links
-    source_link_ids = article.get("sourceLinkIds", [])
-    if isinstance(source_link_ids, str):
-        source_link_ids = [s.strip() for s in source_link_ids.split(",") if s.strip()]
+    # 3. Connections to OTHER articles via shared seed tags
+    my_seed_ids = set(article.get("sourceSeedIds", []) or [])
+    my_link_ids = set(article.get("sourceLinkIds", []) or [])
+    my_tags = get_seed_tags(my_seed_ids)
+    my_words = get_content_words(my_seed_ids)
 
-    for lid in source_link_ids[:5]:
-        if lid not in node_ids:
-            nodes.append({
-                "id": lid,
-                "label": f"Source {lid[:8]}",
-                "type": "link",
-                "size": 6,
-            })
-            node_ids.add(lid)
-        links.append({"source": article_id, "target": lid, "type": "source"})
-
-    # Find connections to other articles via shared seeds/links
-    article_seeds = set(source_seed_ids)
-    article_links = set(source_link_ids)
-
+    connections = []
     for other in articles:
-        if other.get("id") == article_id:
-            continue
-        other_seeds = set(other.get("sourceSeedIds", []))
-        other_links = set(other.get("sourceLinkIds", []))
-        shared = article_seeds & other_seeds | article_links & other_links
-        if shared and other.get("id") not in node_ids:
-            nodes.append({
-                "id": other["id"],
-                "label": other.get("title", "Related"),
-                "type": "article",
-                "category": other.get("category", "General"),
-                "size": 10,
-            })
-            node_ids.add(other["id"])
-            links.append({
-                "source": article_id,
-                "target": other["id"],
-                "type": "shared-source",
-                "shared_count": len(shared),
-            })
+        if other.get("id") == article_id: continue
+        other_seed_ids = set(other.get("sourceSeedIds", []) or [])
+        other_link_ids = set(other.get("sourceLinkIds", []) or [])
+        
+        # Shared source IDs
+        shared_ids = (my_seed_ids & other_seed_ids) | (my_link_ids & other_link_ids)
+        
+        # Shared tags (strongest semantic signal)
+        other_tags = get_seed_tags(other_seed_ids)
+        shared_tags = my_tags & other_tags
+        
+        # Title keyword overlap
+        other_words = get_content_words(other_seed_ids)
+        shared_words = my_words & other_words
+        
+        # Score the connection
+        score = len(shared_ids) * 3 + len(shared_tags) * 2 + min(len(shared_words), 10) * 0.5
+        if score > 0 and other.get("id") not in node_ids:
+            connections.append((other, score, len(shared_tags), shared_tags, len(shared_words)))
+
+    # Sort by score, take top 5
+    connections.sort(key=lambda x: x[1], reverse=True)
+    for conn in connections[:5]:
+        other_art, score, tag_count, shared_tags, word_count = conn
+        nodes.append({
+            "id": other_art["id"],
+            "label": other_art.get("title", "Related")[:35],
+            "type": "article",
+            "category": other_art.get("category", "General"),
+            "size": max(10, min(16, int(score / 2))),
+        })
+        node_ids.add(other_art["id"])
+        
+        conn_type = "shared-tags" if tag_count > 0 else "keyword-overlap"
+        conn_label = f"{tag_count} tags, {word_count} words" if tag_count else f"{word_count} words"
+        links.append({
+            "source": article_id,
+            "target": other_art["id"],
+            "type": conn_type,
+            "shared_count": tag_count or word_count,
+            "connection_label": conn_label,
+        })
 
     return {"nodes": nodes, "links": links}
 
