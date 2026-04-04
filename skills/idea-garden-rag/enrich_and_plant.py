@@ -33,6 +33,10 @@ SYNC_SCRIPT     = os.path.join(os.path.dirname(__file__), 'sync_and_fetch_weavia
 
 SKILL_DIR = os.path.dirname(__file__)
 
+# Bridge: auto-save web sources as Links in Weaviate
+DEFAULT_TENANT_ID = os.environ.get('TENANT_ID', '87959b2e-5443-4c50-9336-2da01af82c14')
+DEFAULT_USER_ID = os.environ.get('USER_ID', '')
+
 
 # ── Notion helpers ────────────────────────────────────────────────────────────
 def npost(path, data):
@@ -113,6 +117,83 @@ def web_search(query, num_results=3):
     except Exception as e:
         print(f'  Exa search error: {e}', file=sys.stderr)
     return results
+
+
+def save_web_sources_as_links(web_results: list, tenant_id: str = None, user_id: str = None):
+    """Bridge: save web search results as Links in Weaviate (Sources page)."""
+    tenant_id = tenant_id or DEFAULT_TENANT_ID
+    user_id = user_id or DEFAULT_USER_ID
+    if not tenant_id or not web_results:
+        return
+
+    # Check existing links to avoid duplicates
+    try:
+        existing_urls = set()
+        gql = '{ Get { Link(where: {operator: Equal, path: ["tenant_id"], valueText: "' + tenant_id + '"}, limit: 500) { url } } }'
+        req = urllib.request.Request(
+            f'{WEAVIATE_URL}/v1/graphql',
+            data=json.dumps({"query": gql}).encode(),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            res = json.loads(r.read())
+        for link in res.get("data", {}).get("Get", {}).get("Link", []):
+            existing_urls.add(link.get("url", ""))
+    except:
+        existing_urls = set()
+
+    created = 0
+    for wr in web_results:
+        url = wr.get("url", "")
+        if not url or url in existing_urls:
+            continue
+
+        title = wr.get("title", "") or url
+        snippet = wr.get("snippet", "")
+        try:
+            domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+        except:
+            domain = "unknown"
+
+        obj = {
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "url": url,
+            "title": title[:200],
+            "summary": snippet[:500],
+            "domain": domain,
+            "tags": "enrichment-discovered",
+            "favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+            "og_image": "",
+            "raw_text": snippet[:2000],
+            "status": "enriched",
+            "starred": False,
+            "connection_count": 0,
+            "garden_seed_id": "",
+            "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "enriched_at": datetime.datetime.utcnow().isoformat() + "Z",
+        }
+        try:
+            post_req = urllib.request.Request(
+                f'{WEAVIATE_URL}/v1/objects',
+                data=json.dumps({"class": "Link", "properties": obj}).encode(),
+                headers={"Content-Type": "application/json"}
+            )
+            urllib.request.urlopen(post_req, timeout=10)
+            created += 1
+            print(f'  📎 Saved source: {title[:60]}', file=sys.stderr)
+            # Activity log
+            try:
+                sys.path.insert(0, '/root/.openclaw/workspace/openclaw-api')
+                from app.activity import log_source_found
+                log_source_found(tenant_id, title[:60], url, "enrichment_pipeline")
+            except:
+                pass
+        except Exception as e:
+            print(f'  ⚠️ Failed to save source {url[:50]}: {e}', file=sys.stderr)
+
+    if created:
+        print(f'  ✅ {created} web sources saved to Sources page', file=sys.stderr)
 
 
 # ── Weaviate query ────────────────────────────────────────────────────────────
@@ -458,6 +539,9 @@ def process_entry(entry):
     print(f'  Searching web: {search_query[:80]}...', file=sys.stderr)
     web_results = web_search(search_query, num_results=3)
     print(f'  Found {len(web_results)} web results', file=sys.stderr)
+
+    # 1b. Bridge: save web sources as Links (Sources page)
+    save_web_sources_as_links(web_results)
 
     # 2. Weaviate query
     query_text = f'{entry["title"]} {entry.get("key_takeaway", "")} {entry.get("body", "")}'[:600]

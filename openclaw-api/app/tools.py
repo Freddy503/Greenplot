@@ -89,7 +89,7 @@ TOOLS.append({
     "type": "function",
     "function": {
         "name": "web_search",
-        "description": "Search the web for current information. Use when the user asks about recent events, news, or topics outside the knowledge base.",
+        "description": "Search the web for current information. Use when the user asks about recent events, news, or topics outside the knowledge base. Results are automatically saved to their Sources library.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -186,6 +186,137 @@ TOOLS.append({
                 }
             },
             "required": []
+        }
+    }
+})
+
+# ── Cohesion Tools: Bridge Chat ↔ Garden ↔ Sources ──
+
+# Search Sources (Links)
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "search_sources",
+        "description": "Search the user's Sources library (saved links, references, articles). Use when discussing a topic and want to reference what the user has already saved. Results include titles, summaries, and domains.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query to find relevant sources by title, domain, or tags."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return (default 5).",
+                    "default": 5
+                }
+            },
+            "required": ["query"]
+        }
+    }
+})
+
+# Create Seed from Source
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "create_seed_from_source",
+        "description": "Create a new seed (idea) from an existing source link. Use when the user wants to develop an idea based on something they've saved. This bridges the Sources to Garden flow.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "link_id": {
+                    "type": "string",
+                    "description": "The ID of the source link to create the seed from."
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Title for the new seed."
+                },
+                "elaboration": {
+                    "type": "string",
+                    "description": "Your elaboration or synthesis of the source content as it relates to the user's interests."
+                }
+            },
+            "required": ["link_id", "title"]
+        }
+    }
+})
+
+# Get Knowledge Digest
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "get_knowledge_digest",
+        "description": "Get a digest of the user's knowledge base: recent seeds, new sources, connections made, and items needing attention. Use for daily briefings or when asked what's new.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "How many days back to look (default 7).",
+                    "default": 7
+                }
+            },
+            "required": []
+        }
+    }
+})
+
+# Garden Intelligence
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "get_garden_intelligence",
+        "description": "Get garden intelligence: trending seeds, stale seeds needing attention, top rated, health score. Use when asked about garden health, what to review, or knowledge base status.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+})
+
+# Activity Feed
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "get_activity_feed",
+        "description": "Get recent system activity: what seeds were created, sources found, enrichments completed. Use when asked what happened recently or what the system has been doing.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hours": {
+                    "type": "integer",
+                    "description": "How many hours back to look (default 48).",
+                    "default": 48
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max events to return (default 10).",
+                    "default": 10
+                }
+            },
+            "required": []
+        }
+    }
+})
+
+# Read Source Content
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "read_source",
+        "description": "Fetch and read the full content of a saved source link. Use when you need to reference specific details from a source to answer a complex question. Returns the page text content.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "link_id": {
+                    "type": "string",
+                    "description": "The ID of the source link to read."
+                }
+            },
+            "required": ["link_id"]
         }
     }
 })

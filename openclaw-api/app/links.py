@@ -479,3 +479,97 @@ async def get_related(link_id: str, request: Request, current_user = Depends(get
         return {"related": related_items}
     except Exception:
         raise HTTPException(status_code=404, detail="Link not found")
+
+
+@router.get("/{link_id}/seeds")
+async def get_spawned_seeds(link_id: str, request: Request, current_user = Depends(get_current_user)):
+    """Get all seeds spawned from this source link."""
+    from app.models import Seed
+    from app.database import get_db as _get_db
+
+    # Find seeds where metadata.source_link_id matches this link
+    try:
+        obj = weaviate_client.client.data_object.get_by_id(uuid=link_id, class_name="Link")
+        props = obj.get("properties", {})
+    except:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    # Also check Weaviate for seeds with this source_link_id
+    spawned = []
+    try:
+        # Check garden_seed_id field
+        garden_id = props.get("garden_seed_id", "")
+        if garden_id:
+            try:
+                seed_obj = weaviate_client.client.data_object.get_by_id(uuid=garden_id, class_name="IdeaSeed")
+                sp = seed_obj.get("properties", {})
+                spawned.append({
+                    "id": garden_id,
+                    "title": sp.get("title", ""),
+                    "source": "source_to_seed",
+                })
+            except:
+                pass
+    except:
+        pass
+
+    return {"seeds": spawned, "link_id": link_id}
+
+
+@router.post("/{link_id}/create-seed")
+async def create_seed_from_link(link_id: str, request: Request, current_user = Depends(get_current_user)):
+    """Bridge: Create a seed from a source link."""
+    user = current_user
+
+    try:
+        obj = weaviate_client.client.data_object.get_by_id(
+            uuid=link_id, class_name="Link"
+        )
+        props = obj.get("properties", {})
+    except:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    title = props.get("title", "Untitled Source")
+    url = props.get("url", "")
+    summary = props.get("summary", "")
+    domain = props.get("domain", "")
+    tags = props.get("tags", "")
+
+    # Create seed content from source
+    seed_content = f"Source: {url}\n\n{summary}" if summary else f"Source: {url}"
+
+    # Create seed in Weaviate
+    from app.enricher import embed_text
+    try:
+        embedding = embed_text(f"{title} {summary}")
+    except:
+        embedding = None
+
+    seed_id = weaviate_client.add_seed(
+        tenant_id=str(user.tenant_id),
+        user_id=str(user.id),
+        thought_id=None,
+        title=f"🌱 {title}",
+        content=seed_content,
+        embedding=embedding or [0.0] * 1536,
+        metadata={
+            "source": "source_to_seed",
+            "source_link_id": link_id,
+            "source_url": url,
+            "domain": domain,
+            "tags": tags,
+        },
+    )
+
+    # Update link with garden_seed_id reference
+    try:
+        weaviate_client.update_link(link_id, garden_seed_id=seed_id)
+    except:
+        pass  # non-blocking
+
+    return {
+        "seed_id": seed_id,
+        "title": f"🌱 {title}",
+        "source_url": url,
+        "message": "Seed created from source"
+    }
