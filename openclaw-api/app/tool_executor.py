@@ -90,8 +90,8 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
                 image_url=None,
                 created_at=seed.created_at.isoformat()
             )
-        except Exception:
-            pass  # Weaviate indexing is best-effort
+        except Exception as e:
+            logger.warning(f"Weaviate indexing failed for seed {seed.id}: {e}")
 
         return json.dumps({
             "status": "ok",
@@ -239,8 +239,8 @@ async def get_daily_briefing(args: dict, user: User, db: Session) -> str:
                                         "shared_tag": tag,
                                     })
                 missed_connections = missed_connections[:3]  # limit to 3
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Missed connections lookup failed: {e}")
 
         # ── Pending enrichment ──
         pending = db.query(Thought).filter(
@@ -437,12 +437,12 @@ async def _save_web_results_as_links(results: list, user: User):
                 try:
                     from app.activity import log_source_found
                     log_source_found(str(user.tenant_id), r.get("title", ""), url, "chat_web_search")
-                except:
-                    pass
-            except Exception:
-                pass  # non-blocking
-    except Exception:
-        pass  # non-blocking
+                except Exception as e:
+                    logger.debug(f"Activity logging failed: {e}")
+            except Exception as e:
+                logger.debug(f"Link enrichment failed: {e}")
+    except Exception as e:
+        logger.debug(f"Web search post-processing failed: {e}")
 
 
 async def rate_seed(args: dict, user: User, db: Session) -> str:
@@ -479,39 +479,44 @@ async def get_seed_detail(args: dict, user: User, db: Session) -> str:
     """Get full seed details with enrichment metadata from Weaviate."""
     seed_id = args["seed_id"]
     try:
-        # Try Weaviate first (enriched data)
-        gql = """
-        {
-          Get {
-            IdeaSeed(
-              where: { operator: Equal path: ["notion_id"] valueText: "%s" }
-              limit: 1
-            ) {
-              title text summary tags entities backlinks domain energy status enrichment_version source url created
-            }
-          }
+        # Try Weaviate first (enriched data) using async httpx
+        import httpx
+        where_filter = {
+            "operator": "Equal",
+            "path": ["notion_id"],
+            "valueText": seed_id
         }
-        """ % seed_id
-        import urllib.request as req
-        r = req.urlopen(req.Request(
-            f"{settings.WEAVIATE_URL}/v1/graphql",
-            data=json.dumps({"query": gql}).encode(),
-            headers={"Content-Type": "application/json"}
-        ), timeout=10)
-        res = json.loads(r.read())
-        hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
+        gql_query = {
+            "query": """{
+              Get {
+                IdeaSeed(
+                  where: %s,
+                  limit: 1
+                ) {
+                  title text summary tags entities backlinks domain energy status enrichment_version source url created
+                }
+              }
+            }""" % json.dumps(where_filter)
+        }
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{settings.WEAVIATE_URL}/v1/graphql",
+                json=gql_query,
+                headers={"Content-Type": "application/json"}
+            )
+            res = resp.json()
+            hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
 
         if hits:
             h = hits[0]
             # Track visit even when data comes from Weaviate
             try:
-                notion_id = seed_id  # the seed_id passed in is the notion_id
                 seed = db.query(Seed).filter(
                     Seed.tenant_id == user.tenant_id,
                     Seed.id == seed_id
                 ).first()
                 if not seed:
-                    # Try by notion_id or embedding_ref
                     seed = db.query(Seed).filter(
                         Seed.tenant_id == user.tenant_id,
                         Seed.embedding_ref == seed_id
@@ -520,8 +525,8 @@ async def get_seed_detail(args: dict, user: User, db: Session) -> str:
                     seed.last_visited = datetime.utcnow()
                     seed.visit_count = (seed.visit_count or 0) + 1
                     db.commit()
-            except Exception:
-                pass  # non-blocking
+            except Exception as e:
+                logger.warning(f"Visit tracking failed for seed {seed_id}: {e}")
 
             result = {
                 "status": "ok",
@@ -539,12 +544,12 @@ async def get_seed_detail(args: dict, user: User, db: Session) -> str:
             # Parse entities
             try:
                 result["entities"] = json.loads(h.get("entities", "[]"))
-            except:
+            except (json.JSONDecodeError, TypeError):
                 result["entities"] = []
             # Parse backlinks
             try:
                 result["backlinks"] = json.loads(h.get("backlinks", "[]"))
-            except:
+            except (json.JSONDecodeError, TypeError):
                 result["backlinks"] = []
             return json.dumps(result)
 
@@ -594,7 +599,7 @@ async def search_seeds_filtered(args: dict, user: User, db: Session) -> str:
     ]}
 
     try:
-        import urllib.request as req
+        import httpx
 
         # Build where clause
         if filters:
@@ -620,13 +625,14 @@ async def search_seeds_filtered(args: dict, user: User, db: Session) -> str:
         }
         """ % (where_clause, limit)
 
-        r = req.urlopen(req.Request(
-            f"{settings.WEAVIATE_URL}/v1/graphql",
-            data=json.dumps({"query": gql}).encode(),
-            headers={"Content-Type": "application/json"}
-        ), timeout=10)
-        res = json.loads(r.read())
-        hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{settings.WEAVIATE_URL}/v1/graphql",
+                json={"query": gql},
+                headers={"Content-Type": "application/json"}
+            )
+            res = resp.json()
+            hits = res.get("data", {}).get("Get", {}).get("IdeaSeed", [])
 
         # Deduplicate by notion_id
         seen = {}
