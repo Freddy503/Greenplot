@@ -141,7 +141,96 @@ async def create_link(body: LinkCreate, request: Request, current_user = Depends
         starred=body.starred,
     )
 
+    # Auto-connect to related seeds (best-effort, non-blocking)
+    try:
+        _auto_connect_link_to_seeds(link_id, tenant_id, title, summary, tags, domain)
+    except Exception:
+        pass
+
     return {"id": link_id, "url": url, "title": title, "summary": summary, "domain": domain}
+
+
+def _auto_connect_link_to_seeds(link_id: str, tenant_id: str, title: str, summary: str, tags: str, domain: str):
+    """Find related seeds by tag/domain overlap and store cross-references."""
+    from app.config import settings
+    # Get all seeds for this tenant
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id, limit=200)
+    if not seeds:
+        return
+
+    link_tags = set(t.strip().lower() for t in (tags or "").split(",") if t.strip())
+    link_domain = (domain or "").lower()
+    link_text = f"{title} {summary}".lower()
+
+    scores = {}
+    for seed in seeds:
+        seed_id = seed.get("id") or seed.get("uuid", "")
+        if not seed_id:
+            continue
+        score = 0
+
+        # Tag overlap (weight 3)
+        seed_tags = seed.get("tags", "")
+        if isinstance(seed_tags, str):
+            seed_tag_set = set(t.strip().lower() for t in seed_tags.split(",") if t.strip())
+        elif isinstance(seed_tags, list):
+            seed_tag_set = set(t.lower() for t in seed_tags if t)
+        else:
+            seed_tag_set = set()
+        tag_overlap = link_tags & seed_tag_set
+        score += len(tag_overlap) * 3
+
+        # Domain match (weight 2)
+        seed_domain = (seed.get("domain", "") or "").lower()
+        if seed_domain and link_domain and seed_domain == link_domain:
+            score += 2
+
+        # Title keyword overlap (weight 1)
+        seed_title = (seed.get("title", "") or "").lower()
+        if seed_title and link_text:
+            seed_words = set(seed_title.split()) - {"the", "a", "an", "is", "in", "on", "of", "for", "to", "and"}
+            link_words = set(link_text.split()) - {"the", "a", "an", "is", "in", "on", "of", "for", "to", "and"}
+            word_overlap = seed_words & link_words
+            score += len(word_overlap)
+
+        if score >= 3:
+            scores[seed_id] = score
+
+    # Store top 5 related seed IDs in the link's garden_seed_id field (comma-separated)
+    if scores:
+        top_seeds = sorted(scores.items(), key=lambda x: -x[1])[:5]
+        related_str = ",".join(sid for sid, _ in top_seeds)
+        weaviate_client.update_link(link_id, garden_seed_id=related_str)
+
+
+@router.post("/enrich-pending")
+async def enrich_pending_links(request: Request, current_user = Depends(get_current_user)):
+    """Re-fetch metadata for links with status='pending'."""
+    user = current_user
+    tenant_id = str(user.tenant_id)
+
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=100)
+    pending = [l for l in links if l.get("status") == "pending"]
+
+    enriched = 0
+    for link in pending[:10]:  # Cap at 10 per call
+        url = link.get("url", "")
+        if not url:
+            continue
+        meta = await fetch_page_metadata(url)
+        if meta.get("title") or meta.get("summary"):
+            updates = {}
+            if meta.get("title"):
+                updates["title"] = meta["title"]
+            if meta.get("summary"):
+                updates["summary"] = meta["summary"]
+                updates["status"] = "enriched"
+            if meta.get("tags"):
+                updates["tags"] = meta["tags"]
+            weaviate_client.update_link(link["id"], **updates)
+            enriched += 1
+
+    return {"enriched": enriched, "remaining": len(pending) - enriched}
 
 
 @router.get("")
