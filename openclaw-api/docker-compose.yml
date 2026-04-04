@@ -1,101 +1,98 @@
-version: "3.8"
-
 services:
-  db:
-    image: postgres:15
-    container_name: openclaw-db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: openclaw
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  weaviate:
-    image: cr.weaviate.io/semitechnologies/weaviate:1.36.6
-    container_name: openclaw-weaviate
-    environment:
-      QUERY_DEFAULTS_LIMIT: 20
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
-      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
-      DEFAULT_VECTORIZER_MODULE: "none"
-      ENABLE_MODULES: "text2vec-openai,text2vec-huggingface,ref2vec-centroid,generative-openai,qna-openai"
-      CLUSTER_HOSTNAME: "node1"
-    volumes:
-      - weaviate_data:/var/lib/weaviate
-    ports:
-      - "127.0.0.1:8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-
-  redis:
-    image: redis:7
-    container_name: openclaw-redis
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis_data:/data
-
   api:
     build: .
-    container_name: openclaw-api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    environment:
-      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
-      - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
-      - WEAVIATE_URL=http://weaviate:8080
-      - REDIS_URL=redis://redis:6379/0
-      - FRONTEND_URL=https://seedify-six.vercel.app
-      - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
-      - NVIDIA_API_KEY=<NVIDIA_API_KEY>
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - BFL_API_KEY=${BFL_API_KEY}
-      - CORS_ORIGINS=https://seedify-six.vercel.app,https://greenplot.ink,https://www.greenplot.ink,https://api.greenplot.ink,http://localhost:3000,http://localhost:5173
-    volumes:
-      - .:/app
-    ports:
-      - "8001:8000"
+    container_name: openclaw-api
     depends_on:
       db:
         condition: service_healthy
-      weaviate:
-        condition: service_started
       redis:
         condition: service_started
-
+      weaviate:
+        condition: service_started
+    environment:
+    - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+    - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+    - WEAVIATE_URL=http://weaviate:8080
+    - REDIS_URL=redis://redis:6379/0
+    - FRONTEND_URL=https://seedify-six.vercel.app
+    - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
+    - NVIDIA_API_KEY=<NVIDIA_API_KEY>
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - BFL_API_KEY=${BFL_API_KEY}
+    - CORS_ORIGINS=https://seedify-six.vercel.app,https://greenplot.ink,https://www.greenplot.ink,https://api.greenplot.ink,http://localhost:3000,http://localhost:5173
+    ports:
+    - 8001:8000
+    volumes:
+    - .:/app
+    - /root/.openclaw/workspace/public/wiki-images:/app/public/wiki-images
+  db:
+    container_name: openclaw-db
+    environment:
+      POSTGRES_DB: openclaw
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    healthcheck:
+      interval: 10s
+      retries: 5
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres
+      timeout: 5s
+    image: postgres:15
+    ports:
+    - 127.0.0.1:5432:5432
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
   enrichment-worker:
     build: .
-    container_name: openclaw-worker
     command: python -m app.task_worker
-    environment:
-      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
-      - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
-      - WEAVIATE_URL=http://weaviate:8080
-      - REDIS_URL=redis://redis:6379/0
-      - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
-      - NVIDIA_API_KEY=<NVIDIA_API_KEY>
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - BFL_API_KEY=${BFL_API_KEY}
-    volumes:
-      - .:/app
+    container_name: openclaw-worker
     depends_on:
       db:
         condition: service_healthy
-      weaviate:
-        condition: service_started
       redis:
         condition: service_started
+      weaviate:
+        condition: service_started
+    environment:
+    - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+    - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+    - WEAVIATE_URL=http://weaviate:8080
+    - REDIS_URL=redis://redis:6379/0
+    - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
+    - NVIDIA_API_KEY=<NVIDIA_API_KEY>
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - BFL_API_KEY=${BFL_API_KEY}
     restart: unless-stopped
-
+    volumes:
+    - .:/app
+  redis:
+    container_name: openclaw-redis
+    image: redis:7
+    ports:
+    - 127.0.0.1:6379:6379
+    volumes:
+    - redis_data:/data
+  weaviate:
+    container_name: openclaw-weaviate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      CLUSTER_HOSTNAME: node1
+      DEFAULT_VECTORIZER_MODULE: none
+      ENABLE_MODULES: text2vec-openai,text2vec-huggingface,ref2vec-centroid,generative-openai,qna-openai
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      QUERY_DEFAULTS_LIMIT: 20
+    image: cr.weaviate.io/semitechnologies/weaviate:1.36.6
+    ports:
+    - 127.0.0.1:8080:8080
+    volumes:
+    - weaviate_data:/var/lib/weaviate
+version: '3.8'
 volumes:
-  postgres_data:
-  weaviate_data:
-  redis_data:
+  postgres_data: null
+  redis_data: null
+  weaviate_data: null

@@ -75,6 +75,27 @@ WIKI_SYSTEM_PROMPT = """You are a senior encyclopedic writer creating personal k
 
 WIKI_MODEL = "qwen/qwen3.6-plus:free"
 
+async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
+    """Download BFL image and save to local persistent storage. Returns absolute URL."""
+    import re, os, urllib.request
+    IMAGES_DIR = "/app/public/wiki-images"
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+    safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title)[:35]
+    filename = f'{safe_title}_{article_id[:8]}.jpeg'
+    filepath = f'{IMAGES_DIR}/{filename}'
+    try:
+        req = urllib.request.Request(<BFL_API_KEY>)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+        with urllib.request.urlopen(req, timeout=30) as r:
+            img_data = r.read()
+        with open(filepath, 'wb') as f:
+            f.write(img_data)
+        return f"https://api.greenplot.ink/api/v1/wiki/images/{filename}"
+    except Exception as e:
+        logger.warning(f"Failed to download image for {title}: {e}")
+        return ""
+
+
 async def _auto_generate_image(article_id: str, title: str, category: str = "", domain: str = "", tenant_id: str = ""):
     """Generate and store a hero image for a wiki article in the background."""
     try:
@@ -84,18 +105,20 @@ async def _auto_generate_image(article_id: str, title: str, category: str = "", 
             tags.append(domain)
         if title and title not in tags:
             tags.insert(0, title)
-        image_url = await generate_concept_image(title or "Concept", tags)
-        if image_url:
-            # Store imageUrl in the article
-            try:
-                weaviate_client.client.data_object.update(
-                    data_object={"imageUrl": image_url},
-                    class_name="WikiArticle",
-                    uuid=article_id,
-                )
-                logger.info(f"Auto-generated image for {title}: {image_url}")
-            except Exception as e:
-                logger.warning(f"Failed to store image URL for {title}: {e}")
+        <BFL_API_KEY> = await generate_concept_image(title or "Concept", tags)
+        if <BFL_API_KEY>:
+            # Download and save locally, get permanent URL
+            image_url = await _save_image_locally(<BFL_API_KEY>, article_id, title)
+            if image_url:
+                try:
+                    weaviate_client.client.data_object.update(
+                        data_object={"imageUrl": image_url},
+                        class_name="WikiArticle",
+                        uuid=article_id,
+                    )
+                    logger.info(f"Auto-generated image for {title}: {image_url}")
+                except Exception as e:
+                    logger.warning(f"Failed to store image URL for {title}: {e}")
     except Exception as e:
         logger.warning(f"Auto image generation failed for {title}: {e}")
 
@@ -1270,17 +1293,20 @@ async def generate_article_image(
         tags = [t.strip() for t in tags.split(",") if t.strip()]
 
     from app.ingest import generate_concept_image
-    image_url = await generate_concept_image(title, tags)
+    <BFL_API_KEY> = await generate_concept_image(title, tags)
 
-    if image_url:
-        # Update article with image URL
-        try:
-            weaviate_client.client.data_object.update(
-                data_object={"imageUrl": image_url},
-                class_name="WikiArticle",
-                uuid=article_id,
-            )
-            logger.info(f"Image generated and stored for article {article_id}")
+    if <BFL_API_KEY>:
+        # Download and save locally for permanent URL
+        image_url = await _save_image_locally(<BFL_API_KEY>, article_id, title)
+        if image_url:
+            # Update article with image URL
+            try:
+                weaviate_client.client.data_object.update(
+                    data_object={"imageUrl": image_url},
+                    class_name="WikiArticle",
+                    uuid=article_id,
+                )
+                logger.info(f"Image generated and stored for article {article_id}")
         except Exception as e:
             logger.warning(f"Failed to update article image: {e}")
 
@@ -1401,3 +1427,21 @@ async def get_concept_map(
 
     return {"nodes": nodes, "links": links}
 
+
+
+# ── Wiki Image Serving ──────────────────────────────
+import os
+from fastapi.responses import FileResponse
+
+IMAGES_DIR = "/app/public/wiki-images"
+
+
+@router.get("/images/{filename}")
+async def get_wiki_image(filename: str):
+    """Serve locally stored wiki hero images."""
+    filepath = os.path.join(IMAGES_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Image not found")
+    if not filename.endswith(('.jpeg', '.jpg', '.png', '.webp')):
+        raise HTTPException(status_code=400, detail="Invalid image type")
+    return FileResponse(filepath, media_type="image/jpeg")
