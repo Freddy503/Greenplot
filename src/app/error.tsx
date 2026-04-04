@@ -1,27 +1,32 @@
 'use client'
 
-export default function RootError({
+import { useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+
+export default function ErrorPage({
   error,
   reset,
 }: {
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  useEffect(() => {
+    console.error(error)
+  }, [error])
+
   return (
-    <div className="flex flex-col items-center justify-center h-dvh gap-4 bg-[#01120b] text-[#e4fcf0]">
-      <span className="material-symbols-outlined text-red-400" style={{ fontSize: 48 }}>
-        error
-      </span>
-      <h2 className="text-lg font-bold">Something went wrong</h2>
-      <p className="text-sm text-gray-400 max-w-md text-center">
-        {error.message || 'An unexpected error occurred.'}
+    <div className="flex flex-col items-center justify-center h-dvh gap-4 bg-background text-on-surface">
+      <span className="material-symbols-outlined text-6xl text-error">error</span>
+      <h1 className="text-2xl font-bold text-on-surface">Something went wrong</h1>
+      <p className="text-sm text-on-surface-variant max-w-sm text-center">
+        We encountered an unexpected error. Please try again.
       </p>
-      <button
-        onClick={reset}
-        className="px-4 py-2 rounded-full bg-[#69f6b8] text-[#01120b] font-semibold text-sm hover:opacity-90 transition-opacity"
+      <Button
+        onClick={() => reset()}
+        className="px-4 py-2 rounded-full bg-primary text-on-primary font-semibold text-sm hover:opacity-90 transition-opacity"
       >
         Try again
-      </button>
+      </Button>
     </div>
   )
 }

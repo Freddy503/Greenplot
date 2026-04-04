@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Header, Depends
 from pydantic import BaseModel
 from typing import Optional, List
-from app.auth import get_current_user
+from app.auth import get_current_user, get_optional_user
 from app.weaviate_client import weaviate_client
 from app.config import settings
 import httpx
@@ -1319,12 +1319,17 @@ async def generate_article_image(
 async def get_concept_map(
     article_id: str,
     request: Request,
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_optional_user),
 ):
     """Get D3.js-compatible concept map data for an article and its connections."""
     import re
     user = current_user
-    tenant_id = str(user.tenant_id)
+    # Use user's tenant_id, fallback to Freddy's tenant for unauthenticated
+    if hasattr(user, 'tenant_id') and user.tenant_id:
+        tenant_id = str(user.tenant_id)
+    else:
+        # Unauthenticated request - use Freddy's known tenant
+        tenant_id = "87959b2e-5443-4c50-9336-2da01af82c14"
 
     articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
     article = next((a for a in articles if a.get("id") == article_id), None)

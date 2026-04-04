@@ -25,14 +25,13 @@ export default function Header() {
     setMounted(true)
   }, [])
 
-  // Use 'G' as default until mounted to avoid hydration mismatch
   const initial = mounted && nickname ? nickname[0].toUpperCase() : 'G'
 
   return (
-    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-surface/80 backdrop-blur-2xl border-b border-outline-variant/10">
+    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-background border-b border-border/60">
       {/* Logo + Identity */}
       <div className="flex items-center gap-3">
-        <Avatar className="w-10 h-10 bg-primary shadow-[0_4px_16px_rgba(105,246,184,0.20)]">
+        <Avatar className="w-10 h-10 bg-primary shadow-sm">
           <AvatarFallback className="bg-primary text-on-primary font-bold text-base">
             {initial}
           </AvatarFallback>
@@ -58,17 +57,9 @@ export default function Header() {
                   flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium
                   ${active
                     ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                    : 'text-on-surface-variant/70 hover:text-on-surface hover:bg-surface-container'
-                  }
-                `}
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'}`}
               >
-                <span
-                  className="material-symbols-outlined"
-                  style={{
-                    fontSize: '18px',
-                    fontVariationSettings: active ? '"FILL" 1' : '"FILL" 0',
-                  }}
-                >
+                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: active ? '"FILL" 1' : '"FILL" 0' }}>
                   {tab.icon}
                 </span>
                 {tab.label}
@@ -77,6 +68,15 @@ export default function Header() {
           )
         })}
       </nav>
+
+      {/* Avatar (mobile) */}
+      <div className="flex md:hidden items-center gap-2">
+        <Avatar className="w-8 h-8 bg-primary shadow-sm">
+          <AvatarFallback className="bg-primary text-on-primary font-bold text-xs">
+            {initial}
+          </AvatarFallback>
+        </Avatar>
+      </div>
     </header>
   )
 }

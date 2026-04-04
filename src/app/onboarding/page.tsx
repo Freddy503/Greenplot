@@ -207,7 +207,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       <div className="relative mb-10">
         <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-[1.8]" />
         <div className="relative w-56 h-72 rounded-full flex items-center justify-center bg-surface-container border border-outline-variant/20 overflow-hidden">
-          <div className="absolute glass-morphism rounded-full w-16 h-16 top-[12%] right-[10%] flex items-center justify-center">
+          <div className="absolute bg-surface-container/80 backdrop-blur-sm rounded-full w-16 h-16 top-[12%] right-[10%] flex items-center justify-center">
             <span
               className="material-symbols-outlined text-primary"
               style={{ fontSize: 24, fontVariationSettings: '"FILL" 1' }}

@@ -4,69 +4,154 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Greenplot / Stitch Design System ──────────────── */
+/* ── Greenplot / Stitch Design System ────────────── */
+
+/* Light (default): off-white SaaS */
 :root {
-  --background: #01120b;
-  --foreground: #e4fcf0;
-  --surface: #01120b;
-  --surface-dim: #01120b;
-  --surface-container: #051e15;
-  --surface-container-low: #021710;
-  --surface-container-high: #09241b;
-  --surface-container-highest: #0d2b21;
-  --surface-bright: #123227;
-  --surface-variant: #0d2b21;
-  --surface-tint: #69f6b8;
-  --primary: #69f6b8;
-  --on-primary: #005a3c;
-  --primary-foreground: #005a3c;
-  --primary-dim: #58e7ab;
-  --primary-container: #06b77f;
-  --primary-fixed: #69f6b8;
-  --primary-fixed-dim: #58e7ab;
-  --inverse-primary: #006d4a;
-  --secondary: #f8a010;
-  --on-secondary: #4a2c00;
-  --secondary-foreground: #4a2c00;
-  --secondary-container: #855300;
-  --on-secondary-container: #fff6f0;
-  --tertiary: #cdffe3;
-  --on-tertiary: #006948;
-  --tertiary-container: #6bffc1;
-  --on-tertiary-container: #006042;
-  --on-surface: #e4fcf0;
-  --on-surface-variant: #9ab0a5;
-  --on-background: #e4fcf0;
-  --outline: #657a70;
-  --outline-variant: #384c43;
-  --border: #384c43;
-  --error: #ff716c;
-  --destructive: #ff716c;
-  --error-container: #9f0519;
-  --inverse-surface: #e7fff2;
-  --inverse-on-surface: #455950;
-  --card: #051e15;
-  --card-foreground: #e4fcf0;
-  --popover: #051e15;
-  --popover-foreground: #e4fcf0;
-  --accent: #09241b;
-  --accent-foreground: #e4fcf0;
-  --muted: #051e15;
-  --muted-foreground: #9ab0a5;
-  --input: #0d2b21;
-  --ring: #69f6b8;
-  --radius: 0.5rem;
-  --sidebar: #01120b;
-  --sidebar-foreground: #e4fcf0;
-  --sidebar-primary: #69f6b8;
-  --sidebar-primary-foreground: #005a3c;
-  --sidebar-accent: #051e15;
-  --sidebar-accent-foreground: #e4fcf0;
-  --sidebar-border: #384c43;
-  --sidebar-ring: #69f6b8;
+  /* Background: warm off-white */
+  --background: #fafaf8;
+  --foreground: #111211;
+  --surface: #fafaf8;
+  --surface-dim: #f5f5f2;
+  --surface-container: #ffffff;
+  --surface-container-low: #fdfdfb;
+  --surface-container-high: #f0efec;
+  --surface-container-highest: #e8e7e4;
+  --surface-bright: #fafaf8;
+  --surface-variant: #f0efec;
+
+  /* Primary: fresh green (used sparingly for CTAs, links, active) */
+  --primary: #16a34a;
+  --on-primary: #ffffff;
+  --primary-foreground: #ffffff;
+  --primary-dim: #15803d;
+  --primary-container: #bbf7d0;
+  --primary-fixed: #22c55e;
+  --primary-fixed-dim: #16a34a;
+  --inverse-primary: #22c55e;
+
+  /* Secondary: warm gold */
+  --secondary: #d97706;
+  --on-secondary: #ffffff;
+  --secondary-foreground: #ffffff;
+  --secondary-container: #fef3c7;
+  --on-secondary-container: #451a03;
+
+  /* Tertiary: blue */
+  --tertiary: #3b82f6;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #dbeafe;
+  --on-tertiary-container: #1e3a5f;
+
+  /* Text */
+  --on-surface: #111211;
+  --on-surface-variant: #5c5d5c;
+  --on-background: #111211;
+
+  /* Borders & outlines */
+  --outline: #d4d3d0;
+  --outline-variant: #e0dfdd;
+  --border: #e0dfdd;
+  --input: #e8e7e4;
+
+  /* Surface structure */
+  --surface-tint: #fafaf8;
+
+  /* Feedback */
+  --error: #dc2626;
+  --destructive: #dc2626;
+  --error-container: #fecaca;
+
+  /* Structural */
+  --inverse-surface: #fefefe;
+  --inverse-on-surface: #222222;
+  --accent: #f5f5f2;
+  --accent-foreground: #111211;
+  --muted: #f5f5f2;
+  --muted-foreground: #6b6c6b;
+  --card: #ffffff;
+  --card-foreground: #111211;
+  --popover: #ffffff;
+  --popover-foreground: #111211;
+  --ring: #16a34a;
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111211;
+  --sidebar-primary: #16a34a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5f5f2;
+  --sidebar-accent-foreground: #111211;
+  --sidebar-border: #e8e7e4;
+  --sidebar-ring: #16a34a;
 }
 
-/* ── Base Styles ──────────────────────────────────── */
+/* Dark theme (opt-in via .dark class) */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --surface: #0d0d0d;
+  --surface-dim: #0a0a0a;
+  --surface-container: #141414;
+  --surface-container-low: #0f0f0f;
+  --surface-container-high: #1a1a1a;
+  --surface-container-highest: #222222;
+  --surface-bright: #0a0a0a;
+  --surface-variant: #1a1a1a;
+  --primary: #a3e635;
+  --on-primary: #1a1a00;
+  --primary-foreground: #1a1a00;
+  --primary-dim: #93d626;
+  --primary-container: #65a30d;
+  --primary-fixed: #bef264;
+  --primary-fixed-dim: #a3e635;
+  --inverse-primary: #4d7c0f;
+  --secondary: #fbbf24;
+  --on-secondary: #422006;
+  --secondary-foreground: #422006;
+  --secondary-container: #78350f;
+  --on-secondary-container: #fef3c7;
+  --tertiary: #60a5fa;
+  --on-tertiary: #172554;
+  --tertiary-container: #1e3a5f;
+  --on-tertiary-container: #dbeafe;
+  --on-surface: #f5f5f5;
+  --on-surface-variant: #a1a1a1;
+  --on-background: #f5f5f5;
+  --outline: #404040;
+  --outline-variant: #2a2a2a;
+  --border: #2a2a2a;
+  --input: #222222;
+  --surface-tint: #0a0a0a;
+  --error: #ef4444;
+  --destructive: #ef4444;
+  --error-container: #450a0a;
+  --inverse-surface: #e5e5e5;
+  --inverse-on-surface: #1a1a1a;
+  --accent: #1a1a1a;
+  --accent-foreground: #f5f5f5;
+  --muted: #1a1a1a;
+  --muted-foreground: #757575;
+  --card: #141414;
+  --card-foreground: #f5f5f5;
+  --popover: #141414;
+  --popover-foreground: #f5f5f5;
+  --ring: #bef264;
+  --radius: 0.625rem;
+  --sidebar: #141414;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #bef264;
+  --sidebar-primary-foreground: #1a1a00;
+  --sidebar-accent: #1a1a1a;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #2a2a2a;
+  --sidebar-ring: #bef264;
+}
+
+/* ── Base Styles ─────────────────────────────────── */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -79,25 +164,11 @@ body {
   font-family: "Plus Jakarta Sans", sans-serif;
 }
 
-/* ── Chat Message Shapes — rectangular, clean ─────── */
-.user-bubble {
-  border-radius: 0.75rem !important;
-}
-.assistant-bubble {
-  border-radius: 0.75rem !important;
-}
-
-/* ── Glass Morphism ───────────────────────────────── */
-.glass-morphism {
-  background: rgba(16, 34, 28, 0.6);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-/* ── Seed Shape ───────────────────────────────────── */
-.seed-shape {
-  border-radius: 9999px;
+/* ── Clean Cards ─────────────────────────────────── */
+.clean-card {
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius);
 }
 
 /* ── Material Symbols ─────────────────────────────── */
@@ -108,13 +179,13 @@ body {
   font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
-/* ── Hide scrollbar utility ───────────────────────── */
+/* ── Hide scrollbar ──────────────────────────────── */
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ── shadcn theme bridge ──────────────────────────── */
+/* ── shadcn theme bridge ─────────────────────────── */
 @theme inline {
   --font-heading: var(--font-jakarta);
   --font-sans: var(--font-jakarta);
@@ -144,13 +215,13 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: 0.375rem;
+  --radius-sm: 0.35rem;
   --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
+  --radius-lg: 0.65rem;
+  --radius-xl: 0.9rem;
+  --radius-2xl: 1.3rem;
 
-  /* ── Stitch extended palette ──────────────────── */
+  /* ── Surface palette ─────────────────────────── */
   --color-surface: var(--surface);
   --color-surface-container: var(--surface-container);
   --color-surface-container-low: var(--surface-container-low);
@@ -164,9 +235,6 @@ body {
   --color-primary-container: var(--primary-container);
   --color-error: var(--error);
 }
-
-/* Streamdown styles */
-@source "../node_modules/streamdown/dist/*.js";
 
 @layer base {
   * {
