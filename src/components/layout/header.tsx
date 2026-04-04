@@ -17,35 +17,30 @@ const tabs = [
 export default function Header() {
   const pathname = usePathname()
   const [nickname, setNickname] = useState('')
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
-    setMounted(true)
   }, [])
 
-  // Use 'G' as default until mounted to avoid hydration mismatch
-  const initial = mounted && nickname ? nickname[0].toUpperCase() : 'G'
+  const initial = (nickname || 'G')[0].toUpperCase()
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100">
-      <div className="flex items-center justify-between px-4 md:px-6 h-14">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-border/50">
+      <div className="flex items-center justify-between px-4 md:px-6 h-14 max-w-7xl mx-auto">
         {/* Logo */}
-        <Link href="/chat" className="flex items-center gap-3 no-underline">
-          <Avatar className="w-8 h-8 bg-primary shadow-[0_2px_8px_rgba(22,163,74,0.15)]">
-            <AvatarFallback className="bg-primary text-on-primary font-bold text-sm">
+        <div className="flex items-center gap-3">
+          <Avatar className="w-9 h-9 bg-primary shadow-sm">
+            <AvatarFallback className="bg-primary text-background font-bold text-sm">
               {initial}
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col leading-none">
-            <span className="text-base font-bold text-on-surface tracking-tight">Greenplot</span>
-            <span className="text-[9px] font-semibold uppercase text-primary/70" style={{ letterSpacing: '0.15em' }}>
-              THE LIVING LABORATORY
-            </span>
+          <div>
+            <h1 className="text-lg font-bold text-on-surface leading-tight">Greenplot</h1>
+            <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Living Laboratory</p>
           </div>
-        </Link>
+        </div>
 
-        {/* Desktop nav tabs */}
+        {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
           {tabs.map((tab) => {
             const active = pathname === tab.href
@@ -53,17 +48,15 @@ export default function Header() {
               <Link key={tab.href} href={tab.href} className="no-underline">
                 <Button
                   variant="ghost"
-                  className={`
-                    flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium min-h-0 h-9
+                  className={`flex items-center gap-1.5 px-3 py-1.5 h-9 rounded-full text-sm font-medium transition-colors
                     ${active
-                      ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                      : 'text-on-surface-variant hover:text-on-surface hover:bg-gray-50'}
-                  `}
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-on-surface hover:bg-accent'}`}
                 >
                   <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: active ? '"FILL" 1' : '"FILL" 0' }}>
                     {tab.icon}
                   </span>
-                  {tab.label}
+                  <span className="hidden lg:inline">{tab.label}</span>
                 </Button>
               </Link>
             )
