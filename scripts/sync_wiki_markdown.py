@@ -23,7 +23,7 @@ import re
 import urllib.request
 
 WIKI_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wiki')
-TENANT_ID = '87959b2e-5443-4c50-9336-7da01af82c14'
+TENANT_ID = '87959b2e-5443-4c50-9336-2da01af82c14'
 WEAVIATE_URL = os.environ.get('WEAVIATE_URL', 'http://localhost:8080')
 
 

@@ -341,3 +341,27 @@ TOOLS.append({
         }
     }
 })
+
+# Search Wiki Articles
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "search_wiki",
+        "description": "Search the user's wiki knowledge base (synthesized articles from seeds and sources). Use when answering complex or conceptual questions that benefit from the user's own documented knowledge. This is the highest-quality context layer. ALWAYS call search_wiki alongside search_seeds and web_search for topic questions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query to find relevant wiki articles by title, content, or summary."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return (default 3).",
+                    "default": 3
+                }
+            },
+            "required": ["query"]
+        }
+    }
+})
