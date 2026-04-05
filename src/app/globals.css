@@ -222,3 +222,28 @@ html, body {
 .pt-safe {
   padding-top: max(4rem, calc(env(safe-area-inset-top, 0px) + 4rem));
 }
+
+/* iOS PWA: ensure content is not hidden under status bar or home indicator */
+@supports (padding-top: env(safe-area-inset-top)) {
+  html {
+    height: 100%;
+    min-height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
+  }
+  body {
+    height: 100%;
+    min-height: 100dvh;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* iOS standalone mode: full screen with safe areas */
+@media all and (display-mode: standalone) {
+  html {
+    padding-top: env(safe-area-inset-top, 20px);
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+}
