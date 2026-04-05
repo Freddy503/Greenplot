@@ -26,6 +26,8 @@ from app.auth import (
 )
 from app.config import settings
 from app.weaviate_client import weaviate_client
+from app.garden_insights import router as garden_insights_router
+from app.garden_skimmer import router as garden_skimmer_router
 import httpx
 import json
 from datetime import datetime, date
@@ -2722,3 +2724,5 @@ from app.garden_health import router as garden_router
 app.include_router(links_router)
 app.include_router(wiki_router)
 app.include_router(garden_router)
+app.include_router(garden_insights_router)
+app.include_router(garden_skimmer_router)
