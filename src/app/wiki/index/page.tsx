@@ -86,7 +86,7 @@ export default function WikiIndexPage() {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
-        <main className="pt-[max(3.5rem,env(safe-area-inset-top,3.5rem))] pb-[max(5rem,env(safe-area-inset-bottom,5rem))] px-3 sm:px-6 max-w-6xl mx-auto mx-auto w-full">
+        <main className="pt-[max(4rem,calc(env(safe-area-inset-top,0px)+0.5rem))] pb-[max(5rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] px-3 sm:px-6 max-w-6xl mx-auto mx-auto w-full">
           <div className="h-8 bg-surface-container rounded-xl w-48 mb-4 animate-pulse" />
           {[1, 2, 3].map(i => (
             <div key={i} className="h-20 bg-surface-container rounded-2xl mb-3 animate-pulse" />
@@ -100,7 +100,7 @@ export default function WikiIndexPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <main className="pt-[max(3.5rem,env(safe-area-inset-top,3.5rem))] pb-[max(5rem,env(safe-area-inset-bottom,5rem))] px-3 sm:px-6 max-w-6xl mx-auto mx-auto w-full">
+      <main className="pt-[max(4rem,calc(env(safe-area-inset-top,0px)+0.5rem))] pb-[max(5rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] px-3 sm:px-6 max-w-6xl mx-auto mx-auto w-full">
         {/* Hero */}
         <section className="mb-6">
           <div className="flex items-center justify-between mb-1">

@@ -111,7 +111,7 @@ function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; on
         </span>
       </TableCell>
       <TableCell>
-        <p className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors mb-1">
+        <p className="text-sm font-bnew text-on-surface group-hover:text-primary transition-colors mb-1">
           {seed.title}
         </p>
         {tags.length > 0 && (
@@ -126,7 +126,7 @@ function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; on
       </TableCell>
       <TableCell className="text-right w-20">
         <div className="flex flex-col items-end gap-0.5">
-          <span className={`text-[10px] font-bold uppercase tracking-tighter ${statusStyle.color}`}>
+          <span className={`text-[10px] font-bnew uppercase tracking-tighter ${statusStyle.color}`}>
             {statusStyle.label}
           </span>
           {connections > 0 && (
@@ -187,7 +187,7 @@ export default function GardenPage() {
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
+            <h1 className="text-3xl font-extrabnew tracking-tight leading-tight text-on-surface">
               Knowledge <span className="text-primary">Garden</span>
             </h1>
             {/* View toggle */}
@@ -221,7 +221,7 @@ export default function GardenPage() {
           >
             <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" style={{ fontSize: '22px', fontVariationSettings: '"FILL" 1' }}>hub</span>
             <div className="text-left">
-              <p className="text-sm font-bold text-on-surface">View Knowledge Graph</p>
+              <p className="text-sm font-bnew text-on-surface">View Knowledge Graph</p>
               <p className="text-[10px] text-on-surface-variant">{seeds.length} seeds connected</p>
             </div>
             <span className="material-symbols-outlined text-on-surface-variant/40 ml-auto">open_in_new</span>
@@ -274,9 +274,9 @@ export default function GardenPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-outline-variant/10">
-                  <TableHead className="w-12 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Type</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Seed Title</TableHead>
-                  <TableHead className="text-right w-20 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Status</TableHead>
+                  <TableHead className="w-12 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bnew">Type</TableHead>
+                  <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bnew">Seed Title</TableHead>
+                  <TableHead className="text-right w-20 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bnew">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -293,10 +293,10 @@ export default function GardenPage() {
           <Card className="mt-10 relative overflow-hidden bg-surface-container border-primary/10">
             <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
             <CardContent className="relative z-10 p-6">
-              <Badge className="bg-secondary/20 text-secondary text-[10px] font-bold uppercase tracking-widest mb-4 border-0">
+              <Badge className="bg-secondary/20 text-secondary text-[10px] font-bnew uppercase tracking-widest mb-4 border-0">
                 Focus Seed
               </Badge>
-              <h4 className="text-xl font-bold text-on-surface mb-2">{focusSeed.title}</h4>
+              <h4 className="text-xl font-bnew text-on-surface mb-2">{focusSeed.title}</h4>
               <p className="text-xs leading-relaxed text-on-surface-variant mb-4">
                 Your garden is currently enriching this seed. Estimated bloom soon.
               </p>
@@ -334,7 +334,7 @@ export default function GardenPage() {
                   >
                     hub
                   </span>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-secondary">
+                  <h3 className="text-sm font-bnew uppercase tracking-wider text-secondary">
                     Seed Connections
                   </h3>
                 </div>
@@ -345,7 +345,7 @@ export default function GardenPage() {
                   {clusters.map(([domain, clusterSeeds]) => (
                     <div key={domain} className="group">
                       <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-primary/10 text-primary text-[10px] font-bold border-0">
+                        <Badge className="bg-primary/10 text-primary text-[10px] font-bnew border-0">
                           {domain}
                         </Badge>
                         <span className="text-[10px] text-on-surface-variant/50">
@@ -382,7 +382,7 @@ export default function GardenPage() {
         className="fixed bottom-24 right-4 w-14 h-14 bg-secondary text-on-secondary rounded-full shadow-lg shadow-secondary/30 z-40 md:bottom-8"
         onClick={() => router.push('/chat')}
       >
-        <span className="material-symbols-outlined text-2xl font-bold">add</span>
+        <span className="material-symbols-outlined text-2xl font-bnew">add</span>
       </Button>
 
       <SeedDetailSheet
