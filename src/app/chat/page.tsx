@@ -836,26 +836,25 @@ export default function ChatPage() {
             )}
           </ConversationContent>
 
+          {/* ── Suggestions below messages ─────────────── */}
+          <div className="max-w-2xl mx-auto w-full px-4 mt-2 mb-2">
+            <Suggestions>
+              {dynamicSuggestions.map((s) => (
+                <Suggestion
+                  key={s}
+                  suggestion={s}
+                  onClick={handleSuggestion}
+                  className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
+                />
+              ))}
+            </Suggestions>
+          </div>
           <ConversationScrollButton />
         </Conversation>
       </main>
 
-      {/* ── Suggestions below messages ─────────────── */}
-      <div className="max-w-2xl mx-auto w-full px-4 ">
-        <Suggestions>
-          {dynamicSuggestions.map((s) => (
-            <Suggestion
-              key={s}
-              suggestion={s}
-              onClick={handleSuggestion}
-              className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
-            />
-          ))}
-        </Suggestions>
-      </div>
-
       {/* ── Input area ───────────────────────────────── */}
-      <div className="shrink-0 px-4 pb-20 md:pb-4 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40">
+      <div className="shrink-0 px-4 pb-20 md:pb-4 pt-2 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40">
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
