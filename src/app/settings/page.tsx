@@ -183,7 +183,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col h-screen bg-background">
       <Header />
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
         <h1 className="text-3xl font-extrabold tracking-tight mb-6 text-on-surface">
           Settings
         </h1>
@@ -310,7 +310,7 @@ export default function SettingsPage() {
                   <p className="text-xs font-medium text-on-surface mb-1">📱 Install to Home Screen first</p>
                   <p className="text-[11px] text-on-surface-variant leading-relaxed">
                     Safari requires the app installed to your home screen for notifications.
-                    Tap the <span className="material-symbols-outlined text-[12px] align-middle" style={{ fontSize: '14px' }}>ios_share</span> icon → Add to Home Screen.
+                    Tap the <span className="material-symbols-outlined text-[12px] align-middle" >ios_share</span> icon → Add to Home Screen.
                   </p>
                 </div>
               )}
@@ -360,7 +360,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-bold text-on-surface">{job.name}</p>
                     <p className="text-[10px] text-on-surface-variant mt-0.5">{job.description}</p>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: '12px' }}>schedule</span>
+                      <span className="material-symbols-outlined text-on-surface-variant/50" >schedule</span>
                       <span className="text-[9px] text-on-surface-variant/60">{job.schedule}</span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">
                         {job.cadence}
@@ -417,7 +417,7 @@ export default function SettingsPage() {
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 transition-colors hover:bg-surface-container-high"
             >
-              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '20px' }}>
+              <span className="material-symbols-outlined text-on-surface-variant" >
                 logout
               </span>
               <div className="text-left">
@@ -431,7 +431,7 @@ export default function SettingsPage() {
               onClick={() => setShowDeleteDialog(true)}
               className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-error/5 border border-error/10 transition-colors hover:bg-error/10"
             >
-              <span className="material-symbols-outlined text-error" style={{ fontSize: '20px' }}>
+              <span className="material-symbols-outlined text-error" >
                 delete_forever
               </span>
               <div className="text-left">
@@ -450,7 +450,7 @@ export default function SettingsPage() {
           <DialogHeader>
             <div className="flex justify-center mb-4">
               <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center">
-                <span className="material-symbols-outlined text-error" style={{ fontSize: '28px' }}>
+                <span className="material-symbols-outlined text-error" >
                   warning
                 </span>
               </div>

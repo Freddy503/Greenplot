@@ -105,7 +105,7 @@ function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; on
       <TableCell className="w-12">
         <span
           className="material-symbols-outlined text-xl text-primary"
-          style={{ fontVariationSettings: isFilled ? '"FILL" 1' : '"FILL" 0' }}
+          
         >
           {icon}
         </span>
@@ -131,7 +131,7 @@ function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; on
           </span>
           {connections > 0 && (
             <span className="flex items-center gap-0.5 text-[9px] text-secondary/60">
-              <span className="material-symbols-outlined" style={{ fontSize: '10px', fontVariationSettings: '"FILL" 1' }}>link</span>
+              <span className="material-symbols-outlined" >link</span>
               {connections}
             </span>
           )}
@@ -183,7 +183,7 @@ export default function GardenPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
@@ -196,13 +196,13 @@ export default function GardenPage() {
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-full transition-all ${viewMode === 'list' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/50'}`}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', fontVariationSettings: viewMode === 'list' ? '"FILL" 1' : '"FILL" 0' }}>view_list</span>
+                <span className="material-symbols-outlined" >view_list</span>
               </button>
               <button
                 onClick={() => setViewMode('graph')}
                 className={`p-2 rounded-full transition-all ${viewMode === 'graph' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/50'}`}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', fontVariationSettings: viewMode === 'graph' ? '"FILL" 1' : '"FILL" 0' }}>hub</span>
+                <span className="material-symbols-outlined" >hub</span>
               </button>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function GardenPage() {
             onClick={() => setGraphOpen(true)}
             className="w-full mb-6 flex items-center justify-center gap-3 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-[0.98] group"
           >
-            <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" style={{ fontSize: '22px', fontVariationSettings: '"FILL" 1' }}>hub</span>
+            <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" >hub</span>
             <div className="text-left">
               <p className="text-sm font-bnew text-on-surface">View Knowledge Graph</p>
               <p className="text-[10px] text-on-surface-variant">{seeds.length} seeds connected</p>
@@ -330,7 +330,7 @@ export default function GardenPage() {
                 <div className="flex items-center gap-2 mb-5">
                   <span
                     className="material-symbols-outlined text-secondary"
-                    style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}
+                    
                   >
                     hub
                   </span>

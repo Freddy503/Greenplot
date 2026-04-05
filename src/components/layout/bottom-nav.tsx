@@ -15,7 +15,7 @@ export default function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border/10 md:hidden" style={{ paddingBottom: "max(4px, env(safe-area-inset-bottom, 4px))" }}>
+    <nav className="fixed bottom-0 inset-x-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border/10 md:hidden" >
       <div className="flex justify-around items-center py-1.5 px-2 max-w-lg mx-auto">
         {navItems.map((item) => {
           const active = pathname === item.href
@@ -23,7 +23,7 @@ export default function BottomNav() {
             <Link key={item.href} href={item.href} className="no-underline">
               <div className={`flex flex-col items-center gap-0.5 py-1 px-2 min-w-[56px] rounded-xl transition-colors
                 ${active ? 'text-primary' : 'text-muted-foreground'}`}>
-                <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: active ? '"FILL" 1' : '"FILL" 0' }}>
+                <span className="material-symbols-outlined text-xl" >
                   {item.icon}
                 </span>
                 <span className="text-[10px] font-medium">{item.label}</span>

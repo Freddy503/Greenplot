@@ -100,7 +100,7 @@ function LinkCard({ link, onStar, onDelete, onClick }: { link: LinkItem; onStar:
                 (e.target as HTMLImageElement).style.display = 'none'
               }}
             />
-            <span className="material-symbols-outlined text-sm text-on-surface-variant/50" style={{ display: 'none' }}>language</span>
+            <span className="material-symbols-outlined text-sm text-on-surface-variant/50" >language</span>
           </div>
 
           {/* Content */}
@@ -120,10 +120,7 @@ function LinkCard({ link, onStar, onDelete, onClick }: { link: LinkItem; onStar:
               >
                 <span
                   className="material-symbols-outlined text-lg"
-                  style={{
-                    fontVariationSettings: link.starred ? '"FILL" 1' : '"FILL" 0',
-                    color: link.starred ? '#fbbf24' : undefined,
-                  }}
+                  
                 >
                   {link.starred ? 'star' : 'star'}
                 </span>
@@ -148,7 +145,7 @@ function LinkCard({ link, onStar, onDelete, onClick }: { link: LinkItem; onStar:
               {/* Cross-tab connections */}
               {link.garden_seed_id && (
                 <span className="flex items-center gap-0.5 text-[9px] text-primary/70">
-                  <span className="material-symbols-outlined" style={{ fontSize: '10px', fontVariationSettings: '"FILL" 1' }}>eco</span>
+                  <span className="material-symbols-outlined" >eco</span>
                   in garden
                 </span>
               )}
@@ -405,7 +402,7 @@ export default function LinksPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
@@ -425,7 +422,7 @@ export default function LinksPage() {
                 onClick={() => setAddOpen(true)}
                 className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm px-5"
               >
-                <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>add_link</span>
+                <span className="material-symbols-outlined text-lg mr-1" >add_link</span>
                 Add
               </Button>
             </div>
@@ -461,7 +458,7 @@ export default function LinksPage() {
                 filter === 'starred' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/60'
               }`}
             >
-              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>star</span>
+              <span className="material-symbols-outlined text-sm" >star</span>
               ({starredCount})
             </button>
           </div>
@@ -554,7 +551,7 @@ export default function LinksPage() {
                 <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
+                  <span className="material-symbols-outlined text-lg mr-1" >add</span>
                   Add Link
                 </>
               )}
@@ -596,7 +593,7 @@ export default function LinksPage() {
                 <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-lg mr-1" style={{ fontVariationSettings: '"FILL" 1' }}>upload</span>
+                  <span className="material-symbols-outlined text-lg mr-1" >upload</span>
                   Import
                 </>
               )}

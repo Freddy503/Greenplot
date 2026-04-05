@@ -616,7 +616,7 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
             </div>
           ) : (
             <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${color} flex items-center justify-center`}>
-              <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>
+              <span className="material-symbols-outlined text-lg" >
                 {icon}
               </span>
             </div>
@@ -637,7 +637,7 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
               </Badge>
               {article.backlinks.length > 0 && (
                 <span className="flex items-center gap-0.5 text-[9px] text-secondary/60">
-                  <span className="material-symbols-outlined" style={{ fontSize: '10px', fontVariationSettings: '"FILL" 1' }}>link</span>
+                  <span className="material-symbols-outlined" >link</span>
                   {article.backlinks.length}
                 </span>
               )}
@@ -781,7 +781,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
       {/* Article header */}
       <div className="flex items-start gap-3 mb-6 px-2">
         <div className={`flex-shrink-0 w-12 h-12 rounded-xl ${color} flex items-center justify-center`}>
-          <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: '"FILL" 1' }}>
+          <span className="material-symbols-outlined text-xl" >
             {icon}
           </span>
         </div>
@@ -810,7 +810,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
       {/* Concept Map */}
       <section className="mb-6 px-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
-          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
+          <span className="material-symbols-outlined text-sm" >hub</span>
           Knowledge Graph
         </h3>
         <ConceptMap articleId={article.id} token={token} />
@@ -820,7 +820,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
       {linked.length > 0 && (
         <section className="px-2 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>link</span>
+            <span className="material-symbols-outlined text-sm" >link</span>
             Backlinks
           </h3>
           <div className="space-y-2">
@@ -842,7 +842,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
       {sourceLinks.length > 0 && (
         <section className="px-2 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>language</span>
+            <span className="material-symbols-outlined text-sm" >language</span>
             Sources
           </h3>
           <div className="space-y-2">
@@ -854,7 +854,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/10 hover:border-blue-400/20 transition-all"
               >
-                <span className="material-symbols-outlined text-blue-400 shrink-0" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>link</span>
+                <span className="material-symbols-outlined text-blue-400 shrink-0" >link</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-on-surface truncate">{link.title}</p>
                   <p className="text-[10px] text-on-surface-variant/60">{link.domain}</p>
@@ -869,7 +869,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
       {sourceSeeds.length > 0 && (
         <section className="px-2 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>eco</span>
+            <span className="material-symbols-outlined text-sm" >eco</span>
             Garden Seeds
           </h3>
           <div className="space-y-2">
@@ -878,7 +878,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
                 key={seed.id}
                 className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/10"
               >
-                <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>eco</span>
+                <span className="material-symbols-outlined text-primary shrink-0" >eco</span>
                 <span className="text-xs font-medium text-on-surface">{seed.title}</span>
               </div>
             ))}
@@ -979,7 +979,7 @@ export default function WikiPage() {
     return (
       <div className="h-screen flex flex-col bg-background">
         <Header />
-        <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+        <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
           <ArticleDetail
             article={selectedArticle}
             onBack={() => setSelectedArticle(null)}
@@ -995,7 +995,7 @@ export default function WikiPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-1">
@@ -1034,15 +1034,15 @@ export default function WikiPage() {
         {!loading && articles.length > 0 && (
           <div className="flex items-center gap-3 mb-5 px-2">
             <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/60">
-              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>auto_stories</span>
+              <span className="material-symbols-outlined text-sm" >auto_stories</span>
               <span className="font-bold">{articles.length}</span> articles
             </div>
             <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/60">
-              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>link</span>
+              <span className="material-symbols-outlined text-sm" >link</span>
               <span className="font-bold">{articles.reduce((sum, a) => sum + a.backlinks.length, 0)}</span> connections
             </div>
             <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/60">
-              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>folder</span>
+              <span className="material-symbols-outlined text-sm" >folder</span>
               <span className="font-bold">{categories.length}</span> categories
             </div>
           </div>
@@ -1056,7 +1056,7 @@ export default function WikiPage() {
               className="w-full flex items-center justify-between p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 transition-all"
             >
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: '"FILL" 1' }}>monitoring</span>
+                <span className="material-symbols-outlined text-primary" >monitoring</span>
                 <div className="text-left">
                   <p className="text-sm font-bold text-on-surface">Garden Health</p>
                   <p className="text-[10px] text-on-surface-variant">
@@ -1064,7 +1064,7 @@ export default function WikiPage() {
                   </p>
                 </div>
               </div>
-              <span className="material-symbols-outlined text-on-surface-variant/40 transition-transform" style={{ transform: healthOpen ? 'rotate(180deg)' : '' }}>
+              <span className="material-symbols-outlined text-on-surface-variant/40 transition-transform" >
                 expand_more
               </span>
             </button>
@@ -1110,13 +1110,13 @@ export default function WikiPage() {
             className="w-full flex items-center justify-between p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 transition-all"
           >
             <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: '"FILL" 1' }}>psychology</span>
+              <span className="material-symbols-outlined text-secondary" >psychology</span>
               <div className="text-left">
                 <p className="text-sm font-bold text-on-surface">Ask Your Garden</p>
                 <p className="text-[10px] text-on-surface-variant">Questions grounded in your knowledge base</p>
               </div>
             </div>
-            <span className="material-symbols-outlined text-on-surface-variant/40 transition-transform" style={{ transform: askOpen ? 'rotate(180deg)' : '' }}>
+            <span className="material-symbols-outlined text-on-surface-variant/40 transition-transform" >
               expand_more
             </span>
           </button>
@@ -1139,7 +1139,7 @@ export default function WikiPage() {
                   {asking ? (
                     <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
                   ) : (
-                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>search</span>
+                    <span className="material-symbols-outlined text-lg" >search</span>
                   )}
                 </Button>
               </div>
@@ -1148,7 +1148,7 @@ export default function WikiPage() {
                 <Card className="bg-surface-container-low border-outline-variant/10">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-secondary mt-0.5" style={{ fontVariationSettings: '"FILL" 1' }}>psychology</span>
+                      <span className="material-symbols-outlined text-secondary mt-0.5" >psychology</span>
                       <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap flex-1">{askAnswer}</p>
                     </div>
                   </CardContent>
