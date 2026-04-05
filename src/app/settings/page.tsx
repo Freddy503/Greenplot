@@ -188,6 +188,28 @@ export default function SettingsPage() {
           Settings
         </h1>
 
+        {/* ── Support the Project ────────────── */}
+        <section className="mb-8">
+          <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
+            Support
+          </h2>
+          <a
+            href="https://buymeacoffee.com/freddy503"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between px-5 py-4 rounded-2xl bg-[#FFDD00] hover:bg-[#ffda00] transition-colors no-underline"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">☕</span>
+              <div>
+                <p className="text-sm font-bold text-[#1a1a1a]">Buy me a coffee</p>
+                <p className="text-xs text-[#1a1a1a]/70">Help keep the garden growing</p>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-[#1a1a1a]">arrow_forward</span>
+          </a>
+        </section>
+
         {/* ── Profile ────────────────────────── */}
         <section className="mb-8">
           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-3">
