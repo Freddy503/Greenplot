@@ -1214,16 +1214,30 @@ async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
     from app.ingest import generate_concept_image
     import asyncio, re, urllib.request
     
-    # Get seeds for this domain
-    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
-    domain_seeds = [s for s in seeds if (s.get("domain") or "").lower() == domain.lower()]
+    # Check if domain already has a wiki article
+    existing_articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+    existing = [a for a in existing_articles 
+                if a.get("category", "").lower() == domain.lower() 
+                or domain.lower() in (a.get("title", "") or "").lower()]
     
-    if not domain_seeds:
+    get_seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+    get_links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
+    domain_seeds = [s for s in get_seeds if (s.get("domain") or "").lower() == domain.lower()]
+    domain_links = [l for l in get_links if (l.get("domain") or "").lower() == domain.lower()]
+
+    # Also gather seeds/links from similar categories (e.g., ai-ml, AI/ML)
+    domain_normalized = domain.lower().replace("-", "").replace("/", "").replace("_", "")
+    for s in get_seeds:
+        s_dom = (s.get("domain") or "").lower().replace("-", "").replace("/", "").replace("_", "")
+        if s_dom == domain_normalized and s not in domain_seeds:
+            domain_seeds.append(s)
+    for l in get_links:
+        l_dom = (l.get("domain") or "").lower().replace("-", "").replace("/", "").replace("_", "")
+        if l_dom == domain_normalized and l not in domain_links:
+            domain_links.append(l)
+
+    if not domain_seeds and not domain_links:
         return None
-    
-    # Get links for this domain
-    links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
-    domain_links = [l for l in links if (l.get("domain") or "").lower() == domain.lower()]
     
     # Prepare content for LLM synthesis
     links_data = [{"title": l.get("title",""), "url": l.get("url",""), 
@@ -1254,17 +1268,40 @@ async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
     link_ids = ",".join(l.get('id', '') for l in domain_links[:5] if l.get('id'))
     
     try:
-        article_id = weaviate_client.add_wiki_article(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            title=title,
-            category=domain,
-            summary=f"LLM-synthesized article from {len(domain_seeds)} seeds and {len(domain_links)} sources",
-            content=article_content,
-            source_seed_ids=seed_ids,
-            source_link_ids=link_ids,
-            status="published",
-        )
+        if existing:
+            # Update existing article with new content
+            article = existing[0]
+            article_id = article.get('id', '')
+            # Merge or replace content intelligently
+            existing_content = article.get('content', '') or ''
+            # If new content is significantly longer/better, replace; otherwise append
+            if len(article_content) > len(existing_content) * 1.5:
+                merged_content = article_content
+            else:
+                merged_content = existing_content + "\n\n---\n\n" + article_content
+            
+            weaviate_client.client.data_object.update(
+                data_object={
+                    "content": merged_content,
+                    "source_seed_ids": seed_ids,
+                    "source_link_ids": link_ids,
+                    "summary": f"Updated: {len(domain_seeds)} seeds, {len(domain_links)} sources",
+                },
+                class_name="WikiArticle",
+                uuid=article_id,
+            )
+        else:
+            article_id = weaviate_client.add_wiki_article(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                title=title,
+                category=domain,
+                summary=f"LLM-synthesized article from {len(domain_seeds)} seeds and {len(domain_links)} sources",
+                content=article_content,
+                source_seed_ids=seed_ids,
+                source_link_ids=link_ids,
+                status="published",
+            )
         
         # Generate BFL hero image
         try:
