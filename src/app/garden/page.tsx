@@ -183,7 +183,7 @@ export default function GardenPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-20 md:pb-4 max-w-4xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto pt-16 pb-20 md:pb-8">
         {/* Hero */}
         <section className="mb-3 px-2">
           <div className="flex items-center justify-between mb-2">
@@ -341,7 +341,7 @@ export default function GardenPage() {
                 <p className="text-xs text-on-surface-variant mb-4">
                   Seeds that share domains and themes. Your second brain is forming patterns.
                 </p>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {clusters.map(([domain, clusterSeeds]) => (
                     <div key={domain} className="group">
                       <div className="flex items-center gap-2 mb-2">
