@@ -181,9 +181,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-dvh bg-background">
       <Header />
-      <main className="flex-1 overflow-y-auto px-4 pt-14 pb-16 md:pb-4 max-w-2xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto px-4 max-w-2xl mx-auto w-full" style={{ paddingTop: "calc(3.5rem + env(safe-area-inset-top, 0px))", paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))" }}>
         <h1 className="text-3xl font-extrabold tracking-tight mb-6 text-on-surface">
           Settings
         </h1>
