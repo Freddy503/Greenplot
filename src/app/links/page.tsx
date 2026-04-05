@@ -193,7 +193,24 @@ export default function LinksPage() {
  })
  .then(r => r.json())
  .then(data => {
- setLinks(data.links || [])
+ const allLinks = data.links || []
+ setLinks(allLinks)
+
+ // Calculate new sources (last 7 days) for badge
+ const weekAgo = new Date()
+ weekAgo.setDate(weekAgo.getDate() - 7)
+ const lastSeen = parseInt(localStorage.getItem('greenplot_last_sources_visit') || '0', 10)
+ const newCount = allLinks.filter((l: any) => {
+  const ts = new Date(l.created_at || l.addedAt).getTime()
+  return ts > lastSeen
+ }).length
+ if (newCount > 0) {
+  localStorage.setItem('greenplot_new_sources', newCount.toString())
+ }
+
+ // Mark as seen when user visits this page
+ localStorage.setItem('greenplot_last_sources_visit', Date.now().toString())
+ localStorage.setItem('greenplot_new_sources', '0')
  })
  .catch(() => {
  // Fallback to localStorage
