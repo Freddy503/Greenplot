@@ -185,7 +185,7 @@ export default function GardenPage() {
 
       <main className="flex-1 overflow-y-auto pb-20 md:pb-8">
         {/* Hero */}
-        <section className="mb-3 px-2">
+        <section className="mb-2 px-2">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-3xl font-extrabnew tracking-tight leading-tight text-on-surface">
               Knowledge <span className="text-primary">Garden</span>
@@ -217,7 +217,7 @@ export default function GardenPage() {
         {!loading && !error && seeds.length > 0 && (
           <button
             onClick={() => setGraphOpen(true)}
-            className="w-full mb-2 flex items-center justify-center gap-3 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-[0.98] group"
+            className="w-full mb-1 flex items-center justify-center gap-3 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-[0.98] group"
           >
             <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" >hub</span>
             <div className="text-left">
@@ -230,7 +230,7 @@ export default function GardenPage() {
 
         {/* Seed Table — list view only */}
         {viewMode === 'list' && (loading ? (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="flex items-center gap-3 px-2">
                 <Skeleton className="w-8 h-8 rounded-full" />
@@ -341,7 +341,7 @@ export default function GardenPage() {
                 <p className="text-xs text-on-surface-variant mb-4">
                   Seeds that share domains and themes. Your second brain is forming patterns.
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {clusters.map(([domain, clusterSeeds]) => (
                     <div key={domain} className="group">
                       <div className="flex items-center gap-2 mb-2">
