@@ -18,3 +18,4 @@ bcrypt==4.0.1
 pywebpush>=2.0.0
 PyJWT
 beautifulsoup4
+apscheduler>=3.10.0

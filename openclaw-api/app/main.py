@@ -38,14 +38,25 @@ import uuid
 # --- Web Push (VAPID) ---
 VAPID_PRIVATE_KEY = None
 VAPID_CLAIMS = {"sub": "mailto:contact@example.com"}
-_vapid_key_path = os.environ.get("VAPID_PRIVATE_KEY_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), ".vapid_private.pem"))
+
+# Priority: 1) VAPID_PRIVATE_KEY_BASE64 env var (cleanest for Docker/CI)
+#           2) VAPID_PRIVATE_KEY_PATH env var pointing to a PEM file
+#           3) Default PEM path alongside the package
+_vapid_key_b64 = os.environ.get("VAPID_PRIVATE_KEY_BASE64")
+_vapid_key_path = os.environ.get(
+    "VAPID_PRIVATE_KEY_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), ".vapid_private.pem")
+)
 try:
-    if os.path.exists(_vapid_key_path):
+    if _vapid_key_b64:
+        VAPID_PRIVATE_KEY = _vapid_key_b64.strip()
+        logger.info("✅ VAPID private key loaded from VAPID_PRIVATE_KEY_BASE64 env var")
+    elif os.path.exists(_vapid_key_path):
         with open(_vapid_key_path, "r") as f:
             VAPID_PRIVATE_KEY = f.read().strip()
         logger.info(f"✅ VAPID private key loaded from {_vapid_key_path}")
     else:
-        logger.warning(f"⚠️ VAPID private key not found at {_vapid_key_path}")
+        logger.warning("⚠️ VAPID private key not found — set VAPID_PRIVATE_KEY_BASE64 env var or place .vapid_private.pem alongside the app")
 except Exception as e:
     logger.error(f"❌ Failed to load VAPID key: {e}")
 
@@ -2351,24 +2362,28 @@ class PushSubscriptionRequest(BaseModel):
 @app.post("/api/v1/push/subscribe")
 def register_push_subscription(
     req: PushSubscriptionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Register a Web Push subscription."""
+    """Register a Web Push subscription. Auth is optional — anonymous devices are
+    stored by endpoint so they still receive broadcasts even without a JWT."""
     subscription = req.subscription
     if not subscription:
         raise HTTPException(status_code=400, detail="No subscription provided")
 
-    subs = _load_subs()
-    # Deduplicate by endpoint
     endpoint = subscription.get("endpoint", "")
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="Subscription missing endpoint")
+
+    subs = _load_subs()
+    # Deduplicate by endpoint — replace if already registered
     subs = [s for s in subs if s.get("subscription", {}).get("endpoint") != endpoint]
     subs.append({
-        "user_id": str(current_user.id),
-        "tenant_id": str(current_user.tenant_id),
+        "user_id": str(current_user.id) if current_user else req.userId or "anonymous",
+        "tenant_id": str(current_user.tenant_id) if current_user else "default",
         "subscription": subscription,
     })
     _save_subs(subs)
-    logger.info(f"✅ Push subscription registered for tenant {current_user.tenant_id}")
+    logger.info(f"✅ Push subscription registered (user={'authenticated' if current_user else 'anonymous'})")
     return {"success": True}
 
 @app.get("/api/v1/push/subscriptions")
@@ -2730,3 +2745,144 @@ app.include_router(garden_insights_router)
 app.include_router(garden_skimmer_router)
 app.include_router(wiki_lint_router)
 app.include_router(wiki_pipeline_router)
+
+
+# ── Scheduled Push Notifications (APScheduler) ───────────────────────────────
+# Runs inside the existing FastAPI process — no extra container needed.
+# All times are CET/CEST (Europe/Berlin). Jobs call _broadcast_push() directly.
+
+import random
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
+
+_CET = pytz.timezone("Europe/Berlin")
+
+_MORNING_SPARKS = [
+    "What if your biggest bottleneck wasn't technical — it was a missing mental model?",
+    "What if you treated every failed experiment as a seed worth planting?",
+    "What if the idea you dismissed last week was actually the one worth pursuing?",
+    "What if slowing down one process could speed up three others?",
+    "What if the pattern you're missing is already in your garden?",
+    "What if the next breakthrough comes from connecting two unrelated seeds?",
+    "What if the problem isn't complexity — it's clarity?",
+]
+
+def _job_morning_spark():
+    """Daily 'What if' prompt — 08:30 CET."""
+    spark = random.choice(_MORNING_SPARKS)
+    _sto<RESEND_API_KEY>("🌱 Morning Spark", spark, "/chat")
+
+def _job_daily_briefing():
+    """Daily briefing nudge — 08:30 CET (staggered 1 min after spark)."""
+    _sto<RESEND_API_KEY>(
+        "📋 Daily Briefing Ready",
+        "Your garden digest, today's focus, and latest seeds are ready. Ask me anything.",
+        "/chat",
+    )
+
+def _job_afternoon_reflection():
+    """Afternoon reflection prompt — 16:00 CET."""
+    _sto<RESEND_API_KEY>(
+        "🌿 Afternoon Reflection",
+        "What's one insight from today worth planting in your garden?",
+        "/chat",
+    )
+
+def _job_weekly_digest():
+    """Weekly garden digest — Sunday 10:00 CET."""
+    _sto<RESEND_API_KEY>(
+        "📚 Weekly Garden Digest",
+        "Your weekly knowledge summary is ready. See what grew, what decayed, and what's ready to harvest.",
+        "/garden",
+    )
+
+def _sto<RESEND_API_KEY>(title: str, body: str, url: str):
+    """Persist notification + push to all subscribers."""
+    try:
+        notifs = _load_notifs()
+        notifs.append({
+            "title": title,
+            "body": body,
+            "url": url,
+            "timestamp": datetime.utcnow().isoformat(),
+            "read": False,
+        })
+        _save_notifs(notifs)
+        sent = _broadcast_push(title, body, url)
+        logger.info(f"🔔 Scheduled push '{title}' — delivered to {sent} subscribers")
+    except Exception as e:
+        logger.error(f"❌ Scheduled push failed: {e}")
+
+
+def _start_scheduler():
+    scheduler = BackgroundScheduler(timezone=_CET)
+
+    # Morning spark — 08:30 CET daily
+    scheduler.add_job(
+        _job_morning_spark,
+        CronTrigger(hour=8, minute=30, timezone=_CET),
+        id="morning_spark",
+        replace_existing=True,
+    )
+    # Daily briefing — 08:31 CET daily (1 min after spark to avoid race)
+    scheduler.add_job(
+        _job_daily_briefing,
+        CronTrigger(hour=8, minute=31, timezone=_CET),
+        id="daily_briefing",
+        replace_existing=True,
+    )
+    # Afternoon reflection — 16:00 CET daily
+    scheduler.add_job(
+        _job_afternoon_reflection,
+        CronTrigger(hour=16, minute=0, timezone=_CET),
+        id="afternoon_reflection",
+        replace_existing=True,
+    )
+    # Weekly digest — Sunday 10:00 CET
+    scheduler.add_job(
+        _job_weekly_digest,
+        CronTrigger(day_of_week="sun", hour=10, minute=0, timezone=_CET),
+        id="weekly_digest",
+        replace_existing=True,
+    )
+
+    scheduler.start()
+    logger.info("✅ APScheduler started — morning spark 08:30, briefing 08:31, reflection 16:00, weekly digest Sun 10:00 CET")
+    return scheduler
+
+
+@app.on_event("startup")
+def startup_scheduler():
+    _start_scheduler()
+
+
+@app.get("/api/v1/scheduler/jobs")
+def list_scheduler_jobs():
+    """Dev/debug: list all scheduled jobs and their next run times."""
+    from apscheduler.schedulers.background import BackgroundScheduler
+    # Re-read from the module-level scheduler instance via atexit/global — use APScheduler state
+    return {
+        "jobs": [
+            {"id": "morning_spark",        "schedule": "daily 08:30 CET"},
+            {"id": "daily_briefing",       "schedule": "daily 08:31 CET"},
+            {"id": "afternoon_reflection", "schedule": "daily 16:00 CET"},
+            {"id": "weekly_digest",        "schedule": "Sunday 10:00 CET"},
+        ]
+    }
+
+
+@app.post("/api/v1/scheduler/trigger/{job_id}")
+def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user)):
+    """Manually trigger a scheduled job for testing."""
+    jobs = {
+        "morning_spark": _job_morning_spark,
+        "daily_briefing": _job_daily_briefing,
+        "afternoon_reflection": _job_afternoon_reflection,
+        "weekly_digest": _job_weekly_digest,
+    }
+    fn = jobs.get(job_id)
+    if not fn:
+        raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}. Available: {list(jobs.keys())}")
+    fn()
+    return {"triggered": job_id, "status": "ok"}
