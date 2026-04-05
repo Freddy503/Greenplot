@@ -979,7 +979,7 @@ export default function WikiPage() {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
-        <main className="pt-28 pb-48 md:pb-16 px-3 sm:px-4 md:px-6 max-w-7xl mx-auto mx-auto w-full">
+        <main className="pt-20 pb-32 md:pb-8 px-3 sm:px-4 md:px-6 max-w-7xl mx-auto mx-auto w-full">
           <ArticleDetail
             article={selectedArticle}
             onBack={() => setSelectedArticle(null)}
@@ -995,7 +995,7 @@ export default function WikiPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="pt-28 pb-48 md:pb-16 px-3 sm:px-4 md:px-6 max-w-7xl mx-auto mx-auto w-full">
+      <main className="pt-20 pb-32 md:pb-8 px-3 sm:px-4 md:px-6 max-w-7xl mx-auto mx-auto w-full">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-1">
