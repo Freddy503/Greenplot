@@ -161,6 +161,29 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("search_seeds_filtered"),
     ))
 
+    # ── Wiki Search ──────────────────────────────────────────────
+    registry.register(ToolSpec(
+        name="search_wiki",
+        description="Search the user's wiki knowledge base (synthesized articles from seeds and sources). Use when answering complex or conceptual questions that benefit from the user's own documented knowledge. This is the highest-quality context layer.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query to find relevant wiki articles by title, content, or summary.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return (default 3).",
+                    "default": 3,
+                },
+            },
+            "required": ["query"],
+        },
+        permission=PermissionLevel.READ,
+        handler=TOOL_HANDLERS.get("search_wiki"),
+    ))
+
     # ── Seed Interaction ──────────────────────────────────────────
 
     registry.register(ToolSpec(

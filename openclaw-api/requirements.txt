@@ -19,3 +19,4 @@ pywebpush>=2.0.0
 PyJWT
 beautifulsoup4
 apscheduler>=3.10.0
+pytz>=2023.0
