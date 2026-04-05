@@ -446,16 +446,16 @@ export default function ChatPage() {
   const isStreaming = status === 'submitted' || status === 'streaming'
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-dvh bg-background">
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto pt-14">
+      <main className="flex-1 overflow-y-auto" style={{ paddingTop: "calc(3.5rem + env(safe-area-inset-top, 0px))" }}>
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
               <ConversationEmptyState>
-                <div className="flex flex-col h-screen bg-background">
+                <div className="flex flex-col h-dvh bg-background">
                   {/* Brand icon */}
                   <div className="relative">
                     <div className="absolute inset-0 rounded-full blur-2xl opacity-30 bg-primary scale-[1.8]" />
@@ -519,7 +519,7 @@ export default function ChatPage() {
 
                     {/* ── User message ─────────────────────────── */}
                     {isUser ? (
-                      <div className="flex flex-col h-screen bg-background">
+                      <div className="flex flex-col h-dvh bg-background">
                         <Message from="user">
                           <MessageContent
                             className="user-bubble bg-primary/10 text-primary-dark px-5 py-3 shadow-sm border border-primary/15"
@@ -548,7 +548,7 @@ export default function ChatPage() {
                       </div>
                     ) : (
                       /* ── Assistant message ────────────────────── */
-                      <div className="flex flex-col h-screen bg-background">
+                      <div className="flex flex-col h-dvh bg-background">
                         <Message from="assistant">
                           <MessageContent
                             className="assistant-bubble bg-surface-container-high text-on-surface px-6 py-5 border border-outline-variant/10 relative overflow-hidden"
@@ -854,7 +854,7 @@ export default function ChatPage() {
       </main>
 
       {/* ── Input area ───────────────────────────────── */}
-      <div className="shrink-0 px-4 pb-20 md:pb-4 pt-2 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40">
+      <div className="shrink-0 px-4 pt-2 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40" style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom, 0px) + 2rem))" }}>
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
