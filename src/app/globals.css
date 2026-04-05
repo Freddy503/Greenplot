@@ -266,23 +266,3 @@ html, body {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
   }
 }
-
-/* iOS PWA safe area adjustments - ONLY applies in standalone mode */
-@media all and (display-mode: standalone) {
-  /* Add status bar height to header padding */
-  header[style*="top-0"] {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 4px) !important;
-  }
-  /* Add home indicator height to bottom nav padding */
-  nav[style*="bottom-0"] {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-  }
-  /* Push main content below fixed header */
-  main {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 60px) !important;
-  }
-  /* Push input above bottom nav */
-  div[class*="shrink-0"] > div[class*="max-w-2xl"] {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
-  }
-}

@@ -84,9 +84,9 @@ export default function WikiIndexPage() {
 
   if (loading) {
     return (
-      <div className="h-dvh flex flex-col bg-background">
+      <div className="h-screen flex flex-col bg-background">
         <Header />
-        <main className="flex-1 overflow-y-auto px-3 sm:px-6 max-w-6xl mx-auto w-full" style={{ paddingTop: "calc(3.5rem + env(safe-area-inset-top, 0px))", paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))" }}>
+        <main className="flex-1 overflow-y-auto px-3 sm:px-6 pt-16 pb-20 md:pb-4 max-w-6xl mx-auto w-full">
           <div className="h-8 bg-surface-container rounded-xl w-48 mb-4 animate-pulse" />
           {[1, 2, 3].map(i => (
             <div key={i} className="h-20 bg-surface-container rounded-2xl mb-3 animate-pulse" />
@@ -98,9 +98,9 @@ export default function WikiIndexPage() {
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background">
       <Header />
-      <main className="flex-1 overflow-y-auto px-3 sm:px-6 max-w-6xl mx-auto w-full" style={{ paddingTop: "calc(3.5rem + env(safe-area-inset-top, 0px))", paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))" }}>
+      <main className="flex-1 overflow-y-auto px-3 sm:px-6 pt-16 pb-20 md:pb-4 max-w-6xl mx-auto w-full">
         {/* Hero */}
         <section className="mb-6">
           <div className="flex items-center justify-between mb-1">
