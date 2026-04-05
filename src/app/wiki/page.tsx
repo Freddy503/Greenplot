@@ -498,7 +498,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
       {/* Sections — rendered with react-markdown for tables, code blocks, etc. */}
       {parsed.sections.map((section) => (
         <section key={section.id} id={section.id} className="mb-8 scroll-mt-24">
-          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
+          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3  border-b border-outline-variant/10">
             {section.title}
           </h2>
           <div className="prose-sm prose-invert prose max-w-none
@@ -520,7 +520,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
       {/* See Also */}
       {parsed.seeAlso.length > 0 && (
         <section className="mb-6">
-          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
+          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3  border-b border-outline-variant/10">
             See Also
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -536,7 +536,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
       {/* References */}
       {parsed.references.length > 0 && (
         <section className="mb-6" id="source-links">
-          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
+          <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3  border-b border-outline-variant/10">
             References
           </h2>
           <ol className="space-y-1 text-xs text-on-surface-variant">
@@ -570,7 +570,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
 
       {/* Footer */}
       {parsed.footer && (
-        <div className="mt-8 pt-4 border-t border-outline-variant/10 text-[10px] text-on-surface-variant/50 italic">
+        <div className="mt-8  border-t border-outline-variant/10 text-[10px] text-on-surface-variant/50 italic">
           {parsed.footer}
         </div>
       )}
@@ -979,7 +979,7 @@ export default function WikiPage() {
     return (
       <div className="h-screen flex flex-col bg-background">
         <Header />
-        <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
+        <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-16 pb-20 md:pb-4 max-w-7xl mx-auto w-full">
           <ArticleDetail
             article={selectedArticle}
             onBack={() => setSelectedArticle(null)}
@@ -995,7 +995,7 @@ export default function WikiPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
+      <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-16 pb-20 md:pb-4 max-w-7xl mx-auto w-full">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-1">
