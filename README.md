@@ -349,3 +349,4 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 🟢 **Working:** Chat (14 tools), Garden + Intelligence + Decay, Sources + Bridge, Wiki (auto-compile, BFL images, D3 maps), Web Push notifications, Enrichment worker, Redis queue/cache, Activity feed, Activity Summary on login, Knowledge graph, Visit tracking, Image generation, Calendar integration, Profile API, D3 concept maps, Buy Me A Coffee integration
 🟡 **Partial:** Enrichment fields (5/230+ seeds enriched — pipeline re-run pending), Push notifications (requires home-screen install on iOS Safari)
 🔴 **Pending:** App Store (Capacitor), Figma MCP, Wiki Index page, Wiki Lint, Incremental per-source updates, "New sources" UI badge
+
