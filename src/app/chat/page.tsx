@@ -837,7 +837,7 @@ export default function ChatPage() {
           </ConversationContent>
 
           {/* ── Suggestions below messages ─────────────── */}
-          <div className="max-w-2xl mx-auto w-full px-4 mt-2 mb-2">
+          <div className="max-w-2xl mx-auto w-full px-4 mt-1 mb-2">
             <Suggestions>
               {dynamicSuggestions.map((s) => (
                 <Suggestion
