@@ -202,3 +202,23 @@ html, body {
     height: 100dvh;
   }
 }
+
+/* iOS PWA fix: prevent content cutoff */
+@media all and (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+  main {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* Bottom safe area spacer */
+.pb-safe {
+  padding-bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+}
+
+/* Top safe area spacer */
+.pt-safe {
+  padding-top: max(4rem, calc(env(safe-area-inset-top, 0px) + 4rem));
+}

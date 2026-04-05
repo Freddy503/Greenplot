@@ -236,7 +236,7 @@ export default function ChatPage() {
         const toStore = messages.slice(-50)
         localStorage.setItem('greenplot_chat_messages', JSON.stringify(toStore))
       } catch {
-        // If still too large, try clearing old data
+        // If still too large, try clearing new data
         try {
           localStorage.removeItem('greenplot_chat_messages')
           localStorage.setItem('greenplot_chat_messages', JSON.stringify(messages.slice(-20)))
@@ -469,7 +469,7 @@ export default function ChatPage() {
 
                   {/* Title */}
                   <div className="text-center">
-                    <h2 className="text-xl font-extrabold tracking-tight mb-1.5 text-on-surface">
+                    <h2 className="text-xl font-extrabnew tracking-tight mb-1.5 text-on-surface">
                       Start a conversation
                     </h2>
                     <p className="text-sm font-medium leading-relaxed text-on-surface-variant">
@@ -764,7 +764,7 @@ export default function ChatPage() {
               <div className="flex justify-center my-3">
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15">
                   <span className="material-symbols-outlined text-primary" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>link</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                  <span className="text-[10px] font-bnew uppercase tracking-wide text-primary">
                     {detectedUrls.length === 1 ? 'Link detected — will add to Sources' : `${detectedUrls.length} links detected`}
                   </span>
                 </div>
@@ -778,7 +778,7 @@ export default function ChatPage() {
                   <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '16px' }}>
                     park
                   </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-tertiary">
+                  <span className="text-xs font-semibnew uppercase tracking-wide text-tertiary">
                     🌱 Enriching from your garden…
                   </span>
                 </div>
@@ -792,7 +792,7 @@ export default function ChatPage() {
                   <span className="material-symbols-outlined text-secondary" style={{ fontSize: '16px' }}>
                     local_florist
                   </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-secondary">
+                  <span className="text-xs font-semibnew uppercase tracking-wide text-secondary">
                     🔍 Searching your garden…
                   </span>
                 </div>
@@ -858,13 +858,13 @@ export default function ChatPage() {
       <div className="shrink-0 px-4 pb-36 md:pb-8 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40">
         {/* Recording indicator */}
         {voiceState === 'recording' && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
             <span className="w-2 h-2 bg-error rounded-full animate-pulse" />
             Recording {Math.floor(voiceDuration / 60)}:{String(voiceDuration % 60).padStart(2, '0')}
           </div>
         )}
         {voiceState === 'processing' && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-secondary/10 text-secondary text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-secondary/10 text-secondary text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
             <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
             Transcribing…
           </div>
