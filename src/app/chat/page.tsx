@@ -29,6 +29,7 @@ import { AddToGardenButton } from '@/components/ai-elements/add-to-garden-button
 // Layout
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+import { VoiceRecordingOverlay } from '@/components/voice/voice-recording-overlay'
 import { ActivitySummary } from '@/components/activity-summary'
 
 // AI Elements
@@ -891,6 +892,15 @@ export default function ChatPage() {
           />
         </div>
       </div>
+
+      {/* Voice recording overlay */}
+      <VoiceRecordingOverlay
+        isRecording={voiceState === 'recording'}
+        isProcessing={voiceState === 'processing'}
+        duration={voiceDuration}
+        onCancel={toggleRecording}
+        onStop={toggleRecording}
+      />
 
       <BottomNav />
     </div>
