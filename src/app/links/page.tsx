@@ -402,10 +402,10 @@ export default function LinksPage() {
   const starredCount = links.filter(l => l.starred).length
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="pt-20 pb-32 md:pb-8 px-4 max-w-3xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto px-4 pb-24 md:pb-8 max-w-3xl mx-auto w-full pt-24 md:pt-20">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
