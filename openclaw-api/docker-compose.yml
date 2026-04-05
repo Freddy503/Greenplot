@@ -26,6 +26,7 @@ services:
     volumes:
     - .:/app
     - /root/.openclaw/workspace/public/wiki-images:/app/public/wiki-images
+    - /root/.openclaw/workspace:/workspace
   db:
     container_name: openclaw-db
     environment:
