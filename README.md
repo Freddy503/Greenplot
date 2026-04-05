@@ -67,6 +67,10 @@ Your AI-powered second brain. Capture ideas through chat, voice, or notes — en
 * seeds table includes: last_visited, visit_count (for decay scoring)
 ```
 
+![Greenplot Architecture](./public/wiki-architecture.png)
+
+![Greenplot Architecture](./public/wiki-architecture.png)
+
 ## Core Concepts
 
 ### Sources → Seeds → Wiki (The Full Pipeline)
