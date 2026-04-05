@@ -1365,3 +1365,65 @@ async def wiki_lint(args: dict, user: User, db: Session) -> str:
                        "report_preview": report[:500]})
 
 TOOL_HANDLERS["wiki_lint"] = wiki_lint
+
+# ── Wiki Search ──────────────────────────────────────────────
+async def search_wiki(args: dict, user: User, db: Session) -> str:
+    """Search wiki markdown files for relevant knowledge."""
+    import os, json, re
+
+    wiki_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'wiki')
+    wiki_dir = os.path.normpath(wiki_dir)
+    index_file = os.path.join(wiki_dir, 'index.json')
+
+    query = args.get('query', '')
+    limit = args.get('limit', 3)
+
+    if not os.path.exists(index_file):
+        return json.dumps({'status': 'error', 'message': 'Wiki index not found. Run sync_wiki_markdown.py first.'})
+
+    try:
+        with open(index_file, 'r') as f:
+            index = json.load(f)
+    except:
+        return json.dumps({'status': 'error', 'message': 'Failed to read wiki index.'})
+
+    query_lower = query.lower()
+    query_terms = [w for w in re.split(r'\W+', query_lower) if len(w) > 2]
+
+    results = []
+    for entry in index:
+        title = entry.get('title', '')
+        summary = entry.get('summary', '')
+        filename = entry.get('filename', '')
+
+        text_to_search = f"{title} {summary}".lower()
+        matches = sum(1 for t in query_terms if t in text_to_search)
+        score = matches / len(query_terms) if query_terms else 0
+
+        if score > 0:
+            filepath = os.path.join(wiki_dir, filename)
+            content = ''
+            if os.path.exists(filepath):
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            # Strip frontmatter for cleaner context
+            if content.startswith('---'):
+                parts = content.split('---', 2)
+                content = parts[2] if len(parts) > 2 else content
+
+            results.append({
+                'title': title,
+                'summary': summary,
+                'content': content[:3000],
+                'filename': filename,
+                'score': round(score, 3),
+            })
+
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return json.dumps({
+        'status': 'ok',
+        'results': results[:limit],
+        'count': len(results[:limit]),
+    })
+
+TOOL_HANDLERS["search_wiki"] = search_wiki

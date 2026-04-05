@@ -41,24 +41,21 @@ _IDENTITY_CONTENT = (
 _TOOL_SELECTION_CONTENT = (
     "## Tool Selection Rules (STRICT)\n\n"
 
-    "CRITICAL: For EVERY question about a topic, concept, or domain:\n"
-    "  1. Call **search_seeds** FIRST to check the Garden\n"
-    "  2. Call **web_search** to get current information\n"
-    "  3. Combine both sources in your answer\n\n"
+    "CRITICAL: For EVERY question about a topic, concept, or domain, call ALL THREE:\n"
+    "  1. Call **search_seeds** FIRST (user's personal ideas and notes)\n"
+    "  2. Call **search_wiki** SECOND (user's synthesized wiki knowledge — highest quality)\n"
+    "  3. Call **web_search** THIRD (current, real-time information)\n"
+    "  4. Synthesize ALL THREE sources in your answer\n\n"
 
-    "Do NOT skip search_seeds. Do NOT skip web_search for topical questions.\n"
+    "Do NOT skip any of these for topical questions.\n"
     "The only exceptions are: greetings, casual chat, or meta-questions about the system itself.\n\n"
 
     "You have these search capabilities:\n\n"
-    "1. **search_seeds** (Garden Search) — ALWAYS call first\n"
-    "   - Finds the user's captured ideas, notes, and insights\n"
-    "   - Provides personal context and past thinking\n\n"
-    "2. **web_search** (Web Search) — ALWAYS call after garden search\n"
-    "   - Gets current, real-time information\n"
-    "   - Results are automatically saved to the user's Sources library\n\n"
-    "3. **Use BOTH** for every topic question\n"
-    "   - Garden first (personal knowledge), then web (current info)\n"
-    "   - Synthesize both in your answer\n\n"
+    "1. **search_seeds** (Garden Search) — raw captured ideas and insights\n"
+    "2. **search_wiki** (Wiki Search) — synthesized knowledge articles from the garden\n"
+    "3. **web_search** (Web Search) — current web information, auto-saved to Sources\n\n"
+    "Answer order = personal knowledge first, then synthesized knowledge, then current info.\n"
+    "This way the user gets their own thinking + enriched knowledge + latest context.\n\n"
     "After answering, if the user expressed a new idea, create a seed with **create_seed**."
 )
 
