@@ -1,7 +1,6 @@
 """
-Garden Skimmer — API endpoint + logic
-Autonomous sub-agent that scans the Garden, finds patterns, gaps, trends, and quality issues.
-Saves results as insight seeds and returns summary.
+Garden Insight Agents — scan the garden for patterns, gaps, trends, and quality issues.
+Can be triggered via API endpoint or cron job.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_current_user
@@ -9,14 +8,14 @@ from app.models import User
 from app.weaviate_client import weaviate_client
 from collections import Counter
 from datetime import datetime
-import json, urllib.request
+import json, urllib.request, os
 
-router = APIRouter(prefix="/api/v1/garden", tags=["garden"])
-
-TENANT_ID = "87959b2e-5443-4c50-9336-2da01af82c14"
+router = APIRouter(prefix="/api/v1/garden", tags=["garden-skimmer"])
 
 
-def _create_insight_seed(title, content, tags, domain, tenant_id, user_id, status="Planted"):
+def create_insight_seed(title: str, content: str, tags: str, domain: str,
+                        tenant_id: str, user_id: str, status: str = "Planted"):
+    """Save insight as a new seed in Weaviate"""
     seed = {
         "class": "IdeaSeed",
         "properties": {
@@ -25,141 +24,126 @@ def _create_insight_seed(title, content, tags, domain, tenant_id, user_id, statu
             "tenant_id": tenant_id, "user_id": str(user_id)
         }
     }
-    req = urllib.request.Request(
-        "http://weaviate:8080/v1/objects",
-        data=json.dumps(seed).encode(),
-        headers={"Content-Type": "application/json"}
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read())
+        weaviate_client.client.data_object.create(
+            data_object=seed["properties"],
+            class_name="IdeaSeed",
+            tenant=seed["properties"]["tenant_id"]
+        )
+        return {"created": True, "title": title}
     except Exception as e:
-        return {"error": str(e)}
+        return {"created": False, "error": str(e)}
 
 
-def _pattern_agent(seeds, wiki_articles, tenant_id, user_id):
-    """Find cross-domain patterns"""
+def pattern_agent(seeds: list, wiki: list, tenant_id: str, user_id: str) -> dict:
+    """Find cross-domain tag patterns"""
     tag_map = {}
-    for seed in seeds:
-        tags = seed.get('tags', '') or ''
-        domain = seed.get('domain', 'untagged')
-        title = seed.get('title', '')
-        for tag in (tags.split(',') if ',' in tags else [tags]):
-            tag = tag.strip().lower()
-            if tag and tag not in ('untitled', 'stub', 'none', ''):
-                tag_map.setdefault(tag, []).append({'title': title, 'domain': domain})
+    for s in seeds:
+        domain = s.get('domain', 'untagged')
+        for tag in (s.get('tags') or '').split(','):
+            t = tag.strip().lower()
+            if t and t not in ('untitled', 'stub', 'none', ''):
+                tag_map.setdefault(t, set()).add(domain)
 
-    connections = []
-    for tag, items in sorted(tag_map.items(), key=lambda x: len(x[1]), reverse=True)[:20]:
-        domains = set(i['domain'] for i in items)
-        if len(domains) > 1 and len(items) >= 3:
-            connections.append({'tag': tag, 'domains': list(domains), 'count': len(items), 'seeds': items[:4]})
+    multi_domain = {tag: sorted(domains) for tag, domains in tag_map.items() if len(domains) > 1}
+    top = sorted(multi_domain.items(), key=lambda x: len(x[1]), reverse=True)[:5]
 
-    if not connections:
-        return {"found": 0, "message": "No cross-domain patterns found"}
+    if top:
+        report = "# Garden Pattern Discovery Report\n\n"
+        report += f"Found {len(multi_domain)} tags spanning multiple domains:\n\n"
+        for rank, (tag, domains) in enumerate(top, 1):
+            report += f"{rank}. **{tag}** → {', '.join(domains)}\n"
+        report += "\n💡 These tags connect different parts of your garden — explore cross-pollination opportunities."
+        create_insight_seed(f"Pattern: {top[0][0]} spans {len(top[0][1])} domains",
+                          report, f"agent-insight, pattern, {top[0][0]}", "agent-insight", tenant_id, user_id)
 
-    report = "# Pattern Discovery Report\n\n"
-    report += f"Found {len(connections)} cross-domain patterns in your garden:\n\n"
-    for i, c in enumerate(connections[:5], 1):
-        report += f"## {i}. \"{c['tag']}\" connects {len(c['domains'])} domains\n"
-        report += f"Domains: {', '.join(c['domains'])}\n"
-        for s in c['seeds']:
-            report += f"- {s['title'][:50]} ({s['domain']})\n"
-        report += "\n"
-
-    _create_insight_seed(
-        f"Pattern: {connections[0]['tag']} connects {len(connections[0]['domains'])} domains",
-        report, f"agent-insight, pattern, {connections[0]['tag']}", "agent-insight", tenant_id, user_id)
-    return {"found": len(connections), "top": connections[:3]}
+    return {"found": len(top), "patterns": [{"tag": t, "domains": d} for t, d in top[:5]]}
 
 
-def _gap_agent(seeds, wiki_articles, tenant_id, user_id):
+def gap_agent(seeds: list, wiki: list, tenant_id: str, user_id: str) -> dict:
     """Find domains with many seeds but no wiki article"""
-    domain_counts = Counter(s.get('domain', '') for s in seeds if s.get('domain') not in ('', 'None', 'General', 'untagged'))
-    wiki_domains = set((a.get('category', '') or '').lower() for a in wiki_articles)
-    gaps = [{'domain': d, 'count': c} for d, c in domain_counts.most_common() if d.lower() not in wiki_domains and c >= 3]
+    domain_counts = Counter(s.get('domain', '') for s in seeds
+                          if s.get('domain') not in ('', 'None', 'General', 'untagged'))
+    wiki_domains = set((a.get('category', '') or '').lower() for a in wiki)
 
-    if not gaps:
-        return {"found": 0, "message": "No significant knowledge gaps"}
+    gaps = [{'domain': d, 'count': c} for d, c in domain_counts.most_common()
+            if d.lower() not in wiki_domains and c >= 3]
 
-    report = "# Knowledge Gap Report\n\n"
-    report += f"Found {len(gaps)} domains with seeds but no wiki coverage:\n\n"
-    for g in gaps:
-        report += f"- **{g['domain']}**: {g['count']} seeds\n"
+    if gaps:
+        report = "# Knowledge Gap Report\n\n"
+        report += "These domains have 3+ seeds but no wiki coverage:\n\n"
+        for g in gaps[:10]:
+            report += f"- **{g['domain']}**: {g['count']} seeds\n"
+        report += "\n💡 Consider creating wiki articles for these high-value domains."
+        create_insight_seed(f"Gap: {len(gaps)} domains lack wiki coverage",
+                          report, "agent-insight, knowledge-gap", "agent-insight", tenant_id, user_id)
 
-    _create_insight_seed(f"Gaps: {len(gaps)} domains missing wiki coverage", report,
-                        "agent-insight, knowledge-gap", "agent-insight", tenant_id, user_id)
     return {"found": len(gaps), "gaps": gaps[:5]}
 
 
-def _trend_agent(seeds, tenant_id, user_id):
+def trend_agent(seeds: list, tenant_id: str, user_id: str) -> dict:
     """Analyze domain and tag distribution"""
-    domain_counts = Counter(s.get('domain', '') for s in seeds)
+    domain_counts = Counter(s.get('domain', '') for s in seeds if s.get('domain'))
     all_tags = []
     for s in seeds:
         if s.get('tags'):
-            all_tags.extend(t.strip().lower() for t in s['tags'].split(',') if t.strip() and t.strip() not in ('untitled', 'stub'))
+            all_tags.extend(t.strip() for t in s['tags'].split(',')
+                          if t.strip() and t.strip().lower() not in ('untitled', 'stub'))
     tag_counts = Counter(all_tags)
 
-    report = f"# Garden Trends Report\n\nTotal seeds: {len(seeds)}\n\n## Top Domains\n"
-    for d, c in domain_counts.most_common(10):
-        if d: report += f"- **{d}**: {c}\n"
+    report = f"# Garden Analytics ({len(seeds)} seeds)\n\n"
+    report += "## Top Domains\n"
+    for d, c in domain_counts.most_common(8):
+        report += f"- **{d}**: {c} seeds\n"
     report += "\n## Top Tags\n"
-    for t, c in tag_counts.most_common(15):
+    for t, c in tag_counts.most_common(12):
         report += f"- **{t}**: {c}\n"
 
-    top = tag_counts.most_common(1)[0] if tag_counts else ("none", 0)
-    _create_insight_seed(f"Trends: top tag is '{top[0]}' ({top[1]} mentions)",
-                        report, "agent-insight, trends, analytics", "agent-insight", tenant_id, user_id)
-    return {"total_seeds": len(seeds), "top_tag": top, "domains": dict(domain_counts.most_common(10))}
+    create_insight_seed(f"Trend: garden has {len(seeds)} seeds across {len(domain_counts)} domains",
+                       report, "agent-insight, analytics, trends", "agent-insight", tenant_id, user_id)
+
+    return {"total_seeds": len(seeds), "top_tag": tag_counts.most_common(1),
+            "domains": dict(domain_counts.most_common(8))}
 
 
-def _quality_agent(seeds, tenant_id, user_id):
-    """Flag seeds with quality issues"""
-    issues = []
+def quality_agent(seeds: list, tenant_id: str, user_id: str) -> dict:
+    """Flag quality issues"""
+    issues = {"untitled": 0, "no-tags": 0, "low-content": 0, "no-domain": 0}
     for s in seeds:
         t = (s.get('title') or '').strip()
-        tags = s.get('tags') or ''
-        content = s.get('content') or ''
-        domain = s.get('domain') or ''
-        if t.lower() in ('untitled', ''): issues.append('untitled')
-        if not tags or tags.strip() in ('', 'untitled', 'stub'): issues.append('no-tags')
-        if len(content.strip()) < 50: issues.append('low-content')
-        if not domain: issues.append('no-domain')
+        if t.lower() in ('untitled', ''): issues["untitled"] += 1
+        tags = (s.get('tags') or '').strip()
+        if not tags or tags.lower() in ('untitled', 'stub', 'none'): issues["no-tags"] += 1
+        if len((s.get('content') or '').strip()) < 50: issues["low-content"] += 1
+        if not s.get('domain') or not s['domain'].strip(): issues["no-domain"] += 1
 
-    if not issues:
-        return {"found": 0, "message": "Garden is healthy"}
+    total = sum(issues.values())
+    if total > 0:
+        report = f"# Garden Quality Report\n\nFound {total} quality issues:\n\n"
+        for k, v in issues.items():
+            if v > 0:
+                report += f"- **{k.replace('-', ' ').title()}**: {v}\n"
+        report += "\n💡 Fix these to improve garden quality and discoverability."
+        create_insight_seed(f"Quality: {total} issues found across {len(seeds)} seeds",
+                           report, "agent-insight, quality-audit", "agent-insight", tenant_id, user_id)
 
-    by_type = dict(Counter(issues).most_common())
-    report = f"# Quality Report\n\nFound {len(issues)} issues across your garden:\n\n"
-    for k, v in by_type.items():
-        report += f"- **{k.replace('-', ' ').title()}**: {v}\n"
-
-    _create_insight_seed(f"Quality: {len(issues)} issues found", report,
-                        "agent-insight, quality-audit", "agent-insight", tenant_id, user_id)
-    return {"found": len(issues), "by_type": by_type}
-
-
-def _run_all_seeds(tenant_id, user_id):
-    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
-    wiki = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
-    return seeds, wiki
+    return {"total_issues": total, "by_type": {k: v for k, v in issues.items() if v > 0}}
 
 
 @router.post("/skim")
-@router.get("/skim")
 def run_skim(current_user: User = Depends(get_current_user)):
+    """Run all garden insight agents — finds patterns, gaps, trends, and quality issues"""
     tenant_id = str(current_user.tenant_id)
-    user_id = str(current_user.id)
-    seeds, wiki = _run_all_seeds(tenant_id, user_id)
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+    wiki = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
 
     return {
         "success": True,
         "insights": {
-            "pattern": _pattern_agent(seeds, wiki, tenant_id, user_id),
-            "gap": _gap_agent(seeds, wiki, tenant_id, user_id),
-            "trend": _trend_agent(seeds, tenant_id, user_id),
-            "quality": _quality_agent(seeds, tenant_id, user_id),
+            "pattern": pattern_agent(seeds, wiki, tenant_id, str(current_user.id)),
+            "gap": gap_agent(seeds, wiki, tenant_id, str(current_user.id)),
+            "trend": trend_agent(seeds, tenant_id, str(current_user.id)),
+            "quality": quality_agent(seeds, tenant_id, str(current_user.id)),
         },
         "generated_at": datetime.utcnow().isoformat() + "Z"
     }
