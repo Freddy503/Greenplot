@@ -808,7 +808,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
       </Card>
 
       {/* Concept Map */}
-      <section className="mb-6 px-2">
+      <section className="mb-3 px-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60 mb-3 flex items-center gap-1">
           <span className="material-symbols-outlined text-sm" >hub</span>
           Knowledge Graph
@@ -997,7 +997,7 @@ export default function WikiPage() {
 
       <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-16 pb-20 md:pb-4 max-w-7xl mx-auto w-full">
         {/* Hero */}
-        <section className="mb-6 px-2">
+        <section className="mb-3 px-2">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
               Knowledge <span className="text-primary">Plants</span>

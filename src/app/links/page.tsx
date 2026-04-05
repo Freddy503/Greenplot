@@ -404,7 +404,7 @@ export default function LinksPage() {
 
       <main className="flex-1 overflow-y-auto px-4 pt-16 pb-20 md:pb-4 max-w-3xl mx-auto w-full">
         {/* Hero */}
-        <section className="mb-6 px-2">
+        <section className="mb-3 px-2">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
               Link <span className="text-primary">Sources</span>
