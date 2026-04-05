@@ -530,46 +530,118 @@ def generate_architecture_image(seed_title, summary, connections):
         return None
 
 
+# ── Intent Classification ─────────────────────────────────────────────────────
+def classify_seed(entry):
+    """Classify a seed into a depth tier for tailored enrichment.
+    
+    Tier 1 'note' — Short, personal, reference-style. Just store & tag.
+    Tier 2 'question' — Answerable concept. Garden search first, web if needed.
+    Tier 3 'substantive' — Full treatment: Garden + Web + Synthesis.
+    """
+    title = entry.get('title', '').lower()
+    body = entry.get('body', '')
+    context = entry.get('context', '').lower()
+    key_takeaway = entry.get('key_takeaway', '')
+    full_text = f'{title} {context} {key_takeaway} {body[:200]}'.lower()
+    
+    # Deterministic heuristics first (fast, free)
+    text_len = len(full_text.strip())
+    
+    # Signal patterns for substantive ideas
+    substantive_signals = [
+        'architecture', 'strategy', 'framework', 'pipeline', 'concept',
+        'moat', 'competitive', 'enterprise', 'deployment', 'agentic',
+        'knowledge graph', 'system design', 'platform', 'infrastructure',
+        'collaboration', 'trust', 'forward deployed', 'fde', 'integration'
+    ]
+    substantive_count = sum(1 for s in substantive_signals if s in full_text)
+    
+    # Signal patterns for simple notes
+    note_signals = [
+        'read', 'check', 'look at', 'reminder', 'todo', 'to do',
+        'buy', 'call', 'email', 'meeting', 'later'
+    ]
+    note_count = sum(1 for s in note_signals if s in full_text)
+    
+    # Question signals
+    question_signals = ['?', 'how', 'what is', 'who is', 'when', 'where', 'why', 'which']
+    question_count = sum(1 for s in question_signals if s in full_text)
+    
+    # Classification
+    if text_len < 120 and note_count >= 1 and substantive_count == 0:
+        return 'note', text_len
+    elif text_len < 300 and question_count >= 1 and substantive_count <= 1:
+        return 'question', text_len
+    elif substantive_count >= 2 or text_len > 400:
+        return 'substantive', text_len
+    elif question_count >= 1:
+        return 'question', text_len
+    else:
+        return 'note', text_len
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def process_entry(entry):
     print(f'Processing: {entry["title"]}', file=sys.stderr)
 
-    # 1. Web search
-    search_query = f'{entry["title"]} {entry.get("context", "")} agentic AI enterprise deployment'
-    print(f'  Searching web: {search_query[:80]}...', file=sys.stderr)
-    web_results = web_search(search_query, num_results=3)
-    print(f'  Found {len(web_results)} web results', file=sys.stderr)
+    # Intent classification — choose enrichment depth
+    tier, text_len = classify_seed(entry)
+    print(f'  Tier: {tier} (text length: {text_len} chars)', file=sys.stderr)
 
-    # 1b. Bridge: save web sources as Links (Sources page)
-    save_web_sources_as_links(web_results)
-
-    # 2. Weaviate query
+    # ALWAYS: Garden search (your first memory)
     query_text = f'{entry["title"]} {entry.get("key_takeaway", "")} {entry.get("body", "")}'[:600]
-    print(f'  Querying Weaviate...', file=sys.stderr)
+    print(f'  Querying Weaviate (Garden)...', file=sys.stderr)
     garden_connections = query_weaviate(query_text, top_k=4)
     print(f'  Found {len(garden_connections)} garden connections', file=sys.stderr)
 
-    # 3. Nemotron synthesis
+    # Web search: based on tier
+    web_results = []
+    if tier == 'note':
+        # Notes: no web search, just tag and store
+        print(f'  Skipping web search (note tier)', file=sys.stderr)
+        
+    elif tier == 'question':
+        # Questions: web search only if garden doesn't have enough
+        if len(garden_connections) >= 2:
+            print(f'  Enough garden context ({len(garden_connections)}), skipping web search', file=sys.stderr)
+        else:
+            search_query = f'{entry["title"]} {entry.get("context", "")} {entry.get("key_takeaway", "")}'
+            print(f'  Searching web: {search_query[:80]}...', file=sys.stderr)
+            web_results = web_search(search_query, num_results=2)
+            print(f'  Found {len(web_results)} web results', file=sys.stderr)
+            
+    else:  # substantive
+        # Full treatment: always garden + web
+        search_query = f'{entry["title"]} {entry.get("context", "")} agentic AI enterprise deployment'
+        print(f'  Web search: {search_query[:80]}...', file=sys.stderr)
+        web_results = web_search(search_query, num_results=3)
+        print(f'  Found {len(web_results)} web results', file=sys.stderr)
+
+    # Bridge: save web sources as Links (Sources page)
+    if web_results:
+        save_web_sources_as_links(web_results)
+
+    # Synthesis: always runs (Nemotron is free)
     print(f'  Synthesizing with Nemotron...', file=sys.stderr)
     synthesis = synthesize(entry, web_results, garden_connections)
     print(f'  Synthesis done: {synthesis.get("seed_title")}', file=sys.stderr)
 
     image_url = None  # BFL images only generated on explicit request
 
-    # 5. Plant in Garden
+    # Plant in Garden
     print(f'  Planting in Idea Garden...', file=sys.stderr)
     seed_url = plant_seed(synthesis, entry, web_results, image_url=image_url)
     print(f'  Planted: {seed_url}', file=sys.stderr)
 
-    # 6. Mark parking lot entry as Planted
+    # Mark parking lot entry as Planted
     mark_planted(entry['id'], seed_url)
     print(f'  Marked as Planted 🌱', file=sys.stderr)
 
-    # 7. Re-sync Weaviate
+    # Re-sync Weaviate
     subprocess.Popen([sys.executable, SYNC_SCRIPT, '--sync'],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # 8. Enrich Weaviate metadata (tags, entities, backlinks, domain)
+    # Enrich Weaviate metadata (tags, entities, backlinks, domain)
     try:
         enrich_weaviate_metadata(entry, synthesis, garden_connections)
     except Exception as e:
@@ -580,6 +652,7 @@ def process_entry(entry):
         'seed_url': seed_url,
         'seeds_entry': entry['title'],
         'seeds_url': entry['url'],
+        'tier': tier,
         'web_sources': len(web_results),
         'garden_connections': len(garden_connections),
         'why_it_matters': synthesis.get('why_it_matters', ''),
