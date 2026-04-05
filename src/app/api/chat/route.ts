@@ -3,10 +3,10 @@ import {
   createUIMessageStreamResponse,
 } from 'ai'
 
-export const maxDuration = 120 // Vercel Pro = 300s, Hobby = 10s
+export const maxDuration = 300 // Vercel Pro max — allows multi-tool chain requests
 
 const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
-const BACKEND_TIMEOUT_MS = 30000 // 30s — gives room for tool-heavy requests
+const BACKEND_TIMEOUT_MS = 120000 // 2 min — covers multi-step tool chains
 
 /**
  * Transform AI SDK v5 messages (parts format) → backend format (content string).
