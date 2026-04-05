@@ -129,8 +129,10 @@ export const PromptBox = React.forwardRef<
     isProcessingVoice?: boolean
     recordingDuration?: number
     onToggleVoice?: () => void
+    /** Opens the full-screen Siri-style voice overlay (preferred over onToggleVoice on mobile) */
+    onOpenVoice?: () => void
   }
->(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, ...props }, ref) => {
+>(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, onOpenVoice, ...props }, ref) => {
   const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [value, setValue] = React.useState('')
@@ -333,12 +335,12 @@ export const PromptBox = React.forwardRef<
             {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Mic */}
+            {/* Mic — opens full-screen voice overlay */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={onToggleVoice}
+                  onClick={onOpenVoice ?? onToggleVoice}
                   disabled={isProcessingVoice}
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-all focus-visible:outline-none',
@@ -359,7 +361,7 @@ export const PromptBox = React.forwardRef<
                     ? `Recording${recordingDuration ? ` ${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')}` : ''} — tap to stop`
                     : isProcessingVoice
                       ? 'Transcribing…'
-                      : 'Record voice memo'}
+                      : 'Voice memo'}
                 </p>
               </TooltipContent>
             </Tooltip>

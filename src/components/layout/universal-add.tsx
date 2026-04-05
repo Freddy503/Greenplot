@@ -101,10 +101,11 @@ export default function UniversalAdd() {
 
   return (
     <>
-      {/* Floating Add Button */}
+      {/* Floating Add Button — sits above the PromptBox on mobile, bottom-right on desktop */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-28 right-6 z-40 w-14 h-14 rounded-full bg-primary text-on-primary shadow-lg shadow-primary/25 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform md:bottom-8"
+        className="fixed right-4 z-40 w-12 h-12 rounded-full bg-primary text-on-primary shadow-lg shadow-primary/25 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform md:bottom-8 md:right-6 md:w-14 md:h-14"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12rem)' }}
         title="Add to garden"
       >
         <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PromptBox } from '@/components/ui/chatgpt-prompt-input'
+import { VoiceOverlay } from '@/components/ui/voice-overlay'
 import { toast } from 'sonner'
 import {
   Empty,
@@ -433,6 +434,8 @@ export default function ChatPage() {
     onError: handleVoiceError,
     authToken,
   })
+
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false)
 
   const isStreaming = status === 'submitted' || status === 'streaming'
 
@@ -866,6 +869,7 @@ export default function ChatPage() {
             isProcessingVoice={voiceState === 'processing'}
             recordingDuration={voiceDuration}
             onToggleVoice={toggleRecording}
+            onOpenVoice={() => setVoiceOverlayOpen(true)}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
               const text = e.target.value
               const urlRegex = /https?:\/\/[^\s<>\]\)"']+/g
@@ -883,6 +887,23 @@ export default function ChatPage() {
       </div>
 
       <BottomNav />
+
+      {/* ── Voice overlay (Siri-style) ────────────────── */}
+      <VoiceOverlay
+        isOpen={voiceOverlayOpen}
+        onClose={() => setVoiceOverlayOpen(false)}
+        onTranscription={async (text) => {
+          setVoiceOverlayOpen(false)
+          if (status === 'ready') {
+            const enrichedText = await enrichWithGarden(`🎙️ Voice memo: ${text}`)
+            sendMessage({ text: enrichedText })
+          }
+        }}
+        onError={(msg) => {
+          toast.error(`🎙️ ${msg}`)
+        }}
+        authToken={authToken}
+      />
     </div>
   )
 }
