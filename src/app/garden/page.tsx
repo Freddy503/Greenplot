@@ -183,7 +183,7 @@ export default function GardenPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-8">
+      <main className="flex-1 overflow-y-auto px-4">
         {/* Hero */}
         <section className="mb-2 px-2">
           <div className="flex items-center justify-between mb-2">
@@ -217,7 +217,7 @@ export default function GardenPage() {
         {!loading && !error && seeds.length > 0 && (
           <button
             onClick={() => setGraphOpen(true)}
-            className="w-full mb-1 flex items-center justify-center gap-3 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-[0.98] group"
+            className="w-full mb-1 flex items-center justify-center gap-3 py-2 rounded-2xl bg-surface-container border border-outline-variant/10 hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-[0.98] group"
           >
             <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" >hub</span>
             <div className="text-left">
@@ -293,11 +293,11 @@ export default function GardenPage() {
           <Card className="mt-10 relative overflow-hidden bg-surface-container border-primary/10">
             <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
             <CardContent className="relative z-10 p-6">
-              <Badge className="bg-secondary/20 text-secondary text-[10px] font-bnew uppercase tracking-widest mb-4 border-0">
+              <Badge className="bg-secondary/20 text-secondary text-[10px] font-bnew uppercase tracking-widest mb-2 border-0">
                 Focus Seed
               </Badge>
               <h4 className="text-xl font-bnew text-on-surface mb-2">{focusSeed.title}</h4>
-              <p className="text-xs leading-relaxed text-on-surface-variant mb-4">
+              <p className="text-xs leading-relaxed text-on-surface-variant mb-2">
                 Your garden is currently enriching this seed. Estimated bloom soon.
               </p>
               <Progress value={65} className="h-1.5 mt-4 bg-surface-container-low [&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-primary-container [&>div]:shadow-green-500/30 [&>div]:shadow-sm" />
@@ -327,7 +327,7 @@ export default function GardenPage() {
             <Card className="mt-10 relative overflow-hidden bg-surface-container border-secondary/10">
               <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-secondary/5 rounded-full blur-3xl" />
               <CardContent className="relative z-10 p-6">
-                <div className="flex items-center gap-1.5 mb-5">
+                <div className="flex items-center gap-1.5 mb-2">
                   <span
                     className="material-symbols-outlined text-secondary"
                     
@@ -338,7 +338,7 @@ export default function GardenPage() {
                     Seed Connections
                   </h3>
                 </div>
-                <p className="text-xs text-on-surface-variant mb-4">
+                <p className="text-xs text-on-surface-variant mb-2">
                   Seeds that share domains and themes. Your second brain is forming patterns.
                 </p>
                 <div className="space-y-1">
