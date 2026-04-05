@@ -1085,3 +1085,124 @@ async def read_source(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["read_source"] = read_source
+
+async def garden_skimmer(args: dict, user: User, db: Session) -> str:
+    """Run sub-agent garden analysis. Discovers patterns, gaps, trends, quality issues."""
+    from app.weaviate_client import weaviate_client
+    tenant_id = str(user.tenant_id)
+    agent_type = args.get("agent_type", "all")
+    
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+    wiki = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
+    
+    results = {"total_seeds": len(seeds), "wiki_articles": len(wiki)}
+    
+    try:
+        # Pattern analysis
+        if agent_type in ("all", "pattern"):
+            tag_map = {}
+            for s in seeds:
+                for tag in (s.get("tags", "") or "").split(","):
+                    t = tag.strip().lower()
+                    if t and t not in ("untitled", "stub", "none", ""):
+                        tag_map.setdefault(t, {}).setdefault(s.get("domain", "untagged"), 0)
+                        tag_map[t][s.get("domain", "untagged")] += 1
+            patterns = [{"tag": t, "domains": {d: c for d, c in domains.items() if c > 0}, "domain_count": len(domains)}
+                       for t, domains in tag_map.items() if len(domains) > 1]
+            patterns.sort(key=lambda x: x["domain_count"], reverse=True)
+            results["patterns"] = patterns[:8]
+            if patterns:
+                _create_insight_seed(
+                    f"Pattern: \"{patterns[0]['tag']}\" spans {patterns[0]['domain_count']} domains",
+                    f"Found {len(patterns)} cross-domain tag patterns\\n\\n" +
+                    "\\n".join(f"- **{p['tag']}** connects {', '.join(p['domains'].keys())}" for p in patterns[:5]),
+                    "agent-insight, pattern, " + patterns[0]["tag"], tenant_id)
+    
+        # Gap analysis
+        if agent_type in ("all", "gap"):
+            from collections import Counter
+            domain_counts = Counter(s.get("domain", "") for s in seeds if s.get("domain") not in ("", "None", "General", "untagged"))
+            wiki_domains = set((a.get("category", "") or "").lower() for a in wiki)
+            gaps = [{"domain": d, "count": c} for d, c in domain_counts.most_common()
+                    if d.lower() not in wiki_domains and c >= 3]
+            results["gaps"] = gaps[:10]
+            if gaps:
+                _create_insight_seed(f"Gaps: {len(gaps)} domains missing wiki coverage",
+                    f"Found {len(gaps)} domains with seeds but no wiki article:\\n\\n" +
+                    "\\n".join(f"- **{g['domain']}**: {g['count']} seeds" for g in gaps[:10]),
+                    "agent-insight, knowledge-gap", tenant_id)
+        
+        # Trend analysis
+        if agent_type in ("all", "trend"):
+            from collections import Counter
+            all_tags = []
+            for s in seeds:
+                if s.get("tags"):
+                    all_tags.extend(t.strip() for t in s["tags"].split(",") if t.strip() and t.strip().lower() not in ("untitled", "stub"))
+            tag_counts = Counter(all_tags)
+            domain_counts = Counter(s.get("domain", "") for s in seeds)
+            results["top_tags"] = dict(tag_counts.most_common(8))
+            results["top_domains"] = {k: v for k, v in domain_counts.most_common(8) if k}
+            if tag_counts:
+                top = tag_counts.most_common(1)[0]
+                _create_insight_seed(f"Trends: '{top[0]}' is top tag ({top[1]} mentions)",
+                    f"Garden has {len(seeds)} seeds across {len(domain_counts)} domains\\n\\n" +
+                    "Top tags: " + ", ".join(f"{t}({c})" for t, c in tag_counts.most_common(5)),
+                    "agent-insight, trends, analytics", tenant_id)
+        
+        # Quality analysis
+        if agent_type in ("all", "quality"):
+            issues = {"untitled": 0, "no-tags": 0, "low-content": 0, "no-domain": 0}
+            for s in seeds:
+                t = (s.get("title") or "").strip()
+                if t.lower() in ("untitled", ""): issues["untitled"] += 1
+                tags = s.get("tags") or ""
+                if not tags or tags.strip() in ("", "untitled", "stub"): issues["no-tags"] += 1
+                if len((s.get("content") or "").strip()) < 50: issues["low-content"] += 1
+                if not s.get("domain"): issues["no-domain"] += 1
+            total = sum(issues.values())
+            results["quality_issues"] = {k: v for k, v in issues.items() if v > 0}
+            if total > 0:
+                _create_insight_seed(f"Quality: {total} issues across {len(seeds)} seeds",
+                    f"Found {total} quality issues:\\n\\n" +
+                    "\\n".join(f"- **{k.replace('-', ' ').title()}**: {v}" for k, v in results["quality_issues"].items()),
+                    "agent-insight, quality-audit", tenant_id)
+        
+        summary_parts = []
+        if "patterns" in results: summary_parts.append(f"Found {len(results['patterns'])} cross-domain patterns")
+        if "gaps" in results: summary_parts.append(f"Found {len(results['gaps'])} knowledge gaps")
+        if "quality_issues" in results: total_q = sum(results["quality_issues"].values()); summary_parts.append(f"{total_q} quality issues found")
+        
+        return json.dumps({
+            "status": "success",
+            "insights": results,
+            "summary": "; ".join(summary_parts) if summary_parts else "Analysis complete, no significant findings",
+            "saved_as_seeds": True,
+            "message": "Insights saved to your Garden with 'agent-insight' tag"
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+def _create_insight_seed(title, content, tags, tenant_id):
+    """Save insight as a seed"""
+    import urllib.request
+    seed = {
+        "class": "IdeaSeed",
+        "properties": {
+            "title": title, "content": content, "tags": tags,
+            "domain": "agent-insight", "status": "Planted", "tenant_id": tenant_id
+        }
+    }
+    try:
+        req = urllib.request.Request(
+            "http://weaviate:8080/v1/objects",
+            data=json.dumps(seed).encode(),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            pass
+    except:
+        pass
+
+TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
