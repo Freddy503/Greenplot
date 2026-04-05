@@ -320,3 +320,24 @@ TOOLS.append({
         }
     }
 })
+
+# Garden Skimmer / Sub-Agent Analysis
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "garden_skimmer",
+        "description": "Run an autonomous sub-agent analysis of the user's garden. Discovers hidden patterns across domains, identifies knowledge gaps (seeds without wiki coverage), analyzes trends, and audits seed quality. Saves findings as insight seeds. Use when the user asks to analyze, run insights, or discover patterns in the garden.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "agent_type": {
+                    "type": "string",
+                    "description": "Which analysis to run: 'all' for full analysis, 'pattern' for cross-domain patterns, 'gap' for knowledge gaps, 'trend' for distribution analysis, 'quality' for seed health audit.",
+                    "default": "all",
+                    "enum": ["all", "pattern", "gap", "trend", "quality"]
+                }
+            },
+            "required": []
+        }
+    }
+})
