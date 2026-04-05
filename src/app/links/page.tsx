@@ -399,10 +399,10 @@ export default function LinksPage() {
  const starredCount = links.filter(l => l.starred).length
 
  return (
- <div className="h-screen flex flex-col bg-background">
+ <div className="h-dvh flex flex-col bg-background">
  <Header />
 
- <main className="flex-1 overflow-y-auto">
+ <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
  {/* Hero */}
  <section className=" px-2">
   <div className="flex items-center justify-between ">

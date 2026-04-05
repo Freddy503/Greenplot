@@ -183,86 +183,50 @@ body {
   border: 1px solid var(--outline-variant) !important;
 }
 
-/* iOS PWA safe area handling */
-@supports (padding-top: env(safe-area-inset-top)) {
-  :root {
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-  }
+/* ── iOS PWA / safe-area variables ───────────────── */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Header height grows to include the status-bar safe area */
+  --header-height: calc(3.5rem + env(safe-area-inset-top, 0px));
 }
 
-/* Force full height on iOS PWA */
+/* ── Full-screen layout ──────────────────────────── */
+/*
+ * IMPORTANT: html and body must both be exactly 100dvh with NO padding.
+ * Adding padding to html shrinks the content area, which causes h-dvh
+ * children to overflow and be clipped by overflow:hidden — hiding the
+ * chat input bar on iOS. Safe areas are handled at the component level
+ * (header padding-top, bottom-nav padding-bottom) instead.
+ */
 html, body {
-  height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
 @media all and (display-mode: standalone) {
-  html, body {
-    height: 100dvh;
-  }
-}
-
-/* iOS PWA fix: prevent content cutoff */
-@media all and (display-mode: standalone) {
   body {
     overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
   main {
     overscroll-behavior-y: contain;
   }
 }
 
-/* Bottom safe area spacer */
+/* ── Safe-area utility classes ───────────────────── */
 .pb-safe {
   padding-bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
 }
 
-/* Top safe area spacer */
 .pt-safe {
   padding-top: max(4rem, calc(env(safe-area-inset-top, 0px) + 4rem));
 }
 
-/* iOS PWA: ensure content is not hidden under status bar or home indicator */
-@supports (padding-top: env(safe-area-inset-top)) {
-  html {
-    height: 100%;
-    min-height: 100dvh;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    overflow: hidden;
-  }
-  body {
-    height: 100%;
-    min-height: 100dvh;
-    overflow: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
+.safe-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
 }
 
-/* iOS standalone mode: full screen with safe areas */
-@media all and (display-mode: standalone) {
-  html {
-    padding-top: env(safe-area-inset-top, 20px);
-    padding-bottom: env(safe-area-inset-bottom, 20px);
-  }
-}
-
-
-
-/* iOS PWA: Safe area handling for scrollable content */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .safe-top {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-  }
-  .safe-bottom {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-  }
-}
-
-/* Ensure bottom nav sits above safe area */
-@media all and (display-mode: standalone) {
-  .bottom-nav-safe {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-  }
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
 }
