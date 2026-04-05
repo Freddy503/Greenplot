@@ -183,7 +183,7 @@ export default function GardenPage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-20 md:pb-4 max-w-4xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto px-4 pt-14 pb-16 md:pb-4 max-w-4xl mx-auto w-full">
         {/* Hero */}
         <section className="mb-6 px-2">
           <div className="flex items-center justify-between mb-2">
