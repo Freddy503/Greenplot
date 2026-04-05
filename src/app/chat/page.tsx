@@ -450,7 +450,7 @@ export default function ChatPage() {
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto md:pb-8">
+      <main className="flex-1 overflow-y-auto">
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
@@ -692,7 +692,7 @@ export default function ChatPage() {
                           if (!isLastAssistant || !userText || !isReflection(userText)) return null
 
                           return (
-                            <div className="mt-2 pl-2 space-y-3">
+                            <div className="mt-2 pl-2 space-y-2">
                               {!img && (
                                 <CreateImageButton
                                   reflectionText={userText}
@@ -801,7 +801,7 @@ export default function ChatPage() {
 
             {/* Garden sources — compact badge after assistant messages */}
             {!isStreaming && lastGardenSeeds.length > 0 && (
-              <div className="flex items-center gap-2 px-2 mb-3 animate-in fade-in">
+              <div className="flex items-center gap-2 px-2 mb-2 animate-in fade-in">
                 <span className="material-symbols-outlined text-primary/40" >park</span>
                 <span className="text-[10px] text-on-surface-variant/40">
                   Enriched by: {lastGardenSeeds.map(s => s.title).join(', ')}
@@ -855,7 +855,7 @@ export default function ChatPage() {
       </div>
 
       {/* ── Input area ───────────────────────────────── */}
-      <div className="shrink-0 px-4 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40" style={{ paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 4rem))" }}>
+      <div "shrink-0 px-4 pt-2 pb-4 md:pb-2 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40" style={{ paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 4rem))" }}>
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">

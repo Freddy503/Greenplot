@@ -979,7 +979,7 @@ export default function WikiPage() {
  return (
   <div className="h-screen flex flex-col bg-background">
   <Header />
-  <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 md: max-w-7xl mx-auto w-full">
+  <main className="flex-1 overflow-y-auto">
    <ArticleDetail
    article={selectedArticle}
    onBack={() => setSelectedArticle(null)}
@@ -995,7 +995,7 @@ export default function WikiPage() {
  <div className="h-screen flex flex-col bg-background">
   <Header />
 
-  <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 md: max-w-7xl mx-auto w-full">
+  <main className="flex-1 overflow-y-auto">
   {/* Hero */}
   <section className=" px-2">
    <div className="flex items-center justify-between ">
@@ -1070,9 +1070,9 @@ export default function WikiPage() {
    </button>
 
    {healthOpen && (
-    <div className="mt-3 space-y-3 animate-in slide-in-from-top duration-200">
+    <div className="mt-3 space-y-2 animate-in slide-in-from-top duration-200">
     <Card className="bg-surface-container-low border-outline-variant/10">
-     <CardContent className="p-4 space-y-3">
+     <CardContent className="p-4 space-y-2">
      <div>
       <div className="flex justify-between text-xs ">
       <span className="text-on-surface-variant">Enrichment Coverage</span>
@@ -1122,7 +1122,7 @@ export default function WikiPage() {
    </button>
 
    {askOpen && (
-   <div className="mt-3 space-y-3 animate-in slide-in-from-top duration-200">
+   <div className="mt-3 space-y-2 animate-in slide-in-from-top duration-200">
     <div className="flex gap-2">
     <input
      placeholder="What do I know about X?"
@@ -1215,7 +1215,7 @@ export default function WikiPage() {
 
   {/* Articles */}
   {loading ? (
-   <div className="space-y-3">
+   <div className="space-y-2">
    {[1, 2, 3].map(i => (
     <Card key={i} className="bg-surface-container-low border-outline-variant/10">
     <CardContent className="p-4 flex gap-3">
@@ -1248,7 +1248,7 @@ export default function WikiPage() {
    </EmptyContent>
    </Empty>
   ) : (
-   <div className="space-y-3">
+   <div className="space-y-2">
    {filtered.map(article => (
     <WikiCard
     key={article.id}

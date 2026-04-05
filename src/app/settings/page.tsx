@@ -183,7 +183,7 @@ export default function SettingsPage() {
  return (
  <div className="flex flex-col h-screen bg-background">
   <Header />
-  <main className="flex-1 overflow-y-auto px-4 md: max-w-2xl mx-auto w-full">
+  <main className="flex-1 overflow-y-auto">
   <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">
    Settings
   </h1>
@@ -215,7 +215,7 @@ export default function SettingsPage() {
    <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
    Profile
    </h2>
-   <div className="space-y-3">
+   <div className="space-y-2">
    {/* Nickname */}
    <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
     {editingNickname ? (
@@ -292,7 +292,7 @@ export default function SettingsPage() {
    <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
    Notifications
    </h2>
-   <div className="space-y-3">
+   <div className="space-y-2">
    {/* Push toggle */}
    <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
     <div className="flex items-center justify-between ">
@@ -411,7 +411,7 @@ export default function SettingsPage() {
    <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
    Account
    </h2>
-   <div className="space-y-3">
+   <div className="space-y-2">
    {/* Logout */}
    <button
     onClick={handleLogout}

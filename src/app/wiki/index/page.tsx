@@ -86,7 +86,7 @@ export default function WikiIndexPage() {
  return (
   <div className="h-screen flex flex-col bg-background">
   <Header />
-  <main className="flex-1 overflow-y-auto px-3 sm:px-6 md: max-w-6xl mx-auto w-full">
+  <main className="flex-1 overflow-y-auto">
    <div className="h-8 bg-surface-container rounded-xl w-48 animate-pulse" />
    {[1, 2, 3].map(i => (
    <div key={i} className="h-20 bg-surface-container rounded-2xl animate-pulse" />
@@ -100,7 +100,7 @@ export default function WikiIndexPage() {
  return (
  <div className="h-screen flex flex-col bg-background">
   <Header />
-  <main className="flex-1 overflow-y-auto px-3 sm:px-6 md: max-w-6xl mx-auto w-full">
+  <main className="flex-1 overflow-y-auto">
   {/* Hero */}
   <section className="">
    <div className="flex items-center justify-between ">
