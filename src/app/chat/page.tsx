@@ -124,7 +124,7 @@ function ThumbsRating({ messageId }: { messageId: string }) {
       >
         <span
           className={`material-symbols-outlined text-[18px] transition-colors ${rating === 'up' ? 'text-primary' : 'text-on-surface-variant/60'}`}
-          style={{ fontVariationSettings: rating === 'up' ? '"FILL" 1' : '"FILL" 0' }}
+          
         >
           thumb_up
         </span>
@@ -136,7 +136,7 @@ function ThumbsRating({ messageId }: { messageId: string }) {
       >
         <span
           className={`material-symbols-outlined text-[18px] transition-colors ${rating === 'down' ? 'text-error' : 'text-on-surface-variant/60'}`}
-          style={{ fontVariationSettings: rating === 'down' ? '"FILL" 1' : '"FILL" 0' }}
+          
         >
           thumb_down
         </span>
@@ -450,7 +450,7 @@ export default function ChatPage() {
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto pt-16 pb-24 md:pb-8">
+      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
@@ -461,7 +461,7 @@ export default function ChatPage() {
                     <div className="absolute inset-0 rounded-full blur-2xl opacity-30 bg-primary scale-[1.8]" />
                     <span
                       className="material-symbols-outlined relative text-primary"
-                      style={{ fontSize: 56, fontVariationSettings: '"FILL" 1' }}
+                      
                     >
                       forest
                     </span>
@@ -540,7 +540,7 @@ export default function ChatPage() {
                           <span className="text-[10px] text-on-surface-variant/60">{timeStr}</span>
                           <span
                             className="material-symbols-outlined text-primary/60"
-                            style={{ fontSize: '14px' }}
+                            
                           >
                             person
                           </span>
@@ -555,7 +555,7 @@ export default function ChatPage() {
                           >
                             {/* Decorative bg icon */}
                             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none" aria-hidden>
-                              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '64px' }}>
+                              <span className="material-symbols-outlined text-on-surface-variant" >
                                 psychology
                               </span>
                             </div>
@@ -577,7 +577,7 @@ export default function ChatPage() {
                                         <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium select-none text-on-surface-variant/70">
                                           <span
                                             className="material-symbols-outlined text-sm transition-transform group-open:rotate-90 text-on-surface-variant/70"
-                                            style={{ fontVariationSettings: '"FILL" 1', fontSize: '16px' }}
+                                            
                                           >
                                             chevron_right
                                           </span>
@@ -639,7 +639,7 @@ export default function ChatPage() {
                         <div className="flex items-center gap-3 pl-2">
                           <span
                             className="material-symbols-outlined text-on-surface-variant/40"
-                            style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}
+                            
                           >
                             psychology
                           </span>
@@ -671,7 +671,7 @@ export default function ChatPage() {
                               className="p-1 rounded-full hover:bg-primary/10 text-on-surface-variant/40 hover:text-primary transition-colors"
                               title="Save to Garden"
                             >
-                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
+                              <span className="material-symbols-outlined text-sm" >eco</span>
                             </button>
                           )}
                         </div>
@@ -763,7 +763,7 @@ export default function ChatPage() {
             {detectedUrls.length > 0 && !gardenEnriching && (
               <div className="flex justify-center my-3">
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15">
-                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>link</span>
+                  <span className="material-symbols-outlined text-primary" >link</span>
                   <span className="text-[10px] font-bnew uppercase tracking-wide text-primary">
                     {detectedUrls.length === 1 ? 'Link detected — will add to Sources' : `${detectedUrls.length} links detected`}
                   </span>
@@ -775,7 +775,7 @@ export default function ChatPage() {
             {gardenEnriching && (
               <div className="flex justify-center my-4">
                 <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-tertiary-container/10 border border-tertiary-container/20">
-                  <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '16px' }}>
+                  <span className="material-symbols-outlined text-tertiary" >
                     park
                   </span>
                   <span className="text-xs font-semibnew uppercase tracking-wide text-tertiary">
@@ -789,7 +789,7 @@ export default function ChatPage() {
             {isStreaming && !gardenEnriching && (
               <div className="flex justify-center my-4">
                 <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-secondary/10 border border-secondary/20">
-                  <span className="material-symbols-outlined text-secondary" style={{ fontSize: '16px' }}>
+                  <span className="material-symbols-outlined text-secondary" >
                     local_florist
                   </span>
                   <span className="text-xs font-semibnew uppercase tracking-wide text-secondary">
@@ -802,7 +802,7 @@ export default function ChatPage() {
             {/* Garden sources — compact badge after assistant messages */}
             {!isStreaming && lastGardenSeeds.length > 0 && (
               <div className="flex items-center gap-2 px-2 mb-3 animate-in fade-in">
-                <span className="material-symbols-outlined text-primary/40" style={{ fontSize: '12px', fontVariationSettings: '"FILL" 1' }}>park</span>
+                <span className="material-symbols-outlined text-primary/40" >park</span>
                 <span className="text-[10px] text-on-surface-variant/40">
                   Enriched by: {lastGardenSeeds.map(s => s.title).join(', ')}
                 </span>
@@ -855,7 +855,7 @@ export default function ChatPage() {
       </div>
 
       {/* ── Input area ───────────────────────────────── */}
-      <div "shrink-0 px-4 pb-32 md:pb-8 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40" from-background via-background/90 to-transparent relative z-40">
+      <div "shrink-0 px-4 pb-[max(6rem,calc(env(safe-area-inset-bottom,0px)+4rem))] md:pb-8 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40" from-background via-background/90 to-transparent relative z-40">
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">

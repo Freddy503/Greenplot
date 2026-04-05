@@ -86,7 +86,7 @@ export default function WikiIndexPage() {
     return (
       <div className="h-screen flex flex-col bg-background">
         <Header />
-        <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+        <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
           <div className="h-8 bg-surface-container rounded-xl w-48 mb-4 animate-pulse" />
           {[1, 2, 3].map(i => (
             <div key={i} className="h-20 bg-surface-container rounded-2xl mb-3 animate-pulse" />
@@ -100,7 +100,7 @@ export default function WikiIndexPage() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <Header />
-      <main className="flex-1 overflow-y-auto px-4 pt-16 pb-24 md:pb-8">
+      <main className="flex-1 overflow-y-auto pt-24 pb-40 md:pb-8">
         {/* Hero */}
         <section className="mb-6">
           <div className="flex items-center justify-between mb-1">
@@ -118,15 +118,15 @@ export default function WikiIndexPage() {
         {/* Stats */}
         <div className="flex items-center gap-3 mb-5">
           <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/60">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>auto_stories</span>
+            <span className="material-symbols-outlined text-sm" >auto_stories</span>
             {articles.length} articles
           </div>
           <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/60">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>folder</span>
+            <span className="material-symbols-outlined text-sm" >folder</span>
             {categoryCount} categories
           </div>
           <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/60">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>link</span>
+            <span className="material-symbols-outlined text-sm" >link</span>
             {totalBacklinks} connections
           </div>
         </div>
@@ -183,7 +183,7 @@ export default function WikiIndexPage() {
                   </div>
                 ) : (
                   <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${colors} flex items-center justify-center`}>
-                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>{icon}</span>
+                    <span className="material-symbols-outlined text-lg" >{icon}</span>
                   </div>
                 )}
                 
