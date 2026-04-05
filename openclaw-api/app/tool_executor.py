@@ -1209,56 +1209,94 @@ TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
 
 
 async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
-    """Auto-compile a wiki article for a specific domain that has seeds but no wiki"""
-    from app.weaviate_client import weaviate_client
+    """Auto-compile a wiki article using full LLM synthesis + BFL image pipeline"""
+    from app.wiki import synthesize_with_llm, WIKI_SYSTEM_PROMPT, build_wiki_user_prompt
+    from app.ingest import generate_concept_image
+    import asyncio, re, urllib.request
     
     # Get seeds for this domain
     seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
     domain_seeds = [s for s in seeds if (s.get("domain") or "").lower() == domain.lower()]
     
     if not domain_seeds:
-        return
+        return None
     
-    # Get links for this domain  
+    # Get links for this domain
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
     domain_links = [l for l in links if (l.get("domain") or "").lower() == domain.lower()]
     
-    # Build article content
-    article_content = f"# {domain.title()} — Insights\n\n"
-    article_content += f"Auto-comp from {len(domain_seeds)} seeds and {len(domain_links)} links.\n\n"
+    # Prepare content for LLM synthesis
+    links_data = [{"title": l.get("title",""), "url": l.get("url",""), 
+                   "summary": l.get("summary",""), "domain": l.get("domain",""),
+                   "tags": l.get("tags","")} for l in domain_links[:8]]
+    seeds_data = [{"title": s.get("title",""), "content": (s.get("content") or "")[:400],
+                   "tags": s.get("tags","")} for s in domain_seeds[:10]]
     
-    article_content += "## Key Seeds\n\n"
-    for i, s in enumerate(domain_seeds[:8], 1):
-        title = (s.get("title") or "").strip()
-        content = (s.get("content") or "")[:200]
-        article_content += f"### {i}. {title}\n{content}\n\n"
+    links_content, seeds_content = "", ""
+    for l in links_data:
+        links_content += f"## {l['title']}\nURL: {l['url']}\nSummary: {l['summary']}\n\n"
+    for s in seeds_data:
+        seeds_content += f"## {s['title']}\nContent: {s['content']}\n\n"
     
-    if domain_links:
-        article_content += "\n## Related Sources\n\n"
-        for i, l in enumerate(domain_links[:5], 1):
-            title = l.get("title", "")
-            summary = l.get("summary", "")[:150]
-            article_content += f"{i}. [{title}]({l.get('url', '')})\n"
-            if summary:
-                article_content += f"   {summary}\n\n"
+    title = f"{domain.title()} — Key Insights"
+    user_prompt = build_wiki_user_prompt(title, domain, links_content, seeds_content)
+    article_content = await synthesize_with_llm(WIKI_SYSTEM_PROMPT, user_prompt)
     
-    # Create wiki article using client method
+    if not article_content:
+        # Fallback content
+        article_content = f"# {title}\n\n"
+        article_content += f"**{domain.title()}** encompasses {len(domain_seeds)} ideas and {len(domain_links)} sources.\n\n"
+        for i, s in enumerate(domain_seeds[:5], 1):
+            article_content += f"### {i}. {s.get('title','')}\n{(s.get('content') or '')[:200]}\n\n"
+    
+    # Save seed and link IDs
     seed_ids = ",".join(s.get('id', '') for s in domain_seeds[:10] if s.get('id'))
     link_ids = ",".join(l.get('id', '') for l in domain_links[:5] if l.get('id'))
     
-    article_id = weaviate_client.add_wiki_article(
-        tenant_id=tenant_id,
-        user_id=user_id,
-        title=f"{domain.title()} — Insights",
-        category=domain,
-        summary=f"Auto-compiled: {len(domain_seeds)} seeds, {len(domain_links)} sources",
-        content=article_content,
-        source_seed_ids=seed_ids,
-        source_link_ids=link_ids,
-        status="published",
-    )
-    
-    return {"domain": domain, "article_id": article_id, "seeds": len(domain_seeds), "links": len(domain_links)}
+    try:
+        article_id = weaviate_client.add_wiki_article(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            title=title,
+            category=domain,
+            summary=f"LLM-synthesized article from {len(domain_seeds)} seeds and {len(domain_links)} sources",
+            content=article_content,
+            source_seed_ids=seed_ids,
+            source_link_ids=link_ids,
+            status="published",
+        )
+        
+        # Generate BFL hero image
+        try:
+            await asyncio.sleep(1)  # Small delay
+            image_url = await generate_concept_image(title, [domain])
+            if image_url:
+                # Download and save locally
+                safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title)[:35]
+                filename = f'{safe_title}_{article_id[:8]}.jpeg'
+                local_path = f'/app/public/wiki-images/{filename}'
+                req = urllib.request.Request(image_url)
+                req.add_header('User-Agent', 'Mozilla/5.0')
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    img_data = r.read()
+                import os
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                with open(local_path, 'wb') as f:
+                    f.write(img_data)
+                permanent_url = f"https://api.greenplot.ink/api/v1/wiki/images/{filename}"
+                weaviate_client.client.data_object.update(
+                    data_object={"imageUrl": permanent_url},
+                    class_name="WikiArticle",
+                    uuid=article_id,
+                )
+        except Exception as e:
+            pass  # Image gen is optional
+        
+        return {"article_id": article_id, "title": title, "seeds": len(domain_seeds), 
+                "links": len(domain_links), "image_generated": True}
+    except Exception as e:
+        return None
+
 
 async def wiki_lint(args: dict, user: User, db: Session) -> str:
     """Run wiki lint analysis — check stale content, orphans, gaps. Auto-creates articles for gaps."""
