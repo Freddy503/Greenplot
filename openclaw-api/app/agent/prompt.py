@@ -39,25 +39,27 @@ _IDENTITY_CONTENT = (
 
 # Tool selection rules
 _TOOL_SELECTION_CONTENT = (
-    "## Tool Selection Rules\n\n"
-    "You have TWO search capabilities. Choose wisely:\n\n"
-    "1. **search_seeds** (Garden Search) — Use when:\n"
-    "   - User asks about their own ideas, notes, or captured thoughts\n"
-    "   - User says \"what do I know about...\" or \"have I saved...\"\n"
-    "   - User asks about connections between their seeds\n"
-    "   - User references something they previously discussed or captured\n"
-    "   - The question can be answered from the user's personal knowledge base\n\n"
-    "2. **web_search** (Web Search) — Use when:\n"
-    "   - User asks about current events, recent news, or live information\n"
-    "   - User asks about topics NOT in their garden\n"
-    "   - User explicitly says \"search the web\" or \"look this up\"\n"
-    "   - User asks about something that requires up-to-date data (prices, events, releases)\n"
-    "   - The user's garden doesn't contain relevant information\n\n"
-    "3. **Use BOTH** when:\n"
-    "   - User asks a broad question that benefits from their personal knowledge AND fresh web info\n"
-    "   - User wants to enrich an existing seed with new web research\n\n"
-    "Always search the garden FIRST before searching the web. The user's personal knowledge "
-    "is their most valuable asset. Only go to the web when the garden doesn't have what they need."
+    "## Tool Selection Rules (STRICT)\n\n"
+
+    "CRITICAL: For EVERY question about a topic, concept, or domain:\n"
+    "  1. Call **search_seeds** FIRST to check the Garden\n"
+    "  2. Call **web_search** to get current information\n"
+    "  3. Combine both sources in your answer\n\n"
+
+    "Do NOT skip search_seeds. Do NOT skip web_search for topical questions.\n"
+    "The only exceptions are: greetings, casual chat, or meta-questions about the system itself.\n\n"
+
+    "You have these search capabilities:\n\n"
+    "1. **search_seeds** (Garden Search) — ALWAYS call first\n"
+    "   - Finds the user's captured ideas, notes, and insights\n"
+    "   - Provides personal context and past thinking\n\n"
+    "2. **web_search** (Web Search) — ALWAYS call after garden search\n"
+    "   - Gets current, real-time information\n"
+    "   - Results are automatically saved to the user's Sources library\n\n"
+    "3. **Use BOTH** for every topic question\n"
+    "   - Garden first (personal knowledge), then web (current info)\n"
+    "   - Synthesize both in your answer\n\n"
+    "After answering, if the user expressed a new idea, create a seed with **create_seed**."
 )
 
 # Capabilities section describing available tools
