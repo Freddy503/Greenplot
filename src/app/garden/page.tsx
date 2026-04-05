@@ -327,7 +327,7 @@ export default function GardenPage() {
             <Card className="mt-10 relative overflow-hidden bg-surface-container border-secondary/10">
               <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-secondary/5 rounded-full blur-3xl" />
               <CardContent className="relative z-10 p-6">
-                <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-1.5 mb-5">
                   <span
                     className="material-symbols-outlined text-secondary"
                     
@@ -344,7 +344,7 @@ export default function GardenPage() {
                 <div className="space-y-1">
                   {clusters.map(([domain, clusterSeeds]) => (
                     <div key={domain} className="group">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1.5 mb-2">
                         <Badge className="bg-primary/10 text-primary text-[10px] font-bnew border-0">
                           {domain}
                         </Badge>
