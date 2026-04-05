@@ -182,3 +182,23 @@ body {
   color: #141413 !important;
   border: 1px solid var(--outline-variant) !important;
 }
+
+/* iOS PWA safe area handling */
+@supports (padding-top: env(safe-area-inset-top)) {
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Force full height on iOS PWA */
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+@media all and (display-mode: standalone) {
+  html, body {
+    height: 100dvh;
+  }
+}
