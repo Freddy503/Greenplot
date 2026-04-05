@@ -1211,7 +1211,6 @@ TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
 async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
     """Auto-compile a wiki article for a specific domain that has seeds but no wiki"""
     from app.weaviate_client import weaviate_client
-    from app.wiki import compile_wiki_article
     
     # Get seeds for this domain
     seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
@@ -1243,29 +1242,23 @@ async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
             if summary:
                 article_content += f"   {summary}\n\n"
     
-    # Create wiki article directly in Weaviate
-    import urllib.request
-    import json
-    wiki_article = {
-        "class": "WikiArticle",
-        "properties": {
-            "title": f"{domain.title()} — Insights",
-            "content": article_content,
-            "category": domain,
-            "summary": f"{len(domain_seeds)} seeds, {len(domain_links)} links about {domain}",
-            "source_seed_ids": ",".join(s.get('id', '') for s in domain_seeds[:8] if s.get('id')),
-            "source_link_ids": ",".join(l.get('id', '') for l in domain_links[:5] if l.get('id')),
-            "status": "published"
-        }
-    }
+    # Create wiki article using client method
+    seed_ids = ",".join(s.get('id', '') for s in domain_seeds[:10] if s.get('id'))
+    link_ids = ",".join(l.get('id', '') for l in domain_links[:5] if l.get('id'))
     
-    req = urllib.request.Request(
-        "http://weaviate:8080/v1/objects",
-        data=json.dumps(wiki_article).encode(),
-        headers={"Content-Type": "application/json"}
+    article_id = weaviate_client.add_wiki_article(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        title=f"{domain.title()} — Insights",
+        category=domain,
+        summary=f"Auto-compiled: {len(domain_seeds)} seeds, {len(domain_links)} sources",
+        content=article_content,
+        source_seed_ids=seed_ids,
+        source_link_ids=link_ids,
+        status="published",
     )
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read())
+    
+    return {"domain": domain, "article_id": article_id, "seeds": len(domain_seeds), "links": len(domain_links)}
 
 async def wiki_lint(args: dict, user: User, db: Session) -> str:
     """Run wiki lint analysis — check stale content, orphans, gaps. Auto-creates articles for gaps."""
@@ -1280,7 +1273,6 @@ async def wiki_lint(args: dict, user: User, db: Session) -> str:
     # Auto-compile wiki articles for top knowledge gaps
     auto_created = []
     for gap in results["knowledge_gaps"][:2]:  # Top 2 gaps
-        report_lines.append(f"Auto-created wiki for: {gap['domain']} ({gap['seed_count']} seeds)")
         # Use the existing wiki compile endpoint
         try:
             await auto_compile_for_domain(gap["domain"], tenant_id, user_id)
