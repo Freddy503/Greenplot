@@ -452,34 +452,6 @@ export default function ChatPage() {
       <main className="pt-16 flex-1 min-h-0 overflow-hidden">
         <Conversation className="h-full">
           <ConversationContent>
-            {/* Always show suggestions at top, regardless of messages */}
-            <div className="max-w-2xl mx-auto w-full px-2 mb-4">
-              <Suggestions>
-                {dynamicSuggestions.map((s) => (
-                  <Suggestion
-                    key={s}
-                    suggestion={s}
-                    onClick={handleSuggestion}
-                    className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
-                  />
-                ))}
-              </Suggestions>
-            </div>
-
-            {/* Suggestions always visible */}
-            <div className="max-w-2xl mx-auto w-full px-2 mb-3">
-              <Suggestions>
-                {dynamicSuggestions.map((s) => (
-                  <Suggestion
-                    key={s}
-                    suggestion={s}
-                    onClick={handleSuggestion}
-                    className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
-                  />
-                ))}
-              </Suggestions>
-            </div>
-
             {messages.length === 0 ? (
               <ConversationEmptyState>
                 <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto">
@@ -862,9 +834,24 @@ export default function ChatPage() {
               </>
             )}
           </ConversationContent>
+
           <ConversationScrollButton />
         </Conversation>
       </main>
+
+      {/* ── Suggestions below messages ─────────────── */}
+      <div className="max-w-2xl mx-auto w-full px-4 pb-1">
+        <Suggestions>
+          {dynamicSuggestions.map((s) => (
+            <Suggestion
+              key={s}
+              suggestion={s}
+              onClick={handleSuggestion}
+              className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
+            />
+          ))}
+        </Suggestions>
+      </div>
 
       {/* ── Input area ───────────────────────────────── */}
       <div className="shrink-0 px-4 pb-28 md:pb-8 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative">
