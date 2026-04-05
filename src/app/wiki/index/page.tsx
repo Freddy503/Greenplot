@@ -84,9 +84,9 @@ export default function WikiIndexPage() {
 
  if (loading) {
  return (
- <div className="h-screen flex flex-col bg-background">
+ <div className="h-dvh flex flex-col bg-background">
  <Header />
- <main className="flex-1 overflow-y-auto">
+ <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
   <div className="h-8 bg-surface-container rounded-xl w-48 animate-pulse" />
   {[1, 2, 3].map(i => (
   <div key={i} className="h-20 bg-surface-container rounded-2xl animate-pulse" />
@@ -98,9 +98,9 @@ export default function WikiIndexPage() {
  }
 
  return (
- <div className="h-screen flex flex-col bg-background">
+ <div className="h-dvh flex flex-col bg-background">
  <Header />
- <main className="flex-1 overflow-y-auto">
+ <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
  {/* Hero */}
  <section className="">
   <div className="flex items-center justify-between ">

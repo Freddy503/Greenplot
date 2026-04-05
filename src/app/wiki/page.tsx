@@ -977,9 +977,9 @@ export default function WikiPage() {
  // Selected article detail
  if (selectedArticle) {
  return (
- <div className="h-screen flex flex-col bg-background">
+ <div className="h-dvh flex flex-col bg-background">
  <Header />
- <main className="flex-1 overflow-y-auto">
+ <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
   <ArticleDetail
   article={selectedArticle}
   onBack={() => setSelectedArticle(null)}

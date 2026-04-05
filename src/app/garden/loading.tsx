@@ -6,7 +6,7 @@ export default function GardenLoading() {
   return (
     <div className="flex flex-col h-dvh bg-background">
       <Header />
-      <main className="pt-14 pb-20 px-4 flex-1 min-h-0 overflow-auto">
+      <main className="pb-20 px-4 flex-1 min-h-0 overflow-auto" style={{ paddingTop: 'var(--header-height)' }}>
         <div className="max-w-4xl mx-auto">
           {/* Title skeleton */}
           <div className="py-6 space-y-2">

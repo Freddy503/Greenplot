@@ -181,9 +181,9 @@ export default function SettingsPage() {
  }
 
  return (
- <div className="flex flex-col h-screen bg-background">
+ <div className="flex flex-col h-dvh bg-background">
  <Header />
- <main className="flex-1 overflow-y-auto">
+ <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
  <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">
   Settings
  </h1>
