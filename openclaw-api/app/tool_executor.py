@@ -1206,3 +1206,20 @@ def _create_insight_seed(title, content, tags, tenant_id):
         pass
 
 TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
+
+async def wiki_lint(args: dict, user: User, db: Session) -> str:
+    """Run wiki lint analysis — check stale content, orphans, gaps"""
+    from app.wiki_lint import lint_articles, generate_lint_report
+    tenant_id = str(user.tenant_id)
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+    results = lint_articles(articles, seeds)
+    report = generate_lint_report(results)
+    return json.dumps({"status": "success", "total_issues": results["total_issues"],
+                       "stale": len(results["stale_articles"]),
+                       "orphans": len(results["orphan_articles"]),
+                       "gaps": len(results["knowledge_gaps"]),
+                       "quality_issues": len(results["quality_issues"]),
+                       "report_preview": report[:500]})
+
+TOOL_HANDLERS["wiki_lint"] = wiki_lint

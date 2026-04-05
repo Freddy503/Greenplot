@@ -18,6 +18,7 @@ import {
 
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+import { WikiLintPanel } from '@/components/wiki/wiki-lint-panel'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -1108,6 +1109,11 @@ export default function WikiPage() {
             )}
           </div>
         )}
+
+        {/* Wiki Lint */}
+        <div className="mb-5">
+          <WikiLintPanel />
+        </div>
 
         {/* Ask Garden */}
         <div className="mb-5">
