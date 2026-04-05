@@ -1207,19 +1207,94 @@ def _create_insight_seed(title, content, tags, tenant_id):
 
 TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
 
+
+async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
+    """Auto-compile a wiki article for a specific domain that has seeds but no wiki"""
+    from app.weaviate_client import weaviate_client
+    from app.wiki import compile_wiki_article
+    
+    # Get seeds for this domain
+    seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+    domain_seeds = [s for s in seeds if (s.get("domain") or "").lower() == domain.lower()]
+    
+    if not domain_seeds:
+        return
+    
+    # Get links for this domain  
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
+    domain_links = [l for l in links if (l.get("domain") or "").lower() == domain.lower()]
+    
+    # Build article content
+    article_content = f"# {domain.title()} — Insights\n\n"
+    article_content += f"Auto-comp from {len(domain_seeds)} seeds and {len(domain_links)} links.\n\n"
+    
+    article_content += "## Key Seeds\n\n"
+    for i, s in enumerate(domain_seeds[:8], 1):
+        title = (s.get("title") or "").strip()
+        content = (s.get("content") or "")[:200]
+        article_content += f"### {i}. {title}\n{content}\n\n"
+    
+    if domain_links:
+        article_content += "\n## Related Sources\n\n"
+        for i, l in enumerate(domain_links[:5], 1):
+            title = l.get("title", "")
+            summary = l.get("summary", "")[:150]
+            article_content += f"{i}. [{title}]({l.get('url', '')})\n"
+            if summary:
+                article_content += f"   {summary}\n\n"
+    
+    # Create wiki article directly in Weaviate
+    import urllib.request
+    import json
+    wiki_article = {
+        "class": "WikiArticle",
+        "properties": {
+            "title": f"{domain.title()} — Insights",
+            "content": article_content,
+            "category": domain,
+            "summary": f"{len(domain_seeds)} seeds, {len(domain_links)} links about {domain}",
+            "source_seed_ids": ",".join(s.get('id', '') for s in domain_seeds[:8] if s.get('id')),
+            "source_link_ids": ",".join(l.get('id', '') for l in domain_links[:5] if l.get('id')),
+            "status": "published"
+        }
+    }
+    
+    req = urllib.request.Request(
+        "http://weaviate:8080/v1/objects",
+        data=json.dumps(wiki_article).encode(),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
+
 async def wiki_lint(args: dict, user: User, db: Session) -> str:
-    """Run wiki lint analysis — check stale content, orphans, gaps"""
+    """Run wiki lint analysis — check stale content, orphans, gaps. Auto-creates articles for gaps."""
     from app.wiki_lint import lint_articles, generate_lint_report
     tenant_id = str(user.tenant_id)
+    user_id = str(user.id)
     articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
     seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
     results = lint_articles(articles, seeds)
     report = generate_lint_report(results)
+    
+    # Auto-compile wiki articles for top knowledge gaps
+    auto_created = []
+    for gap in results["knowledge_gaps"][:2]:  # Top 2 gaps
+        report_lines.append(f"Auto-created wiki for: {gap['domain']} ({gap['seed_count']} seeds)")
+        # Use the existing wiki compile endpoint
+        try:
+            await auto_compile_for_domain(gap["domain"], tenant_id, user_id)
+            auto_created.append(gap["domain"])
+        except:
+            pass
+    
     return json.dumps({"status": "success", "total_issues": results["total_issues"],
                        "stale": len(results["stale_articles"]),
                        "orphans": len(results["orphan_articles"]),
                        "gaps": len(results["knowledge_gaps"]),
+                       "gap_details": results["knowledge_gaps"],
                        "quality_issues": len(results["quality_issues"]),
+                       "auto_created_articles": auto_created,
                        "report_preview": report[:500]})
 
 TOOL_HANDLERS["wiki_lint"] = wiki_lint
