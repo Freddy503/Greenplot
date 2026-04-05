@@ -2,6 +2,8 @@
 
 Your AI-powered second brain. Capture ideas through chat, voice, or notes — enriched with web research, your personal memory, semantic connections, and a living wiki.
 
+> **Vision:** The Greenplot architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
+
 ## Architecture
 
 ```
@@ -314,10 +316,14 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 | Morning Idea Spark | 8:30 AM CET | Creative prompt from latest seed |
 | Daily Reflection | 4:00 PM CET | Reflection prompt + push notification |
 | Voice → Seeds | Every 30 min | Process voice memo transcriptions |
+| Weekly Garden Digest | Sunday 10 AM CET | Research top themes, external Exa search, synthesize digest article |
+| Wiki Auto-Compile | Every 30 min | Compile new seeds/links into wiki articles (BFL images auto-generated) |
+| Auto-seed Enrichment | Every 30 min | Enrich new seeds with tags, entities, connections |
 | Backup | 2:00 AM UTC | Weaviate + Notion backup |
 | Seed Extraction | 11:00 PM UTC | Extract seeds from daily conversations |
 | Pending Link Enrichment | 7AM/7PM CET | Enrich unprocessed source links |
 | Weekly Content Eval | Sunday 6PM | Review rated seeds, adjust enrichment |
+| FDE Interview Prep | Bi-weekly 9AM CET | Generate personalized interview prep challenges |
 
 ## Tech Stack
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK, D3.js
@@ -329,12 +335,13 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 - **Infra:** Docker Compose, Vercel Pro, OpenClaw (agent orchestration)
 
 ## Design System
-- Primary: `#69f6b8` | Background: `#01120b`
-- Font: Plus Jakarta Sans (headings) + Be Vietnam Pro (body)
-- All pill-shaped (border-radius: 9999px)
-- Glass-morphism headers, gradient CTAs, dark green theme
+- **Colors:** Warm off-white `#fafaf8` background, green `#16a34a` primary, gold `#d97706` secondary, white cards with subtle borders
+- **Font:** Plus Jakarta Sans (headings) + Be Vietnam Pro (body)
+- **Corners:** rounded-2xl (1rem) for cards, rounded-full (9999px) for pills/badges
+- **Shadows:** soft green glow on focus, subtle elevation on hover
+- **Dark mode:** opt-in toggle via `.dark` class
 
 ## Status
-🟢 **Working:** Chat (14 tools), Garden + Intelligence + Decay, Sources + Bridge, Wiki (auto-compile, BFL images, D3 maps), Web Push notifications, Enrichment worker, Redis queue/cache, Activity feed, Activity Summary on login, Knowledge graph, Visit tracking, Image generation, Calendar integration, Profile API
-🟡 **Partial:** Enrichment fields (5/230+ seeds enriched — pipeline re-run pending), Push notifications (requires browser permission grant in Settings)
-🔴 **Pending:** App Store (Capacitor), Figma MCP, mobile PWA polish, "New sources" UI badge
+🟢 **Working:** Chat (14 tools), Garden + Intelligence + Decay, Sources + Bridge, Wiki (auto-compile, BFL images, D3 maps), Web Push notifications, Enrichment worker, Redis queue/cache, Activity feed, Activity Summary on login, Knowledge graph, Visit tracking, Image generation, Calendar integration, Profile API, D3 concept maps, Buy Me A Coffee integration
+🟡 **Partial:** Enrichment fields (5/230+ seeds enriched — pipeline re-run pending), Push notifications (requires home-screen install on iOS Safari)
+🔴 **Pending:** App Store (Capacitor), Figma MCP, Wiki Index page, Wiki Lint, Incremental per-source updates, "New sources" UI badge
