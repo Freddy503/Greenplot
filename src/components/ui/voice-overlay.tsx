@@ -140,7 +140,7 @@ export function VoiceOverlay({
         >
           {/* Ambient glow */}
           <motion.div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
             aria-hidden
           >
             <motion.div
@@ -241,7 +241,7 @@ export function VoiceOverlay({
                     {[0, 0.6].map((delay, i) => (
                       <motion.div
                         key={i}
-                        className="absolute inset-0 rounded-full border-2 border-primary/25"
+                        className="absolute inset-0 rounded-full border-2 border-primary/25 pointer-events-none"
                         initial={{ scale: 1, opacity: 0.5 }}
                         animate={{ scale: 1.9, opacity: 0 }}
                         exit={{ opacity: 0 }}
