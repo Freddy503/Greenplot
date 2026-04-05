@@ -248,3 +248,21 @@ html, body {
   }
 }
 
+
+
+/* iOS PWA: Safe area handling for scrollable content */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-top {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  }
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+}
+
+/* Ensure bottom nav sits above safe area */
+@media all and (display-mode: standalone) {
+  .bottom-nav-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  }
+}

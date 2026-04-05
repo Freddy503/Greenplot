@@ -450,7 +450,7 @@ export default function ChatPage() {
       <Header />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="flex-1 min-h-0 overflow-hidden pt-8">
+      <main className="flex-1 overflow-y-auto pt-24 md:pt-20">
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
@@ -855,7 +855,7 @@ export default function ChatPage() {
       </div>
 
       {/* ── Input area ───────────────────────────────── */}
-      <div className="shrink-0 px-4 pb-32 md:pb-8 pt-10 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40">
+      <div className="shrink-0 px-4 pt-10 pb-40 md:pb-8 bg-gradient-to-t from-background via-background/90 to-transparent relative z-40">
         {/* Recording indicator */}
         {voiceState === 'recording' && (
           <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-error/10 text-error text-xs font-semibnew px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
