@@ -183,7 +183,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col min-h-dvh bg-background">
       <Header />
-      <main className="pt-20 pb-32 md:pb-8 px-4 max-w-2xl mx-auto w-full">
+      <main className="pt-24 pb-40 md:pb-16 px-4 max-w-2xl mx-auto w-full">
         <h1 className="text-3xl font-extrabold tracking-tight mb-6 text-on-surface">
           Settings
         </h1>
