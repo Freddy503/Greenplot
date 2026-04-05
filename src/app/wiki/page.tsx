@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import * as d3 from 'd3'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -465,9 +467,13 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
       <Infobox data={parsed.infobox || {}} article={article} />
 
       {/* Lead section */}
-      {parsed.lead.map((line, i) => (
-        <p key={i} className="text-sm text-on-surface-variant leading-relaxed mb-2">{line}</p>
-      ))}
+      {parsed.lead.length > 0 && (
+        <div className="mb-4">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {parsed.lead.join('\n\n')}
+          </ReactMarkdown>
+        </div>
+      )}
 
       <div className="clear-both" />
 
@@ -489,43 +495,25 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
         </div>
       )}
 
-      {/* Sections */}
+      {/* Sections — rendered with react-markdown for tables, code blocks, etc. */}
       {parsed.sections.map((section) => (
-        <section key={section.id} id={section.id} className="mb-6 scroll-mt-24">
+        <section key={section.id} id={section.id} className="mb-8 scroll-mt-24">
           <h2 className="text-lg font-extrabold text-on-surface mt-6 mb-3 pb-1 border-b border-outline-variant/10">
             {section.title}
           </h2>
-          {section.content.map((line, i) => {
-            if (line.startsWith('### ')) {
-              return (
-                <h3 key={i} className="text-base font-bold text-on-surface mt-4 mb-2">
-                  {line.slice(4)}
-                </h3>
-              )
-            }
-            if (line.startsWith('- ')) {
-              return (
-                <li key={i} className="text-sm text-on-surface-variant ml-4 mb-1 list-disc">
-                  {renderInlineFormatting(line.slice(2))}
-                </li>
-              )
-            }
-            if (line.match(/^\d+\./)) {
-              return (
-                <li key={i} className="text-sm text-on-surface-variant ml-4 mb-1 list-decimal">
-                  {renderInlineFormatting(line.slice(line.indexOf('.') + 1).trim())}
-                </li>
-              )
-            }
-            if (line.trim()) {
-              return (
-                <p key={i} className="text-sm text-on-surface-variant leading-relaxed mb-2">
-                  {renderInlineFormatting(line)}
-                </p>
-              )
-            }
-            return null
-          })}
+          <div className="prose-sm prose-invert prose max-w-none
+            prose-table:my-4 prose-table:border-collapse prose-table:w-full
+            prose-thead:bg-surface-container-high prose-thead:text-on-surface
+            prose-th:py-2 prose-th:px-3 prose-th:text-left prose-th:font-bold prose-th:whitespace-nowrap
+            prose-td:py-2 prose-td:px-3 prose-td:border prose-td:border-border/20
+            prose-tr:even:bg-surface-container-low/50
+            prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+            prose-code:bg-surface-container prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+            prose-blockquote:border-l-primary prose-blockquote:text-on-surface-variant">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {section.content.join('\n')}
+            </ReactMarkdown>
+          </div>
         </section>
       ))}
 
