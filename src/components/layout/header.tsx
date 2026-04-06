@@ -14,7 +14,7 @@ const tabs = [
   { href: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
-export default function Header() {
+export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname()
   const [nickname, setNickname] = useState('')
 
@@ -30,13 +30,23 @@ export default function Header() {
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       <div className="flex items-center justify-between px-4 md:px-6 h-14 max-w-7xl mx-auto">
-        {/* Logo */}
+        {/* Logo / hamburger */}
         <div className="flex items-center gap-3">
-          <Avatar className="w-9 h-9 bg-primary shadow-sm">
-            <AvatarFallback className="bg-primary text-background font-bold text-sm">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
+          {onMenuClick ? (
+            <button
+              onClick={onMenuClick}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-primary"
+              aria-label="Open chat history"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>menu</span>
+            </button>
+          ) : (
+            <Avatar className="w-9 h-9 bg-primary shadow-sm">
+              <AvatarFallback className="bg-primary text-background font-bold text-sm">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+          )}
           <div>
             <h1 className="text-lg font-bold text-on-surface leading-tight">Greenplot</h1>
             <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Living Laboratory</p>

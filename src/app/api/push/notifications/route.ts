@@ -12,10 +12,12 @@ const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 // In-memory fallback (fast, but lost on restart)
 let cached: Array<{ title: string; body: string; url: string; timestamp: number }> = []
 
-export async function GET() {
+export async function GET(req: Request) {
+  const authHeader = req.headers.get('authorization') || ''
   try {
     // Also fetch from backend persistent store
     const res = await fetch(`${BACKEND}/api/v1/push/notifications`, {
+      headers: authHeader ? { Authorization: authHeader } : {},
       signal: AbortSignal.timeout(3000),
     })
     if (res.ok) {
@@ -40,10 +42,11 @@ export async function GET() {
       // Clear in-memory after returning
       cached = []
 
-      // Mark backend notifications as read
+      // Mark backend notifications as read (forward auth so backend knows which user)
       try {
         await fetch(`${BACKEND}/api/v1/push/mark-read`, {
           method: 'POST',
+          headers: authHeader ? { Authorization: authHeader } : {},
           signal: AbortSignal.timeout(2000),
         })
       } catch {}

@@ -158,6 +158,8 @@ export default function ChatPage() {
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
   // Prevent double-firing the push notification prompt
   const [pushPromptHandled, setPushPromptHandled] = useState(false)
+  // Voice transcript queue — holds text if chat is streaming when transcription completes
+  const pendingTranscriptRef = useRef<string | null>(null)
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [conversations, setConversations] = useState<ConversationMeta[]>([])
@@ -197,6 +199,12 @@ export default function ChatPage() {
     experimental_throttle: 50,
     onError: (err) => {
       console.error('[chat] useChat error:', err)
+      const msg = String(err)
+      if (msg.includes('401') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('not authenticated')) {
+        toast.error('Session expired — please log in again', {
+          action: { label: 'Log in', onClick: () => { window.location.href = '/login' } },
+        })
+      }
     },
   })
 
@@ -468,6 +476,7 @@ export default function ChatPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ query: text, user_id: token || 'default' }),
         }).then(r => r.ok ? r.json() : null),
@@ -557,10 +566,26 @@ export default function ChatPage() {
       if (status === 'ready') {
         const enrichedText = await enrichWithGarden(`🎙️ Voice memo: ${text}`)
         sendMessage({ text: enrichedText })
+      } else {
+        // Chat is streaming — queue the transcript; it will be drained when ready
+        pendingTranscriptRef.current = text
+        toast('🎙️ Voice memo queued — will send when response finishes')
       }
     },
     [status, sendMessage, enrichWithGarden]
   )
+
+  // Drain pending voice transcript as soon as chat becomes ready
+  useEffect(() => {
+    if (status !== 'ready') return
+    const queued = pendingTranscriptRef.current
+    if (!queued) return
+    pendingTranscriptRef.current = null
+    enrichWithGarden(`🎙️ Voice memo: ${queued}`).then(enriched => {
+      sendMessage({ text: enriched })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
 
   const handleVoiceError = useCallback((msg: string) => {
     toast.error(`🎙️ ${msg}`)
@@ -583,17 +608,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-dvh bg-background">
-      <Header />
-
-      {/* ── Hamburger button (chat page only) ────────────── */}
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="fixed top-0 left-0 z-[60] flex items-center justify-center w-14 h-14 text-on-surface-variant hover:text-primary transition-colors"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-        aria-label="Open chat history"
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>menu</span>
-      </button>
+      <Header onMenuClick={() => setSidebarOpen(true)} />
 
       {/* ── Conversation Sidebar ─────────────────────────── */}
       <ConversationSidebar
