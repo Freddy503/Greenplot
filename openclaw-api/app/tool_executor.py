@@ -93,6 +93,25 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
         except Exception as e:
             logger.warning(f"Weaviate indexing failed for seed {seed.id}: {e}")
 
+        # Enqueue enrichment via Redis so domain/tags/summary/energy get populated
+        try:
+            from app.task_broker import enqueue_enrichment
+            # Create a synthetic Thought so the enricher worker can process it
+            from app.models import Thought
+            thought = Thought(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                content=f"{title}\n\n{content}",
+                source='chat',
+                status='pending',
+            )
+            db.add(thought)
+            db.commit()
+            db.refresh(thought)
+            enqueue_enrichment(str(thought.id), str(user.tenant_id))
+        except Exception as e:
+            logger.warning(f"Enrichment queue failed for seed '{title}': {e}")
+
         return json.dumps({
             "status": "ok",
             "seed_id": str(seed.id),
@@ -1368,69 +1387,71 @@ TOOL_HANDLERS["wiki_lint"] = wiki_lint
 
 # ── Wiki Search ──────────────────────────────────────────────
 async def search_wiki(args: dict, user: User, db: Session) -> str:
-    """Search wiki markdown files for relevant knowledge."""
-    import os, json, re, logging
-    logging.getLogger(__name__).info(f"[search_wiki] Called with args: {args}")
-
-    wiki_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'wiki')
-    wiki_dir = os.path.normpath(wiki_dir)
-    index_file = os.path.join(wiki_dir, 'index.json')
-
-    logging.getLogger(__name__).info(f"[search_wiki] wiki_dir={wiki_dir}, index_exists={os.path.exists(index_file)}")
+    """Search wiki articles via Weaviate vector search (semantic similarity)."""
+    import json, logging
+    log = logging.getLogger(__name__)
+    log.info(f"[search_wiki] Called with args: {args}")
 
     query = args.get('query', '')
     limit = args.get('limit', 3)
 
-    if not os.path.exists(index_file):
-        logging.getLogger(__name__).warning(f"[search_wiki] index.json NOT FOUND at {index_file}")
-        return json.dumps({'status': 'error', 'message': 'Wiki index not found. Run sync_wiki_markdown.py first.'})
+    if not query.strip():
+        return json.dumps({'status': 'error', 'message': 'Query is required.'})
+
+    tenant_id = str(user.tenant_id)
 
     try:
-        with open(index_file, 'r') as f:
-            index = json.load(f)
-    except:
-        return json.dumps({'status': 'error', 'message': 'Failed to read wiki index.'})
+        # Primary: vector search over WikiArticle class
+        from app.enricher import embed_text
+        embedding = embed_text(query)
+        articles = weaviate_client.search_wiki_articles(
+            tenant_id=tenant_id,
+            embedding=embedding,
+            limit=limit,
+        )
+        if articles:
+            results = []
+            for a in articles:
+                results.append({
+                    'title': a.get('title', ''),
+                    'summary': a.get('summary', ''),
+                    'content': (a.get('content') or '')[:3000],
+                    'category': a.get('category', ''),
+                    'score': round(a.get('_additional', {}).get('certainty', 0.5), 3),
+                })
+            log.info(f"[search_wiki] Weaviate returned {len(results)} results")
+            return json.dumps({'status': 'ok', 'results': results, 'count': len(results)})
+    except Exception as e:
+        log.warning(f"[search_wiki] Weaviate vector search failed: {e}, falling back to keyword search")
 
-    query_lower = query.lower()
-    query_terms = [w for w in re.split(r'\W+', query_lower) if len(w) > 2]
+    # Fallback: keyword search over WikiArticle title+summary from Weaviate
+    try:
+        import re
+        all_articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=50)
+        if not all_articles:
+            return json.dumps({'status': 'empty', 'message': 'No wiki articles found.'})
 
-    results = []
-    for entry in index:
-        title = entry.get('title', '')
-        summary = entry.get('summary', '')
-        filename = entry.get('filename', '')
-
-        # Read article content for deeper search
-        content = ''
-        filepath = os.path.join(wiki_dir, filename)
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
-            # Strip frontmatter
-            if content.startswith('---'):
-                parts = content.split('---', 2)
-                content = parts[2] if len(parts) > 2 else content
-
-        # Search title + summary + first 500 chars of content
-        content_preview = content[:500].lower()
-        text_to_search = f"{title} {summary} {content_preview}".lower()
-        matches = sum(1 for t in query_terms if t in text_to_search)
-        score = matches / len(query_terms) if query_terms else 0
-
-        if score > 0:
-            results.append({
-                'title': title,
-                'summary': summary,
-                'content': content[:3000],
-                'filename': filename,
-                'score': round(score, 3),
-            })
-
-    results.sort(key=lambda x: x['score'], reverse=True)
-    return json.dumps({
-        'status': 'ok',
-        'results': results[:limit],
-        'count': len(results[:limit]),
-    })
+        query_terms = [w for w in re.split(r'\W+', query.lower()) if len(w) > 2]
+        results = []
+        for a in all_articles:
+            title = a.get('title', '')
+            summary = a.get('summary', '')
+            content_preview = (a.get('content') or '')[:500]
+            text = f"{title} {summary} {content_preview}".lower()
+            matches = sum(1 for t in query_terms if t in text)
+            score = matches / len(query_terms) if query_terms else 0
+            if score > 0:
+                results.append({
+                    'title': title,
+                    'summary': summary,
+                    'content': (a.get('content') or '')[:3000],
+                    'category': a.get('category', ''),
+                    'score': round(score, 3),
+                })
+        results.sort(key=lambda x: x['score'], reverse=True)
+        log.info(f"[search_wiki] Keyword fallback returned {len(results[:limit])} results")
+        return json.dumps({'status': 'ok', 'results': results[:limit], 'count': len(results[:limit])})
+    except Exception as e:
+        return json.dumps({'status': 'error', 'message': str(e)})
 
 TOOL_HANDLERS["search_wiki"] = search_wiki
