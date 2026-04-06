@@ -31,6 +31,7 @@ import { AddToGardenButton } from '@/components/ai-elements/add-to-garden-button
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { ActivitySummary } from '@/components/activity-summary'
+import { ConversationSidebar, type ConversationMeta } from '@/components/ai-elements/conversation-sidebar'
 
 // AI Elements
 import {
@@ -157,6 +158,10 @@ export default function ChatPage() {
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
   // Prevent double-firing the push notification prompt
   const [pushPromptHandled, setPushPromptHandled] = useState(false)
+  // Sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [conversations, setConversations] = useState<ConversationMeta[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string>('')
 
   useEffect(() => {
     try {
@@ -195,26 +200,87 @@ export default function ChatPage() {
     },
   })
 
+  // ── Conversation helpers ──────────────────────────────
+  const genId = () => `conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+  const loadConvMessages = (id: string) => {
+    try {
+      const raw = localStorage.getItem(`greenplot_conv_${id}`)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) return parsed
+      }
+    } catch {}
+    return []
+  }
+
+  const saveConvMessages = (id: string, msgs: any[]) => {
+    try {
+      localStorage.setItem(`greenplot_conv_${id}`, JSON.stringify(msgs.slice(-50)))
+    } catch {}
+  }
+
+  const saveConvIndex = (convs: ConversationMeta[]) => {
+    try {
+      localStorage.setItem('greenplot_conversations', JSON.stringify(convs))
+    } catch {}
+  }
+
   // Restore messages from localStorage — survives refresh, logout, tab close
   const [restored, setRestored] = useState(false)
   useEffect(() => {
     if (restored) return
     setRestored(true)
-    // Only restore if the chat is currently empty
-    if (messages.length > 0) return
     try {
-      const saved = localStorage.getItem('greenplot_chat_messages')
-      if (saved) {
-        const parsed = JSON.parse(saved)
+      // Load conversations index
+      const indexRaw = localStorage.getItem('greenplot_conversations')
+      let convs: ConversationMeta[] = []
+      let activeId = ''
+
+      if (indexRaw) {
+        const parsed = JSON.parse(indexRaw)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed)
+          convs = parsed
+          activeId = localStorage.getItem('greenplot_active_conv') || parsed[0].id
         }
+      }
+
+      // Migrate from old single-conversation storage
+      if (convs.length === 0) {
+        const legacy = localStorage.getItem('greenplot_chat_messages')
+        const legacyId = genId()
+        const legacyMsgs = legacy ? (() => { try { return JSON.parse(legacy) } catch { return [] } })() : []
+        if (legacyMsgs.length > 0) {
+          const firstUserMsg = legacyMsgs.find((m: any) => m.role === 'user')
+          const title = firstUserMsg?.parts?.[0]?.text?.slice(0, 40) || 'Previous chat'
+          convs = [{ id: legacyId, title, updatedAt: new Date().toISOString() }]
+          saveConvMessages(legacyId, legacyMsgs)
+        }
+        activeId = legacyId
+      }
+
+      // Ensure there's always at least one conversation
+      if (convs.length === 0) {
+        const newId = genId()
+        convs = [{ id: newId, title: 'New chat', updatedAt: new Date().toISOString() }]
+        activeId = newId
+      }
+
+      setConversations(convs)
+      setActiveConversationId(activeId)
+      saveConvIndex(convs)
+      localStorage.setItem('greenplot_active_conv', activeId)
+
+      // Load messages for active conversation
+      const msgs = loadConvMessages(activeId)
+      if (msgs.length > 0) {
+        setMessages(msgs)
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
 
-  // Auto-submit prompt from push notification click (?prompt=...)
+  // Auto-submit prompt from push notification click (?prompt=...) — initial page load
   useEffect(() => {
     if (pushPromptHandled || !restored) return
     if (typeof window === 'undefined') return
@@ -224,16 +290,46 @@ export default function ChatPage() {
     // Clear the query param immediately so refresh doesn't re-fire it
     window.history.replaceState({}, '', '/chat')
     setPushPromptHandled(true)
-    // Small delay to let the chat be fully ready before submitting
-    const t = setTimeout(async () => {
+    // Wait up to 3s for the chat to become ready before submitting
+    let attempts = 0
+    const trySubmit = setInterval(async () => {
+      attempts++
       if (status === 'ready') {
+        clearInterval(trySubmit)
         const enrichedText = await enrichWithGarden(pushPrompt)
         sendMessage({ text: enrichedText })
+      } else if (attempts >= 15) {
+        clearInterval(trySubmit)
       }
-    }, 600)
-    return () => clearTimeout(t)
+    }, 200)
+    return () => clearInterval(trySubmit)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, pushPromptHandled])
+
+  // Handle PUSH_PROMPT messages from service worker (app already open)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const handler = async (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_PROMPT' && event.data?.prompt) {
+        const prompt = event.data.prompt as string
+        // Wait for ready state
+        let attempts = 0
+        const trySubmit = setInterval(async () => {
+          attempts++
+          if (status === 'ready') {
+            clearInterval(trySubmit)
+            const enrichedText = await enrichWithGarden(prompt)
+            sendMessage({ text: enrichedText })
+          } else if (attempts >= 15) {
+            clearInterval(trySubmit)
+          }
+        }, 200)
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', handler)
+    return () => navigator.serviceWorker.removeEventListener('message', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
 
   // Poll for push notifications every 60 seconds
   useEffect(() => {
@@ -242,23 +338,46 @@ export default function ChatPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Persist messages to localStorage whenever they change
+  // Persist messages to the active conversation whenever they change
   useEffect(() => {
-    if (!restored) return
+    if (!restored || !activeConversationId) return
     if (messages.length > 0) {
-      try {
-        // Cap at 50 messages to prevent localStorage quota exceeded
-        const toStore = messages.slice(-50)
-        localStorage.setItem('greenplot_chat_messages', JSON.stringify(toStore))
-      } catch {
-        // If still too large, try clearing old data
-        try {
-          localStorage.removeItem('greenplot_chat_messages')
-          localStorage.setItem('greenplot_chat_messages', JSON.stringify(messages.slice(-20)))
-        } catch {}
-      }
+      saveConvMessages(activeConversationId, messages)
+      // Update conversation title from first user message and bump updatedAt
+      const firstUser = messages.find(m => m.role === 'user')
+      const title = (firstUser?.parts?.find((p: any) => p.type === 'text') as any)?.text?.slice(0, 40) || 'New chat'
+      setConversations(prev => {
+        const updated = prev.map(c =>
+          c.id === activeConversationId ? { ...c, title, updatedAt: new Date().toISOString() } : c
+        )
+        saveConvIndex(updated)
+        return updated
+      })
     }
-  }, [messages, restored])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, restored, activeConversationId])
+
+  // ── Conversation management ───────────────────────
+  const handleNewChat = () => {
+    const newId = genId()
+    const newConv: ConversationMeta = { id: newId, title: 'New chat', updatedAt: new Date().toISOString() }
+    setConversations(prev => {
+      const updated = [newConv, ...prev]
+      saveConvIndex(updated)
+      return updated
+    })
+    setActiveConversationId(newId)
+    localStorage.setItem('greenplot_active_conv', newId)
+    setMessages([])
+  }
+
+  const handleSelectConversation = (id: string) => {
+    if (id === activeConversationId) return
+    setActiveConversationId(id)
+    localStorage.setItem('greenplot_active_conv', id)
+    const msgs = loadConvMessages(id)
+    setMessages(msgs)
+  }
 
   // ── Garden Enrichment ──────────────────────────────
   // API decides intelligently whether to enrich based on:
@@ -465,6 +584,26 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-dvh bg-background">
       <Header />
+
+      {/* ── Hamburger button (chat page only) ────────────── */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-0 left-0 z-[60] flex items-center justify-center w-14 h-14 text-on-surface-variant hover:text-primary transition-colors"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        aria-label="Open chat history"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>menu</span>
+      </button>
+
+      {/* ── Conversation Sidebar ─────────────────────────── */}
+      <ConversationSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        conversations={conversations}
+        activeId={activeConversationId}
+        onSelect={handleSelectConversation}
+        onNewChat={handleNewChat}
+      />
 
       {/* ── Messages ─────────────────────────────────────── */}
       <main className="flex-1 min-h-0 overflow-hidden" style={{ paddingTop: 'var(--header-height)' }}>
