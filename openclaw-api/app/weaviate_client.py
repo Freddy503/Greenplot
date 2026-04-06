@@ -456,6 +456,22 @@ class WeaviateClient:
 
         return articles
 
+    def search_wiki_articles(self, tenant_id: str, embedding: list, limit: int = 3) -> list[dict]:
+        """Vector search over WikiArticle class using a pre-computed embedding."""
+        try:
+            result = (
+                self.client.query
+                .get("WikiArticle", ["title", "category", "summary", "content"])
+                .with_near_vector({"vector": embedding, "certainty": 0.6})
+                .with_where({"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id})
+                .with_additional(["certainty", "id"])
+                .with_limit(limit)
+                .do()
+            )
+            return result.get("data", {}).get("Get", {}).get("WikiArticle", []) or []
+        except Exception:
+            return []
+
     def update_wiki_article(self, article_id: str, **kwargs) -> bool:
         try:
             self.client.data_object.update(

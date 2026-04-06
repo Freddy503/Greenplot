@@ -28,6 +28,7 @@ services:
     - .:/app
     - /root/.openclaw/workspace/public/wiki-images:/app/public/wiki-images
     - /root/.openclaw/workspace:/workspace
+    - /root/.openclaw/wiki:/app/../wiki
   db:
     container_name: openclaw-db
     environment:

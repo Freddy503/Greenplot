@@ -2815,6 +2815,81 @@ def _sto<RESEND_API_KEY>(title: str, body: str, url: str):
         logger.error(f"❌ Scheduled push failed: {e}")
 
 
+def _job_enrich_pending_seeds():
+    """Enrich pending seeds — runs every 30 minutes. Processes up to 5 seeds per run."""
+    try:
+        from app.database import get_db
+        from app.models import User, Thought
+        from app.task_broker import enqueue_enrichment
+        db = next(get_db())
+        # Find pending thoughts (seeds waiting for enrichment)
+        pending = db.query(Thought).filter(
+            Thought.status.in_(['pending', 'error'])
+        ).order_by(Thought.created_at.asc()).limit(5).all()
+        queued = 0
+        for t in pending:
+            try:
+                enqueue_enrichment(str(t.id), str(t.tenant_id))
+                queued += 1
+            except Exception:
+                pass
+        db.close()
+        if queued:
+            logger.info(f"⚙️ Enrichment job: queued {queued} pending seeds")
+    except Exception as e:
+        logger.error(f"❌ Enrichment job failed: {e}")
+
+
+def _job_wiki_compile():
+    """Compile wiki articles from enriched seeds — runs every 6 hours."""
+    try:
+        import asyncio
+        from collections import Counter
+        from app.database import get_db
+        from app.models import User
+        from app.tool_executor import auto_compile_for_domain
+
+        db = next(get_db())
+        user = db.query(User).filter(User.email == "contact@example.com").first()
+        if not user:
+            user = db.query(User).first()
+        if not user:
+            db.close()
+            return
+        tenant_id = str(user.tenant_id)
+        user_id = str(user.id)
+        db.close()
+
+        async def _run():
+            from app.wiki_pipeline import regenerate_all_backlinks
+            articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+            seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+            domain_counts = Counter(
+                s.get('domain', '') for s in seeds
+                if s.get('domain') not in ('', 'None', 'General', 'untagged', 'agent-insight', None)
+            )
+            wiki_domains = set((a.get('category', '') or '').lower() for a in articles)
+            gaps = [
+                {'domain': d, 'count': c} for d, c in domain_counts.most_common()
+                if d.lower() not in wiki_domains and c >= 3
+            ]
+            compiled = 0
+            for gap in gaps[:3]:
+                try:
+                    result = await auto_compile_for_domain(gap['domain'], tenant_id, user_id)
+                    if result:
+                        compiled += 1
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
+            backlinks = await regenerate_all_backlinks(tenant_id)
+            logger.info(f"📚 Wiki compile: {compiled} new articles, {backlinks} backlinks updated")
+
+        asyncio.run(_run())
+    except Exception as e:
+        logger.error(f"❌ Wiki compile job failed: {e}")
+
+
 def _start_scheduler():
     scheduler = BackgroundScheduler(timezone=_CET)
 
@@ -2846,9 +2921,23 @@ def _start_scheduler():
         id="weekly_digest",
         replace_existing=True,
     )
+    # Seed enrichment — every 30 minutes
+    scheduler.add_job(
+        _job_enrich_pending_seeds,
+        CronTrigger(minute="*/30", timezone=_CET),
+        id="enrich_seeds",
+        replace_existing=True,
+    )
+    # Wiki compilation — every 6 hours
+    scheduler.add_job(
+        _job_wiki_compile,
+        CronTrigger(hour="*/6", minute=5, timezone=_CET),
+        id="wiki_compile",
+        replace_existing=True,
+    )
 
     scheduler.start()
-    logger.info("✅ APScheduler started — morning spark 08:30, briefing 08:31, reflection 16:00, weekly digest Sun 10:00 CET")
+    logger.info("✅ APScheduler started — spark 08:30, briefing 08:31, reflection 16:00, weekly Sun 10:00, enrich */30min, wiki compile */6h CET")
     return scheduler
 
 
