@@ -32,6 +32,7 @@ import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { ActivitySummary } from '@/components/activity-summary'
 import { ConversationSidebar, type ConversationMeta } from '@/components/ai-elements/conversation-sidebar'
+import { SparkCard, type SparkNotification } from '@/components/ai-elements/spark-card'
 
 // AI Elements
 import {
@@ -164,6 +165,8 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [conversations, setConversations] = useState<ConversationMeta[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string>('')
+  // SparkCard — shown when a push notification is clicked
+  const [sparkNotification, setSparkNotification] = useState<SparkNotification | null>(null)
 
   const fetchSuggestions = useCallback((token: string) => {
     fetch('/api/garden/prompt-suggestions', {
@@ -290,56 +293,39 @@ export default function ChatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
 
-  // Auto-submit prompt from push notification click (?prompt=...) — initial page load
+  // Show SparkCard from push notification click (?spark_prompt=...) — initial page load
   useEffect(() => {
     if (pushPromptHandled || !restored) return
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    const pushPrompt = params.get('prompt')
-    if (!pushPrompt) return
-    // Clear the query param immediately so refresh doesn't re-fire it
+    const sparkPrompt = params.get('spark_prompt')
+    if (!sparkPrompt) return
+    // Clear the query params immediately so refresh doesn't re-fire
     window.history.replaceState({}, '', '/chat')
     setPushPromptHandled(true)
-    // Wait up to 3s for the chat to become ready before submitting
-    let attempts = 0
-    const trySubmit = setInterval(async () => {
-      attempts++
-      if (status === 'ready') {
-        clearInterval(trySubmit)
-        const enrichedText = await enrichWithGarden(pushPrompt)
-        sendMessage({ text: enrichedText })
-      } else if (attempts >= 15) {
-        clearInterval(trySubmit)
-      }
-    }, 200)
-    return () => clearInterval(trySubmit)
+    setSparkNotification({
+      title: params.get('spark_title') || 'Morning Spark',
+      body: params.get('spark_body') || sparkPrompt,
+      prompt: sparkPrompt,
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, pushPromptHandled])
 
-  // Handle PUSH_PROMPT messages from service worker (app already open)
+  // Handle PUSH_SPARK messages from service worker (app already open)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
-    const handler = async (event: MessageEvent) => {
-      if (event.data?.type === 'PUSH_PROMPT' && event.data?.prompt) {
-        const prompt = event.data.prompt as string
-        // Wait for ready state
-        let attempts = 0
-        const trySubmit = setInterval(async () => {
-          attempts++
-          if (status === 'ready') {
-            clearInterval(trySubmit)
-            const enrichedText = await enrichWithGarden(prompt)
-            sendMessage({ text: enrichedText })
-          } else if (attempts >= 15) {
-            clearInterval(trySubmit)
-          }
-        }, 200)
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_SPARK') {
+        setSparkNotification({
+          title: event.data.title || 'Morning Spark',
+          body: event.data.body || event.data.prompt || '',
+          prompt: event.data.prompt || '',
+        })
       }
     }
     navigator.serviceWorker.addEventListener('message', handler)
     return () => navigator.serviceWorker.removeEventListener('message', handler)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
+  }, [])
 
   // Poll for push notifications every 60 seconds
   useEffect(() => {
@@ -396,6 +382,18 @@ export default function ChatPage() {
   // API decides intelligently whether to enrich based on:
   // 1. Intent classification (is this a substantive question?)
   // 2. Relevance gate (do garden results actually match?)
+
+  // ── SparkCard handler ─────────────────────────────
+  const handleSparkChat = useCallback((content: string) => {
+    setSparkNotification(null)
+    // Inject the pre-generated spark as an assistant message — instant, no AI wait
+    setMessages([{
+      id: genId(),
+      role: 'assistant' as const,
+      parts: [{ type: 'text' as const, text: content }],
+      createdAt: new Date(),
+    }] as any)
+  }, [setMessages])
 
   const enrichWithGarden = useCallback(async (text: string): Promise<string> => {
     try {
@@ -1069,6 +1067,16 @@ export default function ChatPage() {
       </div>
 
       <BottomNav />
+
+      {/* ── Spark Card — shown when push notification is clicked ── */}
+      {sparkNotification && (
+        <SparkCard
+          notification={sparkNotification}
+          onChatAboutThis={handleSparkChat}
+          onDismiss={() => setSparkNotification(null)}
+          token={authToken}
+        />
+      )}
 
       {/* ── Voice overlay (Siri-style) ────────────────── */}
       <VoiceOverlay
