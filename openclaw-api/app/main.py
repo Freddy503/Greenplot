@@ -2264,7 +2264,7 @@ def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
         logger.error(f"❌ Web Push error: {e}")
         return "error"
 
-def _broadcast_push(title: str, body: str, url: str = "/chat"):
+def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = ""):
     """Send Web Push to all active subscriptions for all tenants."""
     if not VAPID_PRIVATE_KEY:
         logger.warning("⚠️ No VAPID key, skipping Web Push broadcast")
@@ -2275,7 +2275,7 @@ def _broadcast_push(title: str, body: str, url: str = "/chat"):
         logger.info("📭 No push subscriptions registered")
         return 0
 
-    payload = json.dumps({"title": title, "body": body or "", "url": url})
+    payload = json.dumps({"title": title, "body": body or "", "url": url, "prompt": prompt})
     sent = 0
     expired = []
 
@@ -2307,6 +2307,7 @@ class PushNotificationRequest(BaseModel):
     title: str
     body: Optional[str] = None
     url: Optional[str] = "/chat"
+    prompt: Optional[str] = None
 
 @app.post("/api/v1/push/send")
 def send_push_notification(req: PushNotificationRequest):
@@ -2317,13 +2318,14 @@ def send_push_notification(req: PushNotificationRequest):
         "title": req.title,
         "body": req.body or "",
         "url": req.url or "/chat",
+        "prompt": req.prompt or "",
         "timestamp": datetime.utcnow().isoformat(),
         "read": False,
     })
     _save_notifs(notifs)
 
     # 2. Send real Web Push (works even when PWA is closed)
-    push_sent = _broadcast_push(req.title, req.body or "", req.url or "/chat")
+    push_sent = _broadcast_push(req.title, req.body or "", req.url or "/chat", prompt=req.prompt or "")
 
     # 3. Also forward to Next.js frontend (best-effort, for in-app polling)
     try:
@@ -2768,52 +2770,145 @@ _MORNING_SPARKS = [
     "What if the problem isn't complexity — it's clarity?",
 ]
 
+def _fetch_weather(city: str) -> str:
+    """Fetch one-line weather summary from wttr.in. Returns empty string on failure."""
+    try:
+        r = httpx.get(f"https://wttr.in/{city}?format=3", timeout=5)
+        if r.status_code == 200:
+            return r.text.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _get_user_city() -> str:
+    """Get city from the primary user account."""
+    try:
+        db = next(get_db())
+        user = db.query(User).filter(User.email == "contact@example.com").first()
+        city = (user.city or "Munich") if user else "Munich"
+        db.close()
+        return city
+    except Exception:
+        return "Munich"
+
+
 def _job_morning_spark():
-    """Daily 'What if' prompt — 08:30 CET."""
+    """Daily 'What if' prompt — 08:30 CET. Includes weather + structured garden prompt."""
     spark = random.choice(_MORNING_SPARKS)
-    _sto<RESEND_API_KEY>("🌱 Morning Spark", spark, "/chat")
+    city = _get_user_city()
+    weather = _fetch_weather(city)
+
+    weather_ctx = f" Current weather in {city}: {weather}." if weather else ""
+    notification_body = weather if weather else spark[:100]
+
+    prompt = (
+        f"🌱 Morning Spark!{weather_ctx}\n\n"
+        f"Today's spark: **{spark}**\n\n"
+        f"Please search my garden for seeds related to this spark, then help me explore it deeply. "
+        f"What patterns do you see? What should I think about or experiment with today?"
+    )
+
+    _sto<RESEND_API_KEY>("🌱 Morning Spark", notification_body, "/chat", prompt=prompt)
+
 
 def _job_daily_briefing():
-    """Daily briefing nudge — 08:30 CET (staggered 1 min after spark)."""
-    _sto<RESEND_API_KEY>(
-        "📋 Daily Briefing Ready",
-        "Your garden digest, today's focus, and latest seeds are ready. Ask me anything.",
-        "/chat",
+    """Daily briefing — 08:31 CET. Opens chat with a structured briefing prompt."""
+    city = _get_user_city()
+    weather = _fetch_weather(city)
+
+    weather_line = f"\n🌤️ {weather}" if weather else ""
+
+    prompt = (
+        f"☀️ Daily Briefing time!{weather_line}\n\n"
+        f"Please give me a structured daily briefing:\n"
+        f"1. **Garden Focus** — Search my seeds and highlight my top 2-3 active interests\n"
+        f"2. **AI & Tech News** — Web search for today's most relevant Agentic AI and Enterprise AI news\n"
+        f"3. **Academic Spotlight** — One research direction worth knowing about\n"
+        f"4. **Today's Focus** — Based on my garden, suggest my #1 priority to explore today\n\n"
+        f"Keep each section concise. Use headers and bullet points."
     )
+
+    body = f"Your briefing is ready.{' ' + weather if weather else ''}"
+    _sto<RESEND_API_KEY>("☀️ Daily Briefing Ready", body, "/chat", prompt=prompt)
+
 
 def _job_afternoon_reflection():
     """Afternoon reflection prompt — 16:00 CET."""
+    prompt = (
+        "🌿 Afternoon Reflection\n\n"
+        "Help me capture what I learned today:\n"
+        "1. Search my recent seeds for anything I added today\n"
+        "2. Ask me: What's one insight from today worth planting permanently?\n"
+        "3. If I share an insight, help me formulate it as a well-structured seed.\n\n"
+        "Start by asking: What was the most interesting thing you encountered today?"
+    )
     _sto<RESEND_API_KEY>(
         "🌿 Afternoon Reflection",
         "What's one insight from today worth planting in your garden?",
         "/chat",
+        prompt=prompt,
     )
+
 
 def _job_weekly_digest():
     """Weekly garden digest — Sunday 10:00 CET."""
+    prompt = (
+        "📚 Weekly Garden Digest\n\n"
+        "Search my garden and give me a weekly summary:\n"
+        "1. **This week's seeds** — What new ideas did I capture?\n"
+        "2. **Top domains** — Which topics are growing most?\n"
+        "3. **Connections** — Any surprising links between seeds?\n"
+        "4. **To enrich** — Which seeds are still raw and worth expanding?\n\n"
+        "Make it feel like a garden walk — what's growing, what needs tending?"
+    )
     _sto<RESEND_API_KEY>(
         "📚 Weekly Garden Digest",
-        "Your weekly knowledge summary is ready. See what grew, what decayed, and what's ready to harvest.",
-        "/garden",
+        "Your weekly knowledge summary is ready. Let's review what grew.",
+        "/chat",
+        prompt=prompt,
     )
+
 
 def _job_weekly_eval():
     """Weekly content evaluation — Sundays 18:00 CET."""
+    prompt = (
+        "📊 Weekly Content Eval\n\n"
+        "Review my garden for this week's patterns:\n"
+        "1. Search seeds rated highly — what made them valuable?\n"
+        "2. Identify any recurring themes across seeds this week\n"
+        "3. Suggest 2-3 seeds ready to be compiled into a wiki article\n"
+        "4. Flag any outdated or contradictory ideas worth revisiting\n\n"
+        "Be analytical. I want to improve the quality of what I capture."
+    )
     _sto<RESEND_API_KEY>(
         "📊 Weekly Content Eval",
-        "Time to review your rated seeds. What patterns emerged this week? Which ideas are ready to harvest?",
-        "/garden",
+        "Time to review your rated seeds and find this week's patterns.",
+        "/chat",
+        prompt=prompt,
     )
+
 
 def _job_biweekly_challenge():
     """Biweekly cross-pollination challenge — 1st and 15th at 10:00 CET."""
+    prompt = (
+        "🎯 Biweekly Cross-Pollination Challenge\n\n"
+        "Search my garden across ALL domains and find two unrelated seeds that could combine "
+        "into a new idea I haven't thought of yet.\n\n"
+        "Then:\n"
+        "1. Present the two seeds and explain the unexpected connection\n"
+        "2. Propose a 'What if...' question that bridges them\n"
+        "3. Suggest one concrete experiment I could run in the next 2 weeks\n\n"
+        "Make it bold. The best cross-pollination surprises me."
+    )
     _sto<RESEND_API_KEY>(
         "🎯 Biweekly Challenge",
-        "Cross-pollination time: connect two unrelated seeds into one new idea. What knowledge gaps can you bridge?",
+        "Cross-pollination time: connect two unrelated seeds into something new.",
         "/chat",
+        prompt=prompt,
     )
 
-def _sto<RESEND_API_KEY>(title: str, body: str, url: str):
+def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
     """Persist notification + push to all subscribers."""
     try:
         notifs = _load_notifs()
@@ -2821,11 +2916,12 @@ def _sto<RESEND_API_KEY>(title: str, body: str, url: str):
             "title": title,
             "body": body,
             "url": url,
+            "prompt": prompt,
             "timestamp": datetime.utcnow().isoformat(),
             "read": False,
         })
         _save_notifs(notifs)
-        sent = _broadcast_push(title, body, url)
+        sent = _broadcast_push(title, body, url, prompt=prompt)
         logger.info(f"🔔 Scheduled push '{title}' — delivered to {sent} subscribers")
     except Exception as e:
         logger.error(f"❌ Scheduled push failed: {e}")

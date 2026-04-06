@@ -22,7 +22,8 @@ self.addEventListener('push', (event) => {
       body: data.body || 'You have a new notification',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      data: data.url || '/',
+      // Store both url and prompt so the click handler can open /chat?prompt=...
+      data: { url: data.url || '/chat', prompt: data.prompt || '' },
       actions: data.actions || [],
       tag: data.tag || 'greenplot-notification',
       renotify: true,
@@ -35,6 +36,7 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification('Greenplot', {
         body: event.data.text(),
         icon: '/icon-192.png',
+        data: { url: '/chat', prompt: '' },
       })
     )
   }
@@ -44,18 +46,31 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const url = event.notification.data || '/'
+  const data = event.notification.data || {}
+  const prompt = typeof data === 'object' ? (data.prompt || '') : ''
+  const baseUrl = typeof data === 'object' ? (data.url || '/chat') : (data || '/chat')
+
+  // If a structured prompt is attached, open /chat?prompt=<encoded>
+  const targetUrl = prompt
+    ? `/chat?prompt=${encodeURIComponent(prompt)}`
+    : baseUrl
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if open
+      // Focus existing window if already open on /chat
       for (const client of clientList) {
-        if (client.url.includes(url) && 'focus' in client) {
+        if (client.url.includes('/chat') && 'focus' in client) {
+          client.focus()
+          // Navigate to the prompt URL if we have one
+          if (prompt && 'navigate' in client) {
+            return client.navigate(targetUrl)
+          }
           return client.focus()
         }
       }
       // Open new window
       if (clients.openWindow) {
-        return clients.openWindow(url)
+        return clients.openWindow(targetUrl)
       }
     })
   )

@@ -140,7 +140,23 @@ export function usePushNotifications() {
     }
   }, [status])
 
-  return { status, subscription, requestPermission, isIOS, isStandalone }
+  const unsubscribe = useCallback(async (): Promise<boolean> => {
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await sub.unsubscribe()
+      }
+      setSubscription(null)
+      setStatus('default')
+      return true
+    } catch (err) {
+      console.error('[push] Unsubscribe failed:', err)
+      return false
+    }
+  }, [])
+
+  return { status, subscription, requestPermission, unsubscribe, isIOS, isStandalone }
 }
 
 // Poll for queued notifications (called from service worker or app)

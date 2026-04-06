@@ -131,7 +131,7 @@ export default function SettingsPage() {
  }
 
  // ── Push notifications (via hook) ──────────
- const { status: pushStatus, requestPermission } = usePushNotifications()
+ const { status: pushStatus, requestPermission, unsubscribe } = usePushNotifications()
  const notificationsEnabled = pushStatus === 'subscribed' || pushStatus === 'granted'
 
  const handleToggleNotifications = async (enabled: boolean) => {
@@ -143,7 +143,8 @@ export default function SettingsPage() {
  toast.error('Could not enable notifications. Check browser permissions.')
  }
  } else {
- toast.info('Notifications disabled. Re-enable from browser settings if needed.')
+ await unsubscribe()
+ toast.success('Notifications disabled')
  }
  }
 
