@@ -651,7 +651,7 @@ def process_entry(entry):
         'seed_title': synthesis['seed_title'],
         'seed_url': seed_url,
         'seeds_entry': entry['title'],
-        'seeds_url': entry['url'],
+        'seeds_url': entry.get('url', entry.get('notion_url', '')),
         'tier': tier,
         'web_sources': len(web_results),
         'garden_connections': len(garden_connections),
