@@ -1369,16 +1369,20 @@ TOOL_HANDLERS["wiki_lint"] = wiki_lint
 # ── Wiki Search ──────────────────────────────────────────────
 async def search_wiki(args: dict, user: User, db: Session) -> str:
     """Search wiki markdown files for relevant knowledge."""
-    import os, json, re
+    import os, json, re, logging
+    logging.getLogger(__name__).info(f"[search_wiki] Called with args: {args}")
 
     wiki_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'wiki')
     wiki_dir = os.path.normpath(wiki_dir)
     index_file = os.path.join(wiki_dir, 'index.json')
 
+    logging.getLogger(__name__).info(f"[search_wiki] wiki_dir={wiki_dir}, index_exists={os.path.exists(index_file)}")
+
     query = args.get('query', '')
     limit = args.get('limit', 3)
 
     if not os.path.exists(index_file):
+        logging.getLogger(__name__).warning(f"[search_wiki] index.json NOT FOUND at {index_file}")
         return json.dumps({'status': 'error', 'message': 'Wiki index not found. Run sync_wiki_markdown.py first.'})
 
     try:
@@ -1396,21 +1400,24 @@ async def search_wiki(args: dict, user: User, db: Session) -> str:
         summary = entry.get('summary', '')
         filename = entry.get('filename', '')
 
-        text_to_search = f"{title} {summary}".lower()
-        matches = sum(1 for t in query_terms if t in text_to_search)
-        score = matches / len(query_terms) if query_terms else 0
-
-        if score > 0:
-            filepath = os.path.join(wiki_dir, filename)
-            content = ''
-            if os.path.exists(filepath):
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            # Strip frontmatter for cleaner context
+        # Read article content for deeper search
+        content = ''
+        filepath = os.path.join(wiki_dir, filename)
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            # Strip frontmatter
             if content.startswith('---'):
                 parts = content.split('---', 2)
                 content = parts[2] if len(parts) > 2 else content
 
+        # Search title + summary + first 500 chars of content
+        content_preview = content[:500].lower()
+        text_to_search = f"{title} {summary} {content_preview}".lower()
+        matches = sum(1 for t in query_terms if t in text_to_search)
+        score = matches / len(query_terms) if query_terms else 0
+
+        if score > 0:
             results.append({
                 'title': title,
                 'summary': summary,
