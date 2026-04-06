@@ -2886,3 +2886,19 @@ def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user))
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}. Available: {list(jobs.keys())}")
     fn()
     return {"triggered": job_id, "status": "ok"}
+
+# ── Debug: test search_wiki directly ──────────────────────
+@app.get("/api/v1/debug/search_wiki")
+async def debug_search_wiki(q: str = "agentic AI"):
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    
+    from app.tool_executor import search_wiki
+    import asyncio, json
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[DEBUG] search_wiki called with: {q}")
+    
+    class F: pass
+    result = await search_wiki({'query': q, 'limit': 3}, F(), F())
+    return json.loads(result)
