@@ -184,6 +184,7 @@ export default function SettingsPage() {
  <div className="flex flex-col h-dvh bg-background">
  <Header />
  <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
+ <div className="px-4 pb-28 space-y-6 max-w-2xl mx-auto">
  <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">
   Settings
  </h1>
@@ -441,6 +442,7 @@ export default function SettingsPage() {
   </button>
   </div>
  </section>
+ </div>
  </main>
  <BottomNav />
 

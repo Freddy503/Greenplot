@@ -178,7 +178,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-[100] bg-[#fafaf8] flex flex-col">
-      <div className="flex items-center justify-between px-6 py-4 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10 z-10">
+      <div className="flex items-center justify-between px-6 py-4 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10 z-10" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}>
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-primary" style={{ fontSize: '24px', fontVariationSettings: '"FILL" 1' }}>hub</span>
           <div>
