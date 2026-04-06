@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: str = "https://api.greenplot.ink/api/v1/calendar/callback"
 
+    # VAPID (Web Push)
+    VAPID_PRIVATE_KEY_BASE64: Optional[str] = None
+    VAPID_PRIVATE_KEY_PATH: Optional[str] = None
+
+    # Harvest / internal API key
+    HARVEST_API_KEY: str = "<HARVEST_API_KEY>"
+
     class Config:
         env_file = ".env"
 
