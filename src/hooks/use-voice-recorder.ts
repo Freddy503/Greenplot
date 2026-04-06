@@ -4,6 +4,8 @@ import { useCallback, useRef, useState } from 'react'
 
 export type VoiceRecorderState = 'idle' | 'recording' | 'processing'
 
+const MAX_RECORDING_SECONDS = 90
+
 interface UseVoiceRecorderOptions {
   onTranscription: (text: string) => void
   onError?: (error: string) => void
@@ -22,11 +24,16 @@ export function useVoiceRecorder({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
+    }
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current)
+      maxTimerRef.current = null
     }
   }, [])
 
@@ -131,6 +138,14 @@ export function useVoiceRecorder({
       timerRef.current = setInterval(() => {
         setDuration((d) => d + 1)
       }, 1000)
+
+      // Auto-stop after MAX_RECORDING_SECONDS to prevent oversized uploads
+      maxTimerRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          onError?.(`Recording capped at ${MAX_RECORDING_SECONDS}s — transcribing now`)
+          mediaRecorderRef.current.stop()
+        }
+      }, MAX_RECORDING_SECONDS * 1000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[voice] Recording error:', msg)

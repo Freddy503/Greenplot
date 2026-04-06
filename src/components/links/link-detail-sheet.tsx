@@ -41,15 +41,22 @@ function LinkDetailSheet({
   link,
   open,
   onOpenChange,
+  onStarChange,
 }: {
   link: LinkItem | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onStarChange?: (id: string, starred: boolean) => void
 }) {
   const [related, setRelated] = useState<RelatedItem[]>([])
   const [loadingRelated, setLoadingRelated] = useState(false)
   const [creatingSeed, setCreatingSeed] = useState(false)
   const [spawnedSeed, setSpawnedSeed] = useState<{id: string; title: string} | null>(null)
+  const [localStarred, setLocalStarred] = useState(false)
+
+  useEffect(() => {
+    setLocalStarred(link?.starred ?? false)
+  }, [link?.starred, link?.id])
 
   useEffect(() => {
     if (link && open) {
@@ -111,7 +118,7 @@ function LinkDetailSheet({
           <Badge className={`text-[10px] border-0 ${statusColors[link.status || ''] || 'bg-surface-container-high text-on-surface-variant'}`}>
             {link.status || 'pending'}
           </Badge>
-          {link.starred && (
+          {localStarred && (
             <Badge className="text-[10px] border-0 bg-amber-500/10 text-amber-400">
               ⭐ starred
             </Badge>
@@ -277,6 +284,9 @@ function LinkDetailSheet({
             variant="outline"
             className="flex-1 rounded-full text-xs"
             onClick={async () => {
+              const newStarred = !localStarred
+              setLocalStarred(newStarred)
+              onStarChange?.(link.id, newStarred)
               const token = localStorage.getItem('greenplot_token')
               await fetch(`/api/links/${link.id}`, {
                 method: 'PATCH',
@@ -284,12 +294,15 @@ function LinkDetailSheet({
                   'Content-Type': 'application/json',
                   ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ starred: !link.starred }),
+                body: JSON.stringify({ starred: newStarred }),
               })
             }}
           >
-            <span className="material-symbols-outlined text-sm mr-1">star</span>
-            {link.starred ? 'Unstar' : 'Star'}
+            <span
+              className="material-symbols-outlined text-sm mr-1"
+              style={{ fontVariationSettings: localStarred ? '"FILL" 1' : '"FILL" 0' }}
+            >star</span>
+            {localStarred ? 'Unstar' : 'Star'}
           </Button>
         </div>
         {/* Bridge: Create Seed from Source */}

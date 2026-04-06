@@ -61,14 +61,14 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if (client.url.includes('/chat') && 'focus' in client) {
           client.focus()
-          // Navigate to the prompt URL if we have one
-          if (prompt && 'navigate' in client) {
-            return client.navigate(targetUrl)
+          // Send prompt via postMessage so the page handles it without a full navigation
+          if (prompt) {
+            client.postMessage({ type: 'PUSH_PROMPT', prompt })
           }
-          return client.focus()
+          return
         }
       }
-      // Open new window
+      // Open new window navigating to /chat?prompt=...
       if (clients.openWindow) {
         return clients.openWindow(targetUrl)
       }

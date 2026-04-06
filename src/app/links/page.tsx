@@ -624,6 +624,11 @@ export default function LinksPage() {
  link={selectedLink}
  open={detailOpen}
  onOpenChange={setDetailOpen}
+ onStarChange={(id, starred) => {
+  const updated = links.map(l => l.id === id ? { ...l, starred } : l)
+  setLinks(updated)
+  saveLinksCache(updated)
+ }}
  />
  </div>
  )

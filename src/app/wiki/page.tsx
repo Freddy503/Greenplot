@@ -736,7 +736,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
  }
 
  return (
- <div className="animate-in slide-in-from-right duration-200">
+ <div className="animate-in slide-in-from-right duration-200" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
  {/* Back button */}
  <div className="flex items-center justify-between px-2">
  <button

@@ -59,7 +59,7 @@ export function ActivitySummary({ token }: { token: string }) {
   if (dismissed || !data) return null
 
   return (
-    <div className="animate-in slide-in-from-top duration-300 mb-4">
+    <div className="animate-in slide-in-from-top duration-300 mb-4 w-full">
       <Card className="bg-surface-container-low border-primary/20 relative overflow-hidden">
         {/* Subtle gradient accent */}
         <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-secondary/5 pointer-events-none" />

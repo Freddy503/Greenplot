@@ -28,8 +28,6 @@ export function AddToGardenButton({ messages, authToken }: AddToGardenButtonProp
   const [error, setError] = useState('')
   const [dismissed, setDismissed] = useState(false)
 
-  if (dismissed) return null
-
   const handleOpen = useCallback(async () => {
     setSheetOpen(true)
     setLoading(true)
@@ -115,6 +113,8 @@ export function AddToGardenButton({ messages, authToken }: AddToGardenButtonProp
     },
     [authToken]
   )
+
+  if (dismissed) return null
 
   return (
     <>
