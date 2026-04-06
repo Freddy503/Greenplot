@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_KEY || 'BMvL3eG7pJjdT4AEXd6Ky_u8DCwYchD523OhkXXPXq5O6lSxCAK4I9Gj4xPjnEPU0w-q5mQlqXJRYs2yJXsuw_c'
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_KEY || 'BOQATyoFzjczoB7OerLYQXveZimfo6FBWAvZBHwiDbpbr0SdMMvXIqIOFx0XeCc7TGsZ1Nl8rFn6mJmJSJygYIY'
 
 export async function GET() {
   return NextResponse.json({ publicKey: VAPID_PUBLIC_KEY })
