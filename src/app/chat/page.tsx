@@ -176,23 +176,45 @@ export default function ChatPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ count: 4 }),
+      signal: AbortSignal.timeout(5000),
     })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) {
+          console.warn('[suggestions] API returned status:', r.status)
+          return null
+        }
+        return r.json()
+      })
       .then(data => {
-        if (data.suggestions?.length > 0) {
+        if (!data) {
+          console.warn('[suggestions] No data returned')
+          return
+        }
+        if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+          console.log('[suggestions] Loaded', data.suggestions.length, 'suggestions')
           setDynamicSuggestions(data.suggestions)
+        } else {
+          console.warn('[suggestions] API returned empty or invalid suggestions:', data)
         }
       })
-      .catch(() => {}) // Keep fallback suggestions
+      .catch(err => {
+        console.error('[suggestions] Fetch failed:', err.message)
+        // Keep fallback suggestions
+      })
   }, [])
 
   useEffect(() => {
     try {
       const token = localStorage.getItem('greenplot_token') || ''
       setAuthToken(token)
-      fetchSuggestions(token)
-    } catch {}
-  }, [])
+      // Only fetch suggestions after app is restored and we have a token
+      if (restored && token) {
+        fetchSuggestions(token)
+      }
+    } catch (err) {
+      console.error('[suggestions] Init error:', err)
+    }
+  }, [restored, fetchSuggestions])
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
