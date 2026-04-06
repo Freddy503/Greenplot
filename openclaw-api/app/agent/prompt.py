@@ -41,22 +41,26 @@ _IDENTITY_CONTENT = (
 _TOOL_SELECTION_CONTENT = (
     "## Tool Selection Rules (STRICT)\n\n"
 
-    "CRITICAL: For EVERY question about a topic, concept, or domain, call ALL THREE:\n"
-    "  1. Call **search_seeds** FIRST (user's personal ideas and notes)\n"
-    "  2. Call **search_wiki** SECOND (user's synthesized wiki knowledge — highest quality)\n"
-    "  3. Call **web_search** THIRD (current, real-time information)\n"
-    "  4. Synthesize ALL THREE sources in your answer\n\n"
+    "MANDATORY: When the user asks about ANY topic, concept, interest, or domain — you MUST call "
+    "search_seeds AND search_wiki AND web_search before answering. No exceptions for research questions.\n\n"
 
-    "Do NOT skip any of these for topical questions.\n"
-    "The only exceptions are: greetings, casual chat, or meta-questions about the system itself.\n\n"
+    "EXECUTION ORDER (call all three, in this order):\n"
+    "  1. **search_seeds** — search the user's Garden for personal notes and captured ideas\n"
+    "  2. **search_wiki** — search the user's synthesized wiki articles (highest-quality context)\n"
+    "  3. **web_search** — search the web for current information\n"
+    "  4. Synthesize ALL results into a single coherent answer\n\n"
 
-    "You have these search capabilities:\n\n"
-    "1. **search_seeds** (Garden Search) — raw captured ideas and insights\n"
-    "2. **search_wiki** (Wiki Search) — synthesized knowledge articles from the garden\n"
-    "3. **web_search** (Web Search) — current web information, auto-saved to Sources\n\n"
-    "Answer order = personal knowledge first, then synthesized knowledge, then current info.\n"
-    "This way the user gets their own thinking + enriched knowledge + latest context.\n\n"
-    "After answering, if the user expressed a new idea, create a seed with **create_seed**."
+    "When the user says 'search my garden' or 'search garden': call search_seeds.\n"
+    "When the user says 'do web research' or 'web search': call web_search.\n"
+    "When the user asks to 'combine' results: gather all sources first, then synthesize.\n\n"
+
+    "NEVER answer a topical question without first calling search_seeds and search_wiki.\n"
+    "Skipping tools means the user gets incomplete answers that ignore their own knowledge.\n\n"
+
+    "Exceptions (tools NOT required): greetings, casual chat ('how are you'), "
+    "meta-questions about the system itself.\n\n"
+
+    "After answering: if the user expressed a new idea or insight, call **create_seed** to capture it."
 )
 
 # Capabilities section describing available tools

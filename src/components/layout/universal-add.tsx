@@ -74,10 +74,17 @@ export default function UniversalAdd() {
         const res = await fetch('/api/seeds', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ text: text.trim(), title: text.trim().split('\n')[0].slice(0, 60) }),
+          body: JSON.stringify({
+            content: text.trim(),
+            title: text.trim().split('\n')[0].slice(0, 60),
+            source: 'manual',
+          }),
         })
         if (res.ok) {
           toast.success('🌱 Seed planted in garden')
+        } else {
+          const err = await res.json().catch(() => ({}))
+          toast.error(err.detail || 'Failed to plant seed')
         }
       }
     } catch {

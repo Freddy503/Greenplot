@@ -1514,7 +1514,7 @@ async def chat_v2_endpoint(
         registry=registry,
         api_key=settings.OPENROUTER_API_KEY,
         model=settings.ENRICH_MODEL,
-        max_rounds=3,
+        max_rounds=8,
         system_prompt=system_prompt,
     )
 
@@ -2797,6 +2797,22 @@ def _job_weekly_digest():
         "/garden",
     )
 
+def _job_weekly_eval():
+    """Weekly content evaluation — Sundays 18:00 CET."""
+    _sto<RESEND_API_KEY>(
+        "📊 Weekly Content Eval",
+        "Time to review your rated seeds. What patterns emerged this week? Which ideas are ready to harvest?",
+        "/garden",
+    )
+
+def _job_biweekly_challenge():
+    """Biweekly cross-pollination challenge — 1st and 15th at 10:00 CET."""
+    _sto<RESEND_API_KEY>(
+        "🎯 Biweekly Challenge",
+        "Cross-pollination time: connect two unrelated seeds into one new idea. What knowledge gaps can you bridge?",
+        "/chat",
+    )
+
 def _sto<RESEND_API_KEY>(title: str, body: str, url: str):
     """Persist notification + push to all subscribers."""
     try:
@@ -2921,6 +2937,20 @@ def _start_scheduler():
         id="weekly_digest",
         replace_existing=True,
     )
+    # Weekly content eval — Sundays 18:00 CET
+    scheduler.add_job(
+        _job_weekly_eval,
+        CronTrigger(day_of_week="sun", hour=18, minute=0, timezone=_CET),
+        id="weekly_eval",
+        replace_existing=True,
+    )
+    # Biweekly challenge — 1st and 15th at 10:00 CET
+    scheduler.add_job(
+        _job_biweekly_challenge,
+        CronTrigger(day="1,15", hour=10, minute=0, timezone=_CET),
+        id="biweekly_challenge",
+        replace_existing=True,
+    )
     # Seed enrichment — every 30 minutes
     scheduler.add_job(
         _job_enrich_pending_seeds,
@@ -2969,6 +2999,8 @@ def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user))
         "daily_briefing": _job_daily_briefing,
         "afternoon_reflection": _job_afternoon_reflection,
         "weekly_digest": _job_weekly_digest,
+        "weekly_eval": _job_weekly_eval,
+        "biweekly_challenge": _job_biweekly_challenge,
     }
     fn = jobs.get(job_id)
     if not fn:
