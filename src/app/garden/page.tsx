@@ -51,9 +51,13 @@ interface Seed {
 
 function parseSeed(raw: any): Seed {
   const text = raw.content || raw.text || ''
-  const metadata = raw.metadata || {}
+  // seed_metadata (Postgres) or metadata (Weaviate) both contain enrichment fields
+  const metadata = raw.seed_metadata || raw.metadata || {}
   const domain = raw.domain || metadata.domain || text.match(/Domain:\s*(.+)/)?.[1]?.trim() || ''
   const status = raw.status || metadata.status || text.match(/Status:\s*(.+)/)?.[1]?.trim() || ''
+  const energy = metadata.energy || text.match(/Energy:\s*(.+)/)?.[1]?.trim() || ''
+  const tags = metadata.tags || text.match(/Tags:\s*(.+)/)?.[1]?.trim() || domain
+  const summary = metadata.summary || ''
   const title = raw.title || text.split('\n')[0]?.slice(0, 60) || 'Untitled'
   return {
     id: raw.id || raw._additional?.id || raw.notion_id || '',
@@ -63,10 +67,9 @@ function parseSeed(raw: any): Seed {
     source: raw.source || metadata.source || '',
     domain,
     status,
-    // Carry enrichment data for the detail sheet
-    ...(metadata.summary ? { summary: metadata.summary } : {}),
-    ...(metadata.tags ? { tags: metadata.tags } : {}),
-    ...(metadata.energy ? { energy: metadata.energy } : {}),
+    ...(summary ? { summary } : {}),
+    ...(tags ? { tags } : {}),
+    ...(energy ? { energy } : {}),
   }
 }
 
