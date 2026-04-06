@@ -165,29 +165,31 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<ConversationMeta[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string>('')
 
+  const fetchSuggestions = useCallback((token: string) => {
+    fetch('/api/garden/prompt-suggestions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ count: 4 }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.suggestions?.length > 0) {
+          setDynamicSuggestions(data.suggestions)
+        }
+      })
+      .catch(() => {}) // Keep fallback suggestions
+  }, [])
+
   useEffect(() => {
     try {
       const token = localStorage.getItem('greenplot_token') || ''
       setAuthToken(token)
-
-      // Fetch dynamic suggestions from garden
-      fetch('/api/garden/prompt-suggestions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ count: 4 }),
-      })
-        .then(r => r.json())
-        .then(data => {
-          if (data.suggestions?.length > 0) {
-            setDynamicSuggestions(data.suggestions)
-          }
-        })
-        .catch(() => {}) // Keep fallback suggestions
+      fetchSuggestions(token)
     } catch {}
-  }, [])
+  }, [fetchSuggestions])
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
@@ -377,6 +379,9 @@ export default function ChatPage() {
     setActiveConversationId(newId)
     localStorage.setItem('greenplot_active_conv', newId)
     setMessages([])
+    // Refresh suggestions based on latest seeds
+    const token = localStorage.getItem('greenplot_token') || ''
+    fetchSuggestions(token)
   }
 
   const handleSelectConversation = (id: string) => {
@@ -626,7 +631,7 @@ export default function ChatPage() {
           <ConversationContent>
             {messages.length === 0 ? (
               <ConversationEmptyState>
-                <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto">
+                <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full">
                   {/* Brand icon */}
                   <div className="relative">
                     <div className="absolute inset-0 rounded-full blur-2xl opacity-30 bg-primary scale-[1.8]" />
@@ -656,7 +661,7 @@ export default function ChatPage() {
                         key={s}
                         suggestion={s}
                         onClick={handleSuggestion}
-                        className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
+                        className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant max-w-[260px] truncate"
                       />
                     ))}
                   </Suggestions>
