@@ -67,12 +67,10 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
   const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>([])
   const [loadingLinks, setLoadingLinks] = useState(false)
 
-  if (!seed) return null
-
-  const tags = seed.tags ? seed.tags.split(',').map(t => t.trim()).filter(Boolean) : []
-  const entities = seed.entities ? seed.entities.split(',').map(e => e.trim()).filter(Boolean) : []
-  const domain = seed.domain || ''
-  const energy = seed.energy || ''
+  // Derive these before hooks so they're available in useEffect
+  const tags = seed?.tags ? seed.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+  const domain = seed?.domain || ''
+  const energy = seed?.energy || ''
 
   // Fetch related Sources links when sheet opens
   useEffect(() => {
@@ -97,6 +95,11 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
       .catch(() => setRelatedLinks([]))
       .finally(() => setLoadingLinks(false))
   }, [open, seed?.id])
+
+  // All hooks above — safe to return early now
+  if (!seed) return null
+
+  const entities = seed.entities ? seed.entities.split(',').map(e => e.trim()).filter(Boolean) : []
 
   const handleWebSearch = async () => {
     setLoadingSearch(true)
