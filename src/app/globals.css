@@ -211,6 +211,7 @@ html, body {
   }
   main {
     overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
