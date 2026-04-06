@@ -659,7 +659,7 @@ export default function ChatPage() {
                         key={s}
                         suggestion={s}
                         onClick={handleSuggestion}
-                        className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant max-w-[260px] truncate"
+                        className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
                       />
                     ))}
                   </Suggestions>
