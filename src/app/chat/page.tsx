@@ -192,7 +192,7 @@ export default function ChatPage() {
       setAuthToken(token)
       fetchSuggestions(token)
     } catch {}
-  }, [fetchSuggestions])
+  }, [])
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
