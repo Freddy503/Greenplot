@@ -50,9 +50,12 @@ self.addEventListener('notificationclick', (event) => {
   const prompt = typeof data === 'object' ? (data.prompt || '') : ''
   const baseUrl = typeof data === 'object' ? (data.url || '/chat') : (data || '/chat')
 
-  // If a structured prompt is attached, open /chat?prompt=<encoded>
+  const title = event.notification.title || ''
+  const body = event.notification.body || ''
+
+  // If a structured prompt is attached, open /chat with spark data encoded
   const targetUrl = prompt
-    ? `/chat?prompt=${encodeURIComponent(prompt)}`
+    ? `/chat?spark_prompt=${encodeURIComponent(prompt)}&spark_title=${encodeURIComponent(title)}&spark_body=${encodeURIComponent(body)}`
     : baseUrl
 
   event.waitUntil(
@@ -61,14 +64,14 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if (client.url.includes('/chat') && 'focus' in client) {
           client.focus()
-          // Send prompt via postMessage so the page handles it without a full navigation
-          if (prompt) {
-            client.postMessage({ type: 'PUSH_PROMPT', prompt })
+          // Send spark data via postMessage so the page shows the SparkCard
+          if (prompt || body) {
+            client.postMessage({ type: 'PUSH_SPARK', prompt, title, body })
           }
           return
         }
       }
-      // Open new window navigating to /chat?prompt=...
+      // Open new window navigating to /chat with spark params
       if (clients.openWindow) {
         return clients.openWindow(targetUrl)
       }
