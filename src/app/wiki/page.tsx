@@ -995,7 +995,7 @@ export default function WikiPage() {
  <div className="h-dvh flex flex-col bg-background">
  <Header />
 
- <main className="flex-1 overflow-y-auto pb-28" style={{ paddingTop: 'var(--header-height)' }}>
+ <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
  {/* Hero */}
  <section className=" px-2">
   <div className="flex items-center justify-between ">

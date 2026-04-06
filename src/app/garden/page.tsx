@@ -183,7 +183,7 @@ export default function GardenPage() {
     <div className="h-dvh flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 overflow-y-auto pb-28 px-4 max-w-4xl mx-auto w-full" style={{ paddingTop: 'calc(var(--header-height) + 1.5rem)' }}>
+      <main className="flex-1 overflow-y-auto px-4 max-w-4xl mx-auto w-full" style={{ paddingTop: 'calc(var(--header-height) + 1.5rem)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
         {/* Hero */}
         <section className="mb-3 px-2">
           <div className="flex items-center justify-between mb-2">

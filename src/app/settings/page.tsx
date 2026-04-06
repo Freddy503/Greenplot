@@ -184,7 +184,7 @@ export default function SettingsPage() {
  <div className="flex flex-col h-dvh bg-background">
  <Header />
  <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
- <div className="px-4 pb-28 space-y-6 max-w-2xl mx-auto">
+ <div className="px-4 space-y-6 max-w-2xl mx-auto" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
  <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">
   Settings
  </h1>
