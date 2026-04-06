@@ -162,7 +162,10 @@ export function usePushNotifications() {
 // Poll for queued notifications (called from service worker or app)
 export async function pollNotifications() {
   try {
-    const res = await fetch('/api/push/notifications')
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
+    const res = await fetch('/api/push/notifications', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
     const data = await res.json()
     const notifications = data.notifications || []
 

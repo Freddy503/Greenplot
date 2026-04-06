@@ -136,7 +136,7 @@ async function fetchSessions(userId: string, token: string): Promise<{ messages:
   const cacheKey = userId
   const cached = sessionCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < 30000) {
-    // Use cached
+    return { messages: cached.sessions, summaries: [] }
   }
 
   try {
