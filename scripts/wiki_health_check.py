@@ -48,26 +48,30 @@ def notion_get(path):
 
 
 def load_wiki_articles():
-    """Load all wiki articles from Notion Idea Garden DB."""
-    res = notion_post(f'/databases/{WIKI_DB}/query', {
-        'filter': {'property': 'Status', 'select': {'equals': 'Planted'}},
-        'page_size': 50
-    })
+    """Load all wiki articles from local markdown files."""
+    import glob
+    md_files = glob.glob(os.path.join(WIKI_DIR, '*.md'))
+    md_files = [f for f in md_files if os.path.basename(f) != 'INDEX.md']
     articles = []
-    for page in res.get('results', []):
-        pid = page['id']
-        title = ''.join(x['plain_text'] for x in page.get('properties',{}).get('Seed',{}).get('title',[]))
-        source = ''.join(x['plain_text'] for x in page.get('properties',{}).get('Source',{}).get('rich_text',[]))
-        # Get body
-        blocks = notion_get(f'/blocks/{pid}/children?page_size=100')
-        body_lines = []
-        for b in blocks.get('results', []):
-            btype = b.get(b.get('type',''), {})
-            text = ''.join(x.get('plain_text','') for x in btype.get('rich_text', []))
-            if text.strip():
-                body_lines.append(text.strip())
-        body = '\n'.join(body_lines)
-        articles.append({'id': pid, 'title': title, 'source': source, 'body': body})
+    for fp in sorted(md_files):
+        with open(fp, 'r', encoding='utf-8') as f:
+            content = f.read()
+        title = os.path.splitext(os.path.basename(fp))[0].replace('-', ' ').title()
+        # Check for YAML frontmatter
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                fm_text = parts[1]
+                body = parts[2].strip()
+                # Extract title from frontmatter
+                for line in fm_text.split('\n'):
+                    if line.startswith('title:'):
+                        title = line.split(':', 1)[1].strip().strip('"')
+            else:
+                body = content
+        else:
+            body = content
+        articles.append({'id': fp, 'title': title, 'source': '', 'body': body})
     return articles
 
 
@@ -82,7 +86,7 @@ def find_wikilinks(articles):
         for link in links:
             link_lower = link.lower()
             found_links.add(link)
-            if link_lower not in all_titles and link_lower not in (a.lower() for a in articles):
+            if link_lower not in all_titles and link_lower not in (a['title'].lower() for a in articles):
                 orphaned.add(link)
 
     return found_links, orphaned
@@ -145,7 +149,10 @@ Output JSON only: {"contradictions": [...], "gaps": [...], "suggested_articles":
         raw = raw.split('```')[1]
         if raw.startswith('json'):
             raw = raw[4:]
-    return json.loads(raw.strip())
+    try:
+        return json.loads(raw.strip())
+    except json.JSONDecodeError as e:
+        return {"error": f"LLM returned non-JSON: {e}", "raw_preview": raw[:500]}
 
 
 def generate_report(articles, orphaned, claims, llm_result):
