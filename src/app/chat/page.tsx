@@ -155,6 +155,8 @@ export default function ChatPage() {
   const [generatedImages, setGeneratedImages] = useState<Record<string, { url: string; prompt: string }>>({})
   // Dynamic suggestions from garden
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
+  // Prevent double-firing the push notification prompt
+  const [pushPromptHandled, setPushPromptHandled] = useState(false)
 
   useEffect(() => {
     try {
@@ -211,6 +213,27 @@ export default function ChatPage() {
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
+
+  // Auto-submit prompt from push notification click (?prompt=...)
+  useEffect(() => {
+    if (pushPromptHandled || !restored) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const pushPrompt = params.get('prompt')
+    if (!pushPrompt) return
+    // Clear the query param immediately so refresh doesn't re-fire it
+    window.history.replaceState({}, '', '/chat')
+    setPushPromptHandled(true)
+    // Small delay to let the chat be fully ready before submitting
+    const t = setTimeout(async () => {
+      if (status === 'ready') {
+        const enrichedText = await enrichWithGarden(pushPrompt)
+        sendMessage({ text: enrichedText })
+      }
+    }, 600)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restored, pushPromptHandled])
 
   // Poll for push notifications every 60 seconds
   useEffect(() => {
