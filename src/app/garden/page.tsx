@@ -56,7 +56,8 @@ function parseSeed(raw: any): Seed {
   const domain = raw.domain || metadata.domain || text.match(/Domain:\s*(.+)/)?.[1]?.trim() || ''
   const status = raw.status || metadata.status || text.match(/Status:\s*(.+)/)?.[1]?.trim() || ''
   const energy = metadata.energy || text.match(/Energy:\s*(.+)/)?.[1]?.trim() || ''
-  const tags = metadata.tags || text.match(/Tags:\s*(.+)/)?.[1]?.trim() || domain
+  const rawTags = metadata.tags || text.match(/Tags:\s*(.+)/)?.[1]?.trim() || domain
+  const tags = Array.isArray(rawTags) ? rawTags.join(', ') : rawTags
   const summary = metadata.summary || ''
   const title = raw.title || text.split('\n')[0]?.slice(0, 60) || 'Untitled'
   return {
