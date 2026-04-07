@@ -333,46 +333,32 @@ export default function ChatPage() {
     window.history.replaceState({}, '', '/chat')
     setPushPromptHandled(true)
 
-    // Try to fetch the full briefing from backend by matching the title
-    const fetchFullBriefing = async () => {
-      try {
-        const res = await fetch('/api/v1/push/notifications')
-        const data = await res.json()
-        const notifications = data.notifications || []
-
-        // Find the matching notification by title (most recent first)
-        const match = notifications
-          .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .find((n: any) => n.title === sparkTitle)
-
-        if (match?.briefing) {
-          console.log('[PUSH_SPARK] Found full briefing from backend:', match.briefing)
-          setSparkNotification(match.briefing as SparkNotification)
-          return
-        }
-      } catch (e) {
-        console.error('[PUSH_SPARK] Failed to fetch full briefing:', e)
-      }
-
-      // Fallback: create basic notification from URL params
-      console.log('[PUSH_SPARK] Using URL param fallback')
-      const sparkBody = params.get('spark_body') || sparkPrompt
-      setSparkNotification({
-        type: 'morning_spark',
-        title: sparkTitle || 'Briefing',
-        sections: sparkBody
-          ? [{
-            title: '',
-            icon: 'lightbulb',
-            color: 'text-primary',
-            content: sparkBody,
-          }]
-          : [],
-        prompt: sparkPrompt,
-      })
+    // Check if service worker stored a briefing in window
+    const storedBriefing = (window as any).__SPARK_BRIEFING
+    if (storedBriefing) {
+      console.log('[PUSH_SPARK] Using briefing stored by SW:', storedBriefing)
+      setSparkNotification(storedBriefing as SparkNotification)
+      // Clean up after using
+      delete (window as any).__SPARK_BRIEFING
+      return
     }
 
-    fetchFullBriefing()
+    // Fallback: create basic notification from URL params only
+    console.log('[PUSH_SPARK] Using URL param fallback (no briefing stored)')
+    const sparkBody = params.get('spark_body') || sparkPrompt
+    setSparkNotification({
+      type: 'morning_spark',
+      title: sparkTitle || 'Briefing',
+      sections: sparkBody
+        ? [{
+          title: '',
+          icon: 'lightbulb',
+          color: 'text-primary',
+          content: sparkBody,
+        }]
+        : [],
+      prompt: sparkPrompt,
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, pushPromptHandled])
 
@@ -381,22 +367,14 @@ export default function ChatPage() {
     if (!('serviceWorker' in navigator)) return
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'PUSH_SPARK') {
-        console.log('[PUSH_SPARK] Received from SW:', {
-          type: event.data.type,
-          title: event.data.title,
-          body: event.data.body,
-          hasBriefing: !!event.data.briefing,
-          briefingType: event.data.briefing?.type,
-          briefingSections: event.data.briefing?.sections?.length,
-          fullBriefing: event.data.briefing,
-        })
-
         // If full briefing structure is available, use it directly
         if (event.data.briefing) {
-          console.log('[PUSH_SPARK] Using full briefing, setting to SparkCard:', event.data.briefing)
+          // Store in window for URL param handler to find
+          (window as any).__SPARK_BRIEFING = event.data.briefing
+          console.log('[PUSH_SPARK] Setting SparkCard with full briefing')
           setSparkNotification(event.data.briefing as SparkNotification)
         } else {
-          console.log('[PUSH_SPARK] No briefing found, using fallback')
+          console.log('[PUSH_SPARK] No briefing in SW message, using fallback')
           // Fallback to creating a basic notification from title/body
           setSparkNotification({
             type: 'morning_spark',

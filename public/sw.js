@@ -53,8 +53,6 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {}
   const prompt = typeof data === 'object' ? (data.prompt || '') : ''
   const briefingStr = typeof data === 'object' ? (data.briefing || '') : ''
-  const baseUrl = typeof data === 'object' ? (data.url || '/chat') : (data || '/chat')
-
   const title = event.notification.title || ''
   const body = event.notification.body || ''
 
@@ -68,15 +66,17 @@ self.addEventListener('notificationclick', (event) => {
     }
   }
 
-  // Build message to send to chat page
+  // Build message to send to chat page (if app is already open)
   const postMessage = briefing
     ? { type: 'PUSH_SPARK', briefing, title, body, prompt }
     : { type: 'PUSH_SPARK', prompt, title, body }
 
-  // Fallback URL with encoded params (for new window case)
-  const targetUrl = prompt
-    ? `/chat?spark_prompt=${encodeURIComponent(prompt)}&spark_title=${encodeURIComponent(title)}&spark_body=${encodeURIComponent(body)}`
-    : baseUrl
+  // URL for new window (basic info only, briefing stored in window var)
+  const params = new URLSearchParams()
+  params.set('spark_title', title)
+  params.set('spark_body', body)
+  params.set('spark_prompt', prompt)
+  const targetUrl = `/chat?${params.toString()}`
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -84,14 +84,12 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if (client.url.includes('/chat') && 'focus' in client) {
           client.focus()
-          // Send spark data via postMessage so the page shows the SparkCard
-          if (prompt || body || briefing) {
-            client.postMessage(postMessage)
-          }
+          // Send spark data via postMessage (includes briefing if available)
+          client.postMessage(postMessage)
           return
         }
       }
-      // Open new window navigating to /chat with spark params
+      // Open new window — it will use URL params and check for window.__SPARK_BRIEFING
       if (clients.openWindow) {
         return clients.openWindow(targetUrl)
       }
