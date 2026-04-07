@@ -263,10 +263,24 @@ def list_seeds(
             embedding=embedding,
             limit=limit
         )
+        # Try to match Weaviate hits back to Postgres rows to get real created_at
+        hit_titles = [h.get("title") for h in weaviate_hits if h.get("title")]
+        pg_seeds_map: dict = {}
+        if hit_titles:
+            try:
+                pg_rows = db.query(Seed).filter(
+                    Seed.tenant_id == current_user.tenant_id,
+                    Seed.title.in_(hit_titles)
+                ).all()
+                pg_seeds_map = {s.title: s for s in pg_rows}
+            except Exception:
+                pass
+
         seeds = []
         for hit in weaviate_hits:
+            pg = pg_seeds_map.get(hit.get("title") or "")
             seed = Seed(
-                id=uuid.uuid4(),
+                id=pg.id if pg else uuid.uuid4(),
                 tenant_id=current_user.tenant_id,
                 user_id=current_user.id,
                 thought_id=None,
@@ -282,10 +296,9 @@ def list_seeds(
                     "source": hit.get("source") or "",
                     "url": hit.get("url") or "",
                 },
-                created_at=datetime.utcnow()
+                created_at=pg.created_at if pg else datetime.utcnow()
             )
             seeds.append(seed)
-        # Cache search results
         cache_search(tenant_id, query, [vars(s) for s in seeds])
         return SeedSearchResponse(seeds=seeds, query=query, total=len(seeds))
     else:
@@ -3019,12 +3032,18 @@ def _sto<RESEND_API_KEY>(briefing: dict):
         if isinstance(body, list):
             body = body[0] if body else briefing.get("title", "")
 
+        # Store a clean briefing — strip the raw LLM prompt chain (too large, not useful in frontend)
+        clean_briefing = {k: v for k, v in briefing.items() if k != "prompt"}
+        # Derive a short chat prompt from the title + first section title
+        section_titles = [s.get("title", "") for s in briefing.get("sections", []) if s.get("title")]
+        short_prompt = briefing.get("title", "") + (f" — {section_titles[0]}" if section_titles else "")
+
         notifs.append({
             "title": briefing.get("title", "Briefing"),
             "body": body[:100] if body else briefing.get("subtitle", ""),
             "url": "/chat",
-            "prompt": briefing.get("prompt", ""),
-            "briefing": briefing,  # Full multi-section payload
+            "prompt": short_prompt[:200],
+            "briefing": clean_briefing,
             "timestamp": datetime.utcnow().isoformat(),
             "read": False,
         })
@@ -3075,15 +3094,21 @@ def _job_wiki_compile():
         from app.tool_executor import auto_compile_for_domain
 
         db = next(get_db())
-        user = db.query(User).filter(User.email == "contact@example.com").first()
-        if not user:
-            user = db.query(User).first()
-        if not user:
-            db.close()
+        users = db.query(User).all()
+        db.close()
+        if not users:
             return
+        # Process all users (for now run once per unique tenant)
+        seen_tenants = set()
+        user_list = []
+        for u in users:
+            tid = str(u.tenant_id)
+            if tid not in seen_tenants:
+                seen_tenants.add(tid)
+                user_list.append(u)
+        user = user_list[0]  # first user drives wiki compile per tenant
         tenant_id = str(user.tenant_id)
         user_id = str(user.id)
-        db.close()
 
         async def _run():
             from app.wiki_pipeline import regenerate_all_backlinks
