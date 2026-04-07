@@ -79,7 +79,11 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
             temperature=0.7
         )
 
-        return response.choices[0].message.content if response.choices else ""
+        content = response.choices[0].message.content if response.choices else ""
+        # Strip Qwen3 chain-of-thought thinking blocks
+        import re
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        return content
     except Exception as e:
         logger.error(f"LLM call failed (model={model}): {e}")
         # Try fallback model
