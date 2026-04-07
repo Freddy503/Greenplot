@@ -2870,7 +2870,7 @@ def _job_morning_spark():
                     city=city,
                     weather=weather or f"Check weather in {city or 'your location'}"
                 )
-        logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
+                logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
 
                 # Store and broadcast
                 _sto<RESEND_API_KEY>(briefing)
