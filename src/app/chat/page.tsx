@@ -330,9 +330,18 @@ export default function ChatPage() {
     // Clear the query params immediately so refresh doesn't re-fire
     window.history.replaceState({}, '', '/chat')
     setPushPromptHandled(true)
+    const sparkBody = params.get('spark_body') || sparkPrompt
     setSparkNotification({
-      title: params.get('spark_title') || 'Morning Spark',
-      body: params.get('spark_body') || sparkPrompt,
+      type: 'morning_spark',
+      title: params.get('spark_title') || 'Briefing',
+      sections: sparkBody
+        ? [{
+          title: '',
+          icon: 'lightbulb',
+          color: 'text-primary',
+          content: sparkBody,
+        }]
+        : [],
       prompt: sparkPrompt,
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -343,11 +352,25 @@ export default function ChatPage() {
     if (!('serviceWorker' in navigator)) return
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'PUSH_SPARK') {
-        setSparkNotification({
-          title: event.data.title || 'Morning Spark',
-          body: event.data.body || event.data.prompt || '',
-          prompt: event.data.prompt || '',
-        })
+        // If full briefing structure is available, use it directly
+        if (event.data.briefing) {
+          setSparkNotification(event.data.briefing as SparkNotification)
+        } else {
+          // Fallback to creating a basic notification from title/body
+          setSparkNotification({
+            type: 'morning_spark',
+            title: event.data.title || 'Briefing',
+            sections: event.data.body || event.data.prompt
+              ? [{
+                title: '',
+                icon: 'lightbulb',
+                color: 'text-primary',
+                content: event.data.body || event.data.prompt || '',
+              }]
+              : [],
+            prompt: event.data.prompt,
+          })
+        }
       }
     }
     navigator.serviceWorker.addEventListener('message', handler)

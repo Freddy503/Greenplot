@@ -2266,8 +2266,8 @@ def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
         logger.error(f"❌ Web Push error: {e}")
         return "error"
 
-def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = ""):
-    """Send Web Push to all active subscriptions for all tenants."""
+def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = "", briefing: dict = None):
+    """Send Web Push to all active subscriptions for all tenants. Optionally includes full briefing structure."""
     if not VAPID_PRIVATE_KEY:
         logger.warning("⚠️ No VAPID key, skipping Web Push broadcast")
         return 0
@@ -2277,7 +2277,11 @@ def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = "")
         logger.info("📭 No push subscriptions registered")
         return 0
 
-    payload = json.dumps({"title": title, "body": body or "", "url": url, "prompt": prompt})
+    # Build payload with full briefing if provided
+    payload_dict = {"title": title, "body": body or "", "url": url, "prompt": prompt}
+    if briefing:
+        payload_dict["briefing"] = briefing
+    payload = json.dumps(payload_dict)
     sent = 0
     expired = []
 
@@ -2285,7 +2289,7 @@ def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = "")
         sub_info = sub_entry.get("subscription", {})
         if not sub_info.get("endpoint"):
             continue
-        
+
         result = _send_web_push_to_all(sub_info, payload)
         if result == "ok":
             sent += 1
@@ -3002,30 +3006,26 @@ def _sto<RESEND_API_KEY>(briefing: dict):
 def _broadcast_push_briefing(briefing: dict) -> int:
     """
     Broadcast a multi-section briefing as a web push.
-    Sends the full briefing structure to clients.
+    Sends the full briefing structure to all subscribers.
     """
     try:
-        import base64
-        from pywebpush import webpush
+        # Extract preview for notification title/body
+        body = briefing.get("sections", [{}])[0].get("content", "")
+        if isinstance(body, list):
+            body = body[0] if body else briefing.get("title", "")
 
-        db = next(get_db())
-        from app.models import User
-        users = db.query(User).all()
-
-        sent = 0
-        for user in users:
-            try:
-                # Get user's push subscriptions (placeholder — implement based on your DB schema)
-                # For now, return 0 (integrate with your subscription storage)
-                pass
-            except:
-                pass
-
-        # Fallback: log the briefing
-        logger.info(f"📢 Broadcasting briefing type={briefing.get('type')}, title={briefing.get('title')}")
-        return len(users) if users else 0
+        # Call _broadcast_push with full briefing structure
+        sent = _broadcast_push(
+            title=briefing.get("title", "Briefing"),
+            body=body[:100] if body else briefing.get("subtitle", ""),
+            url="/chat",
+            prompt=briefing.get("prompt", ""),
+            briefing=briefing  # Send full structure!
+        )
+        logger.info(f"✅ Briefing '{briefing.get('type', 'unknown')}' pushed to {sent} subscribers")
+        return sent
     except Exception as e:
-        logger.error(f"Push broadcast failed: {e}")
+        logger.error(f"❌ Push broadcast failed: {e}")
         return 0
 
 
