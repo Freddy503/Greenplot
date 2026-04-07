@@ -3019,6 +3019,12 @@ def _sto<RESEND_API_KEY>(briefing: dict):
         })
         _save_notifs(notifs)
         logger.info(f"✅ Briefing '{briefing.get('type', 'unknown')}' stored with {len(briefing.get('sections', []))} sections")
+
+        # Send Web Push to all subscribers
+        title = briefing.get("title", "Briefing")
+        sent = _broadcast_push(title, body[:100] if body else "", "/chat",
+                               prompt=briefing.get("prompt", ""), briefing=briefing)
+        print(f"🔔 Web push sent to {sent} subscribers", flush=True)
     except Exception as e:
         logger.error(f"❌ Briefing storage failed: {e}", exc_info=True)
 
