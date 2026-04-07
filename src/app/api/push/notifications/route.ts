@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server'
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 
 // In-memory fallback (fast, but lost on restart)
-let cached: Array<{ title: string; body: string; url: string; timestamp: number }> = []
+let cached: Array<{ title: string; body: string; url: string; timestamp: number; briefing?: any }> = []
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization') || ''
@@ -22,12 +22,15 @@ export async function GET(req: Request) {
     })
     if (res.ok) {
       const data = await res.json()
-      const backendNotifs = (data.notifications || []).map((n: any) => ({
-        title: n.title,
-        body: n.body || '',
-        url: n.url || '/chat',
-        timestamp: new Date(n.timestamp).getTime(),
-      }))
+      const backendNotifs = (data.notifications || [])
+        .filter((n: any) => !n.read)
+        .map((n: any) => ({
+          title: n.title,
+          body: n.body || '',
+          url: n.url || '/chat',
+          timestamp: new Date(n.timestamp).getTime(),
+          ...(n.briefing ? { briefing: n.briefing } : {}),
+        }))
 
       // Merge: backend + in-memory, deduplicate by timestamp+title
       const all = [...backendNotifs, ...cached]
