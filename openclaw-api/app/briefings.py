@@ -7,6 +7,11 @@ Generates rich, multi-section briefings for:
 - Evening Reflection (Contrarian + Actionable)
 - Weekly Content Eval (What Stuck + Constraints)
 - Biweekly Challenge (Cross-domain synthesis)
+
+Uses:
+- OpenRouter (via OpenAI SDK) for LLM: Qwen, Nemotron, etc.
+- Exa API for web search
+- Open-Meteo for weather (free)
 """
 
 import logging
@@ -16,101 +21,121 @@ import json
 import httpx
 import os
 
-try:
-    from anthropic import Anthropic
-except ImportError:
-    Anthropic = None
-
 logger = logging.getLogger(__name__)
 
-# Try to use the configured LLM client (Nemotron/Qwen), fall back to Anthropic
-_client = None
+# Global LLM client (OpenRouter via OpenAI SDK)
+_llm_client = None
+
 
 def get_llm_client():
-    """Get or initialize the LLM client."""
-    global _client
-    if _client is None:
+    """Get or initialize OpenRouter client via OpenAI SDK."""
+    global _llm_client
+    if _llm_client is None:
         try:
-            # Try to import the configured LLM client from settings
+            from openai import OpenAI
             from app.config import settings
-            if hasattr(settings, 'llm_client') and settings.llm_client:
-                _client = settings.llm_client
-                logger.info("✓ Using configured LLM client")
-            elif Anthropic:
-                api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-                _client = Anthropic(api_key=api_key)
-                logger.info("✓ Using Anthropic client")
-            else:
-                logger.warning("⚠️ No LLM client configured; briefings will be basic")
-                _client = None
+
+            api_key = settings.OPENROUTER_API_KEY or os.environ.get('OPENROUTER_API_KEY')
+            if not api_key:
+                logger.warning("⚠️ OPENROUTER_API_KEY not configured")
+                return None
+
+            _llm_client = OpenAI(
+                api_key=api_key,
+                base_url=settings.OPENROUTER_BASE_URL
+            )
+            logger.info("✓ OpenRouter client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize LLM client: {e}")
-            _client = None
-    return _client
+            _llm_client = None
+    return _llm_client
 
 
-def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500) -> str:
-    """Call the LLM with a prompt. Returns empty string on failure."""
+def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str = None) -> str:
+    """
+    Call OpenRouter LLM with a prompt.
+    Default models: Qwen (general), Nemotron (fallback)
+    Returns empty string on failure.
+    """
     try:
         client = get_llm_client()
         if not client:
+            logger.warning("No LLM client available")
             return ""
 
-        # Try Anthropic API first
-        if hasattr(client, 'messages'):
-            response = client.messages.create(
-                model="claude-opus-4-6",  # Or from config
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return response.content[0].text if response.content else ""
+        # Use provided model or default to Qwen
+        if not model:
+            model = "qwen/qwen3.6-plus:free"
 
-        # Fallback for other clients
-        return ""
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.7
+        )
+
+        return response.choices[0].message.content if response.choices else ""
     except Exception as e:
-        logger.error(f"LLM call failed: {e}")
+        logger.error(f"LLM call failed (model={model}): {e}")
+        # Try fallback model
+        if model != "nvidia/nemotron-3-super-120b-a12b:free":
+            logger.info("Retrying with Nemotron fallback...")
+            return _call_llm(prompt, system, max_tokens, model="nvidia/nemotron-3-super-120b-a12b:free")
         return ""
 
 
 async def fetch_web_search(query: str, limit: int = 5) -> List[Dict[str, str]]:
     """
-    Fetch recent web search results.
+    Fetch recent web search results using Exa API.
     Returns: [{"title": "...", "url": "...", "snippet": "..."}, ...]
     """
     try:
-        # Use SerpAPI, Tavily, or similar
-        api_key = os.environ.get("SoperationalAPI_API_KEY") or os.environ.get("TAVILY_API_KEY")
-        if not api_key:
-            logger.warning("No web search API key configured")
+        from app.config import settings
+
+        exa_key = settings.EXA_API_KEY or os.environ.get('EXA_API_KEY')
+        if not exa_key:
+            logger.warning("⚠️ EXA_API_KEY not configured")
             return []
 
-        # Example using Tavily (free tier available)
-        if "TAVILY" in os.environ:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "https://api.tavily.com/search",
-                    params={"api_key": api_key, "query": query, "max_results": limit}
-                )
-                data = response.json()
-                return [
-                    {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")}
-                    for r in data.get("results", [])
-                ]
-        else:
-            # SerpAPI
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "https://serpapi.com/search",
-                    params={"api_key": api_key, "q": query, "num": limit}
-                )
-                data = response.json()
-                return [
-                    {"title": r.get("title", ""), "url": r.get("link", ""), "snippet": r.get("snippet", "")}
-                    for r in data.get("organic_results", [])
-                ]
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.exa.ai/search",
+                headers={
+                    "x-api-key": exa_key,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "query": query,
+                    "numResults": limit,
+                    "type": "auto"
+                },
+                timeout=15.0
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Exa API returned {response.status_code}")
+                return []
+
+            data = response.json()
+            results = []
+            for r in data.get("results", [])[:limit]:
+                # Exa returns: title, url, text (snippet)
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "snippet": r.get("text", "")[:300] if r.get("text") else ""
+                })
+
+            logger.info(f"✓ Exa search returned {len(results)} results for '{query}'")
+            return results
+
     except Exception as e:
-        logger.error(f"Web search failed: {e}")
+        logger.error(f"Web search (Exa) failed: {e}")
         return []
 
 
@@ -246,7 +271,11 @@ Keep to 150 words. Be specific, not generic. Use sources if available.
 Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Relevance]
 """
 
-    deep_pattern = _call_llm(llm_prompt, max_tokens=500)
+    deep_pattern = _call_llm(
+        llm_prompt,
+        max_tokens=500,
+        model="qwen/qwen3.6-plus:free"
+    )
     if not deep_pattern:
         deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
 
@@ -301,7 +330,11 @@ Extract 2-3 key news items. For each: headline, 1-2 sentence summary, actionable
 Keep concise. Format as bullet points.
 """
 
-    news_synthesis = _call_llm(news_prompt, max_tokens=600)
+    news_synthesis = _call_llm(
+        news_prompt,
+        max_tokens=600,
+        model="nvidia/nemotron-3-super-120b-a12b:free"  # Longer context for news synthesis
+    )
     if not news_synthesis:
         news_synthesis = "• Check recent news on " + theme_str + " for latest enterprise AI developments."
 
@@ -312,7 +345,11 @@ From this research paper:
 Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} practitioners care?
 """
 
-    academic_synthesis = _call_llm(academic_prompt, max_tokens=300)
+    academic_synthesis = _call_llm(
+        academic_prompt,
+        max_tokens=300,
+        model="qwen/qwen3.6-plus:free"
+    )
     if not academic_synthesis:
         academic_synthesis = "Explore recent academic work in your domain."
 
@@ -357,7 +394,11 @@ What's the most contrarian argument against your main focus?
 Then propose ONE concrete 15-minute action for tomorrow that tests this contrarian view.
 """
 
-    contrarian = _call_llm(contrarian_prompt, max_tokens=300)
+    contrarian = _call_llm(
+        contrarian_prompt,
+        max_tokens=300,
+        model="qwen/qwen3.6-plus:free"
+    )
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
 
@@ -401,7 +442,11 @@ Based on a week focused on {theme_str}:
 Be analytical. Format: [Theme] / [Gap] / [Next Week's Constraint]
 """
 
-    evaluation = _call_llm(eval_prompt, max_tokens=400)
+    evaluation = _call_llm(
+        eval_prompt,
+        max_tokens=400,
+        model="nvidia/nemotron-3-super-120b-a12b:free"  # Longer context for analysis
+    )
     if not evaluation:
         evaluation = f"Review your {theme_str} work this week. What emerged as most valuable?"
 
@@ -457,7 +502,11 @@ Format:
 Be specific, not abstract. 15-min experiment.
 """
 
-    challenge = _call_llm(challenge_prompt, max_tokens=500)
+    challenge = _call_llm(
+        challenge_prompt,
+        max_tokens=500,
+        model="nvidia/nemotron-3-super-120b-a12b:free"  # Creative synthesis task
+    )
     if not challenge:
         challenge = f"Apply concepts from {themes[0]} to solve a challenge in {themes[1]}."
 
