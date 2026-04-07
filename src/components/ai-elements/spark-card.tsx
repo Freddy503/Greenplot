@@ -71,7 +71,7 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
           'Content-Type': 'application/json',
           ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
         },
-        body: JSON.stringify({ content: allText, source: notification.type }),
+        body: JSON.stringify({ content: allText, source: notification.type, title: notification.title }),
       })
       if (res.ok) {
         toast.success('Added to Garden!')

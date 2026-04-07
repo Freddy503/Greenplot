@@ -52,6 +52,16 @@ export function usePushNotifications() {
       if (existing) {
         setSubscription(existing)
         setStatus('subscribed')
+        // Re-register with server in case push_notifications.json was cleared
+        const token = localStorage.getItem('greenplot_token') || ''
+        fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ subscription: existing.toJSON(), userId: token || 'default' }),
+        }).catch(() => {/* silent — server may be unreachable */})
       } else if (Notification.permission === 'granted') {
         setStatus('granted')
       }
