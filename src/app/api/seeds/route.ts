@@ -8,10 +8,11 @@ export async function GET(req: NextRequest) {
   const query = searchParams.get('query') || ''
   const limit = searchParams.get('limit') || '50'
 
-  // Always search the backend (which queries Weaviate via vector search)
-  // When no query, use a broad search to populate the garden
-  const searchQuery = query || 'knowledge ideas project technology business creativity learning'
-  const url = `${BACKEND}/api/v1/seeds?query=${encodeURIComponent(searchQuery)}&limit=${limit}`
+  // If no query, omit it so backend returns recent seeds from Postgres with real timestamps
+  // (Weaviate path sets created_at=utcnow() which breaks date display)
+  const url = query
+    ? `${BACKEND}/api/v1/seeds?query=${encodeURIComponent(query)}&limit=${limit}`
+    : `${BACKEND}/api/v1/seeds?limit=${limit}`
 
   try {
     const res = await fetch(url, {

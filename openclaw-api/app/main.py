@@ -3115,29 +3115,34 @@ def _job_wiki_compile():
         logger.error(f"❌ Wiki compile job failed: {e}")
 
 
+scheduler = None  # global reference for dynamic rescheduling
+
 def _start_scheduler():
+    global scheduler
+    # Load saved schedule config
+    saved = _load_schedule()
     scheduler = BackgroundScheduler(timezone=_CET)
 
-    # Morning spark — 08:30 CET daily
+    # Morning spark — configurable, default 08:30 CET daily
+    ms = saved.get("morning_spark", {})
     scheduler.add_job(
         _job_morning_spark,
-        CronTrigger(hour=8, minute=30, timezone=_CET),
-        id="morning_spark",
-        replace_existing=True,
+        CronTrigger(hour=ms.get("hour", 8), minute=ms.get("minute", 30), timezone=_CET),
+        id="morning_spark", replace_existing=True,
     )
-    # Daily briefing — 09:30 CET daily
+    # Daily briefing — configurable, default 09:30 CET daily
+    db_cfg = saved.get("daily_briefing", {})
     scheduler.add_job(
         _job_daily_briefing,
-        CronTrigger(hour=9, minute=30, timezone=_CET),
-        id="daily_briefing",
-        replace_existing=True,
+        CronTrigger(hour=db_cfg.get("hour", 9), minute=db_cfg.get("minute", 30), timezone=_CET),
+        id="daily_briefing", replace_existing=True,
     )
-    # Afternoon reflection — 16:00 CET daily
+    # Afternoon reflection — configurable, default 16:00 CET daily
+    ref = saved.get("reflection", {})
     scheduler.add_job(
         _job_afternoon_reflection,
-        CronTrigger(hour=16, minute=0, timezone=_CET),
-        id="afternoon_reflection",
-        replace_existing=True,
+        CronTrigger(hour=ref.get("hour", 16), minute=ref.get("minute", 0), timezone=_CET),
+        id="afternoon_reflection", replace_existing=True,
     )
     # Weekly digest — Sunday 10:00 CET
     scheduler.add_job(
@@ -3209,6 +3214,66 @@ def trigger_job_admin(job_id: str, x_api_key: str = Header(default="")):
     if not expected or x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return _run_trigger_job(job_id)
+
+
+_SCHEDULE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "schedule_config.json")
+
+_DEFAULT_SCHEDULE = {
+    "morning_spark":    {"enabled": True, "hour": 8,  "minute": 30, "label": "Morning Idea Spark"},
+    "daily_briefing":   {"enabled": True, "hour": 9,  "minute": 30, "label": "Daily Briefing"},
+    "reflection":       {"enabled": True, "hour": 16, "minute": 0,  "label": "Evening Reflection"},
+    "weekly_eval":      {"enabled": True, "hour": 18, "minute": 0,  "label": "Weekly Content Eval"},
+    "biweekly_challenge":{"enabled": True,"hour": 10, "minute": 0,  "label": "Biweekly Challenge"},
+}
+
+def _load_schedule() -> dict:
+    try:
+        with open(_SCHEDULE_FILE) as f:
+            data = json.load(f)
+            # Merge with defaults to handle new keys
+            merged = dict(_DEFAULT_SCHEDULE)
+            for k, v in data.items():
+                if k in merged:
+                    merged[k].update(v)
+            return merged
+    except (FileNotFoundError, json.JSONDecodeError):
+        return dict(_DEFAULT_SCHEDULE)
+
+def _save_schedule(config: dict):
+    os.makedirs(os.path.dirname(_SCHEDULE_FILE), exist_ok=True)
+    with open(_SCHEDULE_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+
+def _reschedule_job(job_id: str, hour: int, minute: int, enabled: bool):
+    """Dynamically reschedule or pause/resume a job in APScheduler."""
+    global scheduler
+    if scheduler is None:
+        return
+    try:
+        if not enabled:
+            scheduler.pause_job(job_id)
+        else:
+            scheduler.reschedule_job(job_id, trigger=CronTrigger(hour=hour, minute=minute, timezone=_CET))
+            scheduler.resume_job(job_id)
+    except Exception as e:
+        logger.warning(f"Could not reschedule {job_id}: {e}")
+
+@app.get("/api/v1/schedule")
+def get_schedule(current_user: User = Depends(get_current_user)):
+    """Get current notification schedule configuration."""
+    return {"jobs": _load_schedule()}
+
+@app.patch("/api/v1/schedule")
+def update_schedule(body: dict, current_user: User = Depends(get_current_user)):
+    """Update schedule for one or more jobs. Body: {job_id: {hour, minute, enabled}}"""
+    config = _load_schedule()
+    for job_id, updates in body.items():
+        if job_id not in config:
+            continue
+        config[job_id].update({k: v for k, v in updates.items() if k in ("hour", "minute", "enabled")})
+        _reschedule_job(job_id, config[job_id]["hour"], config[job_id]["minute"], config[job_id]["enabled"])
+    _save_schedule(config)
+    return {"ok": True, "jobs": config}
 
 
 def _run_trigger_job(job_id: str):

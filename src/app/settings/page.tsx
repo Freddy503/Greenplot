@@ -21,6 +21,39 @@ import { toast } from 'sonner'
 
 const BACKEND = '/api'
 
+const PIPELINE_JOBS = [
+  { id: 'morning_spark',     label: 'Morning Idea Spark',  icon: 'light_mode',    emoji: '☀️', description: 'Weather + one deep pattern from your research interests' },
+  { id: 'daily_briefing',    label: 'Daily Briefing',       icon: 'newspaper',     emoji: '📰', description: 'Enterprise AI news + academic papers for your focus areas' },
+  { id: 'reflection',        label: 'Evening Reflection',   icon: 'psychology',    emoji: '🧠', description: 'Contrarian angle on today + one actionable move' },
+  { id: 'weekly_eval',       label: 'Weekly Content Eval',  icon: 'assessment',    emoji: '📊', description: 'What stuck this week? Patterns + creative constraint' },
+  { id: 'biweekly_challenge',label: 'Biweekly Challenge',   icon: 'emoji_events',  emoji: '🎯', description: 'Cross-domain experiment: apply a concept from one field to another' },
+]
+
+interface JobConfig {
+  enabled: boolean
+  hour: number
+  minute: number
+  label: string
+}
+
+function pad(n: number) { return String(n).padStart(2, '0') }
+
+function TimeEditor({ hour, minute, onChange }: { hour: number; minute: number; onChange: (h: number, m: number) => void }) {
+  const [val, setVal] = useState(`${pad(hour)}:${pad(minute)}`)
+  return (
+    <input
+      type="time"
+      value={val}
+      onChange={e => {
+        setVal(e.target.value)
+        const [h, m] = e.target.value.split(':').map(Number)
+        if (!isNaN(h) && !isNaN(m)) onChange(h, m)
+      }}
+      className="text-xs font-mono bg-surface-container-high border border-outline-variant/20 rounded-lg px-2 py-1 text-on-surface"
+    />
+  )
+}
+
 export default function SettingsPage() {
  const router = useRouter()
  const [nickname, setNickname] = useState('')
@@ -29,52 +62,9 @@ export default function SettingsPage() {
  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
  const [deleting, setDeleting] = useState(false)
  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+ const [scheduleConfig, setScheduleConfig] = useState<Record<string, JobConfig>>({})
+ const [savingSchedule, setSavingSchedule] = useState<string | null>(null)
 
- // Notification pipeline jobs — pre-defined, no gateway dependency
- const PIPELINE_JOBS = [
- {
- id: 'morning-spark',
- name: '☀️ Morning Idea Spark',
- icon: 'light_mode',
- description: 'Weather forecast + one deep pattern from your research interests with bold implications',
- schedule: 'Daily at 8:30 AM CET',
- cadence: 'daily',
- },
- {
- id: 'daily-briefing',
- name: '📰 Daily Briefing',
- icon: 'newspaper',
- description: 'Enterprise AI news + academic papers relevant to your focus areas',
- schedule: 'Daily at 9:30 AM CET',
- cadence: 'daily',
- },
- {
- id: 'reflection',
- name: '🧠 Evening Reflection',
- icon: 'psychology',
- description: 'Contrarian angle on what you learned today + one actionable move',
- schedule: 'Daily at 4:00 PM CET',
- cadence: 'daily',
- },
- {
- id: 'weekly-eval',
- name: '📊 Weekly Content Eval',
- icon: 'assessment',
- description: 'What stuck this week? Patterns in your learning. Creative constraint for next week.',
- schedule: 'Sundays at 6:00 PM CET',
- cadence: 'weekly',
- },
- {
- id: 'biweekly-challenge',
- name: '🎯 Biweekly Challenge',
- icon: 'emoji_events',
- description: 'Cross-domain experiment: take a concept from one field, apply it to a problem in another',
- schedule: '1st & 15th at 10:00 AM CET',
- cadence: 'biweekly',
- },
- ]
-
- // Edit modes
  const [editingCity, setEditingCity] = useState(false)
  const [editCity, setEditCity] = useState('')
  const [editingNickname, setEditingNickname] = useState(false)
@@ -83,390 +73,323 @@ export default function SettingsPage() {
  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
  useEffect(() => {
- setNickname(localStorage.getItem('greenplot_nickname') || '')
- try {
- const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
- setCity(profile.city || '')
- } catch {}
+   setNickname(localStorage.getItem('greenplot_nickname') || '')
+   try {
+     const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
+     setCity(profile.city || '')
+   } catch {}
 
- // (Pipeline jobs are pre-defined — no fetch needed)
+   // Fetch schedule config
+   fetch('/api/schedule', {
+     headers: token ? { Authorization: `Bearer ${token}` } : {},
+   })
+     .then(r => r.ok ? r.json() : null)
+     .then(data => { if (data?.jobs) setScheduleConfig(data.jobs) })
+     .catch(() => {})
  }, [])
 
  const authHeaders = () => ({
- 'Content-Type': 'application/json',
- ...(token ? { Authorization: `Bearer ${token}` } : {}),
+   'Content-Type': 'application/json',
+   ...(token ? { Authorization: `Bearer ${token}` } : {}),
  })
 
- // ── Save city ───────────────────────────────
  const handleSaveCity = async () => {
- if (!editCity.trim()) return
- setSaving(true)
- try {
- const res = await fetch(`${BACKEND}/profile`, {
- method: 'PATCH',
- headers: authHeaders(),
- body: JSON.stringify({ city: editCity.trim() }),
- })
- if (!res.ok) throw new Error('Failed to save')
- setCity(editCity.trim())
- const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
- profile.city = editCity.trim()
- localStorage.setItem('greenplot_profile', JSON.stringify(profile))
- setEditingCity(false)
- toast.success('Location updated')
- } catch {
- toast.error('Failed to save location')
- } finally {
- setSaving(false)
- }
+   if (!editCity.trim()) return
+   setSaving(true)
+   try {
+     const res = await fetch(`${BACKEND}/profile`, {
+       method: 'PATCH',
+       headers: authHeaders(),
+       body: JSON.stringify({ city: editCity.trim() }),
+     })
+     if (!res.ok) throw new Error('Failed to save')
+     setCity(editCity.trim())
+     const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
+     profile.city = editCity.trim()
+     localStorage.setItem('greenplot_profile', JSON.stringify(profile))
+     setEditingCity(false)
+     toast.success('Location updated')
+   } catch {
+     toast.error('Failed to save location')
+   } finally {
+     setSaving(false)
+   }
  }
 
- // ── Save nickname ───────────────────────────
  const handleSaveNickname = async () => {
- if (!editNickname.trim()) return
- setNickname(editNickname.trim())
- localStorage.setItem('greenplot_nickname', editNickname.trim())
- setEditingNickname(false)
- toast.success('Nickname updated')
+   if (!editNickname.trim()) return
+   setNickname(editNickname.trim())
+   localStorage.setItem('greenplot_nickname', editNickname.trim())
+   setEditingNickname(false)
+   toast.success('Nickname updated')
  }
 
- // ── Push notifications (via hook) ──────────
  const { status: pushStatus, requestPermission, unsubscribe } = usePushNotifications()
  const notificationsEnabled = pushStatus === 'subscribed' || pushStatus === 'granted'
 
  const handleToggleNotifications = async (enabled: boolean) => {
- if (enabled) {
- const ok = await requestPermission()
- if (ok) {
- toast.success('Notifications enabled')
- } else {
- toast.error('Could not enable notifications. Check browser permissions.')
- }
- } else {
- await unsubscribe()
- toast.success('Notifications disabled')
- }
+   if (enabled) {
+     const ok = await requestPermission()
+     if (ok) toast.success('Notifications enabled')
+     else toast.error('Could not enable notifications. Check browser permissions.')
+   } else {
+     await unsubscribe()
+     toast.success('Notifications disabled')
+   }
  }
 
- // ── Logout ──────────────────────────────────
+ const handleScheduleChange = async (jobId: string, updates: Partial<JobConfig>) => {
+   const updated = { ...scheduleConfig, [jobId]: { ...scheduleConfig[jobId], ...updates } }
+   setScheduleConfig(updated)
+   setSavingSchedule(jobId)
+   try {
+     const res = await fetch('/api/schedule', {
+       method: 'PATCH',
+       headers: authHeaders(),
+       body: JSON.stringify({ [jobId]: updates }),
+     })
+     if (!res.ok) throw new Error('Failed')
+     toast.success('Schedule updated')
+   } catch {
+     toast.error('Failed to save schedule')
+   } finally {
+     setSavingSchedule(null)
+   }
+ }
+
  const handleLogout = () => {
- localStorage.removeItem('greenplot_token')
- localStorage.removeItem('greenplot_tenant')
- localStorage.removeItem('greenplot_nickname')
- localStorage.removeItem('greenplot_chat_messages')
- localStorage.removeItem('greenplot_profile')
- toast.success('Logged out')
- router.push('/onboarding')
+   localStorage.removeItem('greenplot_token')
+   localStorage.removeItem('greenplot_tenant')
+   localStorage.removeItem('greenplot_nickname')
+   localStorage.removeItem('greenplot_chat_messages')
+   localStorage.removeItem('greenplot_profile')
+   toast.success('Logged out')
+   router.push('/onboarding')
  }
 
- // ── Delete account ──────────────────────────
  const handleDeleteAccount = async () => {
- if (deleteConfirmText.toLowerCase() !== 'delete my account') return
- setDeleting(true)
- try {
- const res = await fetch(`${BACKEND}/account`, {
- method: 'DELETE',
- headers: authHeaders(),
- })
- if (!res.ok) throw new Error('Failed to delete')
- // Clear all local data
- localStorage.clear()
- toast.success('Account deleted')
- router.push('/onboarding')
- } catch {
- toast.error('Failed to delete account. Try again.')
- } finally {
- setDeleting(false)
- setShowDeleteDialog(false)
- }
+   if (deleteConfirmText.toLowerCase() !== 'delete my account') return
+   setDeleting(true)
+   try {
+     const res = await fetch(`${BACKEND}/account`, {
+       method: 'DELETE',
+       headers: authHeaders(),
+     })
+     if (!res.ok) throw new Error('Failed to delete')
+     localStorage.clear()
+     toast.success('Account deleted')
+     router.push('/onboarding')
+   } catch {
+     toast.error('Failed to delete account. Try again.')
+   } finally {
+     setDeleting(false)
+     setShowDeleteDialog(false)
+   }
  }
 
  return (
- <div className="flex flex-col h-dvh bg-background">
- <Header />
- <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
- <div className="px-4 space-y-6 max-w-2xl mx-auto" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
- <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">
-  Settings
- </h1>
+   <div className="flex flex-col h-dvh bg-background">
+     <Header />
+     <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
+       <div className="px-4 space-y-6 max-w-2xl mx-auto" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
+         <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">Settings</h1>
 
- {/* ── Support the Project ────────────── */}
- <section className="">
-  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
-  Support
-  </h2>
-  <a
-  href="https://buymeacoffee.com/freddy503"
-  target="_blank"
-  rel="noopener noreferrer"
-  className="flex items-center justify-between px-5 py-4 rounded-2xl bg-[#FFDD00] hover:bg-[#ffda00] transition-colors no-underline"
-  >
-  <div className="flex items-center gap-3">
-  <span className="text-2xl">☕</span>
-  <div>
-  <p className="text-sm font-bold text-[#1a1a1a]">Buy me a coffee</p>
-  <p className="text-xs text-[#1a1a1a]/70">Help keep the garden growing</p>
-  </div>
-  </div>
-  <span className="material-symbols-outlined text-[#1a1a1a]">arrow_forward</span>
-  </a>
- </section>
+         {/* Support */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Support</h2>
+           <a href="https://buymeacoffee.com/freddy503" target="_blank" rel="noopener noreferrer"
+             className="flex items-center justify-between px-5 py-4 rounded-2xl bg-[#FFDD00] hover:bg-[#ffda00] transition-colors no-underline">
+             <div className="flex items-center gap-3">
+               <span className="text-2xl">☕</span>
+               <div>
+                 <p className="text-sm font-bold text-[#1a1a1a]">Buy me a coffee</p>
+                 <p className="text-xs text-[#1a1a1a]/70">Help keep the garden growing</p>
+               </div>
+             </div>
+             <span className="material-symbols-outlined text-[#1a1a1a]">arrow_forward</span>
+           </a>
+         </section>
 
- {/* ── Profile ────────────────────────── */}
- <section className="">
-  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
-  Profile
-  </h2>
-  <div className="space-y-2">
-  {/* Nickname */}
-  <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
-  {editingNickname ? (
-  <div className="flex items-center gap-2">
-   <Input
-   value={editNickname}
-   onChange={(e) => setEditNickname(e.target.value)}
-   className="flex-1 rounded-full bg-surface-container-highest border-0"
-   placeholder="Your nickname"
-   autoFocus
-   />
-   <Button size="sm" onClick={handleSaveNickname} disabled={saving} className="rounded-full">
-   Save
-   </Button>
-   <Button size="sm" variant="ghost" onClick={() => setEditingNickname(false)} className="rounded-full">
-   Cancel
-   </Button>
-  </div>
-  ) : (
-  <div className="flex items-center justify-between">
-   <div>
-   <p className="text-xs text-on-surface-variant">Nickname</p>
-   <p className="text-sm font-bold text-on-surface">{nickname || 'Not set'}</p>
+         {/* Profile */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Profile</h2>
+           <div className="space-y-2">
+             <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
+               {editingNickname ? (
+                 <div className="flex items-center gap-2">
+                   <Input value={editNickname} onChange={e => setEditNickname(e.target.value)}
+                     className="flex-1 rounded-full bg-surface-container-highest border-0" placeholder="Your nickname" autoFocus />
+                   <Button size="sm" onClick={handleSaveNickname} disabled={saving} className="rounded-full">Save</Button>
+                   <Button size="sm" variant="ghost" onClick={() => setEditingNickname(false)} className="rounded-full">Cancel</Button>
+                 </div>
+               ) : (
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <p className="text-xs text-on-surface-variant">Nickname</p>
+                     <p className="text-sm font-bold text-on-surface">{nickname || 'Not set'}</p>
+                   </div>
+                   <button onClick={() => { setEditNickname(nickname); setEditingNickname(true) }} className="text-xs text-primary font-medium">Edit</button>
+                 </div>
+               )}
+             </div>
+             <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
+               {editingCity ? (
+                 <div className="flex items-center gap-2">
+                   <Input value={editCity} onChange={e => setEditCity(e.target.value)}
+                     className="flex-1 rounded-full bg-surface-container-highest border-0" placeholder="e.g. Munich, Berlin, NYC" autoFocus />
+                   <Button size="sm" onClick={handleSaveCity} disabled={saving} className="rounded-full">Save</Button>
+                   <Button size="sm" variant="ghost" onClick={() => setEditingCity(false)} className="rounded-full">Cancel</Button>
+                 </div>
+               ) : (
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <p className="text-xs text-on-surface-variant">Location</p>
+                     <p className="text-sm font-bold text-on-surface">{city || 'Not set'}</p>
+                     <p className="text-[10px] text-on-surface-variant/60 mt-0.5">Used for weather in daily briefing</p>
+                   </div>
+                   <button onClick={() => { setEditCity(city); setEditingCity(true) }} className="text-xs text-primary font-medium">Edit</button>
+                 </div>
+               )}
+             </div>
+           </div>
+         </section>
+
+         {/* Notifications */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Notifications</h2>
+           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
+             <div className="flex items-center justify-between">
+               <div>
+                 <p className="text-sm font-bold text-on-surface">Push Notifications</p>
+                 <p className="text-xs text-on-surface-variant">Daily briefings and reminders</p>
+               </div>
+               <Switch checked={notificationsEnabled} onCheckedChange={handleToggleNotifications} />
+             </div>
+             {pushStatus === 'not-installed' && (
+               <div className="mt-3 p-3 rounded-xl bg-tertiary-container/20 border border-tertiary/20">
+                 <p className="text-xs font-medium text-on-surface">📱 Install to Home Screen first</p>
+                 <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                   Tap the <span className="material-symbols-outlined text-[12px] align-middle">ios_share</span> icon → Add to Home Screen.
+                 </p>
+               </div>
+             )}
+             {pushStatus === 'denied' && (
+               <div className="mt-3 p-3 rounded-xl bg-error/10 border border-error/20">
+                 <p className="text-xs font-medium text-error">🚫 Notifications blocked</p>
+                 <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                   Go to Settings → Safari → Notifications → Allow.
+                 </p>
+               </div>
+             )}
+           </div>
+         </section>
+
+         {/* Integrations */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Integrations</h2>
+           <CalendarConnectCard />
+         </section>
+
+         {/* Notification Pipelines */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Notification Pipelines</h2>
+           <div className="space-y-2">
+             {PIPELINE_JOBS.map(job => {
+               const cfg = scheduleConfig[job.id]
+               const enabled = cfg?.enabled ?? true
+               const hour = cfg?.hour ?? 8
+               const minute = cfg?.minute ?? 30
+               return (
+                 <div key={job.id} className={`px-4 py-4 rounded-2xl bg-surface-container border transition-colors ${enabled ? 'border-outline-variant/10' : 'border-outline-variant/5 opacity-60'}`}>
+                   <div className="flex items-start gap-3">
+                     <span className="material-symbols-outlined text-primary mt-0.5 flex-shrink-0" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>{job.icon}</span>
+                     <div className="flex-1 min-w-0">
+                       <div className="flex items-center justify-between mb-1">
+                         <p className="text-sm font-bold text-on-surface">{job.label}</p>
+                         <Switch
+                           checked={enabled}
+                           onCheckedChange={val => handleScheduleChange(job.id, { enabled: val })}
+                           disabled={savingSchedule === job.id}
+                         />
+                       </div>
+                       <p className="text-[10px] text-on-surface-variant mb-2">{job.description}</p>
+                       {enabled && (
+                         <div className="flex items-center gap-2">
+                           <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: '14px' }}>schedule</span>
+                           <TimeEditor
+                             hour={hour}
+                             minute={minute}
+                             onChange={(h, m) => handleScheduleChange(job.id, { hour: h, minute: m })}
+                           />
+                           <span className="text-[9px] text-on-surface-variant/50">CET</span>
+                           {savingSchedule === job.id && (
+                             <span className="material-symbols-outlined text-primary animate-spin" style={{ fontSize: '14px' }}>progress_activity</span>
+                           )}
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                 </div>
+               )
+             })}
+           </div>
+         </section>
+
+         {/* Account */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Account</h2>
+           <div className="space-y-2">
+             <button onClick={handleLogout}
+               className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 transition-colors hover:bg-surface-container-high">
+               <span className="material-symbols-outlined text-on-surface-variant">logout</span>
+               <div className="text-left">
+                 <p className="text-sm font-bold text-on-surface">Log Out</p>
+                 <p className="text-xs text-on-surface-variant">Sign out of your account</p>
+               </div>
+             </button>
+             <button onClick={() => setShowDeleteDialog(true)}
+               className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-error/5 border border-error/10 transition-colors hover:bg-error/10">
+               <span className="material-symbols-outlined text-error">delete_forever</span>
+               <div className="text-left">
+                 <p className="text-sm font-bold text-error">Delete Account</p>
+                 <p className="text-xs text-on-surface-variant">Permanently delete your account and all data</p>
+               </div>
+             </button>
+           </div>
+         </section>
+       </div>
+     </main>
+     <BottomNav />
+
+     <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+       <DialogContent className="rounded-3xl bg-surface-container border border-outline-variant/10 max-w-sm mx-4">
+         <DialogHeader>
+           <div className="flex justify-center">
+             <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center">
+               <span className="material-symbols-outlined text-error">warning</span>
+             </div>
+           </div>
+           <DialogTitle className="text-center text-lg font-extrabold text-on-surface">Delete Account?</DialogTitle>
+           <DialogDescription className="text-center text-sm text-on-surface-variant">
+             This will permanently delete your account, all seeds, conversations, and data. This cannot be undone.
+           </DialogDescription>
+         </DialogHeader>
+         <div className="py-4">
+           <p className="text-xs text-on-surface-variant">Type <span className="font-bold text-error">&quot;delete my account&quot;</span> to confirm:</p>
+           <Input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
+             placeholder="delete my account" className="rounded-full bg-surface-container-highest border-error/20 text-center" autoFocus />
+         </div>
+         <DialogFooter className="flex gap-2 sm:flex-col">
+           <Button onClick={handleDeleteAccount}
+             disabled={deleteConfirmText.toLowerCase() !== 'delete my account' || deleting}
+             className="w-full rounded-full bg-error text-on-error hover:bg-error/90 font-bold">
+             {deleting ? 'Deleting...' : 'Delete My Account'}
+           </Button>
+           <Button variant="ghost" onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText('') }}
+             className="w-full rounded-full text-on-surface-variant">Cancel</Button>
+         </DialogFooter>
+       </DialogContent>
+     </Dialog>
    </div>
-   <button
-   onClick={() => { setEditNickname(nickname); setEditingNickname(true) }}
-   className="text-xs text-primary font-medium"
-   >
-   Edit
-   </button>
-  </div>
-  )}
-  </div>
-
-  {/* Location */}
-  <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
-  {editingCity ? (
-  <div className="flex items-center gap-2">
-   <Input
-   value={editCity}
-   onChange={(e) => setEditCity(e.target.value)}
-   className="flex-1 rounded-full bg-surface-container-highest border-0"
-   placeholder="e.g. Munich, Berlin, NYC"
-   autoFocus
-   />
-   <Button size="sm" onClick={handleSaveCity} disabled={saving} className="rounded-full">
-   Save
-   </Button>
-   <Button size="sm" variant="ghost" onClick={() => setEditingCity(false)} className="rounded-full">
-   Cancel
-   </Button>
-  </div>
-  ) : (
-  <div className="flex items-center justify-between">
-   <div>
-   <p className="text-xs text-on-surface-variant">Location</p>
-   <p className="text-sm font-bold text-on-surface">{city || 'Not set'}</p>
-   <p className="text-[10px] text-on-surface-variant/60 mt-0.5">Used for weather in daily briefing</p>
-   </div>
-   <button
-   onClick={() => { setEditCity(city); setEditingCity(true) }}
-   className="text-xs text-primary font-medium"
-   >
-   Edit
-   </button>
-  </div>
-  )}
-  </div>
-  </div>
- </section>
-
- {/* ── Notifications ──────────────────── */}
- <section className="">
-  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
-  Notifications
-  </h2>
-  <div className="space-y-2">
-  {/* Push toggle */}
-  <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10">
-  <div className="flex items-center justify-between ">
-  <div>
-   <p className="text-sm font-bold text-on-surface">Push Notifications</p>
-   <p className="text-xs text-on-surface-variant">Daily briefings and reminders</p>
-  </div>
-  <Switch
-   checked={notificationsEnabled}
-   onCheckedChange={handleToggleNotifications}
-  />
-  </div>
-  {pushStatus === 'not-installed' && (
-  <div className="mt-3 p-3 rounded-xl bg-tertiary-container/20 border border-tertiary/20">
-   <p className="text-xs font-medium text-on-surface ">📱 Install to Home Screen first</p>
-   <p className="text-[11px] text-on-surface-variant leading-relaxed">
-   Safari requires the app installed to your home screen for notifications.
-   Tap the <span className="material-symbols-outlined text-[12px] align-middle" >ios_share</span> icon → Add to Home Screen.
-   </p>
-  </div>
-  )}
-  {pushStatus === 'denied' && (
-  <div className="mt-3 p-3 rounded-xl bg-error/10 border border-error/20">
-   <p className="text-xs font-medium text-error ">🚫 Notifications blocked</p>
-   <p className="text-[11px] text-on-surface-variant leading-relaxed">
-   Go to Settings → Safari → Notifications → Allow, or in Settings app → Greenplot → toggle Notifications on.
-   </p>
-  </div>
-  )}
-  {pushStatus === 'error' && (
-  <div className="mt-3 p-3 rounded-xl bg-error/10 border border-error/20">
-   <p className="text-xs font-medium text-error ">⚠ Could not enable notifications</p>
-   <p className="text-[11px] text-on-surface-variant leading-relaxed">
-   Make sure you've allowed notification permission when prompted. Try toggling again.
-   </p>
-  </div>
-  )}
-  </div>
-
-  </div>
- </section>
-
- {/* ── Integrations ───────────────────── */}
- <section className="">
-  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
-  Integrations
-  </h2>
-  <CalendarConnectCard />
- </section>
-
- {/* ── Notification Pipelines ──────────── */}
- <section className="">
-  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
-  Notification Pipelines
-  </h2>
-  <div className="space-y-2">
-  {PIPELINE_JOBS.map((job) => (
-  <div
-  key={job.id}
-  className="px-4 py-3 rounded-2xl bg-surface-container border border-outline-variant/10"
-  >
-  <div className="flex items-start gap-3">
-   <span className="text-lg mt-0.5 flex-shrink-0">{job.icon}</span>
-   <div className="flex-1 min-w-0">
-   <p className="text-sm font-bold text-on-surface">{job.name}</p>
-   <p className="text-[10px] text-on-surface-variant mt-0.5">{job.description}</p>
-   <div className="flex items-center gap-1.5 mt-1.5">
-   <span className="material-symbols-outlined text-on-surface-variant/50" >schedule</span>
-   <span className="text-[9px] text-on-surface-variant/60">{job.schedule}</span>
-   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">
-   {job.cadence}
-   </span>
-   </div>
-   </div>
-  </div>
-  </div>
-  ))}
-  </div>
-  <p className="text-[9px] text-on-surface-variant/40 mt-3 px-1">
-  Pipelines run automatically via OpenClaw cron. Deliveries go to your connected Telegram.
-  </p>
- </section>
-
- {/* ── Account ────────────────────────── */}
- <section className="">
-  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant ">
-  Account
-  </h2>
-  <div className="space-y-2">
-  {/* Logout */}
-  <button
-  onClick={handleLogout}
-  className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 transition-colors hover:bg-surface-container-high"
-  >
-  <span className="material-symbols-outlined text-on-surface-variant" >
-  logout
-  </span>
-  <div className="text-left">
-  <p className="text-sm font-bold text-on-surface">Log Out</p>
-  <p className="text-xs text-on-surface-variant">Sign out of your account</p>
-  </div>
-  </button>
-
-  {/* Delete account */}
-  <button
-  onClick={() => setShowDeleteDialog(true)}
-  className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-error/5 border border-error/10 transition-colors hover:bg-error/10"
-  >
-  <span className="material-symbols-outlined text-error" >
-  delete_forever
-  </span>
-  <div className="text-left">
-  <p className="text-sm font-bold text-error">Delete Account</p>
-  <p className="text-xs text-on-surface-variant">Permanently delete your account and all data</p>
-  </div>
-  </button>
-  </div>
- </section>
- </div>
- </main>
- <BottomNav />
-
- {/* ── Delete Account Confirmation Dialog ──────── */}
- <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
- <DialogContent className="rounded-3xl bg-surface-container border border-outline-variant/10 max-w-sm mx-4">
-  <DialogHeader>
-  <div className="flex justify-center ">
-  <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center">
-  <span className="material-symbols-outlined text-error" >
-   warning
-  </span>
-  </div>
-  </div>
-  <DialogTitle className="text-center text-lg font-extrabold text-on-surface">
-  Delete Account?
-  </DialogTitle>
-  <DialogDescription className="text-center text-sm text-on-surface-variant">
-  This will permanently delete your account, all seeds, conversations, and data. This cannot be undone.
-  </DialogDescription>
-  </DialogHeader>
-
-  <div className="py-4">
-  <p className="text-xs text-on-surface-variant ">
-  Type <span className="font-bold text-error">&quot;delete my account&quot;</span> to confirm:
-  </p>
-  <Input
-  value={deleteConfirmText}
-  onChange={(e) => setDeleteConfirmText(e.target.value)}
-  placeholder="delete my account"
-  className="rounded-full bg-surface-container-highest border-error/20 text-center"
-  autoFocus
-  />
-  </div>
-
-  <DialogFooter className="flex gap-2 sm:flex-col">
-  <Button
-  onClick={handleDeleteAccount}
-  disabled={deleteConfirmText.toLowerCase() !== 'delete my account' || deleting}
-  className="w-full rounded-full bg-error text-on-error hover:bg-error/90 font-bold"
-  >
-  {deleting ? 'Deleting...' : 'Delete My Account'}
-  </Button>
-  <Button
-  variant="ghost"
-  onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText('') }}
-  className="w-full rounded-full text-on-surface-variant"
-  >
-  Cancel
-  </Button>
-  </DialogFooter>
- </DialogContent>
- </Dialog>
- </div>
  )
 }

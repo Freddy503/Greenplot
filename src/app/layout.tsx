@@ -22,6 +22,13 @@ export const metadata: Metadata = {
   title: "Greenplot — The Living Laboratory",
   description: "Your AI-powered second brain",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/icon-192.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
