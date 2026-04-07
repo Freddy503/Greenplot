@@ -2255,14 +2255,18 @@ def _get_vapid_key_b64url() -> str:
     if not VAPID_PRIVATE_KEY:
         return ""
     try:
-        from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key
         import base64
         key = load_pem_private_key(VAPID_PRIVATE_KEY.encode(), password=None)
-        raw = key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
-        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+        # Extract raw 32-byte key via private_numbers (works on all cryptography versions)
+        private_int = key.private_numbers().private_value
+        raw = private_int.to_bytes(32, 'big')
+        b64url = base64.urlsafe_b64encode(raw).decode().rstrip("=")
+        print(f"✅ VAPID key converted: {len(b64url)} chars", flush=True)
+        return b64url
     except Exception as e:
         logger.error(f"❌ VAPID key conversion failed: {e}")
-        return VAPID_PRIVATE_KEY  # fallback: pass as-is
+        return VAPID_PRIVATE_KEY  # fallback
 
 def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
     """Send a Web Push notification to a single subscription. Returns 'ok', 'expired', or 'error'."""
