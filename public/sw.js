@@ -22,8 +22,12 @@ self.addEventListener('push', (event) => {
       body: data.body || 'You have a new notification',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      // Store both url and prompt so the click handler can open /chat?prompt=...
-      data: { url: data.url || '/chat', prompt: data.prompt || '' },
+      // Store url, prompt, and full briefing structure for click handler
+      data: {
+        url: data.url || '/chat',
+        prompt: data.prompt || '',
+        briefing: data.briefing ? JSON.stringify(data.briefing) : '',
+      },
       actions: data.actions || [],
       tag: data.tag || 'greenplot-notification',
       renotify: true,
@@ -36,7 +40,7 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification('Greenplot', {
         body: event.data.text(),
         icon: '/icon-192.png',
-        data: { url: '/chat', prompt: '' },
+        data: { url: '/chat', prompt: '', briefing: '' },
       })
     )
   }
@@ -48,12 +52,28 @@ self.addEventListener('notificationclick', (event) => {
 
   const data = event.notification.data || {}
   const prompt = typeof data === 'object' ? (data.prompt || '') : ''
+  const briefingStr = typeof data === 'object' ? (data.briefing || '') : ''
   const baseUrl = typeof data === 'object' ? (data.url || '/chat') : (data || '/chat')
 
   const title = event.notification.title || ''
   const body = event.notification.body || ''
 
-  // If a structured prompt is attached, open /chat with spark data encoded
+  // Parse briefing if available
+  let briefing = null
+  if (briefingStr) {
+    try {
+      briefing = JSON.parse(briefingStr)
+    } catch (e) {
+      console.error('Failed to parse briefing:', e)
+    }
+  }
+
+  // Build message to send to chat page
+  const postMessage = briefing
+    ? { type: 'PUSH_SPARK', briefing, title, body, prompt }
+    : { type: 'PUSH_SPARK', prompt, title, body }
+
+  // Fallback URL with encoded params (for new window case)
   const targetUrl = prompt
     ? `/chat?spark_prompt=${encodeURIComponent(prompt)}&spark_title=${encodeURIComponent(title)}&spark_body=${encodeURIComponent(body)}`
     : baseUrl
@@ -65,8 +85,8 @@ self.addEventListener('notificationclick', (event) => {
         if (client.url.includes('/chat') && 'focus' in client) {
           client.focus()
           // Send spark data via postMessage so the page shows the SparkCard
-          if (prompt || body) {
-            client.postMessage({ type: 'PUSH_SPARK', prompt, title, body })
+          if (prompt || body || briefing) {
+            client.postMessage(postMessage)
           }
           return
         }
