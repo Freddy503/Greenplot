@@ -160,7 +160,7 @@ export function usePushNotifications() {
 }
 
 // Poll for queued notifications (called from service worker or app)
-export async function pollNotifications() {
+export async function pollNotifications(onBriefing?: (briefing: any) => void) {
   try {
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
     const res = await fetch('/api/push/notifications', {
@@ -170,7 +170,18 @@ export async function pollNotifications() {
     const notifications = data.notifications || []
 
     for (const notif of notifications) {
-      if ('Notification' in window && Notification.permission === 'granted') {
+      // If briefing exists, pass to callback (for SparkCard display)
+      if (notif.briefing && onBriefing) {
+        const briefing = typeof notif.briefing === 'string' ? JSON.parse(notif.briefing) : notif.briefing
+        onBriefing({
+          type: briefing.type || 'daily_briefing',
+          title: notif.title || briefing.title || 'Briefing',
+          subtitle: briefing.subtitle,
+          sections: briefing.sections || [],
+          prompt: briefing.prompt,
+        })
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        // Fallback: create basic notification
         new Notification(notif.title, {
           body: notif.body,
           icon: '/icon-192.png',
@@ -178,5 +189,7 @@ export async function pollNotifications() {
         })
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[pollNotifications]', err)
+  }
 }

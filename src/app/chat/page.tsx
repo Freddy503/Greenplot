@@ -398,8 +398,12 @@ export default function ChatPage() {
 
   // Poll for push notifications every 60 seconds
   useEffect(() => {
-    const interval = setInterval(pollNotifications, 60000)
-    pollNotifications() // check immediately
+    const handleBriefing = (briefing: SparkNotification) => {
+      console.log('[poll] New briefing:', briefing.type, '—', briefing.sections.length, 'sections')
+      setSparkNotification(briefing)
+    }
+    const interval = setInterval(() => pollNotifications(handleBriefing), 60000)
+    pollNotifications(handleBriefing) // check immediately
     return () => clearInterval(interval)
   }, [])
 
