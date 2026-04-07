@@ -39,6 +39,7 @@ import asyncio
 
 # --- Web Push (VAPID) ---
 VAPID_PRIVATE_KEY = None
+print("DEBUG: VAPID loading starting...", flush=True)
 VAPID_CLAIMS = {"sub": "mailto:contact@example.com"}
 
 # Priority: 1) VAPID_PRIVATE_KEY_BASE64 env var (cleanest for Docker/CI)
@@ -50,8 +51,12 @@ _vapid_key_path = os.environ.get(
     os.path.join(os.path.dirname(os.path.dirname(__file__)), ".vapid_private.pem")
 )
 try:
+    print(f"DEBUG: _vapid_key_b64 = {_vapid_key_b64[:50] if _vapid_key_b64 else 'EMPTY'}", flush=True)
     if _vapid_key_b64:
-        VAPID_PRIVATE_KEY = _vapid_key_b64.strip()
+        import base64
+        print(f"DEBUG: Decoding base64...", flush=True)
+        VAPID_PRIVATE_KEY = base64.b64decode(_vapid_key_b64.strip()).decode('utf-8')
+        print(f"DEBUG: Decoded key starts with: {VAPID_PRIVATE_KEY[:30]}", flush=True)
         logger.info("✅ VAPID private key loaded from VAPID_PRIVATE_KEY_BASE64 env var")
     elif os.path.exists(_vapid_key_path):
         with open(_vapid_key_path, "r") as f:
@@ -60,7 +65,8 @@ try:
     else:
         logger.warning("⚠️ VAPID private key not found — set VAPID_PRIVATE_KEY_BASE64 env var or place .vapid_private.pem alongside the app")
 except Exception as e:
-    logger.error(f"❌ Failed to load VAPID key: {e}")
+    print(f"DEBUG: Exception in VAPID loading: {e}", flush=True)
+    logger.error(f"❌ Failed to load VAPID key: {e}", exc_info=True)
 
 def extract_text(msg: dict) -> str:
     if "content" in msg and msg["content"]:
