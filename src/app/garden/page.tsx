@@ -92,11 +92,28 @@ function getSeedIcon(domain: string) {
 
 // ── Seed Row ──────────────────────────────────────────
 
+function formatDate(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return mins <= 1 ? 'Just now' : `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days}d ago`
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
 function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; onClick: () => void }) {
   const icon = getSeedIcon(seed.domain || '')
   const isFilled = icon === 'psychiatry' || icon === 'eco'
   const statusStyle = getStatusStyle(seed.status || '')
   const tags = seed.domain ? seed.domain.split(',').map((t: string) => t.trim()).filter(Boolean) : []
+  const dateLabel = formatDate(seed.created)
 
   // Count connections: other seeds sharing at least one domain tag
   const connections = tags.length > 0
@@ -117,15 +134,16 @@ function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; on
         <p className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors mb-1">
           {seed.title}
         </p>
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((tag: string, i: number) => (
-              <Badge key={i} variant="outline" className="text-[9px] px-2 py-0.5 bg-surface-container-high border-outline-variant/20">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {dateLabel && (
+            <span className="text-[9px] text-on-surface-variant/50">{dateLabel}</span>
+          )}
+          {tags.map((tag: string, i: number) => (
+            <Badge key={i} variant="outline" className="text-[9px] px-2 py-0.5 bg-surface-container-high border-outline-variant/20">
+              {tag}
+            </Badge>
+          ))}
+        </div>
       </TableCell>
       <TableCell className="text-right w-20">
         <div className="flex flex-col items-end gap-0.5">
@@ -174,7 +192,10 @@ export default function GardenPage() {
       })
       .then((data) => {
         const raw = data.seeds || data || []
-        setSeeds(Array.isArray(raw) ? raw.map(parseSeed) : [])
+        const parsed = Array.isArray(raw) ? raw.map(parseSeed) : []
+        // Sort newest first
+        parsed.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+        setSeeds(parsed)
       })
       .catch(() => setError('Could not load seeds'))
       .finally(() => setLoading(false))
@@ -278,7 +299,7 @@ export default function GardenPage() {
               <TableHeader>
                 <TableRow className="border-b border-outline-variant/10">
                   <TableHead className="w-12 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Type</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Seed Title</TableHead>
+                  <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Seed · Date Added</TableHead>
                   <TableHead className="text-right w-20 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Status</TableHead>
                 </TableRow>
               </TableHeader>

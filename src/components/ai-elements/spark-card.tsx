@@ -58,14 +58,18 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
     setAddingToGarden(true)
     try {
       const allText = notification.sections
-        .map(s => `${s.title || ''}\n${typeof s.content === 'string' ? s.content : s.content.join('\n')}`)
-        .join('\n')
+        .map(s => `${s.title ? s.title + '\n' : ''}${typeof s.content === 'string' ? s.content : s.content.join('\n')}`)
+        .join('\n\n')
+        .slice(0, 4000) // stay under ThoughtCreate 5000 char limit
+
+      // Read token fresh in case prop was empty at render time
+      const freshToken = token || (typeof localStorage !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '')
 
       const res = await fetch('/api/seeds', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
         },
         body: JSON.stringify({ content: allText, source: notification.type }),
       })
