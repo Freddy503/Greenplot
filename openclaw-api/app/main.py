@@ -3329,10 +3329,6 @@ def _run_trigger_job(job_id: str):
 def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user)):
     """Manually trigger a scheduled job (requires user auth)."""
     return _run_trigger_job(job_id)
-    except Exception as e:
-        print(f"  EXCEPTION: {e}", flush=True)
-        logger.error(f"Job trigger failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ── Debug: test search_wiki directly ──────────────────────
 @app.get("/api/v1/debug/search_wiki")
