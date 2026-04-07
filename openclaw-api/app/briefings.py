@@ -65,7 +65,7 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
 
         # Use provided model or default to Qwen
         if not model:
-            model = "qwen/qwen3.6-plus:free"
+            model = "nvidia/nemotron-super-49b-v1:free"
 
         messages = []
         if system:
@@ -87,9 +87,9 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
     except Exception as e:
         logger.error(f"LLM call failed (model={model}): {e}")
         # Try fallback model
-        if model != "nvidia/nemotron-3-super-120b-a12b:free":
+        if model != "nvidia/nemotron-super-49b-v1:free":
             logger.info("Retrying with Nemotron fallback...")
-            return _call_llm(prompt, system, max_tokens, model="nvidia/nemotron-3-super-120b-a12b:free")
+            return _call_llm(prompt, system, max_tokens, model="nvidia/nemotron-super-49b-v1:free")
         return ""
 
 
@@ -278,7 +278,7 @@ Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Rel
     deep_pattern = _call_llm(
         llm_prompt,
         max_tokens=500,
-        model="nvidia/nemotron-3-super-120b-a12b:free"  # Nemotron is more reliable
+        model="nvidia/nemotron-super-49b-v1:free"  # Nemotron is more reliable
     )
     if not deep_pattern:
         deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
@@ -337,7 +337,7 @@ Keep concise. Format as bullet points.
     news_synthesis = _call_llm(
         news_prompt,
         max_tokens=600,
-        model="nvidia/nemotron-3-super-120b-a12b:free"  # Longer context for news synthesis
+        model="nvidia/nemotron-super-49b-v1:free"  # Longer context for news synthesis
     )
     if not news_synthesis:
         news_synthesis = "• Check recent news on " + theme_str + " for latest enterprise AI developments."
@@ -352,7 +352,7 @@ Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} prac
     academic_synthesis = _call_llm(
         academic_prompt,
         max_tokens=300,
-        model="nvidia/nemotron-3-super-120b-a12b:free"
+        model="nvidia/nemotron-super-49b-v1:free"
     )
     if not academic_synthesis:
         academic_synthesis = "Explore recent academic work in your domain."
@@ -401,7 +401,7 @@ Then propose ONE concrete 15-minute action for tomorrow that tests this contrari
     contrarian = _call_llm(
         contrarian_prompt,
         max_tokens=300,
-        model="nvidia/nemotron-3-super-120b-a12b:free"
+        model="nvidia/nemotron-super-49b-v1:free"
     )
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
@@ -449,7 +449,7 @@ Be analytical. Format: [Theme] / [Gap] / [Next Week's Constraint]
     evaluation = _call_llm(
         eval_prompt,
         max_tokens=400,
-        model="nvidia/nemotron-3-super-120b-a12b:free"  # Longer context for analysis
+        model="nvidia/nemotron-super-49b-v1:free"  # Longer context for analysis
     )
     if not evaluation:
         evaluation = f"Review your {theme_str} work this week. What emerged as most valuable?"
@@ -509,7 +509,7 @@ Be specific, not abstract. 15-min experiment.
     challenge = _call_llm(
         challenge_prompt,
         max_tokens=500,
-        model="nvidia/nemotron-3-super-120b-a12b:free"  # Creative synthesis task
+        model="nvidia/nemotron-super-49b-v1:free"  # Creative synthesis task
     )
     if not challenge:
         challenge = f"Apply concepts from {themes[0]} to solve a challenge in {themes[1]}."
