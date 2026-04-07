@@ -1271,7 +1271,23 @@ async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
     for s in seeds_data:
         seeds_content += f"## {s['title']}\nContent: {s['content']}\n\n"
     
-    title = f"{domain.title()} — Key Insights"
+    # Generate a meaningful title from the domain + seed content rather than generic "Key Insights"
+    title_hint = domain_seeds[0].get("title", "") if domain_seeds else ""
+    title_prompt = f"""Given these seed titles about the domain "{domain}":
+{chr(10).join(s.get('title','') for s in domain_seeds[:5] if s.get('title'))}
+
+Write ONE short wiki article title (5-8 words max) that captures the core concept.
+Do NOT use "Key Insights", "Overview" or generic phrases. Be specific and sharp.
+Reply with just the title, no quotes, no explanation."""
+    from app.briefings import _call_llm
+    generated_title = _call_llm(title_prompt, max_tokens=30)
+    # Clean up: strip quotes, newlines, fallback to domain name
+    import re as _re
+    generated_title = _re.sub(r'["\'\n]', '', generated_title or '').strip()
+    if not generated_title or len(generated_title) < 5 or len(generated_title) > 80:
+        generated_title = domain.replace('-', ' ').replace('_', ' ').title()
+    title = generated_title
+
     user_prompt = build_wiki_user_prompt(title, domain, links_content, seeds_content)
     article_content = await synthesize_with_llm(WIKI_SYSTEM_PROMPT, user_prompt)
     
