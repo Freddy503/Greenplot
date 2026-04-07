@@ -66,44 +66,67 @@ All briefings follow this JSON structure:
 
 ## Configuration
 
-### LLM Client
+### LLM Clients (OpenRouter)
 
-By default, the system tries to use the configured LLM client from your settings:
+The system uses **OpenRouter** with OpenAI SDK. Models are free tier:
 
-```python
-# In app/briefings.py
-client = settings.llm_client  # Falls back to Anthropic if not set
-```
-
-**To use Nemotron or Qwen**, update your `app/config.py`:
-
-```python
-from anthropic import Anthropic
-
-class Settings:
-    llm_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    # OR
-    # llm_client = your_custom_nemotron_client()
-```
-
-### Web Search APIs
-
-The system supports two web search providers:
-
-**Option 1: SerpAPI** (recommended for news)
+**Primary Model: Qwen**
 ```bash
-export SERPAPI_API_KEY="your_api_key"
+Model: qwen/qwen3.6-plus:free
+Used for: general synthesis, news, reflection, quick tasks
 ```
 
-**Option 2: Tavily** (free tier available)
+**Fallback Model: Nemotron**
 ```bash
-export TAVILY_API_KEY="your_api_key"
-export TAVILY=1  # Enable Tavily
+Model: nvidia/nemotron-3-super-120b-a12b:free
+Used for: deep pattern analysis, weekly eval, cross-domain synthesis
+Falls back if Qwen fails or times out
 ```
+
+**Configuration** (in `.env` or `app/config.py`):
+```bash
+OPENROUTER_API_KEY="your_api_key_from_openrouter.ai"
+OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"  # Already set in config.py
+```
+
+Get your key at: https://openrouter.ai/keys
+
+### Web Search (Exa API)
+
+The system uses **Exa API** for high-quality web search (news + academic papers):
+
+```bash
+EXA_API_KEY="your_api_key_from_exa.ai"
+```
+
+Get your key at: https://exa.ai/
+
+**Features:**
+- Async search with 15s timeout
+- Returns: title, url, text (300-char snippet)
+- Auto-saves results as Sources in Weaviate
+- Same integration as existing `web_search` tool in chat
 
 ### Weather (Free, No Auth)
 
 Uses Open-Meteo geocoding + current weather API. No configuration needed.
+
+## Environment Setup
+
+**Quick Reference**: Add these to your `.env` file or OpenClaw environment:
+
+```bash
+# OpenRouter (for Qwen + Nemotron)
+OPENROUTER_API_KEY="<OPENROUTER_API_KEY>"  # Get from https://openrouter.ai/keys
+OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"  # Already in config.py
+
+# Exa API (for web search)
+EXA_API_KEY="..."  # Get from https://exa.ai/
+
+# Optional: Override default models
+# BRIEFING_DEFAULT_MODEL="qwen/qwen3.6-plus:free"  # Currently hardcoded per task
+# BRIEFING_FALLBACK_MODEL="nvidia/nemotron-3-super-120b-a12b:free"
+```
 
 ## Testing
 
@@ -248,9 +271,11 @@ cache_set(f"briefing:{briefing_type}:{user_id}", json.dumps(briefing), ttl=3600)
 
 ### Briefing content is generic?
 
-- **LLM failing silently**: Set `ANTHROPIC_API_KEY` and check logs for errors
-- **Web search failing**: Set `SERPAPI_API_KEY` or `TAVILY_API_KEY`
-- **User themes empty**: Check that user has recent seeds/chats
+- **LLM failing**: Ensure `OPENROUTER_API_KEY` is set. Check logs for model-specific errors.
+  - Both Qwen and Nemotron should work free tier
+  - If Qwen fails, Nemotron fallback should kick in automatically
+- **Web search failing**: Ensure `EXA_API_KEY` is set. Exa returns 200 OK with empty results if quota exceeded.
+- **User themes empty**: Check that user has recent seeds/chats in the database
 
 ### Frontend not rendering multi-section?
 
@@ -260,7 +285,38 @@ cache_set(f"briefing:{briefing_type}:{user_id}", json.dumps(briefing), ttl=3600)
 
 ## Files Modified
 
-- `openclaw-api/app/briefings.py` — New module (400+ lines)
+**Backend:**
+- `openclaw-api/app/briefings.py` — Briefing generation + OpenRouter/Exa integration (500+ lines)
 - `openclaw-api/app/main.py` — Updated job handlers + store/broadcast functions
+
+**Frontend:**
 - `src/components/ai-elements/spark-card.tsx` — Enhanced to render multi-section briefings
 - `src/app/settings/page.tsx` — Updated notification schedule display
+
+## Architecture Notes
+
+### Model Selection Strategy
+
+```
+Task Type          | Primary Model              | Fallback
+-------------------|----------------------------|---------
+News synthesis     | Qwen (fast)               | Nemotron
+Reflection/quick   | Qwen                      | Nemotron
+Deep pattern       | Nemotron (powerful)       | Qwen
+Analysis/eval      | Nemotron                  | Qwen
+Cross-domain       | Nemotron (creative)       | Qwen
+```
+
+### Rate Limiting
+
+OpenRouter free tier has NO rate limits on these models. If you hit quota issues:
+1. Switch to paid tier
+2. Use different models (e.g., gpt-4o-mini for faster, cheaper inference)
+
+### Cost Estimate
+
+All models used are **free tier** on OpenRouter:
+- `qwen/qwen3.6-plus:free` — $0 per 1M tokens
+- `nvidia/nemotron-3-super-120b-a12b:free` — $0 per 1M tokens
+
+Exa API: Check your plan at https://exa.ai/ (free tier available)
