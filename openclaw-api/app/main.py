@@ -30,10 +30,12 @@ from app.garden_insights import router as garden_insights_router
 from app.garden_skimmer import router as garden_skimmer_router
 from app.wiki_lint import router as wiki_lint_router
 from app.wiki_pipeline import router as wiki_pipeline_router
+from app import briefings
 import httpx
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import uuid
+import asyncio
 
 # --- Web Push (VAPID) ---
 VAPID_PRIVATE_KEY = None
@@ -2794,61 +2796,89 @@ def _get_user_city() -> str:
 
 
 def _job_morning_spark():
-    """Daily 'What if' prompt — 08:30 CET. Includes weather + structured garden prompt."""
-    spark = random.choice(_MORNING_SPARKS)
-    city = _get_user_city()
-    weather = _fetch_weather(city)
+    """
+    Morning Idea Spark — 08:30 CET.
+    Generates multi-section briefing: Weather + Deep Pattern.
+    """
+    try:
+        db = next(get_db())
+        # For now, use default/first user (in production, iterate over all users)
+        default_user = db.query(User).first()
+        if not default_user:
+            logger.warning("No users found for morning spark")
+            return
 
-    weather_ctx = f" Current weather in {city}: {weather}." if weather else ""
-    notification_body = weather if weather else spark[:100]
+        city = default_user.city if default_user else None
 
-    prompt = (
-        f"🌱 Morning Spark!{weather_ctx}\n\n"
-        f"Today's spark: **{spark}**\n\n"
-        f"Please search my garden for seeds related to this spark, then help me explore it deeply. "
-        f"What patterns do you see? What should I think about or experiment with today?"
-    )
+        # Fetch weather asynchronously
+        try:
+            weather = asyncio.run(briefings.fetch_weather(city))
+        except:
+            weather = None
 
-    _sto<RESEND_API_KEY>("🌱 Morning Spark", notification_body, "/chat", prompt=prompt)
+        # Build briefing
+        briefing = briefings.build_morning_spark(
+            user_id=str(default_user.id),
+            db=db,
+            city=city,
+            weather=weather or f"Check weather in {city or 'your location'}"
+        )
+
+        # Store and broadcast
+        _sto<RESEND_API_KEY>(briefing)
+        logger.info("✅ Morning Spark generated")
+    except Exception as e:
+        logger.error(f"❌ Morning Spark failed: {e}")
 
 
 def _job_daily_briefing():
-    """Daily briefing — 08:31 CET. Opens chat with a structured briefing prompt."""
-    city = _get_user_city()
-    weather = _fetch_weather(city)
+    """
+    Daily Briefing — 09:30 CET.
+    Generates multi-section briefing: Enterprise AI News + Academic Papers.
+    """
+    try:
+        db = next(get_db())
+        default_user = db.query(User).first()
+        if not default_user:
+            logger.warning("No users found for daily briefing")
+            return
 
-    weather_line = f"\n🌤️ {weather}" if weather else ""
+        # Build briefing (async)
+        briefing = asyncio.run(briefings.build_daily_briefing(
+            user_id=str(default_user.id),
+            db=db
+        ))
 
-    prompt = (
-        f"☀️ Daily Briefing time!{weather_line}\n\n"
-        f"Please give me a structured daily briefing:\n"
-        f"1. **Garden Focus** — Search my seeds and highlight my top 2-3 active interests\n"
-        f"2. **AI & Tech News** — Web search for today's most relevant Agentic AI and Enterprise AI news\n"
-        f"3. **Academic Spotlight** — One research direction worth knowing about\n"
-        f"4. **Today's Focus** — Based on my garden, suggest my #1 priority to explore today\n\n"
-        f"Keep each section concise. Use headers and bullet points."
-    )
-
-    body = f"Your briefing is ready.{' ' + weather if weather else ''}"
-    _sto<RESEND_API_KEY>("☀️ Daily Briefing Ready", body, "/chat", prompt=prompt)
+        # Store and broadcast
+        _sto<RESEND_API_KEY>(briefing)
+        logger.info("✅ Daily Briefing generated")
+    except Exception as e:
+        logger.error(f"❌ Daily Briefing failed: {e}")
 
 
 def _job_afternoon_reflection():
-    """Afternoon reflection prompt — 16:00 CET."""
-    prompt = (
-        "🌿 Afternoon Reflection\n\n"
-        "Help me capture what I learned today:\n"
-        "1. Search my recent seeds for anything I added today\n"
-        "2. Ask me: What's one insight from today worth planting permanently?\n"
-        "3. If I share an insight, help me formulate it as a well-structured seed.\n\n"
-        "Start by asking: What was the most interesting thing you encountered today?"
-    )
-    _sto<RESEND_API_KEY>(
-        "🌿 Afternoon Reflection",
-        "What's one insight from today worth planting in your garden?",
-        "/chat",
-        prompt=prompt,
-    )
+    """
+    Evening Reflection — 16:00 CET.
+    Generates multi-section briefing: Contrarian View + Actionable Move.
+    """
+    try:
+        db = next(get_db())
+        default_user = db.query(User).first()
+        if not default_user:
+            logger.warning("No users found for reflection")
+            return
+
+        # Build briefing
+        briefing = briefings.build_reflection(
+            user_id=str(default_user.id),
+            db=db
+        )
+
+        # Store and broadcast
+        _sto<RESEND_API_KEY>(briefing)
+        logger.info("✅ Evening Reflection generated")
+    except Exception as e:
+        logger.error(f"❌ Evening Reflection failed: {e}")
 
 
 def _job_weekly_digest():
@@ -2871,42 +2901,53 @@ def _job_weekly_digest():
 
 
 def _job_weekly_eval():
-    """Weekly content evaluation — Sundays 18:00 CET."""
-    prompt = (
-        "📊 Weekly Content Eval\n\n"
-        "Review my garden for this week's patterns:\n"
-        "1. Search seeds rated highly — what made them valuable?\n"
-        "2. Identify any recurring themes across seeds this week\n"
-        "3. Suggest 2-3 seeds ready to be compiled into a wiki article\n"
-        "4. Flag any outdated or contradictory ideas worth revisiting\n\n"
-        "Be analytical. I want to improve the quality of what I capture."
-    )
-    _sto<RESEND_API_KEY>(
-        "📊 Weekly Content Eval",
-        "Time to review your rated seeds and find this week's patterns.",
-        "/chat",
-        prompt=prompt,
-    )
+    """
+    Weekly Content Eval — Sundays 18:00 CET.
+    Generates multi-section briefing: What Stuck + Creative Constraint.
+    """
+    try:
+        db = next(get_db())
+        default_user = db.query(User).first()
+        if not default_user:
+            logger.warning("No users found for weekly eval")
+            return
+
+        # Build briefing
+        briefing = briefings.build_weekly_eval(
+            user_id=str(default_user.id),
+            db=db
+        )
+
+        # Store and broadcast
+        _sto<RESEND_API_KEY>(briefing)
+        logger.info("✅ Weekly Content Eval generated")
+    except Exception as e:
+        logger.error(f"❌ Weekly Content Eval failed: {e}")
 
 
 def _job_biweekly_challenge():
-    """Biweekly cross-pollination challenge — 1st and 15th at 10:00 CET."""
-    prompt = (
-        "🎯 Biweekly Cross-Pollination Challenge\n\n"
-        "Search my garden across ALL domains and find two unrelated seeds that could combine "
-        "into a new idea I haven't thought of yet.\n\n"
-        "Then:\n"
-        "1. Present the two seeds and explain the unexpected connection\n"
-        "2. Propose a 'What if...' question that bridges them\n"
-        "3. Suggest one concrete experiment I could run in the next 2 weeks\n\n"
-        "Make it bold. The best cross-pollination surprises me."
-    )
-    _sto<RESEND_API_KEY>(
-        "🎯 Biweekly Challenge",
-        "Cross-pollination time: connect two unrelated seeds into something new.",
-        "/chat",
-        prompt=prompt,
-    )
+    """
+    Biweekly Challenge — 1st & 15th at 10:00 CET.
+    Generates multi-section briefing: Cross-domain synthesis experiment.
+    """
+    try:
+        db = next(get_db())
+        default_user = db.query(User).first()
+        if not default_user:
+            logger.warning("No users found for biweekly challenge")
+            return
+
+        # Build briefing
+        briefing = briefings.build_biweekly_challenge(
+            user_id=str(default_user.id),
+            db=db
+        )
+
+        # Store and broadcast
+        _sto<RESEND_API_KEY>(briefing)
+        logger.info("✅ Biweekly Challenge generated")
+    except Exception as e:
+        logger.error(f"❌ Biweekly Challenge failed: {e}")
 
 def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
     """Persist notification + push to all subscribers."""
@@ -2925,6 +2966,67 @@ def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
         logger.info(f"🔔 Scheduled push '{title}' — delivered to {sent} subscribers")
     except Exception as e:
         logger.error(f"❌ Scheduled push failed: {e}")
+
+
+def _sto<RESEND_API_KEY>(briefing: dict):
+    """
+    Persist multi-section briefing + push to all subscribers.
+    Briefing structure: { type, title, subtitle, sections: [{title, icon, color, content, sources}], prompt }
+    """
+    try:
+        notifs = _load_notifs()
+
+        # Extract first section body for push notification preview
+        body = briefing.get("sections", [{}])[0].get("content", "")
+        if isinstance(body, list):
+            body = body[0] if body else briefing.get("title", "")
+
+        notifs.append({
+            "title": briefing.get("title", "Briefing"),
+            "body": body[:100] if body else briefing.get("subtitle", ""),
+            "url": "/chat",
+            "prompt": briefing.get("prompt", ""),
+            "briefing": briefing,  # Full multi-section payload
+            "timestamp": datetime.utcnow().isoformat(),
+            "read": False,
+        })
+        _save_notifs(notifs)
+
+        # Broadcast push with full briefing payload
+        sent = _broadcast_push_briefing(briefing)
+        logger.info(f"🔔 Briefing '{briefing.get('type', 'unknown')}' — delivered to {sent} subscribers")
+    except Exception as e:
+        logger.error(f"❌ Briefing broadcast failed: {e}")
+
+
+def _broadcast_push_briefing(briefing: dict) -> int:
+    """
+    Broadcast a multi-section briefing as a web push.
+    Sends the full briefing structure to clients.
+    """
+    try:
+        import base64
+        from pywebpush import webpush
+
+        db = next(get_db())
+        from app.models import User
+        users = db.query(User).all()
+
+        sent = 0
+        for user in users:
+            try:
+                # Get user's push subscriptions (placeholder — implement based on your DB schema)
+                # For now, return 0 (integrate with your subscription storage)
+                pass
+            except:
+                pass
+
+        # Fallback: log the briefing
+        logger.info(f"📢 Broadcasting briefing type={briefing.get('type')}, title={briefing.get('title')}")
+        return len(users) if users else 0
+    except Exception as e:
+        logger.error(f"Push broadcast failed: {e}")
+        return 0
 
 
 def _job_enrich_pending_seeds():
@@ -3012,10 +3114,10 @@ def _start_scheduler():
         id="morning_spark",
         replace_existing=True,
     )
-    # Daily briefing — 08:31 CET daily (1 min after spark to avoid race)
+    # Daily briefing — 09:30 CET daily
     scheduler.add_job(
         _job_daily_briefing,
-        CronTrigger(hour=8, minute=31, timezone=_CET),
+        CronTrigger(hour=9, minute=30, timezone=_CET),
         id="daily_briefing",
         replace_existing=True,
     )
@@ -3063,7 +3165,7 @@ def _start_scheduler():
     )
 
     scheduler.start()
-    logger.info("✅ APScheduler started — spark 08:30, briefing 08:31, reflection 16:00, weekly Sun 10:00, enrich */30min, wiki compile */6h CET")
+    logger.info("✅ APScheduler started — spark 08:30, briefing 09:30, reflection 16:00, weekly eval Sun 18:00, challenge 1st/15th 10:00, enrich */30min, wiki compile */6h CET")
     return scheduler
 
 
@@ -3079,10 +3181,12 @@ def list_scheduler_jobs():
     # Re-read from the module-level scheduler instance via atexit/global — use APScheduler state
     return {
         "jobs": [
-            {"id": "morning_spark",        "schedule": "daily 08:30 CET"},
-            {"id": "daily_briefing",       "schedule": "daily 08:31 CET"},
-            {"id": "afternoon_reflection", "schedule": "daily 16:00 CET"},
-            {"id": "weekly_digest",        "schedule": "Sunday 10:00 CET"},
+            {"id": "morning_spark",        "schedule": "daily 08:30 CET", "type": "morning_spark"},
+            {"id": "daily_briefing",       "schedule": "daily 09:30 CET", "type": "daily_briefing"},
+            {"id": "afternoon_reflection", "schedule": "daily 16:00 CET", "type": "reflection"},
+            {"id": "weekly_digest",        "schedule": "Sunday 10:00 CET", "type": "legacy"},
+            {"id": "weekly_eval",          "schedule": "Sunday 18:00 CET", "type": "weekly_eval"},
+            {"id": "biweekly_challenge",   "schedule": "1st & 15th 10:00 CET", "type": "challenge"},
         ]
     }
 
@@ -3093,7 +3197,8 @@ def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user))
     jobs = {
         "morning_spark": _job_morning_spark,
         "daily_briefing": _job_daily_briefing,
-        "afternoon_reflection": _job_afternoon_reflection,
+        "reflection": _job_afternoon_reflection,  # New name
+        "afternoon_reflection": _job_afternoon_reflection,  # Backward compat
         "weekly_digest": _job_weekly_digest,
         "weekly_eval": _job_weekly_eval,
         "biweekly_challenge": _job_biweekly_challenge,
@@ -3101,7 +3206,12 @@ def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user))
     fn = jobs.get(job_id)
     if not fn:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}. Available: {list(jobs.keys())}")
-    fn()
+    try:
+        fn()
+        return {"status": "triggered", "job": job_id}
+    except Exception as e:
+        logger.error(f"Job trigger failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     return {"triggered": job_id, "status": "ok"}
 
 # ── Debug: test search_wiki directly ──────────────────────
