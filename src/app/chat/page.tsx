@@ -326,24 +326,53 @@ export default function ChatPage() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     const sparkPrompt = params.get('spark_prompt')
-    if (!sparkPrompt) return
+    const sparkTitle = params.get('spark_title')
+    if (!sparkPrompt || !sparkTitle) return
+
     // Clear the query params immediately so refresh doesn't re-fire
     window.history.replaceState({}, '', '/chat')
     setPushPromptHandled(true)
-    const sparkBody = params.get('spark_body') || sparkPrompt
-    setSparkNotification({
-      type: 'morning_spark',
-      title: params.get('spark_title') || 'Briefing',
-      sections: sparkBody
-        ? [{
-          title: '',
-          icon: 'lightbulb',
-          color: 'text-primary',
-          content: sparkBody,
-        }]
-        : [],
-      prompt: sparkPrompt,
-    })
+
+    // Try to fetch the full briefing from backend by matching the title
+    const fetchFullBriefing = async () => {
+      try {
+        const res = await fetch('/api/v1/push/notifications')
+        const data = await res.json()
+        const notifications = data.notifications || []
+
+        // Find the matching notification by title (most recent first)
+        const match = notifications
+          .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .find((n: any) => n.title === sparkTitle)
+
+        if (match?.briefing) {
+          console.log('[PUSH_SPARK] Found full briefing from backend:', match.briefing)
+          setSparkNotification(match.briefing as SparkNotification)
+          return
+        }
+      } catch (e) {
+        console.error('[PUSH_SPARK] Failed to fetch full briefing:', e)
+      }
+
+      // Fallback: create basic notification from URL params
+      console.log('[PUSH_SPARK] Using URL param fallback')
+      const sparkBody = params.get('spark_body') || sparkPrompt
+      setSparkNotification({
+        type: 'morning_spark',
+        title: sparkTitle || 'Briefing',
+        sections: sparkBody
+          ? [{
+            title: '',
+            icon: 'lightbulb',
+            color: 'text-primary',
+            content: sparkBody,
+          }]
+          : [],
+        prompt: sparkPrompt,
+      })
+    }
+
+    fetchFullBriefing()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, pushPromptHandled])
 
