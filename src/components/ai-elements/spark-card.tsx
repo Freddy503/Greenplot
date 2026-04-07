@@ -39,6 +39,21 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
   const [addingToGarden, setAddingToGarden] = useState(false)
   const config = typeConfig[notification.type]
 
+  // DEBUG: Log what SparkCard is receiving
+  console.log('🎨 SparkCard rendered with:', {
+    type: notification.type,
+    title: notification.title,
+    subtitle: notification.subtitle,
+    sectionsCount: notification.sections.length,
+    sections: notification.sections.map(s => ({
+      title: s.title,
+      contentType: typeof s.content,
+      contentLength: typeof s.content === 'string' ? s.content.length : s.content.length,
+      hasSources: !!(s.sources?.length)
+    })),
+    fullNotification: notification
+  })
+
   const handleAddToGarden = async () => {
     setAddingToGarden(true)
     try {
