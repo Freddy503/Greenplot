@@ -167,8 +167,11 @@ export default function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<string>('')
   // SparkCard — shown when a push notification is clicked
   const [sparkNotification, setSparkNotification] = useState<SparkNotification | null>(null)
+  // Track if we've already fetched suggestions on mount
+  const suggestionsInitializedRef = useRef(false)
 
   const fetchSuggestions = useCallback((token: string) => {
+    console.log('[suggestions] Fetching...')
     fetch('/api/garden/prompt-suggestions', {
       method: 'POST',
       headers: {
@@ -191,7 +194,7 @@ export default function ChatPage() {
           return
         }
         if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
-          console.log('[suggestions] Loaded', data.suggestions.length, 'suggestions')
+          console.log('[suggestions] ✓ Loaded', data.suggestions.length, 'suggestions:', data.suggestions)
           setDynamicSuggestions(data.suggestions)
         } else {
           console.warn('[suggestions] API returned empty or invalid suggestions:', data)
@@ -207,8 +210,10 @@ export default function ChatPage() {
     try {
       const token = localStorage.getItem('greenplot_token') || ''
       setAuthToken(token)
-      // Only fetch suggestions after app is restored and we have a token
-      if (restored && token) {
+      // Only fetch suggestions ONCE after app is restored and we have a token
+      if (restored && token && !suggestionsInitializedRef.current) {
+        console.log('[suggestions] Initializing (restored=', restored, ', initialized=', suggestionsInitializedRef.current, ')')
+        suggestionsInitializedRef.current = true
         fetchSuggestions(token)
       }
     } catch (err) {
@@ -388,6 +393,7 @@ export default function ChatPage() {
     localStorage.setItem('greenplot_active_conv', newId)
     setMessages([])
     // Refresh suggestions based on latest seeds
+    suggestionsInitializedRef.current = false // Allow fetch on new chat
     const token = localStorage.getItem('greenplot_token') || ''
     fetchSuggestions(token)
   }
