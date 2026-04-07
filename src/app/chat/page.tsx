@@ -352,10 +352,22 @@ export default function ChatPage() {
     if (!('serviceWorker' in navigator)) return
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'PUSH_SPARK') {
+        console.log('[PUSH_SPARK] Received from SW:', {
+          type: event.data.type,
+          title: event.data.title,
+          body: event.data.body,
+          hasBriefing: !!event.data.briefing,
+          briefingType: event.data.briefing?.type,
+          briefingSections: event.data.briefing?.sections?.length,
+          fullBriefing: event.data.briefing,
+        })
+
         // If full briefing structure is available, use it directly
         if (event.data.briefing) {
+          console.log('[PUSH_SPARK] Using full briefing, setting to SparkCard:', event.data.briefing)
           setSparkNotification(event.data.briefing as SparkNotification)
         } else {
+          console.log('[PUSH_SPARK] No briefing found, using fallback')
           // Fallback to creating a basic notification from title/body
           setSparkNotification({
             type: 'morning_spark',
