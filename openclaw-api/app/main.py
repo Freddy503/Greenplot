@@ -2250,6 +2250,20 @@ def _save_subs(subs: list):
     with open(_SUBS_FILE, "w") as f:
         json.dump(subs, f, indent=2)
 
+def _get_vapid_key_b64url() -> str:
+    """Convert PKCS8 PEM private key to raw base64url format required by pywebpush."""
+    if not VAPID_PRIVATE_KEY:
+        return ""
+    try:
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+        import base64
+        key = load_pem_private_key(VAPID_PRIVATE_KEY.encode(), password=None)
+        raw = key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+    except Exception as e:
+        logger.error(f"❌ VAPID key conversion failed: {e}")
+        return VAPID_PRIVATE_KEY  # fallback: pass as-is
+
 def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
     """Send a Web Push notification to a single subscription. Returns 'ok', 'expired', or 'error'."""
     try:
@@ -2257,7 +2271,7 @@ def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
         response = webpush(
             subscription_info=subscription_info,
             data=payload,
-            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_private_key=_get_vapid_key_b64url(),
             vapid_claims=VAPID_CLAIMS.copy(),
         )
         return "ok" if response.status_code in (200, 201) else "error"
@@ -2283,19 +2297,11 @@ def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = "",
         logger.info("📭 No push subscriptions registered")
         return 0
 
-    # Build payload with full briefing if provided
-    payload_dict = {"title": title, "body": body or "", "url": url, "prompt": prompt}
-    if briefing:
-        payload_dict["briefing"] = briefing
+    # Build lightweight payload — full briefing is too large for web push (4KB limit)
+    # The app fetches the full briefing via polling /api/v1/push/notifications
+    payload_dict = {"title": title, "body": (body or "")[:120], "url": url, "prompt": prompt[:200] if prompt else ""}
     payload = json.dumps(payload_dict)
-    payload_size = len(payload.encode('utf-8'))
-    logger.info(f"🔔 Web push payload size: {payload_size} bytes (4KB limit = 4096)")
-    if payload_size > 4096:
-        logger.warning(f"⚠️ Payload exceeds 4KB limit! Sections in briefing: {len(briefing.get('sections', []))}")
-        # Log each section size
-        for i, section in enumerate(briefing.get('sections', [])):
-            section_json = json.dumps(section)
-            logger.info(f"  Section {i} ({section.get('title', 'untitled')}): {len(section_json.encode('utf-8'))} bytes")
+    print(f"🔔 Web push payload: {len(payload.encode('utf-8'))} bytes", flush=True)
     sent = 0
     expired = []
 
