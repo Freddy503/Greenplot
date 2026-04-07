@@ -274,7 +274,7 @@ Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Rel
     deep_pattern = _call_llm(
         llm_prompt,
         max_tokens=500,
-        model="qwen/qwen3.6-plus:free"
+        model="nvidia/nemotron-3-super-120b-a12b:free"  # Nemotron is more reliable
     )
     if not deep_pattern:
         deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
@@ -348,7 +348,7 @@ Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} prac
     academic_synthesis = _call_llm(
         academic_prompt,
         max_tokens=300,
-        model="qwen/qwen3.6-plus:free"
+        model="nvidia/nemotron-3-super-120b-a12b:free"
     )
     if not academic_synthesis:
         academic_synthesis = "Explore recent academic work in your domain."
@@ -397,7 +397,7 @@ Then propose ONE concrete 15-minute action for tomorrow that tests this contrari
     contrarian = _call_llm(
         contrarian_prompt,
         max_tokens=300,
-        model="qwen/qwen3.6-plus:free"
+        model="nvidia/nemotron-3-super-120b-a12b:free"
     )
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
