@@ -86,10 +86,17 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
     .join('\n\n')
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[80] flex items-end justify-center pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-2xl mx-3 mb-24 bg-surface-container rounded-3xl border border-outline-variant/15 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 max-h-[80vh] overflow-y-auto">
-        {/* Header */}
-        <div className={`bg-gradient-to-r ${config.bgColor} to-transparent relative overflow-hidden`}>
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onDismiss}
+        className="fixed inset-0 bg-black/20 z-[75] animate-in fade-in duration-300"
+      />
+      {/* Card - Full height bottom sheet on mobile */}
+      <div className="fixed inset-x-0 bottom-0 z-[80] flex items-end justify-center pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-2xl bg-surface-container rounded-t-3xl border-t border-x border-outline-variant/15 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 h-[90vh] md:h-auto md:max-h-[80vh] md:mx-3 md:mb-24 md:rounded-3xl flex flex-col">
+        {/* Header - Sticky */}
+        <div className={`bg-gradient-to-r ${config.bgColor} to-transparent relative overflow-hidden sticky top-0 z-10`}>
           <div className="flex items-center gap-3 px-6 py-5">
             <div className="relative flex-shrink-0">
               <div className="absolute inset-0 rounded-full blur-xl opacity-30 bg-primary scale-150" />
@@ -114,8 +121,8 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
           </div>
         </div>
 
-        {/* Sections */}
-        <div className="px-6 py-5 space-y-6">
+        {/* Sections - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {notification.sections.map((section, idx) => (
             <div key={idx} className="space-y-3">
               {section.title && (
@@ -163,8 +170,8 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
           ))}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 px-6 pb-6 pt-4 border-t border-outline-variant/10">
+        {/* Actions - Sticky Bottom */}
+        <div className="sticky bottom-0 flex items-center gap-2 px-6 pb-6 pt-4 border-t border-outline-variant/10 bg-surface-container">
           <Button
             onClick={() => onChatAboutThis(combinedContent)}
             className="flex-1 rounded-2xl bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm h-10"
@@ -188,7 +195,8 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
             )}
           </Button>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
