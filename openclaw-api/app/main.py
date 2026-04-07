@@ -2826,46 +2826,47 @@ def _get_user_city() -> str:
 def _job_morning_spark():
     """
     Morning Idea Spark — 08:30 CET.
-    Generates multi-section briefing: Weather + Deep Pattern.
+    Generates multi-section briefing per user: Weather + Deep Pattern.
     """
     print("🌅 MORNING SPARK JOB CALLED", flush=True)
     logger.info("🌅 Starting morning spark job...")
     try:
         db = next(get_db())
-        # For now, use default/first user (in production, iterate over all users)
-        default_user = db.query(User).first()
-        if not default_user:
+        users = db.query(User).all()
+        if not users:
             logger.warning("❌ No users found for morning spark")
             return
+        logger.info(f"👥 Processing {len(users)} user(s)")
 
-        city = default_user.city if default_user else None
-        logger.info(f"📍 Using city: {city}")
+        for user in users:
+            try:
+                city = getattr(user, 'city', None)
+                logger.info(f"📍 User {user.id}: city={city}")
 
-        # Fetch weather asynchronously
-        try:
-            logger.info("🌡️ Fetching weather...")
-            weather = asyncio.run(briefings.fetch_weather(city))
-            logger.info(f"✓ Weather fetched: {weather[:50] if weather else 'None'}")
-        except Exception as we:
-            logger.error(f"⚠️ Weather fetch failed: {we}")
-            weather = None
+                # Fetch weather per user city
+                try:
+                    weather = asyncio.run(briefings.fetch_weather(city))
+                except Exception as we:
+                    logger.error(f"⚠️ Weather fetch failed for {user.id}: {we}")
+                    weather = None
 
-        # Build briefing
-        logger.info("🔨 Building morning spark briefing...")
-        briefing = briefings.build_morning_spark(
-            user_id=str(default_user.id),
-            db=db,
-            city=city,
-            weather=weather or f"Check weather in {city or 'your location'}"
-        )
+                # Build briefing
+                briefing = briefings.build_morning_spark(
+                    user_id=str(user.id),
+                    db=db,
+                    city=city,
+                    weather=weather or f"Check weather in {city or 'your location'}"
+                )
         logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
 
-        # Store and broadcast
-        logger.info("📤 Storing and broadcasting...")
-        _sto<RESEND_API_KEY>(briefing)
-        logger.info("✅ Morning Spark generated successfully")
+                # Store and broadcast
+                _sto<RESEND_API_KEY>(briefing)
+                logger.info(f"✅ Morning Spark sent to user {user.id}")
+            except Exception as ue:
+                logger.error(f"❌ Morning Spark failed for user {user.id}: {ue}", exc_info=True)
+
     except Exception as e:
-        logger.error(f"❌ Morning Spark failed: {e}", exc_info=True)
+        logger.error(f"❌ Morning Spark job failed: {e}", exc_info=True)
 
 
 def _job_daily_briefing():
@@ -3201,36 +3202,43 @@ def list_scheduler_jobs():
     }
 
 
-@app.post("/api/v1/scheduler/trigger/{job_id}")
-def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user)):
-    """Manually trigger a scheduled job for testing."""
-    print(f"🔔 TRIGGER ENDPOINT CALLED: job_id={job_id}", flush=True)
-    logger.info(f"🔔 Trigger endpoint called for job: {job_id}")
+@app.post("/api/v1/admin/trigger/{job_id}")
+def trigger_job_admin(job_id: str, x_api_key: str = Header(default="")):
+    """Trigger a scheduled job via API key — for cron jobs, no user auth required."""
+    expected = settings.HARVEST_API_KEY or os.environ.get("HARVEST_API_KEY", "")
+    if not expected or x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return _run_trigger_job(job_id)
 
+
+def _run_trigger_job(job_id: str):
+    """Shared logic for triggering a scheduled job by ID."""
+    print(f"🔔 TRIGGER ENDPOINT CALLED: job_id={job_id}", flush=True)
     jobs = {
         "morning_spark": _job_morning_spark,
         "daily_briefing": _job_daily_briefing,
-        "reflection": _job_afternoon_reflection,  # New name
-        "afternoon_reflection": _job_afternoon_reflection,  # Backward compat
+        "reflection": _job_afternoon_reflection,
+        "afternoon_reflection": _job_afternoon_reflection,
         "weekly_digest": _job_weekly_digest,
         "weekly_eval": _job_weekly_eval,
         "biweekly_challenge": _job_biweekly_challenge,
     }
     fn = jobs.get(job_id)
-    print(f"  Job function found: {fn is not None}", flush=True)
-    logger.info(f"  Job function found: {fn is not None}")
-
     if not fn:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}. Available: {list(jobs.keys())}")
-
     print(f"  Calling function: {fn.__name__}", flush=True)
-    logger.info(f"  Calling function: {fn.__name__}")
-
     try:
         fn()
         print(f"  Function completed successfully", flush=True)
-        logger.info(f"  {job_id} completed successfully")
         return {"status": "triggered", "job": job_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/scheduler/trigger/{job_id}")
+def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user)):
+    """Manually trigger a scheduled job (requires user auth)."""
+    return _run_trigger_job(job_id)
     except Exception as e:
         print(f"  EXCEPTION: {e}", flush=True)
         logger.error(f"Job trigger failed: {e}", exc_info=True)
