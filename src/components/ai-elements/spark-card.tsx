@@ -4,10 +4,20 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
+export interface SparkSection {
+  title?: string
+  icon?: string
+  color?: string
+  content: string | string[]
+  sources?: Array<{ title: string; url: string }>
+}
+
 export interface SparkNotification {
+  type: 'morning_spark' | 'daily_briefing' | 'reflection' | 'weekly_eval' | 'challenge'
   title: string
-  body: string     // content from the push notification
-  prompt: string   // original prompt field from the cron job payload
+  subtitle?: string
+  sections: SparkSection[]
+  prompt?: string // for chat context
 }
 
 interface SparkCardProps {
@@ -17,21 +27,32 @@ interface SparkCardProps {
   token: string
 }
 
+const typeConfig = {
+  morning_spark: { icon: 'light_mode', label: 'Morning Spark', bgColor: 'from-amber-500/20' },
+  daily_briefing: { icon: 'newspaper', label: 'Daily Briefing', bgColor: 'from-blue-500/20' },
+  reflection: { icon: 'psychology', label: 'Evening Reflection', bgColor: 'from-purple-500/20' },
+  weekly_eval: { icon: 'assessment', label: 'Weekly Eval', bgColor: 'from-green-500/20' },
+  challenge: { icon: 'emoji_events', label: 'Biweekly Challenge', bgColor: 'from-red-500/20' },
+}
+
 export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: SparkCardProps) {
   const [addingToGarden, setAddingToGarden] = useState(false)
-
-  const content = notification.body || notification.prompt
+  const config = typeConfig[notification.type]
 
   const handleAddToGarden = async () => {
     setAddingToGarden(true)
     try {
+      const allText = notification.sections
+        .map(s => `${s.title || ''}\n${typeof s.content === 'string' ? s.content : s.content.join('\n')}`)
+        .join('\n')
+
       const res = await fetch('/api/seeds', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ content, source: 'morning_spark' }),
+        body: JSON.stringify({ content: allText, source: notification.type }),
       })
       if (res.ok) {
         toast.success('Added to Garden!')
@@ -45,44 +66,92 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
     setAddingToGarden(false)
   }
 
+  const combinedContent = notification.sections
+    .map(s => typeof s.content === 'string' ? s.content : s.content.join('\n'))
+    .join('\n\n')
+
   return (
     <div className="fixed inset-x-0 bottom-0 z-[80] flex items-end justify-center pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-lg mx-3 mb-24 bg-surface-container rounded-3xl border border-outline-variant/15 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+      <div className="pointer-events-auto w-full max-w-2xl mx-3 mb-24 bg-surface-container rounded-3xl border border-outline-variant/15 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 max-h-[80vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-          <div className="relative flex-shrink-0">
-            <div className="absolute inset-0 rounded-full blur-xl opacity-30 bg-primary scale-150" />
-            <span
-              className="material-symbols-outlined relative text-primary text-2xl"
-              style={{ fontVariationSettings: '"FILL" 1' }}
+        <div className={`bg-gradient-to-r ${config.bgColor} to-transparent relative overflow-hidden`}>
+          <div className="flex items-center gap-3 px-6 py-5">
+            <div className="relative flex-shrink-0">
+              <div className="absolute inset-0 rounded-full blur-xl opacity-30 bg-primary scale-150" />
+              <span
+                className="material-symbols-outlined relative text-primary text-2xl"
+                style={{ fontVariationSettings: '"FILL" 1' }}
+              >
+                {config.icon}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{config.label}</p>
+              <p className="text-lg font-semibold text-on-surface">{notification.title}</p>
+              {notification.subtitle && <p className="text-xs text-on-surface-variant mt-0.5">{notification.subtitle}</p>}
+            </div>
+            <button
+              onClick={onDismiss}
+              className="flex-shrink-0 p-1.5 rounded-full hover:bg-surface-container-high transition-colors"
             >
-              forest
-            </span>
+              <span className="material-symbols-outlined text-on-surface-variant/60 text-lg">close</span>
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Morning Spark</p>
-            <p className="text-sm font-semibold text-on-surface truncate">{notification.title}</p>
-          </div>
-          <button
-            onClick={onDismiss}
-            className="flex-shrink-0 p-1.5 rounded-full hover:bg-surface-container-high transition-colors"
-          >
-            <span className="material-symbols-outlined text-on-surface-variant/60 text-lg">close</span>
-          </button>
         </div>
 
-        {/* Divider */}
-        <div className="mx-5 h-px bg-outline-variant/10" />
-
-        {/* Content */}
-        <div className="px-5 py-4">
-          <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-5">{content}</p>
+        {/* Sections */}
+        <div className="px-6 py-5 space-y-6">
+          {notification.sections.map((section, idx) => (
+            <div key={idx} className="space-y-3">
+              {section.title && (
+                <div className="flex items-center gap-2">
+                  {section.icon && (
+                    <span className={`material-symbols-outlined text-lg ${section.color || 'text-primary'}`}
+                      style={{ fontVariationSettings: '"FILL" 1' }}>
+                      {section.icon}
+                    </span>
+                  )}
+                  <h3 className="font-semibold text-on-surface">{section.title}</h3>
+                </div>
+              )}
+              <div className="text-sm text-on-surface-variant leading-relaxed space-y-2">
+                {typeof section.content === 'string' ? (
+                  <p>{section.content}</p>
+                ) : (
+                  section.content.map((line, i) => (
+                    <div key={i}>
+                      {line.startsWith('•') || line.startsWith('-') ? (
+                        <p className="ml-4">{line}</p>
+                      ) : (
+                        <p>{line}</p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              {section.sources && section.sources.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-outline-variant/10">
+                  {section.sources.map((src, i) => (
+                    <a
+                      key={i}
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:text-primary/80 underline"
+                    >
+                      {src.title}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 px-5 pb-5">
+        <div className="flex items-center gap-2 px-6 pb-6 pt-4 border-t border-outline-variant/10">
           <Button
-            onClick={() => onChatAboutThis(content)}
+            onClick={() => onChatAboutThis(combinedContent)}
             className="flex-1 rounded-2xl bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm h-10"
           >
             <span className="material-symbols-outlined text-base mr-1.5">chat</span>
