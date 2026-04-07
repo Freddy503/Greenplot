@@ -2812,35 +2812,43 @@ def _job_morning_spark():
     Morning Idea Spark — 08:30 CET.
     Generates multi-section briefing: Weather + Deep Pattern.
     """
+    logger.info("🌅 Starting morning spark job...")
     try:
         db = next(get_db())
         # For now, use default/first user (in production, iterate over all users)
         default_user = db.query(User).first()
         if not default_user:
-            logger.warning("No users found for morning spark")
+            logger.warning("❌ No users found for morning spark")
             return
 
         city = default_user.city if default_user else None
+        logger.info(f"📍 Using city: {city}")
 
         # Fetch weather asynchronously
         try:
+            logger.info("🌡️ Fetching weather...")
             weather = asyncio.run(briefings.fetch_weather(city))
-        except:
+            logger.info(f"✓ Weather fetched: {weather[:50] if weather else 'None'}")
+        except Exception as we:
+            logger.error(f"⚠️ Weather fetch failed: {we}")
             weather = None
 
         # Build briefing
+        logger.info("🔨 Building morning spark briefing...")
         briefing = briefings.build_morning_spark(
             user_id=str(default_user.id),
             db=db,
             city=city,
             weather=weather or f"Check weather in {city or 'your location'}"
         )
+        logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
 
         # Store and broadcast
+        logger.info("📤 Storing and broadcasting...")
         _sto<RESEND_API_KEY>(briefing)
-        logger.info("✅ Morning Spark generated")
+        logger.info("✅ Morning Spark generated successfully")
     except Exception as e:
-        logger.error(f"❌ Morning Spark failed: {e}")
+        logger.error(f"❌ Morning Spark failed: {e}", exc_info=True)
 
 
 def _job_daily_briefing():
