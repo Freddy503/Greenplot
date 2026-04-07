@@ -2812,6 +2812,7 @@ def _job_morning_spark():
     Morning Idea Spark — 08:30 CET.
     Generates multi-section briefing: Weather + Deep Pattern.
     """
+    print("🌅 MORNING SPARK JOB CALLED", flush=True)
     logger.info("🌅 Starting morning spark job...")
     try:
         db = next(get_db())
