@@ -1,0 +1,30 @@
+{
+  "type": "morning_spark",
+  "title": "Monday, April 7 — Deep Pattern",
+  "subtitle": "Tailored to your interests in agentic systems & enterprise AI",
+  "sections": [
+    {
+      "title": "Weather — Munich",
+      "icon": "cloud",
+      "color": "text-blue-400",
+      "content": "Partly cloudy, 4°C, gusty winds (32 km/h). Layer up — feels colder than the number suggests."
+    },
+    {
+      "title": "Deep Pattern: Capability-Centric Architecture for Multi-Agent Systems",
+      "icon": "architecture",
+      "color": "text-primary",
+      "content": [
+        "What it solves: Most multi-agent systems hardcode dependencies between orchestrators and workers. Swap a model backend → everything downstream breaks. CCA treats each agent capability as an atomic unit with formal contracts.",
+        "How it works: Capability Registry acts as the coordination hub. Lifecycle Manager handles startup/shutdown via dependency graphs. Evolution Envelopes version capabilities without breaking running systems.",
+        "Production example: 6-agent software engineering pipeline (Requirements → Code Gen → Test Gen → Review → Docs → PR), each on different backends (Claude, GPT-5.3, Gemini).",
+        "Your relevance: Seedify's Notion ingestion, PKM indexing, and Odoo task creation are different capabilities with different reliability requirements. CCA's contracts let you swap Notion for Confluence without refactoring the orchestrator."
+      ],
+      "sources": [
+        { "title": "stal.blogspot.com", "url": "https://stal.blogspot.com" },
+        { "title": "augmentcode.com", "url": "https://augmentcode.com" },
+        { "title": "architectureandgovernance.com", "url": "https://architectureandgovernance.com" }
+      ]
+    }
+  ],
+  "prompt": "Weather — Munich: Partly cloudy, 4°C. Deep Pattern: Capability-Centric Architecture treats agent capabilities as atomic units with formal contracts. Production example: 6-agent pipeline. Your relevance: Seedify's Notion + PKM + Odoo have different reliability requirements; CCA lets you swap without refactoring."
+}
