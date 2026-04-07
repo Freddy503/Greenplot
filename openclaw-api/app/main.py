@@ -3211,6 +3211,9 @@ def list_scheduler_jobs():
 @app.post("/api/v1/scheduler/trigger/{job_id}")
 def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user)):
     """Manually trigger a scheduled job for testing."""
+    print(f"🔔 TRIGGER ENDPOINT CALLED: job_id={job_id}", flush=True)
+    logger.info(f"🔔 Trigger endpoint called for job: {job_id}")
+
     jobs = {
         "morning_spark": _job_morning_spark,
         "daily_briefing": _job_daily_briefing,
@@ -3221,15 +3224,24 @@ def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user))
         "biweekly_challenge": _job_biweekly_challenge,
     }
     fn = jobs.get(job_id)
+    print(f"  Job function found: {fn is not None}", flush=True)
+    logger.info(f"  Job function found: {fn is not None}")
+
     if not fn:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}. Available: {list(jobs.keys())}")
+
+    print(f"  Calling function: {fn.__name__}", flush=True)
+    logger.info(f"  Calling function: {fn.__name__}")
+
     try:
         fn()
+        print(f"  Function completed successfully", flush=True)
+        logger.info(f"  {job_id} completed successfully")
         return {"status": "triggered", "job": job_id}
     except Exception as e:
-        logger.error(f"Job trigger failed: {e}")
+        print(f"  EXCEPTION: {e}", flush=True)
+        logger.error(f"Job trigger failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-    return {"triggered": job_id, "status": "ok"}
 
 # ── Debug: test search_wiki directly ──────────────────────
 @app.get("/api/v1/debug/search_wiki")
