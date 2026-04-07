@@ -2282,6 +2282,14 @@ def _broadcast_push(title: str, body: str, url: str = "/chat", prompt: str = "",
     if briefing:
         payload_dict["briefing"] = briefing
     payload = json.dumps(payload_dict)
+    payload_size = len(payload.encode('utf-8'))
+    logger.info(f"🔔 Web push payload size: {payload_size} bytes (4KB limit = 4096)")
+    if payload_size > 4096:
+        logger.warning(f"⚠️ Payload exceeds 4KB limit! Sections in briefing: {len(briefing.get('sections', []))}")
+        # Log each section size
+        for i, section in enumerate(briefing.get('sections', [])):
+            section_json = json.dumps(section)
+            logger.info(f"  Section {i} ({section.get('title', 'untitled')}): {len(section_json.encode('utf-8'))} bytes")
     sent = 0
     expired = []
 
