@@ -3018,38 +3018,9 @@ def _sto<RESEND_API_KEY>(briefing: dict):
             "read": False,
         })
         _save_notifs(notifs)
-
-        # Broadcast push with full briefing payload
-        sent = _broadcast_push_briefing(briefing)
-        logger.info(f"🔔 Briefing '{briefing.get('type', 'unknown')}' — delivered to {sent} subscribers")
+        logger.info(f"✅ Briefing '{briefing.get('type', 'unknown')}' stored with {len(briefing.get('sections', []))} sections")
     except Exception as e:
-        logger.error(f"❌ Briefing broadcast failed: {e}")
-
-
-def _broadcast_push_briefing(briefing: dict) -> int:
-    """
-    Broadcast a multi-section briefing as a web push.
-    Sends the full briefing structure to all subscribers.
-    """
-    try:
-        # Extract preview for notification title/body
-        body = briefing.get("sections", [{}])[0].get("content", "")
-        if isinstance(body, list):
-            body = body[0] if body else briefing.get("title", "")
-
-        # Call _broadcast_push with full briefing structure
-        sent = _broadcast_push(
-            title=briefing.get("title", "Briefing"),
-            body=body[:100] if body else briefing.get("subtitle", ""),
-            url="/chat",
-            prompt=briefing.get("prompt", ""),
-            briefing=briefing  # Send full structure!
-        )
-        logger.info(f"✅ Briefing '{briefing.get('type', 'unknown')}' pushed to {sent} subscribers")
-        return sent
-    except Exception as e:
-        logger.error(f"❌ Push broadcast failed: {e}")
-        return 0
+        logger.error(f"❌ Briefing storage failed: {e}", exc_info=True)
 
 
 def _job_enrich_pending_seeds():
