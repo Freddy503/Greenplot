@@ -219,7 +219,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error('[suggestions] Init error:', err)
     }
-  }, [restored, fetchSuggestions])
+  }, [])
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
