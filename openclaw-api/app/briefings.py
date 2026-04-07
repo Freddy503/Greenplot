@@ -65,7 +65,7 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
 
         # Use provided model or default to Qwen
         if not model:
-            model = "nvidia/nemotron-super-49b-v1:free"
+            model = "qwen/qwen3-235b-a22b:free"
 
         messages = []
         if system:
