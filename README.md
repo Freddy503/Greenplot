@@ -157,7 +157,7 @@ Auto-generated articles that synthesize your sources and seeds into encyclopedic
 - **Auto-compile:** Groups enriched content by domain/tag, runs LLM synthesis
 - **Seed-cluster compilation:** Compiles uncovered seeds even without link matches
 - **Quality:** 1,300–1,800 word articles (vs. previous 200–300 word dumps)
-- **Model:** qwen/qwen3.6-plus:free via OpenRouter (nemotron as fallback)
+- **Model:** nvidia/nemotron-super-49b-v1:free via OpenRouter
 
 ### 🔔 Push Notifications (Web Push)
 True push notifications via VAPID + Service Worker:
@@ -333,7 +333,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK, D3.js
 - **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT auth, pywebpush
 - **Database:** PostgreSQL 15, Weaviate 1.36 (BM25 + vector), Redis 7
-- **AI:** OpenRouter (qwen3.6-plus:free primary, nemotron fallback), OpenAI Whisper, BFL FLUX, Exa Search
+- **AI:** OpenRouter (nemotron-super-49b-v1:free), OpenAI Whisper, BFL FLUX, Exa Search
 - **Memory:** Multi-Layer Memory Architecture + MemFactory pipeline
 - **Push:** Web Push via VAPID (pywebpush + Service Worker)
 - **Infra:** Docker Compose, Vercel Pro, OpenClaw (agent orchestration)
