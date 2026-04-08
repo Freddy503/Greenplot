@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as d3 from 'd3'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -898,6 +899,7 @@ export default function WikiPage() {
  const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null)
  const [filter, setFilter] = useState<string>('all')
  const [search, setSearch] = useState('')
+ const [compiling, setCompiling] = useState(false)
 
  // Health dashboard state
  const [health, setHealth] = useState<any>(null)
@@ -909,6 +911,35 @@ export default function WikiPage() {
  const [askSources, setAskSources] = useState<any[]>([])
  const [asking, setAsking] = useState(false)
  const [askOpen, setAskOpen] = useState(false)
+
+ const handleCompile = async () => {
+  setCompiling(true)
+  const toastId = toast.loading('Compiling wiki from your garden…')
+  try {
+   const token = localStorage.getItem('greenplot_token')
+   const res = await fetch('/api/wiki/auto-compile', {
+    method: 'POST',
+    headers: {
+     'Content-Type': 'application/json',
+     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+   })
+   const data = await res.json()
+   if (res.ok) {
+    toast.success(`Compiled ${data.compiled ?? 'new'} article(s)`, { id: toastId })
+    // Refresh articles
+    const r2 = await fetch('/api/wiki', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const d2 = await r2.json()
+    if (d2.articles) setArticles(d2.articles)
+   } else {
+    toast.error(data.error || 'Compilation failed', { id: toastId })
+   }
+  } catch {
+   toast.error('Could not reach backend', { id: toastId })
+  } finally {
+   setCompiling(false)
+  }
+ }
 
  // Load wiki articles from API
  useEffect(() => {
@@ -1003,6 +1034,14 @@ export default function WikiPage() {
   Knowledge <span className="text-primary">Plants</span>
   </h1>
   <div className="flex items-center gap-1">
+  <button
+  onClick={handleCompile}
+  disabled={compiling}
+  className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant/60 hover:text-primary disabled:opacity-40"
+  title="Compile wiki from garden"
+  >
+  <span className={`material-symbols-outlined text-lg ${compiling ? 'animate-spin' : ''}`}>auto_awesome</span>
+  </button>
   <button
   onClick={() => {
    const token = localStorage.getItem('greenplot_token')
