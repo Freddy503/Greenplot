@@ -314,6 +314,14 @@ def list_seeds(
             Seed.tenant_id == current_user.tenant_id
         ).order_by(Seed.created_at.desc()).limit(limit).all()
 
+        # Enrich seeds with metadata fields for visualization
+        for seed in seeds:
+            metadata = seed.seed_metadata or {}
+            seed.tags = metadata.get("tags", "")
+            seed.domain = metadata.get("domain", "")
+            seed.energy = metadata.get("energy", "")
+            seed.summary = metadata.get("summary", "")
+
         # Cache for next time
         cache_seeds(tenant_id, [{"id": str(s.id), "title": s.title, "content": s.content[:500],
                                   "created_at": s.created_at.isoformat() if s.created_at else None}
@@ -359,7 +367,7 @@ def search_seeds_endpoint(
             content=hit.get("content") or hit.get("summary") or hit.get("text") or "",
             embedding_ref="",
             image_url=None,
-            metadata={
+            seed_metadata={
                 "summary": hit.get("summary") or "",
                 "tags": hit.get("tags") or "",
                 "domain": hit.get("domain") or "",
@@ -369,6 +377,11 @@ def search_seeds_endpoint(
             },
             created_at=datetime.utcnow(),
         )
+        # Extract metadata fields for visualization
+        seed.tags = hit.get("tags") or ""
+        seed.domain = hit.get("domain") or ""
+        seed.energy = hit.get("energy") or ""
+        seed.summary = hit.get("summary") or ""
         seeds.append(seed)
 
     return SeedSearchResponse(seeds=seeds, query=req.query, total=len(seeds))
@@ -381,7 +394,142 @@ def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: S
     ).first()
     if not seed:
         raise HTTPException(status_code=404, detail="Seed not found")
+    
+    # Update interaction tracking
+    seed.interaction_count = (seed.interaction_count or 0) + 1
+    seed.last_interacted_at = datetime.utcnow()
+    db.commit()
+    
+    # Extract metadata fields for richer response
+    metadata = seed.seed_metadata or {}
+    seed.tags = metadata.get("tags", "")
+    seed.domain = metadata.get("domain", "")
+    seed.energy = metadata.get("energy", "")
+    seed.summary = metadata.get("summary", "")
+    
     return seed
+
+
+class SeedLinksRequest(BaseModel):
+    seed_ids: List[str]
+
+
+class SeedLinkItem(BaseModel):
+    source_seed_id: str
+    target_seed_id: str
+    link_type: str
+    confidence: int
+
+
+class SeedLinksResponse(BaseModel):
+    links: List[SeedLinkItem]
+
+
+@app.post("/api/v1/seeds/links", response_model=SeedLinksResponse)
+def get_seed_links(req: SeedLinksRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Return all SeedLink records for the given seed IDs.
+    Used by the Knowledge Graph frontend to draw edges from real backlinks.
+    """
+    from app.models import SeedLink
+    from uuid import UUID
+
+    if not req.seed_ids:
+        return SeedLinksResponse(links=[])
+
+    # Convert string IDs to UUIDs
+    try:
+        uuid_ids = [UUID(sid) for sid in req.seed_ids]
+    except ValueError:
+        return SeedLinksResponse(links=[])
+
+    links = db.query(SeedLink).join(
+        Seed, SeedLink.source_seed_id == Seed.id
+    ).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        SeedLink.source_seed_id.in_(uuid_ids)
+    ).all()
+
+    # Also get reverse links (where this seed is the target)
+    reverse_links = db.query(SeedLink).join(
+        Seed, SeedLink.target_seed_id == Seed.id
+    ).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        SeedLink.target_seed_id.in_(uuid_ids)
+    ).all()
+
+    all_links = links + reverse_links
+
+    return SeedLinksResponse(links=[
+        SeedLinkItem(
+            source_seed_id=str(l.source_seed_id),
+            target_seed_id=str(l.target_seed_id),
+            link_type=l.link_type,
+            confidence=l.confidence or 700,
+        )
+        for l in all_links
+    ])
+
+
+class SeedLinksRequest(BaseModel):
+    seed_ids: List[str]
+
+
+class SeedLinkItem(BaseModel):
+    source_seed_id: str
+    target_seed_id: str
+    link_type: str
+    confidence: int
+
+
+class SeedLinksResponse(BaseModel):
+    links: List[SeedLinkItem]
+
+
+@app.post("/api/v1/seeds/links", response_model=SeedLinksResponse)
+def get_seed_links(req: SeedLinksRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Return all SeedLink records for the given seed IDs.
+    Used by the Knowledge Graph frontend to draw edges from real backlinks.
+    """
+    from app.models import SeedLink
+    from uuid import UUID
+
+    if not req.seed_ids:
+        return SeedLinksResponse(links=[])
+
+    # Convert string IDs to UUIDs
+    try:
+        uuid_ids = [UUID(sid) for sid in req.seed_ids]
+    except ValueError:
+        return SeedLinksResponse(links=[])
+
+    links = db.query(SeedLink).join(
+        Seed, SeedLink.source_seed_id == Seed.id
+    ).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        SeedLink.source_seed_id.in_(uuid_ids)
+    ).all()
+
+    # Also get reverse links (where this seed is the target)
+    reverse_links = db.query(SeedLink).join(
+        Seed, SeedLink.target_seed_id == Seed.id
+    ).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        SeedLink.target_seed_id.in_(uuid_ids)
+    ).all()
+
+    all_links = links + reverse_links
+
+    return SeedLinksResponse(links=[
+        SeedLinkItem(
+            source_seed_id=str(l.source_seed_id),
+            target_seed_id=str(l.target_seed_id),
+            link_type=l.link_type,
+            confidence=l.confidence or 700,
+        )
+        for l in all_links
+    ])
 
 
 @app.get("/api/v1/seeds/garden/intelligence")
