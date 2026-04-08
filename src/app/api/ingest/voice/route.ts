@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const maxDuration = 120 // seconds — Vercel function timeout
+export const config = {
+  api: {
+    bodyParser: false,
+    responseLimit: false,
+  },
+}
+
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 
 export async function POST(req: NextRequest) {
@@ -14,7 +22,7 @@ export async function POST(req: NextRequest) {
         ...(token ? { Authorization: token } : {}),
       },
       body: formData as any,
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(120000),
     })
 
     const data = await res.json()
