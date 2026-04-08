@@ -73,7 +73,7 @@ WIKI_SYSTEM_PROMPT = """You are a senior encyclopedic writer creating personal k
 7. End with "What to explore next" suggestions
 8. Minimum 800 words for substantial topics"""
 
-WIKI_MODEL = "qwen/qwen3.6-plus:free"
+WIKI_MODEL = "nvidia/nemotron-super-49b-v1:free"
 
 async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
     """Download BFL image and save to local persistent storage. Returns absolute URL."""
@@ -122,7 +122,7 @@ async def _auto_generate_image(article_id: str, title: str, category: str = "", 
     except Exception as e:
         logger.warning(f"Auto image generation failed for {title}: {e}")
 
-WIKI_FALLBACK_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"  # Fallback if primary is rate-limited
+WIKI_FALLBACK_MODEL = "nvidia/nemotron-super-49b-v1:free"  # Fallback if primary is rate-limited
 WIKI_MAX_TOKENS = 4000
 WIKI_TEMPERATURE = 0.5
 
