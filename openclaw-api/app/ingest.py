@@ -70,7 +70,7 @@ async def transcribe_audio(file: UploadFile) -> str:
                     headers=_openai_headers(),
                     data={"model": "whisper-1", "language": "en"},
                     files={"file": (file.filename or "audio" + ext, f)},
-                    timeout=30.0,
+                    timeout=90.0,
                 )
         if resp.status_code != 200:
             raise HTTPException(

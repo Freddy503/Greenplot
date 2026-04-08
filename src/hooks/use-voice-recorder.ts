@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 
 export type VoiceRecorderState = 'idle' | 'recording' | 'processing'
 
-const MAX_RECORDING_SECONDS = 90
+const MAX_RECORDING_SECONDS = 180
 
 interface UseVoiceRecorderOptions {
   onTranscription: (text: string) => void
@@ -81,6 +81,12 @@ export function useVoiceRecorder({
 
         if (blob.size < 1000) {
           onError?.('Recording too short')
+          setState('idle')
+          return
+        }
+
+        if (blob.size > 24 * 1024 * 1024) {
+          onError?.('Recording too large (max 24 MB). Try a shorter memo.')
           setState('idle')
           return
         }
