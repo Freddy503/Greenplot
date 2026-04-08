@@ -2505,28 +2505,21 @@ def send_push_notification(req: PushNotificationRequest):
     """Store + push a notification for PWA delivery. Called by cron jobs and internal services."""
     # 1. Store in JSON (for polling fallback)
     notifs = _load_notifs()
+    ts = datetime.utcnow()
+    notif_id = f"push_{ts.strftime('%Y%m%d%H%M')}"
     notifs.append({
+        "id": notif_id,
         "title": req.title,
         "body": req.body or "",
         "url": req.url or "/chat",
         "prompt": req.prompt or "",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": ts.isoformat(),
         "read": False,
     })
     _save_notifs(notifs)
 
     # 2. Send real Web Push (works even when PWA is closed)
     push_sent = _broadcast_push(req.title, req.body or "", req.url or "/chat", prompt=req.prompt or "")
-
-    # 3. Also forward to Next.js frontend (best-effort, for in-app polling)
-    try:
-        httpx.post(
-            "https://seedify-six.vercel.app/api/push/notifications",
-            json={"title": req.title, "body": req.body, "url": req.url},
-            timeout=5,
-        )
-    except Exception:
-        pass
 
     return {"success": True, "total": len(notifs), "push_sent": push_sent}
 
@@ -3186,13 +3179,16 @@ def _sto<RESEND_API_KEY>(briefing: dict):
         section_titles = [s.get("title", "") for s in briefing.get("sections", []) if s.get("title")]
         short_prompt = briefing.get("title", "") + (f" — {section_titles[0]}" if section_titles else "")
 
+        ts = datetime.utcnow()
+        notif_id = f"{briefing.get('type', 'briefing')}_{ts.strftime('%Y%m%d%H%M')}"
         notifs.append({
+            "id": notif_id,
             "title": briefing.get("title", "Briefing"),
             "body": body[:100] if body else briefing.get("subtitle", ""),
             "url": "/chat",
             "prompt": short_prompt[:200],
             "briefing": clean_briefing,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": ts.isoformat(),
             "read": False,
         })
         _save_notifs(notifs)

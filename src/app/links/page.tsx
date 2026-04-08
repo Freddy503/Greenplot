@@ -27,6 +27,7 @@ import {
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { LinkDetailSheet } from '@/components/links/link-detail-sheet'
+import { toast } from 'sonner'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ function timeAgo(date: string): string {
 
 // ── Link Card ─────────────────────────────────────────
 
-function LinkCard({ link, onStar, onDelete, onClick }: { link: LinkItem; onStar: () => void; onDelete: () => void; onClick: () => void }) {
+function LinkCard({ link, onStar, onDelete, onClick, onSaveToGarden }: { link: LinkItem; onStar: () => void; onDelete: () => void; onClick: () => void; onSaveToGarden: () => void }) {
  const domainColor = getDomainColor(link.domain)
  return (
  <Card className="bg-surface-container-low border-outline-variant/10 hover:border-primary/20 transition-all group cursor-pointer" onClick={onClick}>
@@ -142,12 +143,21 @@ function LinkCard({ link, onStar, onDelete, onClick }: { link: LinkItem; onStar:
    {tag}
   </Badge>
   ))}
-  {/* Cross-tab connections */}
-  {link.garden_seed_id && (
+  {/* Save to Garden */}
+  {link.garden_seed_id ? (
   <span className="flex items-center gap-0.5 text-[9px] text-primary/70">
-   <span className="material-symbols-outlined" >eco</span>
+   <span className="material-symbols-outlined" style={{ fontSize: '12px', fontVariationSettings: '"FILL" 1' }}>eco</span>
    in garden
   </span>
+  ) : (
+  <button
+   onClick={(e) => { e.stopPropagation(); onSaveToGarden() }}
+   className="flex items-center gap-0.5 text-[9px] text-on-surface-variant/50 hover:text-primary transition-colors"
+   title="Save to Garden"
+  >
+   <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>eco</span>
+   save
+  </button>
   )}
   <span className="text-[9px] text-on-surface-variant/40 ml-auto">
   {timeAgo(link.addedAt)}
@@ -404,6 +414,34 @@ export default function LinksPage() {
  setBulkImporting(false)
  }
 
+ const saveToGarden = async (link: LinkItem) => {
+  const token = localStorage.getItem('greenplot_token') || ''
+  const toastId = toast.loading(`Saving "${link.title || link.domain}" to Garden…`)
+  try {
+   const res = await fetch('/api/seeds', {
+    method: 'POST',
+    headers: {
+     'Content-Type': 'application/json',
+     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+     content: `${link.title}\n\n${link.summary || ''}\n\nSource: ${link.url}`,
+     title: link.title || link.domain,
+     source: link.url,
+    }),
+   })
+   if (res.ok) {
+    toast.success('Saved to Garden!', { id: toastId })
+    // Mark the link as in-garden locally
+    setLinks(prev => prev.map(l => l.id === link.id ? { ...l, garden_seed_id: 'local' } : l))
+   } else {
+    toast.error('Failed to save', { id: toastId })
+   }
+  } catch {
+   toast.error('Could not reach backend', { id: toastId })
+  }
+ }
+
  // Filter
  const filtered = links
  .filter(l => filter === 'starred' ? l.starred : true)
@@ -528,6 +566,7 @@ export default function LinksPage() {
   onStar={() => toggleStar(link.id)}
   onDelete={() => deleteLink(link.id)}
   onClick={() => { setSelectedLink(link); setDetailOpen(true) }}
+  onSaveToGarden={() => saveToGarden(link)}
   />
   ))}
   </div>
