@@ -63,9 +63,9 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
             logger.warning("No LLM client available")
             return ""
 
-        # Use provided model or default to Qwen
+        # Use provided model or default to Nemotron Super
         if not model:
-            model = "qwen/qwen3-235b-a22b:free"
+            model = "nvidia/nemotron-super-49b-v1:free"
 
         messages = []
         if system:
