@@ -42,6 +42,15 @@ class SeedResponse(BaseModel):
     image_url: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = Field(None, alias='seed_metadata')
     created_at: datetime
+    created_by: Optional[str] = None
+    created_via: Optional[str] = None
+    provenance_log: Optional[List[Dict[str, Any]]] = None
+    last_interacted_at: Optional[datetime] = None
+    interaction_count: Optional[int] = 0
+    tags: Optional[str] = ""
+    domain: Optional[str] = ""
+    energy: Optional[str] = ""
+    summary: Optional[str] = ""
 
     class Config:
         from_attributes = True

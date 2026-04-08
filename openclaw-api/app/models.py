@@ -52,6 +52,12 @@ class Seed(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_visited = Column(DateTime, nullable=True)  # when user last viewed this seed
     visit_count = Column(Integer, default=0)  # how many times user viewed this seed
+    # Provenance tracking fields
+    created_by = Column(String(50), nullable=True, default="human")  # ENUM: human, agent_research, agent_synthesis, cron_harvest, voice_to_seed
+    created_via = Column(String(100), nullable=True)  # e.g., "voice_to_seeds.py", "web_search", "mcp::cursor_agent"
+    provenance_log = Column(JSON, nullable=True)  # List of provenance events
+    last_interacted_at = Column(DateTime, nullable=True)  # For decay scoring
+    interaction_count = Column(Integer, default=0)  # How many times seed was accessed
 
     user = relationship("User", back_populates="seeds")
     thought = relationship("Thought", back_populates="seeds")
@@ -111,6 +117,31 @@ class SeedEntity(Base):
     __table_args__ = (
         UniqueConstraint('seed_id', 'entity_id', name='uq_seed_entity'),
     )
+class Source(Base):
+    """Information sources — URLs, documents, papers, etc."""
+    __tablename__ = 'sources'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    name = Column(String(200), nullable=False)  # source name or title
+    source_type = Column(String(50), nullable=False)  # url, document, paper, article, etc.
+    url = Column(String(500), nullable=True)
+    content = Column(String, nullable=True)  # extracted content or summary
+    domain = Column(String(100), nullable=True)  # e.g., example.com, arxiv.org
+    author = Column(String(200), nullable=True)
+    published_date = Column(DateTime, nullable=True)
+    retrieved_at = Column(DateTime, default=datetime.utcnow)
+    credibility_score = Column(Integer, nullable=True)  # 0-1000
+    # Provenance tracking fields
+    created_by = Column(String(50), nullable=True, default="human")  # ENUM: human, agent_research, agent_synthesis, cron_harvest, voice_to_seed
+    created_via = Column(String(100), nullable=True)  # e.g., "voice_to_seeds.py", "web_search", "mcp::cursor_agent"
+    provenance_log = Column(JSON, nullable=True)  # List of provenance events
+    last_interacted_at = Column(DateTime, nullable=True)  # For decay scoring
+    interaction_count = Column(Integer, default=0)  # How many times source was accessed
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'name', 'source_type', name='uq_source_tenant_name_type'),
+        Index('idx_source_tenant_type', tenant_id, source_type),
+    )
+
 
 class Rating(Base):
     __tablename__ = 'ratings'
@@ -164,6 +195,29 @@ class Usage(Base):
         UniqueConstraint('tenant_id', 'date', name='uq_tenant_date'),
         Index('idx_usage_tenant_date', tenant_id, date),
     )
+class WikiArticle(Base):
+    """Knowledge base articles — synthesized information from multiple sources."""
+    __tablename__ = 'wiki_articles'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    content = Column(String, nullable=False)
+    summary = Column(String, nullable=True)
+    category = Column(String(100), nullable=True)
+    author = Column(String(200), nullable=True)
+    published_at = Column(DateTime, nullable=True)
+    image_url = Column(String(500), nullable=True)
+    # Provenance tracking fields
+    created_by = Column(String(50), nullable=True, default="human")  # ENUM: human, agent_research, agent_synthesis, cron_harvest, voice_to_seed
+    created_via = Column(String(100), nullable=True)  # e.g., "voice_to_seeds.py", "web_search", "mcp::cursor_agent"
+    provenance_log = Column(JSON, nullable=True)  # List of provenance events
+    last_interacted_at = Column(DateTime, nullable=True)  # For decay scoring
+    interaction_count = Column(Integer, default=0)  # How many times article was accessed
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'title', name='uq_wiki_tenant_title'),
+        Index('idx_wiki_tenant_category', tenant_id, category),
+    )
+
 
 class CalendarConnection(Base):
     """Google Calendar OAuth tokens per user."""
