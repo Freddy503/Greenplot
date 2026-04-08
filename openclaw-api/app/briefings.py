@@ -9,7 +9,7 @@ Generates rich, multi-section briefings for:
 - Biweekly Challenge (Cross-domain synthesis)
 
 Uses:
-- OpenRouter (via OpenAI SDK) for LLM: Qwen, Nemotron, etc.
+- OpenRouter (via OpenAI SDK) for LLM: Nemotron Super (nvidia/nemotron-super-49b-v1:free)
 - Exa API for web search
 - Open-Meteo for weather (free)
 """
@@ -54,7 +54,7 @@ def get_llm_client():
 def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str = None) -> str:
     """
     Call OpenRouter LLM with a prompt.
-    Default models: Qwen (general), Nemotron (fallback)
+    Default model: Nemotron Super (nvidia/nemotron-super-49b-v1:free)
     Returns empty string on failure.
     """
     try:
@@ -80,7 +80,7 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
         )
 
         content = response.choices[0].message.content if response.choices else ""
-        # Strip Qwen3 chain-of-thought thinking blocks
+        # Strip any chain-of-thought thinking blocks (some models emit these)
         import re
         content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         return content

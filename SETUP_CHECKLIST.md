@@ -16,7 +16,7 @@ Complete these steps to enable the personalized briefing notification system.
 ## ✅ Backend Code (Already Done)
 
 - [x] `briefings.py` module created
-- [x] LLM integration via OpenRouter (Qwen + Nemotron)
+- [x] LLM integration via OpenRouter (Nemotron Super)
 - [x] Exa API integration for web search
 - [x] All 5 briefing builders implemented
 - [x] Job handlers updated in `main.py`
@@ -30,7 +30,7 @@ Complete these steps to enable the personalized briefing notification system.
 
 ### 1. OpenRouter API Key
 
-Get free API key for Qwen + Nemotron models:
+Get free API key for Nemotron Super models:
 
 1. Visit: https://openrouter.ai/
 2. Sign up (free account)
@@ -193,7 +193,7 @@ curl https://api.openrouter.ai/api/v1/chat/completions \
   -H "Authorization: Bearer <OPENROUTER_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen/qwen3.6-plus:free",
+    "model": "nvidia/nemotron-super-49b-v1:free",
     "messages": [{"role": "user", "content": "Test"}]
   }'
 ```
