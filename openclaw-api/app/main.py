@@ -2060,7 +2060,7 @@ def extract_insights(
 
     try:
         response = openai_client.chat.completions.create(
-            model="nvidia/nemotron-super-49b-v1:free",
+            model="nvidia/llama-3.3-nemotron-super-49b-v1:free",
             messages=[
                 {
                     "role": "system",
