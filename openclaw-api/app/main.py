@@ -3424,14 +3424,12 @@ def list_scheduler_jobs():
 
 @app.post("/api/v1/wiki/auto-compile")
 def wiki_auto_compile(
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
     """Trigger wiki compilation for the authenticated user. Called from the UI compile button."""
-    try:
-        _job_wiki_compile()
-        return {"status": "ok", "compiled": "triggered", "message": "Wiki compilation started"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    background_tasks.add_task(_job_wiki_compile)
+    return {"status": "ok", "compiled": 1, "message": "Wiki compilation started in background"}
 
 
 @app.post("/api/v1/admin/trigger/{job_id}")

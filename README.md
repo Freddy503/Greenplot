@@ -1,8 +1,8 @@
-# Greenplot — The Living Laboratory
+# Seedify — The Living Laboratory
 
-Your AI-powered second brain. Capture ideas through chat, voice, or notes — enriched with web research, your personal memory, semantic connections, and a living wiki.
+Your AI-powered second brain. Capture ideas through chat, voice, or notes — enriched with web research, your personal memory, semantic connections, and a living wiki. Delivers personalized daily email digests connecting new research to your existing knowledge.
 
-> **Vision:** The Greenplot architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
+> **Vision:** The Seedify architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
 
 ## Architecture
 
@@ -13,8 +13,9 @@ Your AI-powered second brain. Capture ideas through chat, voice, or notes — en
 │  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  │
 │  │ Chat v2  │  │  Garden   │  │ Sources  │  │ Wiki     │  │ API    │  │
 │  │ + Tools  │  │ + Intel   │  │ + Bridge │  │ + Maps   │  │ Routes │  │
-│  │ + Source │  │ + Decay   │  │          │  │ + Images │  │ (28)   │  │
+│  │ + Source │  │ + Decay   │  │          │  │ + Images │  │ (30+)  │  │
 │  │ Surfacing│  │ + Revisit │  │          │  │ TOC      │  │        │  │
+│  │ + History│  │ + Viz Tool│  │          │  │ Compile  │  │        │  │
 │  └──────────┘  └───────────┘  └──────────┘  └──────────┘  └────────┘  │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │  Service Worker (sw.js) ← Web Push ← VAPID                      │  │
@@ -27,20 +28,21 @@ Your AI-powered second brain. Capture ideas through chat, voice, or notes — en
 │                   FastAPI Backend (Docker, port 8001)                   │
 │  JWT Auth · Tool Calling · Session Mgmt · Activity Feed · Wiki          │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐       │
-│  │  Chat v1/v2  │  │  Enricher v2 │  │  Tool Executor (14)    │       │
-│  │  (streaming) │  │  (pipeline)  │  │  search_seeds          │       │
-│  │  + source    │  │  chunk→embed │  │  search_sources        │       │
-│  │    surfacing │  │  →entity→    │  │  create_seed           │       │
-│  └──────────────┘  │  backlink    │  │  read_source            │       │
-│                    └──────┬───────┘  │  web_search            │       │
-│  ┌──────────────┐         │        │  get_daily_briefing    │       │
-│  │  Wiki Engine │◄────────┘        │  get_garden_intel      │       │
-│  │  Auto-compile│                 │  get_knowledge_digest  │       │
-│  │  + Re-synth  │  ┌──────────┐  │  get_activity_feed     │       │
-│  └──────┬───────┘  │ Activity │  │  rate_seed             │       │
-│         │          │ Feed     │  │  get_seed_detail       │       │
-│         ▼          └──────────┘  │  search_seeds_filtered │       │
-│  ┌──────────────┐                └────────────────────────┘       │
+│  │  Chat v1/v2  │  │  Enricher v2 │  │  Tool Executor (15)    │       │
+│  │  (streaming) │  │  URL detect  │  │  search_seeds          │       │
+│  │  + source    │  │  + Exa fetch │  │  search_sources        │       │
+│  │    surfacing │  │  + domain/   │  │  create_seed           │       │
+│  │  + sessions  │  │  energy infer│  │  read_source            │       │
+│  └──────────────┘  └──────┬───────┘  │  web_search            │       │
+│                            │        │  get_daily_briefing    │       │
+│  ┌──────────────┐         │        │  get_garden_intel      │       │
+│  │  Wiki Engine │◄────────┘        │  get_knowledge_digest  │       │
+│  │  Auto-compile│                 │  get_activity_feed     │       │
+│  │  + Re-synth  │  ┌──────────┐  │  rate_seed             │       │
+│  └──────┬───────┘  │ Briefings│  │  get_seed_detail       │       │
+│         │          │ + Email  │  │  search_seeds_filtered │       │
+│         ▼          │ (Resend) │  │  visualize_garden      │       │
+│  ┌──────────────┐  └──────────┘  └────────────────────────┘       │
 │  │  Redis Queue │                                                 │
 │  │  (pub/sub)   │                                                 │
 │  └──────┬───────┘                                                 │
@@ -117,7 +119,7 @@ relevance = e^(-0.05 × age_days) × (1 + visit_count × 0.5)
 
 ## Features
 
-### 💬 Chat (14 tools)
+### 💬 Chat (15 tools)
 The chat is the primary interface to the entire knowledge base:
 
 | Tool | Description |
@@ -136,8 +138,11 @@ The chat is the primary interface to the entire knowledge base:
 | `rate_seed` | Rate seeds 1-5 stars |
 | `list_recent_seeds` | Browse recent seeds |
 | `search_seeds_filtered` | Search by domain/tag/energy |
+| `visualize_garden` | Interactive D3 force graph of all seeds by domain + tag |
 
 **Source Surfacing:** When relevant, the chat automatically surfaces saved sources that match the conversation topic. The LLM sees: *"📎 Relevant sources: Forward-Deployed Engineer (sundeepteki.org)"* and can reference them.
+
+**Persistent Chat History:** Conversations are saved as `ChatSession` records in Postgres. The frontend stores session IDs in `localStorage` and restores full history on revisit.
 
 **Missed Connections:** The daily briefing finds unlinked seed pairs with shared tags:
 ```
@@ -156,8 +161,9 @@ Auto-generated articles that synthesize your sources and seeds into encyclopedic
 - **D3 concept maps** — force-directed connection visualizations
 - **Auto-compile:** Groups enriched content by domain/tag, runs LLM synthesis
 - **Seed-cluster compilation:** Compiles uncovered seeds even without link matches
+- **Manual compile button:** UI button triggers `/api/v1/wiki/auto-compile` via user Bearer auth
 - **Quality:** 1,300–1,800 word articles (vs. previous 200–300 word dumps)
-- **Model:** nvidia/nemotron-super-49b-v1:free via OpenRouter
+- **Model:** deepseek/deepseek-v3.2 via OpenRouter
 
 ### 🔔 Push Notifications (Web Push)
 True push notifications via VAPID + Service Worker:
@@ -171,8 +177,10 @@ True push notifications via VAPID + Service Worker:
 - Semantic search via Weaviate (BM25 + vector)
 - Knowledge graph with seed connections (click to open detail)
 - **Garden Intelligence API:** trending seeds, stale (decay), needs revisiting, health score
+- **Interactive visualization:** `visualize_garden` tool renders inline D3 force graph via chat, grouped by domain + tag proximity
 - Star ratings for seed quality
 - Visit tracking: `last_visited`, `visit_count`
+- URL detection in seeds: Exa full-page fetch for web-sourced thoughts; LLM-inferred `domain` and `energy` fields
 
 ### 📎 Sources
 - Auto-enriched on add (title, summary, domain, favicon, OG image)
@@ -181,6 +189,17 @@ True push notifications via VAPID + Service Worker:
 - "Create Seed from Source" button (Sources → Garden bridge)
 - Shows spawned seeds for each source
 - Auto-bridge: Sources → Seeds created automatically when no related seeds exist
+
+### 📬 Email Digests (Resend)
+Personalized daily emails grounded in your Garden and Wiki:
+
+| Digest | Time | Content |
+|--------|------|---------|
+| Enterprise Digest | 09:30 CET | Daily briefing — seeds to review, missed connections, sources |
+| Academic + Research Digest | 07:00 CET | Top arXiv papers for your themes → connected to your Garden seeds and Wiki articles → actionable move + solution design seed. arXiv PDFs attached. |
+| Weekly Content Eval | Sunday 18:00 CET | Rated seeds review, enrichment quality summary |
+
+Requires `RESEND_API_KEY` in `.env`. Free tier (3,000 emails/month) covers all jobs.
 
 ### 📊 Activity Summary ("What's New")
 Shown on every PWA login (empty state + with messages):
@@ -246,6 +265,8 @@ OPENROUTER_API_KEY=sk-or-...
 WEAVIATE_URL=http://weaviate:8080
 REDIS_URL=redis://redis:6379/0
 VAPID_PRIVATE_KEY_PATH=/app/.vapid_private.pem
+RESEND_API_KEY=re_...              # Email digests (optional — disables email if unset)
+EMAIL_FROM=Seedify <digest@...>    # Verified Resend sender domain
 
 # Frontend (.env.local)
 NEXT_PUBLIC_VAPID_KEY=BMvL3eG7...
@@ -281,11 +302,14 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │       └── use-push-notifications.ts  # VAPID subscribe + poll (improved error handling)
 ├── openclaw-api/               # FastAPI backend
 │   ├── app/
-│   │   ├── main.py             # API routes (50+), Web Push, migrations
+│   │   ├── main.py             # API routes (50+), Web Push, migrations, cron jobs
 │   │   ├── weaviate_client.py  # Weaviate client (IdeaSeed + Link + WikiArticle)
-│   │   ├── tool_executor.py    # 14 LLM tool handlers + decay scoring
+│   │   ├── tool_executor.py    # 15 LLM tool handlers + decay scoring + visualize_garden
 │   │   ├── tools.py            # Tool definitions (OpenAI format)
-│   │   ├── enricher_v2.py      # Seed enrichment pipeline
+│   │   ├── enricher.py         # URL detection + Exa full-page fetch + LLM seed gen
+│   │   ├── enricher_v2.py      # Seed enrichment pipeline (URL-aware)
+│   │   ├── briefings.py        # Daily/academic digest builders + garden/wiki context
+│   │   ├── email_sender.py     # Resend API email dispatch + arXiv PDF attachments
 │   │   ├── entity_extractor.py # LLM topic/entity extraction
 │   │   ├── backlinker.py       # Auto-link related seeds
 │   │   ├── wiki.py             # Wiki engine (auto-compile, synthesis, images, maps)
@@ -295,7 +319,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   │   ├── activity.py         # Activity feed (Redis sorted set)
 │   │   ├── links.py            # Source link CRUD + enrichment
 │   │   ├── database.py         # SQLAlchemy + PostgreSQL
-│   │   ├── models.py           # Seed (with visit tracking), User, etc.
+│   │   ├── models.py           # Seed, User, ChatSession, etc.
 │   │   ├── garden_health.py    # Decay scoring + health monitoring
 │   │   └── agent/              # Chat agent architecture
 │   ├── .vapid_private.pem      # VAPID private key for Web Push
@@ -312,28 +336,27 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 ```
 
 ## Cron Jobs
-| Job | Schedule | Description |
-|---|---|---|
-| Weaviate Watchdog | Every 30 min | Health check, alerts on failure |
-| Auto-seed Harvest | Every 30 min | Scan chat sessions → Redis queue → enrichment |
-| Daily Briefing | 8:30 AM CET | Weather + seeds to review + new sources + missed connections |
-| Morning Idea Spark | 8:30 AM CET | Creative prompt from latest seed |
-| Daily Reflection | 4:00 PM CET | Reflection prompt + push notification |
-| Voice → Seeds | Every 30 min | Process voice memo transcriptions |
-| Weekly Garden Digest | Sunday 10 AM CET | Research top themes, external Exa search, synthesize digest article |
-| Wiki Auto-Compile | Every 30 min | Compile new seeds/links into wiki articles (BFL images auto-generated) |
-| Auto-seed Enrichment | Every 30 min | Enrich new seeds with tags, entities, connections |
-| Backup | 2:00 AM UTC | Weaviate + Notion backup |
-| Seed Extraction | 11:00 PM UTC | Extract seeds from daily conversations |
-| Pending Link Enrichment | 7AM/7PM CET | Enrich unprocessed source links |
-| Weekly Content Eval | Sunday 6PM | Review rated seeds, adjust enrichment |
-| FDE Interview Prep | Bi-weekly 9AM CET | Generate personalized interview prep challenges |
+| Job | Schedule | Push | Email | Description |
+|---|---|---|---|---|
+| Weaviate Watchdog | Every 30 min | — | — | Health check, alerts on failure |
+| Auto-seed Harvest | Every 30 min | — | — | Scan chat sessions → Redis queue → enrichment |
+| Morning Idea Spark | 08:30 CET | ✓ | — | Creative prompt from latest seed |
+| Daily Briefing | 09:30 CET | ✓ | ✓ | Weather + seeds to review + sources + missed connections |
+| Academic + Research Digest | 07:00 CET | ✓ | ✓ + PDFs | arXiv papers × your Garden + Wiki → actionable move + solution design |
+| Daily Reflection | 16:00 CET | ✓ | — | Reflection prompt |
+| Weekly Garden Digest | Sunday 10:00 CET | ✓ | — | Research top themes, Exa search, synthesize digest article |
+| Weekly Content Eval | Sunday 18:00 CET | ✓ | ✓ | Review rated seeds, enrichment quality |
+| FDE Interview Prep | 1st & 15th 10:00 CET | ✓ | — | Personalized interview prep challenges |
+| Wiki Auto-Compile | Every 6h | — | — | Compile new seeds/links into wiki articles |
+| Auto-seed Enrichment | Every 5 min | — | — | Enrich new seeds with tags, domain, energy, connections |
+| Pending Link Enrichment | 07:00 & 19:00 CET | — | — | Enrich unprocessed source links |
 
 ## Tech Stack
-- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK, D3.js
-- **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT auth, pywebpush
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK v5, D3.js
+- **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT auth, pywebpush, APScheduler
 - **Database:** PostgreSQL 15, Weaviate 1.36 (BM25 + vector), Redis 7
-- **AI:** OpenRouter (nemotron-super-49b-v1:free), OpenAI Whisper, BFL FLUX, Exa Search
+- **AI:** OpenRouter (deepseek/deepseek-v3.2), OpenAI Whisper, BFL FLUX, Exa Search
+- **Email:** Resend API (transactional email + arXiv PDF attachments)
 - **Memory:** Multi-Layer Memory Architecture + MemFactory pipeline
 - **Push:** Web Push via VAPID (pywebpush + Service Worker)
 - **Infra:** Docker Compose, Vercel Pro, OpenClaw (agent orchestration)
@@ -346,7 +369,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 - **Dark mode:** opt-in toggle via `.dark` class
 
 ## Status
-🟢 **Working:** Chat (14 tools), Garden + Intelligence + Decay, Sources + Bridge, Wiki (auto-compile, BFL images, D3 maps), Web Push notifications, Enrichment worker, Redis queue/cache, Activity feed, Activity Summary on login, Knowledge graph, Visit tracking, Image generation, Calendar integration, Profile API, D3 concept maps, Buy Me A Coffee integration
-🟡 **Partial:** Enrichment fields (5/230+ seeds enriched — pipeline re-run pending), Push notifications (requires home-screen install on iOS Safari)
+🟢 **Working:** Chat (15 tools + persistent history), Garden + Intelligence + Decay + Visualization, Sources + Bridge, Wiki (auto-compile, BFL images, D3 maps, UI compile button), Web Push notifications, Email digests (Resend), Academic + Research Digest with arXiv PDFs, Enrichment worker (URL detection + Exa fetch + domain/energy inference), Redis queue/cache, Activity feed, Activity Summary on login, Knowledge graph, Visit tracking, Image generation, Calendar integration, Profile API, D3 concept maps, Solution design export
+🟡 **Partial:** Email digests (requires RESEND_API_KEY on server), Push notifications (requires home-screen install on iOS Safari)
 🔴 **Pending:** App Store (Capacitor), Figma MCP, Wiki Index page, Wiki Lint, Incremental per-source updates, "New sources" UI badge
 
