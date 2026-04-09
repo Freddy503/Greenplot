@@ -284,6 +284,30 @@ export default function SettingsPage() {
            </div>
          </section>
 
+         {/* Share to Garden */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Share to Garden</h2>
+           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+             <div className="flex items-start gap-3">
+               <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>ios_share</span>
+               <div>
+                 <p className="text-sm font-bold text-on-surface">Share from Safari</p>
+                 <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">
+                   Greenplot appears in the iOS share sheet once installed to your home screen.
+                   If you added the app before this feature was enabled, remove it and re-add it.
+                 </p>
+               </div>
+             </div>
+             <div className="bg-surface-container-high rounded-xl p-3 text-[11px] text-on-surface-variant leading-relaxed space-y-1.5">
+               <p className="font-semibold text-on-surface text-xs">To enable:</p>
+               <p>1. Remove Greenplot from your home screen</p>
+               <p>2. Open <span className="font-medium text-primary">greenplot.ink</span> in Safari</p>
+               <p>3. Tap <span className="material-symbols-outlined text-[11px] align-middle">ios_share</span> → <strong>Add to Home Screen</strong></p>
+               <p>4. Now tap Share in any app → Greenplot appears in the list</p>
+             </div>
+           </div>
+         </section>
+
          {/* Integrations */}
          <section>
            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Integrations</h2>

@@ -44,7 +44,7 @@ function ShareHandler() {
         },
         body: JSON.stringify({
           content: content.slice(0, 4000),
-          source: (sharedUrl || '').slice(0, 100) || undefined,
+          source: 'share',
         }),
       })
 
