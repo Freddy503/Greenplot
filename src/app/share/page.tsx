@@ -42,9 +42,8 @@ function ShareHandler() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          content,
-          title: sharedTitle || sharedUrl || 'Shared idea',
-          source: sharedUrl || undefined,
+          content: content.slice(0, 4000),
+          source: (sharedUrl || '').slice(0, 100) || undefined,
         }),
       })
 
