@@ -31,6 +31,7 @@ from app.garden_skimmer import router as garden_skimmer_router
 from app.wiki_lint import router as wiki_lint_router
 from app.wiki_pipeline import router as wiki_pipeline_router
 from app import briefings
+from app import email_sender
 import httpx
 import json
 from datetime import datetime, date, timedelta
@@ -3043,6 +3044,12 @@ def _job_daily_briefing():
 
         # Store and broadcast
         _sto<RESEND_API_KEY>(briefing)
+        # Email delivery (Enterprise Digest)
+        if settings.RESEND_API_KEY and default_user.email:
+            try:
+                email_sender.send_briefing_email(default_user.email, briefing)
+            except Exception as email_err:
+                logger.error(f"Email delivery failed for daily briefing: {email_err}")
         logger.info("✅ Daily Briefing generated")
     except Exception as e:
         logger.error(f"❌ Daily Briefing failed: {e}")
@@ -3112,6 +3119,12 @@ def _job_weekly_eval():
 
         # Store and broadcast
         _sto<RESEND_API_KEY>(briefing)
+        # Email delivery (Content Evaluation)
+        if settings.RESEND_API_KEY and default_user.email:
+            try:
+                email_sender.send_briefing_email(default_user.email, briefing)
+            except Exception as email_err:
+                logger.error(f"Email delivery failed for weekly eval: {email_err}")
         logger.info("✅ Weekly Content Eval generated")
     except Exception as e:
         logger.error(f"❌ Weekly Content Eval failed: {e}")
@@ -3140,6 +3153,39 @@ def _job_biweekly_challenge():
         logger.info("✅ Biweekly Challenge generated")
     except Exception as e:
         logger.error(f"❌ Biweekly Challenge failed: {e}")
+
+def _job_academic_digest():
+    """
+    Academic + Practical Research Digest — Daily 07:00 CET.
+    Connects new arXiv/Semantic Scholar papers to the user's Garden seeds and Wiki,
+    produces a practical synthesis and solution design seed.
+    """
+    try:
+        db = next(get_db())
+        default_user = db.query(User).first()
+        if not default_user:
+            logger.warning("No users found for academic digest")
+            return
+
+        briefing = asyncio.run(briefings.build_academic_digest(
+            user_id=str(default_user.id),
+            db=db
+        ))
+
+        _sto<RESEND_API_KEY>(briefing)
+
+        # Email with arXiv PDF attachments
+        if settings.RESEND_API_KEY and default_user.email:
+            try:
+                attachments = email_sender.collect_arxiv_pdfs(briefing)
+                email_sender.send_briefing_email(default_user.email, briefing, attachments)
+            except Exception as email_err:
+                logger.error(f"Email delivery failed for academic digest: {email_err}")
+
+        logger.info("✅ Academic Digest generated")
+    except Exception as e:
+        logger.error(f"❌ Academic Digest failed: {e}", exc_info=True)
+
 
 def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
     """Persist notification + push to all subscribers."""
@@ -3334,6 +3380,13 @@ def _start_scheduler():
         id="biweekly_challenge",
         replace_existing=True,
     )
+    # Academic + Practical Digest — daily 07:00 CET
+    ad_cfg = saved.get("academic_digest", {})
+    scheduler.add_job(
+        _job_academic_digest,
+        CronTrigger(hour=ad_cfg.get("hour", 7), minute=ad_cfg.get("minute", 0), timezone=_CET),
+        id="academic_digest", replace_existing=True,
+    )
     # Seed enrichment — every 30 minutes
     scheduler.add_job(
         _job_enrich_pending_seeds,
@@ -3389,6 +3442,7 @@ _SCHEDULE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data"
 
 _DEFAULT_SCHEDULE = {
     "morning_spark":    {"enabled": True, "hour": 8,  "minute": 30, "label": "Morning Idea Spark"},
+    "academic_digest":  {"enabled": True, "hour": 7,  "minute": 0,  "label": "Academic & Practical Digest"},
     "daily_briefing":   {"enabled": True, "hour": 9,  "minute": 30, "label": "Daily Briefing"},
     "reflection":       {"enabled": True, "hour": 16, "minute": 0,  "label": "Evening Reflection"},
     "weekly_eval":      {"enabled": True, "hour": 18, "minute": 0,  "label": "Weekly Content Eval"},
@@ -3445,6 +3499,34 @@ def update_schedule(body: dict, current_user: User = Depends(get_current_user)):
     return {"ok": True, "jobs": config}
 
 
+@app.post("/api/v1/digest/generate-solution-design")
+def generate_solution_design_endpoint(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """
+    Expand a solution_design_seed from an academic digest into a full markdown
+    solution design document. Returns the file path and the markdown content.
+    Body: {"briefing": {...}} or {"solution_design_seed": "..."}
+    """
+    briefing = body.get("briefing", {})
+    if not briefing and body.get("solution_design_seed"):
+        briefing = {"_solution_design_seed": body["solution_design_seed"]}
+
+    filepath = briefings.generate_solution_design(briefing, str(current_user.id), db)
+    if not filepath:
+        raise HTTPException(status_code=500, detail="Failed to generate solution design")
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        content = ""
+
+    return {"filepath": filepath, "content": content}
+
+
 def _run_trigger_job(job_id: str):
     """Shared logic for triggering a scheduled job by ID."""
     print(f"🔔 TRIGGER ENDPOINT CALLED: job_id={job_id}", flush=True)
@@ -3456,6 +3538,7 @@ def _run_trigger_job(job_id: str):
         "weekly_digest": _job_weekly_digest,
         "weekly_eval": _job_weekly_eval,
         "biweekly_challenge": _job_biweekly_challenge,
+        "academic_digest": _job_academic_digest,
     }
     fn = jobs.get(job_id)
     if not fn:

@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     VAPID_PRIVATE_KEY_BASE64: Optional[str] = None
     VAPID_PRIVATE_KEY_PATH: Optional[str] = None
 
+    # Email (Resend)
+    RESEND_API_KEY: Optional[str] = None
+    EMAIL_FROM: str = "Seedify <digest@seedify.app>"
+
+    # Wiki data path (inside container)
+    WIKI_DATA_PATH: str = "/data/wiki"
+
     # Harvest / internal API key
     HARVEST_API_KEY: str = "<HARVEST_API_KEY>"
 
