@@ -1,8 +1,8 @@
 const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const token = req.headers.get('authorization') || ''
-  const { id } = params
+  const { id } = await params
 
   try {
     const res = await fetch(`${BACKEND}/api/v1/sessions/${id}`, {
@@ -15,9 +15,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const token = req.headers.get('authorization') || ''
-  const { id } = params
+  const { id } = await params
 
   try {
     const res = await fetch(`${BACKEND}/api/v1/sessions/${id}`, {
