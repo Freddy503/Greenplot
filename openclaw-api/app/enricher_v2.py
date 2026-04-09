@@ -14,7 +14,7 @@ from typing import Optional
 from app.chunker import chunk_text, should_chunk
 from app.entity_extractor import extract_entities
 from app.backlinker import find_and_create_links
-from app.enricher import embed_text, generate_seed
+from app.enricher import embed_text, generate_seed, detect_url, fetch_url_content
 from app.weaviate_client import weaviate_client
 from app.database import get_db
 from app.models import Thought, Seed, Usage, Entity, SeedEntity, SeedLink
@@ -39,6 +39,17 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
     content = thought.content
     tenant_str = str(tenant_id)
 
+    # ── Step 0: URL detection + web fetch ──
+    web_context: Optional[str] = None
+    detected_url: Optional[str] = detect_url(content)
+    if detected_url:
+        print(f"[enricher_v2] URL detected: {detected_url} — fetching via Exa")
+        web_context = fetch_url_content(detected_url)
+        if web_context:
+            print(f"[enricher_v2] Fetched {len(web_context)} chars from {detected_url}")
+        else:
+            print(f"[enricher_v2] Exa fetch returned nothing for {detected_url}")
+
     # ── Step 1: Chunk ──
     chunks = chunk_text(content)
     is_chunked = len(chunks) > 1
@@ -58,10 +69,12 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
         embeddings.append(emb)
 
     # ── Step 4: Generate seed via LLM ──
-    seed_data = generate_seed(content)
+    seed_data = generate_seed(content, web_context=web_context)
     title = seed_data.get("title", "Untitled Seed")
     seed_content = seed_data.get("content", content)
     tags = seed_data.get("tags", [])
+    domain = seed_data.get("domain", "General")
+    energy = seed_data.get("energy", "MEDIUM")
 
     # Merge extracted topics with LLM tags
     all_tags = list(set(tags + topics))
@@ -77,6 +90,10 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
             "tags": all_tags,
             "entities": entity_names,
             "summary": summary,
+            "domain": domain,
+            "energy": energy,
+            "source_url": detected_url,
+            "web_enriched": web_context is not None,
             "chunked": is_chunked,
             "chunk_count": len(chunks),
             "source": "enriched_v2"
