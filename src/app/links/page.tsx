@@ -425,9 +425,8 @@ export default function LinksPage() {
      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
-     content: `${link.title}\n\n${link.summary || ''}\n\nSource: ${link.url}`,
-     title: link.title || link.domain,
-     source: link.url,
+     content: [link.title, link.summary, link.url].filter(Boolean).join('\n\n').slice(0, 4000),
+     source: (link.url || '').slice(0, 100),
     }),
    })
    if (res.ok) {
