@@ -180,8 +180,8 @@ export async function pollNotifications(onBriefing?: (briefing: any) => void) {
     const notifications = data.notifications || []
 
     for (const notif of notifications) {
-      // If briefing exists, pass to callback (for SparkCard display)
       if (notif.briefing && onBriefing) {
+        // Full briefing — show SparkCard
         const briefing = typeof notif.briefing === 'string' ? JSON.parse(notif.briefing) : notif.briefing
         onBriefing({
           type: briefing.type || 'daily_briefing',
@@ -190,14 +190,15 @@ export async function pollNotifications(onBriefing?: (briefing: any) => void) {
           sections: briefing.sections || [],
           prompt: briefing.prompt,
         })
-      } else if ('Notification' in window && Notification.permission === 'granted') {
-        // Fallback: create basic notification
+      } else if (!notif.briefing && 'Notification' in window && Notification.permission === 'granted') {
+        // Plain notification (no briefing) — show OS banner as fallback
         new Notification(notif.title, {
           body: notif.body,
           icon: '/icon-192.png',
           data: notif.url,
         })
       }
+      // briefing exists but no callback: skip silently (Web Push already delivered it)
     }
   } catch (err) {
     console.error('[pollNotifications]', err)

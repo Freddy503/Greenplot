@@ -28,6 +28,7 @@ function ShareHandler() {
 
     // If not logged in, redirect to login then come back
     if (!token) {
+      setSaving(false)
       router.push(`/login?redirect=/share?${params.toString()}`)
       return
     }
