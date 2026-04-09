@@ -94,7 +94,7 @@ def confirm_with_llm(
     """
     try:
         response = openai_client.chat.completions.create(
-            model="nvidia/llama-3.3-nemotron-super-49b-v1:free",
+            model="nvidia/nemotron-3-super-120b-a12b:free",
             messages=[
                 {"role": "system", "content": """You are a connection finder for a personal knowledge base.
 Two notes were found to be semantically similar. Determine if they are genuinely related.
