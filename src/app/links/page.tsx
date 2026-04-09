@@ -116,14 +116,14 @@ function LinkCard({ link, onStar, onDelete, onClick, onSaveToGarden }: { link: L
   {link.title || link.url}
   </a>
   <button
-  onClick={onStar}
+  onClick={(e) => { e.stopPropagation(); onStar() }}
   className="flex-shrink-0 p-1 rounded-full hover:bg-primary/10 transition-colors"
   >
   <span
    className="material-symbols-outlined text-lg"
-   
+   style={{ fontVariationSettings: link.starred ? '"FILL" 1' : '"FILL" 0', color: link.starred ? 'var(--color-primary)' : undefined }}
   >
-   {link.starred ? 'star' : 'star'}
+   star
   </span>
   </button>
   </div>
@@ -167,7 +167,7 @@ function LinkCard({ link, onStar, onDelete, onClick, onSaveToGarden }: { link: L
 
   {/* Delete */}
   <button
-  onClick={onDelete}
+  onClick={(e) => { e.stopPropagation(); onDelete() }}
   className="flex-shrink-0 p-1.5 rounded-full text-on-surface-variant/30 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
   >
   <span className="material-symbols-outlined text-sm">close</span>
@@ -426,7 +426,7 @@ export default function LinksPage() {
     },
     body: JSON.stringify({
      content: [link.title, link.summary, link.url].filter(Boolean).join('\n\n').slice(0, 4000),
-     source: (link.url || '').slice(0, 100),
+     source: 'link',
     }),
    })
    if (res.ok) {
