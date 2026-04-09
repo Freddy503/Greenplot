@@ -177,6 +177,77 @@ def fetch_user_themes(user_id: str, db) -> List[str]:
         return ["learning", "research"]
 
 
+def fetch_garden_context(user_id: str, themes: List[str], db) -> List[Dict[str, str]]:
+    """
+    Return up to 5 seed snippets from the last 90 days that relate to the given themes.
+    Used to ground the academic digest in the user's existing knowledge.
+    """
+    try:
+        from app.models import Seed
+        ninety_days_ago = datetime.utcnow() - timedelta(days=90)
+        seeds = db.query(Seed).filter(
+            Seed.user_id == user_id,
+            Seed.created_at >= ninety_days_ago
+        ).order_by(Seed.created_at.desc()).limit(60).all()
+
+        theme_words = set(t.lower() for t in themes)
+        scored = []
+        for s in seeds:
+            if not s.content:
+                continue
+            text = (s.title or "") + " " + s.content
+            score = sum(1 for w in theme_words if w in text.lower())
+            if score > 0:
+                scored.append((score, s))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [
+            {"title": s.title or "(untitled)", "snippet": s.content[:200]}
+            for _, s in scored[:5]
+        ]
+    except Exception as e:
+        logger.error(f"fetch_garden_context failed: {e}")
+        return []
+
+
+def fetch_wiki_context(themes: List[str]) -> List[Dict[str, str]]:
+    """
+    Read wiki/*.md files and return relevant paragraph excerpts for the given themes.
+    No vector search — simple keyword matching is sufficient.
+    """
+    import os, glob as _glob
+    try:
+        from app.config import settings
+        wiki_dir = settings.WIKI_DATA_PATH
+    except Exception:
+        wiki_dir = "/data/wiki"
+
+    results = []
+    theme_words = [t.lower() for t in themes]
+
+    try:
+        md_files = _glob.glob(os.path.join(wiki_dir, "*.md"))
+        for path in md_files[:30]:  # cap file scan
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    text = f.read()
+                fname = os.path.basename(path)
+                # Split into paragraphs and score each
+                paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 80]
+                for para in paragraphs:
+                    score = sum(1 for w in theme_words if w in para.lower())
+                    if score >= 1:
+                        results.append((score, fname, para[:400]))
+    except Exception as e:
+        logger.warning(f"Wiki context fetch error: {e}")
+
+    results.sort(key=lambda x: x[0], reverse=True)
+    return [
+        {"source": fname, "excerpt": excerpt}
+        for _, fname, excerpt in results[:3]
+    ]
+
+
 def get_user_city(user_id: str, db) -> Optional[str]:
     """Get user's city from profile."""
     try:
@@ -540,3 +611,255 @@ Be specific, not abstract. 15-min experiment.
         ],
         "prompt": challenge
     }
+
+
+async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
+    """
+    Build a daily academic + practical digest that connects new research
+    to the user's existing Garden seeds and Wiki knowledge.
+
+    Sections: Weather · Academic Spotlight · Enterprise News ·
+              Challenging Take · Actionable Move · Solution Design Seed
+    """
+    import re as _re
+
+    themes = fetch_user_themes(user_id, db)
+    theme_str = ", ".join(themes[:3])
+    city = get_user_city(user_id, db)
+    today = datetime.now().strftime("%a %b %d, %Y")
+
+    # Gather context in parallel-ish (sequential but fast)
+    garden_ctx = fetch_garden_context(user_id, themes, db)
+    wiki_ctx = fetch_wiki_context(themes)
+    weather = await fetch_weather(city)
+
+    # Exa searches
+    paper_results = []
+    for theme in themes[:2]:
+        paper_results += await fetch_web_search(f"{theme} arxiv preprint 2026", limit=3)
+    news_results = await fetch_web_search(f"enterprise AI {theme_str} news {today}", limit=3)
+
+    # Deduplicate papers by URL
+    seen = set()
+    unique_papers = []
+    for p in paper_results:
+        if p["url"] not in seen:
+            seen.add(p["url"])
+            unique_papers.append(p)
+
+    # Fetch full text for top 2 papers
+    from app.enricher import fetch_url_content
+    paper_texts = []
+    for paper in unique_papers[:2]:
+        full = fetch_url_content(paper["url"])
+        paper_texts.append({
+            "title": paper["title"],
+            "url": paper["url"],
+            "text": full[:3000] if full else paper.get("snippet", ""),
+        })
+
+    # Build the LLM context block
+    garden_block = "\n".join(
+        f"- [{s['title']}]: {s['snippet']}" for s in garden_ctx
+    ) or "No recent seeds."
+    wiki_block = "\n".join(
+        f"[{w['source']}]: {w['excerpt']}" for w in wiki_ctx
+    ) or "No wiki articles found."
+    papers_block = "\n\n".join(
+        f"PAPER: {p['title']}\nURL: {p['url']}\n{p['text']}"
+        for p in paper_texts
+    ) or "No papers found."
+    news_block = "\n".join(
+        f"- {n['title']} ({n['url']}): {n['snippet']}"
+        for n in news_results[:3]
+    ) or "No news results."
+
+    system_prompt = (
+        "You are a research-to-practice synthesizer for a personal knowledge management system. "
+        "Your job: connect new academic research to the user's existing knowledge and ongoing work, "
+        "producing insights that are both intellectually rigorous and immediately actionable. "
+        "The user's focus areas: " + theme_str + ". "
+        "Always relate findings back to how they apply to enterprise AI deployment and forward-deployed engineering. "
+        "Output valid JSON only (no markdown fences)."
+    )
+
+    user_prompt = f"""Today: {today}
+
+USER'S RECENT GARDEN SEEDS (what they've been thinking about):
+{garden_block}
+
+USER'S WIKI KNOWLEDGE (what they already know well):
+{wiki_block}
+
+NEW ACADEMIC PAPERS:
+{papers_block}
+
+ENTERPRISE AI NEWS TODAY:
+{news_block}
+
+Produce a JSON object with this exact structure:
+{{
+  "spotlight_title": "Paper title + authors + year",
+  "spotlight_content": "3-5 sentences: what problem it solves, key finding, why it matters for enterprise AI. Reference the user's existing seeds/wiki where relevant.",
+  "spotlight_sources": [{{"title": "arXiv", "url": "paper_url"}}],
+  "news_items": [
+    {{"headline": "...", "synthesis": "1-2 sentences", "url": "..."}}
+  ],
+  "challenging_take": "A counterintuitive observation about one of the papers or news items. 2-3 sentences.",
+  "actionable_move": "One specific thing the user can do TODAY based on the research, grounded in their current seeds.",
+  "solution_design_seed": "3-5 bullet markdown sketch of how this research could become a concrete tool or project the user could build.",
+  "prompt": "A single sentence to open a chat discussion about today's research."
+}}"""
+
+    raw = _call_llm(user_prompt, system=system_prompt, max_tokens=1500,
+                    model="deepseek/deepseek-v3.2")
+
+    # Parse JSON, strip fences if needed
+    cleaned = _re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=_re.IGNORECASE)
+    cleaned = _re.sub(r'\s*```$', '', cleaned.strip())
+    try:
+        data = json.loads(cleaned)
+    except Exception:
+        logger.error(f"[academic_digest] JSON parse failed, using fallback. Raw: {raw[:200]}")
+        data = {}
+
+    # Build standard briefing sections
+    sections = []
+
+    # Weather
+    if weather and city:
+        sections.append({
+            "title": f"Weather — {city}",
+            "icon": "cloud",
+            "color": "text-blue-400",
+            "content": weather,
+        })
+
+    # Academic spotlight
+    spotlight_sources = data.get("spotlight_sources", [])
+    if paper_texts and not spotlight_sources:
+        spotlight_sources = [{"title": paper_texts[0]["title"][:50], "url": paper_texts[0]["url"]}]
+    sections.append({
+        "title": data.get("spotlight_title", "Academic Spotlight"),
+        "icon": "school",
+        "color": "text-indigo-400",
+        "content": data.get("spotlight_content", "No spotlight generated."),
+        "sources": spotlight_sources,
+    })
+
+    # Enterprise news
+    news_items = data.get("news_items", [])
+    if news_items:
+        news_content = [f"{item.get('headline', '')}: {item.get('synthesis', '')}" for item in news_items]
+        news_sources = [{"title": item.get("headline", "")[:40], "url": item.get("url", "")} for item in news_items if item.get("url")]
+        sections.append({
+            "title": "Enterprise AI News",
+            "icon": "newspaper",
+            "color": "text-blue-400",
+            "content": news_content,
+            "sources": news_sources,
+        })
+
+    # Challenging take
+    if data.get("challenging_take"):
+        sections.append({
+            "title": "Challenging Take",
+            "icon": "bolt",
+            "color": "text-amber-400",
+            "content": data["challenging_take"],
+        })
+
+    # Actionable move
+    if data.get("actionable_move"):
+        sections.append({
+            "title": "One Actionable Move",
+            "icon": "tips_and_updates",
+            "color": "text-green-400",
+            "content": data["actionable_move"],
+        })
+
+    # Solution design seed
+    if data.get("solution_design_seed"):
+        sections.append({
+            "title": "Solution Design Seed",
+            "icon": "architecture",
+            "color": "text-purple-400",
+            "content": data["solution_design_seed"],
+        })
+
+    return {
+        "type": "academic_digest",
+        "title": f"Research Digest — {today}",
+        "subtitle": f"Grounded in your interests: {theme_str}",
+        "sections": sections,
+        "prompt": data.get("prompt", f"Let's discuss today's research on {theme_str}."),
+        "_solution_design_seed": data.get("solution_design_seed", ""),
+    }
+
+
+def generate_solution_design(briefing: dict, user_id: str, db) -> Optional[str]:
+    """
+    Expand the solution_design_seed from an academic digest into a full
+    markdown solution design document. Saves to /data/outputs/solution_designs/.
+    Returns the file path, or None on failure.
+    """
+    import os, re as _re
+    seed = briefing.get("_solution_design_seed") or briefing.get("solution_design_seed", "")
+    if not seed:
+        logger.warning("[solution_design] No seed found in briefing")
+        return None
+
+    themes = fetch_user_themes(user_id, db)
+    garden_ctx = fetch_garden_context(user_id, themes, db)
+    wiki_ctx = fetch_wiki_context(themes)
+
+    garden_block = "\n".join(f"- [{s['title']}]: {s['snippet']}" for s in garden_ctx) or ""
+    wiki_block = "\n".join(f"[{w['source']}]: {w['excerpt']}" for w in wiki_ctx) or ""
+
+    system = (
+        "You are a solution architect for a forward-deployed AI engineer. "
+        "Produce a clean, actionable markdown solution design document. "
+        "It should be concrete enough to be directly executed as a plan by Claude Code or Cursor."
+    )
+    prompt = f"""Expand this idea sketch into a full solution design document:
+
+IDEA SKETCH:
+{seed}
+
+USER'S EXISTING KNOWLEDGE:
+{wiki_block}
+
+USER'S RECENT CONTEXT:
+{garden_block}
+
+Write a markdown document with these sections:
+# [Project Name]
+## Problem Statement
+## Proposed Approach (from research)
+## Connection to Existing Knowledge
+## Implementation Sketch
+### Phase 1 (MVP)
+### Phase 2 (Enhancement)
+## Key Technical Decisions
+## Open Questions
+## Success Criteria
+"""
+
+    md_content = _call_llm(prompt, system=system, max_tokens=2000, model="deepseek/deepseek-v3.2")
+    if not md_content:
+        return None
+
+    # Save to disk
+    output_dir = "/data/outputs/solution_designs"
+    os.makedirs(output_dir, exist_ok=True)
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    # Derive slug from first heading or seed first line
+    slug_src = (md_content.split("\n")[0].lstrip("# ") or seed.split("\n")[0])[:40]
+    slug = _re.sub(r"[^a-z0-9]+", "-", slug_src.lower()).strip("-")
+    filepath = os.path.join(output_dir, f"{date_str}-{slug}.md")
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(md_content)
+
+    logger.info(f"[solution_design] Saved to {filepath}")
+    return filepath

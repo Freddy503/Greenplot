@@ -13,7 +13,7 @@ export interface SparkSection {
 }
 
 export interface SparkNotification {
-  type: 'morning_spark' | 'daily_briefing' | 'reflection' | 'weekly_eval' | 'challenge'
+  type: 'morning_spark' | 'daily_briefing' | 'reflection' | 'weekly_eval' | 'challenge' | 'academic_digest'
   title: string
   subtitle?: string
   sections: SparkSection[]
@@ -33,6 +33,7 @@ const typeConfig = {
   reflection: { icon: 'psychology', label: 'Evening Reflection', bgColor: 'from-purple-500/20' },
   weekly_eval: { icon: 'assessment', label: 'Weekly Eval', bgColor: 'from-green-500/20' },
   challenge: { icon: 'emoji_events', label: 'Biweekly Challenge', bgColor: 'from-red-500/20' },
+  academic_digest: { icon: 'school', label: 'Research Digest', bgColor: 'from-indigo-500/20' },
 }
 
 export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: SparkCardProps) {

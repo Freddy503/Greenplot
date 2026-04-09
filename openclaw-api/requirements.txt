@@ -20,3 +20,4 @@ PyJWT
 beautifulsoup4
 apscheduler>=3.10.0
 pytz>=2023.0
+resend>=2.0.0
