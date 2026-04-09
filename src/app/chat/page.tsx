@@ -76,6 +76,9 @@ import {
   Suggestion,
 } from '@/components/ai-elements/suggestion'
 
+// Garden graph
+import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
+
 // Icons
 import { PaperclipIcon, GlobeIcon } from 'lucide-react'
 
@@ -165,6 +168,10 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [conversations, setConversations] = useState<ConversationMeta[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string>('')
+  // Backend session_id per conversation (for persistent chat history)
+  const sessionIdRef = useRef<string>('')
+  // Inline garden visualization from tool call
+  const [gardenVizData, setGardenVizData] = useState<{ nodes: any[]; links: any[]; stats: any } | null>(null)
   // SparkCard — shown when a push notification is clicked
   const [sparkNotification, setSparkNotification] = useState<SparkNotification | null>(null)
   // Track if we've already fetched suggestions on mount
@@ -226,6 +233,8 @@ export default function ChatPage() {
       api: '/api/chat',
       body: () => ({
         _auth_token: authToken,
+        // Include backend session_id so conversations persist across page loads
+        session_id: sessionIdRef.current || '',
       }),
     }),
     experimental_throttle: 50,
@@ -311,10 +320,49 @@ export default function ChatPage() {
       saveConvIndex(convs)
       localStorage.setItem('greenplot_active_conv', activeId)
 
+      // Restore backend session_id for active conversation
+      sessionIdRef.current = localStorage.getItem(`greenplot_session_${activeId}`) || ''
+
       // Load messages for active conversation
       const msgs = loadConvMessages(activeId)
       if (msgs.length > 0) {
         setMessages(msgs)
+      }
+
+      // Merge backend sessions into conversation list (best-effort, async)
+      const token = localStorage.getItem('greenplot_token') || ''
+      if (token) {
+        fetch('/api/sessions', {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(5000),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then((sessions: Array<{ id: string; title: string; updated_at: string; message_count: number }> | null) => {
+            if (!sessions || !Array.isArray(sessions)) return
+            setConversations(prev => {
+              // Add backend sessions not already in local list (identified by session_id stored in localStorage)
+              const localSessionIds = new Set(
+                prev.map(c => localStorage.getItem(`greenplot_session_${c.id}`)).filter(Boolean)
+              )
+              const newFromBackend = sessions
+                .filter(s => !localSessionIds.has(s.id) && s.message_count > 0)
+                .map(s => ({
+                  id: `backend_${s.id}`,
+                  title: s.title || 'Chat session',
+                  updatedAt: s.updated_at || new Date().toISOString(),
+                  _backendSessionId: s.id,
+                }))
+              // Store session_id mapping for backend convs
+              for (const bc of newFromBackend) {
+                localStorage.setItem(`greenplot_session_${bc.id}`, (bc as any)._backendSessionId)
+              }
+              if (newFromBackend.length === 0) return prev
+              const merged = [...prev, ...newFromBackend]
+              saveConvIndex(merged.map(c => ({ id: c.id, title: c.title, updatedAt: c.updatedAt })))
+              return merged.map(c => ({ id: c.id, title: c.title, updatedAt: c.updatedAt }))
+            })
+          })
+          .catch(() => {/* silent — backend may be unreachable */})
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -448,6 +496,8 @@ export default function ChatPage() {
     if (id === activeConversationId) return
     setActiveConversationId(id)
     localStorage.setItem('greenplot_active_conv', id)
+    // Restore backend session_id for this conversation
+    sessionIdRef.current = localStorage.getItem(`greenplot_session_${id}`) || ''
     const msgs = loadConvMessages(id)
     setMessages(msgs)
   }
@@ -745,7 +795,34 @@ export default function ChatPage() {
                 <ActivitySummary token={authToken} />
                 
                 {messages.map((message, msgIdx) => {
-                const sourceParts = message.parts.filter((p) => p.type === 'source-url')
+                const allSourceParts = message.parts.filter((p) => p.type === 'source-url')
+                // Intercept sentinel sources: session_id and visualization data
+                const sourceParts = allSourceParts.filter((p) => {
+                  const sp = p as { url: string; title?: string; sourceId?: string }
+                  if (sp.title?.startsWith('__session__:')) {
+                    // Extract and persist session_id for this conversation
+                    const sid = sp.title.replace('__session__:', '')
+                    if (sid && sid !== sessionIdRef.current) {
+                      sessionIdRef.current = sid
+                      if (activeConversationId) {
+                        localStorage.setItem(`greenplot_session_${activeConversationId}`, sid)
+                      }
+                    }
+                    return false // Don't render
+                  }
+                  if (sp.title?.startsWith('__visualization__:')) {
+                    // Extract visualization data — rendered inline below
+                    try {
+                      const vizJson = sp.title.replace('__visualization__:', '')
+                      const viz = JSON.parse(vizJson)
+                      if (viz.nodes && !gardenVizData) {
+                        setGardenVizData(viz)
+                      }
+                    } catch {}
+                    return false // Don't render as a clickable source
+                  }
+                  return true
+                })
                 const isUser = message.role === 'user'
                 const isLastAssistant = !isUser && msgIdx === messages.length - 1
 
@@ -862,6 +939,19 @@ export default function ChatPage() {
                                     } catch {}
                                   }
 
+                                  // Check if this is a garden visualization tool output
+                                  const isVizTool = tp.type === 'tool-visualize_garden' ||
+                                    (tp.input && (tp.input as any).limit !== undefined && tp.type?.includes('visualize'))
+                                  let vizOutput: { nodes: any[]; links: any[]; stats: any } | null = null
+                                  if (tp.output) {
+                                    try {
+                                      const parsed = typeof tp.output === 'string' ? JSON.parse(tp.output) : tp.output
+                                      if (parsed.type === 'garden_visualization' && parsed.status === 'ok') {
+                                        vizOutput = { nodes: parsed.nodes, links: parsed.links, stats: parsed.stats }
+                                      }
+                                    } catch {}
+                                  }
+
                                   return (
                                     <div key={`${message.id}-tool-${i}`} className="mt-3">
                                       {isSubagent && subagentData && (
@@ -875,12 +965,49 @@ export default function ChatPage() {
                                         />
                                         <ToolContent>
                                           {tp.input != null && <ToolInput input={tp.input} />}
-                                          {(tp.output != null || tp.errorText != null) && (
+                                          {vizOutput ? (
+                                            <div className="mt-2 p-4 rounded-2xl bg-surface-container-high border border-outline-variant/15">
+                                              <div className="flex items-center gap-2 mb-3">
+                                                <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
+                                                <p className="text-sm font-semibold text-on-surface">Garden Knowledge Graph</p>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-3 mb-3">
+                                                <div className="text-center p-2 rounded-xl bg-surface-container">
+                                                  <p className="text-xl font-bold text-primary">{vizOutput.stats.total_seeds}</p>
+                                                  <p className="text-[10px] text-on-surface-variant">Seeds</p>
+                                                </div>
+                                                <div className="text-center p-2 rounded-xl bg-surface-container">
+                                                  <p className="text-xl font-bold text-primary">{vizOutput.links.length}</p>
+                                                  <p className="text-[10px] text-on-surface-variant">Connections</p>
+                                                </div>
+                                                <div className="text-center p-2 rounded-xl bg-surface-container">
+                                                  <p className="text-xl font-bold text-primary">{vizOutput.stats.domains?.length || 0}</p>
+                                                  <p className="text-[10px] text-on-surface-variant">Domains</p>
+                                                </div>
+                                              </div>
+                                              {vizOutput.stats.domains && vizOutput.stats.domains.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                                  {vizOutput.stats.domains.map(([domain, count]: [string, number]) => (
+                                                    <span key={domain} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                                                      {domain || 'General'} · {count}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              <button
+                                                onClick={() => setGardenVizData(vizOutput)}
+                                                className="w-full text-sm text-primary font-medium py-2 rounded-xl hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+                                              >
+                                                <span className="material-symbols-outlined text-base">open_in_full</span>
+                                                Open Interactive Graph
+                                              </button>
+                                            </div>
+                                          ) : (tp.output != null || tp.errorText != null) ? (
                                             <ToolOutput
                                               output={tp.output != null ? JSON.stringify(tp.output) : undefined}
                                               errorText={tp.errorText}
                                             />
-                                          )}
+                                          ) : null}
                                         </ToolContent>
                                       </Tool>
                                     </div>
@@ -1141,6 +1268,20 @@ export default function ChatPage() {
       </div>
 
       <BottomNav />
+
+      {/* ── Garden Graph — shown when visualize_garden tool is called ── */}
+      {gardenVizData && (
+        <FullScreenGraph
+          seeds={gardenVizData.nodes.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            domain: n.domain || '',
+            text: Array.isArray(n.tags) ? n.tags.join(', ') : (n.tags || ''),
+          }))}
+          open={true}
+          onClose={() => setGardenVizData(null)}
+        />
+      )}
 
       {/* ── Spark Card — shown when push notification is clicked ── */}
       {sparkNotification && (

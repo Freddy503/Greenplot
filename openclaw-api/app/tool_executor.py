@@ -375,12 +375,91 @@ async def list_recent_seeds(args: dict, user: User, db: Session) -> str:
         return json.dumps({"status": "error", "message": str(e)})
 
 
+async def visualize_garden(args: dict, user: User, db: Session) -> str:
+    """
+    Return garden graph data for visualization in chat.
+    Queries seeds from Postgres and builds a node/edge structure.
+    """
+    limit = min(args.get("limit", 40), 80)
+    from datetime import timedelta
+    try:
+        seeds = db.query(Seed).filter(
+            Seed.tenant_id == user.tenant_id
+        ).order_by(Seed.created_at.desc()).limit(limit).all()
+
+        if not seeds:
+            return json.dumps({"type": "garden_visualization", "status": "empty",
+                               "message": "No seeds in your garden yet."})
+
+        # Build node list
+        nodes = []
+        domain_counts: dict = {}
+        for s in seeds:
+            meta = s.seed_metadata or {}
+            domain = meta.get("domain", "") or ""
+            energy = meta.get("energy", "MEDIUM") or "MEDIUM"
+            tags_raw = meta.get("tags", "") or ""
+            tags = tags_raw if isinstance(tags_raw, list) else [t.strip() for t in tags_raw.split(",") if t.strip()]
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+            nodes.append({
+                "id": str(s.id),
+                "title": s.title or "Untitled",
+                "domain": domain,
+                "energy": energy,
+                "tags": tags[:3],
+                "created_at": s.created_at.isoformat() if s.created_at else "",
+                "connections": 0,  # filled below
+            })
+
+        # Build edges via shared domain/tags (lightweight — no Weaviate call needed)
+        node_map = {n["id"]: n for n in nodes}
+        links = []
+        seen_pairs: set = set()
+        for i, a in enumerate(nodes):
+            for b in nodes[i+1:]:
+                if a["domain"] and a["domain"] == b["domain"]:
+                    pair = tuple(sorted([a["id"], b["id"]]))
+                    if pair not in seen_pairs:
+                        seen_pairs.add(pair)
+                        links.append({"source": a["id"], "target": b["id"], "strength": 0.6})
+                        node_map[a["id"]]["connections"] += 1
+                        node_map[b["id"]]["connections"] += 1
+                # Shared tag
+                if set(a["tags"]) & set(b["tags"]):
+                    pair = tuple(sorted([a["id"], b["id"]]))
+                    if pair not in seen_pairs:
+                        seen_pairs.add(pair)
+                        links.append({"source": a["id"], "target": b["id"], "strength": 0.4})
+                        node_map[a["id"]]["connections"] += 1
+                        node_map[b["id"]]["connections"] += 1
+
+        # Cap edges for performance
+        links = sorted(links, key=lambda l: l["strength"], reverse=True)[:120]
+
+        stats = {
+            "total_seeds": len(seeds),
+            "domains": sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:5],
+            "connected_seeds": sum(1 for n in nodes if n["connections"] > 0),
+        }
+
+        return json.dumps({
+            "type": "garden_visualization",
+            "status": "ok",
+            "nodes": nodes,
+            "links": links,
+            "stats": stats,
+        })
+    except Exception as e:
+        return json.dumps({"type": "garden_visualization", "status": "error", "message": str(e)})
+
+
 # Tool dispatch map
 TOOL_HANDLERS = {
     "search_seeds": search_seeds,
     "create_seed": create_seed,
     "get_daily_briefing": get_daily_briefing,
     "list_recent_seeds": list_recent_seeds,
+    "visualize_garden": visualize_garden,
 }
 
 

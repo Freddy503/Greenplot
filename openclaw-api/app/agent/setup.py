@@ -230,6 +230,24 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("rate_seed"),
     ))
 
+    registry.register(ToolSpec(
+        name="visualize_garden",
+        description="Generate a visual knowledge graph of the user's Garden seeds. Use when the user asks to visualize, map, or see connections in their garden. Returns graph data rendered as an interactive network in the chat.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of seeds to include (default 40, max 80).",
+                    "default": 40,
+                },
+            },
+            "required": [],
+        },
+        permission=PermissionLevel.READ,
+        handler=TOOL_HANDLERS.get("visualize_garden"),
+    ))
+
     # ── Sub-Agent System ───────────────────────────────────────────
     from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
 

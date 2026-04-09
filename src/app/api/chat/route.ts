@@ -158,9 +158,18 @@ export async function POST(req: Request) {
 
             switch (event.type) {
               case 'session': {
-                // Backend confirms session ID
+                // Backend confirms session ID — propagate to frontend via source-url sentinel
                 if (event.session_id) {
                   currentSessionId = event.session_id
+                  // Encode session_id as a special source so page.tsx can capture it
+                  // without modifying visible text. Prefixed with __session__ so it can
+                  // be filtered out of the rendered sources list.
+                  writer.write({
+                    type: 'source-url',
+                    sourceId: `__session__:${event.session_id}`,
+                    url: `session://${event.session_id}`,
+                    title: `__session__:${event.session_id}`,
+                  })
                 }
                 break
               }
@@ -206,7 +215,6 @@ export async function POST(req: Request) {
               }
 
               case 'tool_result': {
-                // Extract sources from web search results
                 const output =
                   typeof event.result === 'string'
                     ? event.result
@@ -214,6 +222,24 @@ export async function POST(req: Request) {
 
                 try {
                   const parsed = JSON.parse(output)
+
+                  // Garden visualization — emit as a special source sentinel
+                  // so the chat page can render an inline graph
+                  if (parsed.type === 'garden_visualization' && parsed.status === 'ok') {
+                    writer.write({
+                      type: 'source-url',
+                      sourceId: `__visualization__:${event.name || 'garden'}`,
+                      url: `visualization://garden?data=${encodeURIComponent(JSON.stringify({
+                        nodes: parsed.nodes,
+                        links: parsed.links,
+                        stats: parsed.stats,
+                      }))}`,
+                      title: `__visualization__:${JSON.stringify({ nodes: parsed.nodes, links: parsed.links, stats: parsed.stats })}`,
+                    })
+                    break
+                  }
+
+                  // Web search sources
                   if (parsed.results && Array.isArray(parsed.results)) {
                     const seen = new Set<string>()
                     for (const r of parsed.results) {
@@ -239,7 +265,7 @@ export async function POST(req: Request) {
                     }
                   }
                 } catch {
-                  // Not JSON or no results — skip source extraction
+                  // Not JSON or no results — skip
                 }
                 break
               }

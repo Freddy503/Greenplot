@@ -303,19 +303,14 @@ def list_seeds(
         cache_search(tenant_id, query, [vars(s) for s in seeds])
         return SeedSearchResponse(seeds=seeds, query=query, total=len(seeds))
     else:
-        # Check Redis cache for recent seeds
-        from app.cache import get_cached_seeds, cache_seeds
-        cached = get_cached_seeds(tenant_id)
-        if cached is not None:
-            seeds = [Seed(**s) if isinstance(s, dict) else s for s in cached]
-            return SeedSearchResponse(seeds=seeds[:limit], query=None, total=len(seeds))
-
-        # Return recent seeds from Postgres
+        # Always query Postgres directly — Redis cache reconstruction was causing
+        # type errors (string id/created_at, missing new columns) that silently
+        # returned empty seed lists to the frontend.
         seeds = db.query(Seed).filter(
             Seed.tenant_id == current_user.tenant_id
         ).order_by(Seed.created_at.desc()).limit(limit).all()
 
-        # Enrich seeds with metadata fields for visualization
+        # Attach metadata fields as convenience attributes for serialization
         for seed in seeds:
             metadata = seed.seed_metadata or {}
             seed.tags = metadata.get("tags", "")
@@ -323,10 +318,6 @@ def list_seeds(
             seed.energy = metadata.get("energy", "")
             seed.summary = metadata.get("summary", "")
 
-        # Cache for next time
-        cache_seeds(tenant_id, [{"id": str(s.id), "title": s.title, "content": s.content[:500],
-                                  "created_at": s.created_at.isoformat() if s.created_at else None}
-                                 for s in seeds])
         return SeedSearchResponse(seeds=seeds, query=None, total=len(seeds))
 
 class SeedSearchRequest(BaseModel):
