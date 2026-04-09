@@ -310,13 +310,15 @@ def list_seeds(
             Seed.tenant_id == current_user.tenant_id
         ).order_by(Seed.created_at.desc()).limit(limit).all()
 
-        # Attach metadata fields as convenience attributes for serialization
+        # Attach metadata fields as convenience attributes for serialization.
+        # Normalize tags to str — enricher_v2 stores them as list, schema expects str.
         for seed in seeds:
             metadata = seed.seed_metadata or {}
-            seed.tags = metadata.get("tags", "")
-            seed.domain = metadata.get("domain", "")
-            seed.energy = metadata.get("energy", "")
-            seed.summary = metadata.get("summary", "")
+            raw_tags = metadata.get("tags", "")
+            seed.tags = ", ".join(raw_tags) if isinstance(raw_tags, list) else (raw_tags or "")
+            seed.domain = metadata.get("domain", "") or ""
+            seed.energy = metadata.get("energy", "") or ""
+            seed.summary = metadata.get("summary", "") or ""
 
         return SeedSearchResponse(seeds=seeds, query=None, total=len(seeds))
 
@@ -3418,6 +3420,18 @@ def list_scheduler_jobs():
             {"id": "biweekly_challenge",   "schedule": "1st & 15th 10:00 CET", "type": "challenge"},
         ]
     }
+
+
+@app.post("/api/v1/wiki/auto-compile")
+def wiki_auto_compile(
+    current_user: User = Depends(get_current_user),
+):
+    """Trigger wiki compilation for the authenticated user. Called from the UI compile button."""
+    try:
+        _job_wiki_compile()
+        return {"status": "ok", "compiled": "triggered", "message": "Wiki compilation started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/v1/admin/trigger/{job_id}")
