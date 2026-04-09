@@ -238,6 +238,8 @@ def fetch_wiki_context(themes: List[str]) -> List[Dict[str, str]]:
                     score = sum(1 for w in theme_words if w in para.lower())
                     if score >= 1:
                         results.append((score, fname, para[:400]))
+            except Exception:
+                pass
     except Exception as e:
         logger.warning(f"Wiki context fetch error: {e}")
 
