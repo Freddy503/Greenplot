@@ -97,7 +97,7 @@ def generate_seed(thought_text: str, web_context: Optional[str] = None) -> dict:
     user_content = "\n\n".join(user_parts)
 
     response = openai_client.chat.completions.create(
-        model="nvidia/nemotron-3-super-120b-a12b:free",
+        model="deepseek/deepseek-v3.2",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content}

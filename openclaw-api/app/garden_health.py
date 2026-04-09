@@ -224,7 +224,7 @@ async def ask_garden(body: AskRequest, token: str = Depends(oauth2_scheme), db: 
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "nvidia/nemotron-3-super-120b-a12b:free",
+                        "model": "deepseek/deepseek-v3.2",
                         "messages": [
                             {
                                 "role": "system",
