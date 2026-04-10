@@ -1,15 +1,17 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, Suspense } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/chat'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -52,7 +54,7 @@ export default function LoginPage() {
       // Register push notifications (non-blocking)
       requestPermission().catch(() => {})
 
-      router.push('/chat')
+      router.push(redirectTo)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -135,5 +137,13 @@ export default function LoginPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

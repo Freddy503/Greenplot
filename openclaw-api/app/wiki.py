@@ -627,14 +627,36 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         except Exception:
             raise HTTPException(status_code=401, detail="Could not validate credentials")
 
-    # 1. Get all enriched links
+    # 1. Get all enriched links (may be empty — that's OK, seed clusters still compile)
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
     enriched = [l for l in links if l.get("status") == "enriched" and l.get("summary")]
-    if not enriched:
-        return {"ok": True, "compiled": 0, "message": "No enriched links available"}
 
-    # 1b. Also get seeds — they contain your actual thinking
+    # 1b. Get seeds — prefer Weaviate, fall back to Postgres (source of truth)
     all_seeds = weaviate_client.get_seeds_by_tenant(tenant_id, limit=200)
+    if not all_seeds:
+        # Weaviate may be empty or unsynced — read directly from Postgres
+        try:
+            from app.database import get_db
+            from app.models import Seed
+            db = next(get_db())
+            pg_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).order_by(Seed.created_at.desc()).limit(200).all()
+            db.close()
+            all_seeds = []
+            for s in pg_seeds:
+                meta = s.seed_metadata or {}
+                tags_raw = meta.get("tags", "")
+                tags = ", ".join(tags_raw) if isinstance(tags_raw, list) else (tags_raw or "")
+                all_seeds.append({
+                    "id": str(s.id),
+                    "title": s.title or "",
+                    "content": s.content or "",
+                    "domain": meta.get("domain", "") or "",
+                    "energy": meta.get("energy", "") or "",
+                    "tags": tags,
+                    "summary": meta.get("summary", "") or "",
+                })
+        except Exception as e:
+            logger.warning(f"Postgres seed fallback failed: {e}")
 
     # 2. Get existing wiki articles and their source IDs
     articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
@@ -642,13 +664,10 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     for article in articles:
         for lid in article.get("sourceLinkIds", []):
             covered_link_ids.add(lid)
-        # Also check by domain — don't create duplicate domain articles
-        pass
 
     # 3. Find enriched links NOT yet in any wiki article
     uncovered = [l for l in enriched if l.get("id") not in covered_link_ids]
-    if not uncovered:
-        return {"ok": True, "compiled": 0, "message": "All enriched links already in wiki"}
+    # Note: if no enriched links we skip the link-cluster path but still compile seed clusters below
 
     # 4. Group by domain
     domain_groups = {}
@@ -821,7 +840,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
                     covered_seed_ids.add(sid.strip())
 
     for domain, seeds_group in seed_groups.items():
-        if len(seeds_group) < 2:  # Need at least 2 seeds for a cluster
+        if len(seeds_group) < 1:  # Need at least 1 seed for a cluster
             continue
         
         # Skip if all seeds already covered
