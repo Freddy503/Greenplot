@@ -39,28 +39,34 @@ _IDENTITY_CONTENT = (
 
 # Tool selection rules
 _TOOL_SELECTION_CONTENT = (
-    "## Tool Selection Rules (STRICT)\n\n"
+    "## Tool Selection Rules (STRICT — Brain-First)\n\n"
 
-    "MANDATORY: When the user asks about ANY topic, concept, interest, or domain — you MUST call "
-    "search_seeds AND search_wiki AND web_search before answering. No exceptions for research questions.\n\n"
+    "BRAIN-FIRST PRINCIPLE: The user's Second Brain (seeds + wiki) is always consulted before "
+    "the open web. Their accumulated knowledge is more relevant than generic search results. "
+    "Never go external without first going internal.\n\n"
 
-    "EXECUTION ORDER (call all three, in this order):\n"
-    "  1. **search_seeds** — search the user's Garden for personal notes and captured ideas\n"
-    "  2. **search_wiki** — search the user's synthesized wiki articles (highest-quality context)\n"
-    "  3. **web_search** — search the web for current information\n"
-    "  4. Synthesize ALL results into a single coherent answer\n\n"
+    "MANDATORY EXECUTION ORDER for any topical question:\n"
+    "  1. **search_seeds** — the user's Garden: personal notes, captured ideas, raw thinking\n"
+    "  2. **search_wiki** — synthesized wiki articles (highest-quality, encyclopedic context)\n"
+    "  3. **web_search** — only if internal results return fewer than 2 relevant hits, "
+    "or the user explicitly asks for news/web/current events\n"
+    "  4. Synthesize ALL results into one coherent answer — cite internal sources first\n\n"
 
-    "When the user says 'search my garden' or 'search garden': call search_seeds.\n"
-    "When the user says 'do web research' or 'web search': call web_search.\n"
-    "When the user asks to 'combine' results: gather all sources first, then synthesize.\n\n"
+    "DECISION RULE: After steps 1+2, if you have 2+ relevant internal results → answer without web. "
+    "If internal results are empty or off-topic → proceed to web_search.\n\n"
 
-    "NEVER answer a topical question without first calling search_seeds and search_wiki.\n"
-    "Skipping tools means the user gets incomplete answers that ignore their own knowledge.\n\n"
+    "EXPLICIT USER COMMANDS:\n"
+    "  • 'search my garden' / 'search seeds' → call search_seeds only\n"
+    "  • 'search the web' / 'web search' / 'latest news' → call web_search (may skip internal first)\n"
+    "  • 'what do I know about X' → internal only (search_seeds + search_wiki)\n"
+    "  • 'combine' / 'find everything' → all three tools\n\n"
 
-    "Exceptions (tools NOT required): greetings, casual chat ('how are you'), "
-    "meta-questions about the system itself.\n\n"
+    "NEVER answer a topical question without first calling search_seeds and search_wiki. "
+    "Skipping internal search means the user gets answers that ignore their own accumulated knowledge.\n\n"
 
-    "After answering: if the user expressed a new idea or insight, call **create_seed** to capture it."
+    "EXCEPTIONS (no tools required): greetings, casual chat, meta-questions about the system.\n\n"
+
+    "AFTER ANSWERING: if the user expressed a new idea or insight, call **create_seed** to capture it."
 )
 
 # Capabilities section describing available tools

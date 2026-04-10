@@ -21,6 +21,70 @@ from app.models import Thought, Seed, Usage, Entity, SeedEntity, SeedLink
 from app.config import settings
 
 
+def _token_overlap_ratio(a: str, b: str) -> float:
+    """Simple token-level Jaccard similarity between two strings."""
+    tokens_a = set(a.lower().split())
+    tokens_b = set(b.lower().split())
+    if not tokens_a or not tokens_b:
+        return 0.0
+    return len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
+
+def _normalize_against_wiki(tags: list[str], domain: str, tenant_id: str) -> tuple[list[str], str]:
+    """
+    Collapse tags and domain to canonical wiki article titles where token overlap ≥ 0.5.
+    Preserves all tags that don't match anything — only replaces near-matches.
+    Never raises (returns original tags/domain on any failure).
+
+    Example: "agentic systems" → "Agentic AI" if a wiki article titled "Agentic AI" exists.
+    """
+    try:
+        wiki_titles = [
+            a.get("title", "").strip()
+            for a in weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=100)
+            if a.get("title")
+        ]
+        if not wiki_titles:
+            return tags, domain
+
+        normalized_tags = []
+        for tag in tags:
+            best_match = None
+            best_score = 0.0
+            for wt in wiki_titles:
+                score = _token_overlap_ratio(tag, wt)
+                if score > best_score:
+                    best_score = score
+                    best_match = wt
+            # Replace tag with wiki title if overlap is strong enough
+            if best_match and best_score >= 0.5:
+                canonical = best_match.split("—")[0].strip()  # strip " — Insights" suffixes
+                normalized_tags.append(canonical)
+            else:
+                normalized_tags.append(tag)
+
+        # Deduplicate (normalization may produce duplicates)
+        seen = []
+        for t in normalized_tags:
+            if t not in seen:
+                seen.append(t)
+        normalized_tags = seen
+
+        # Normalize domain too
+        normalized_domain = domain
+        best_domain_score = 0.0
+        for wt in wiki_titles:
+            score = _token_overlap_ratio(domain, wt)
+            if score > best_domain_score:
+                best_domain_score = score
+                if score >= 0.5:
+                    normalized_domain = wt.split("—")[0].strip()
+
+        return normalized_tags, normalized_domain
+    except Exception as e:
+        print(f"[enricher_v2] Entity normalization failed (non-fatal): {e}")
+        return tags, domain
+
+
 def enrich_thought_v2(thought_id: str, tenant_id: str, db):
     """
     Full enrichment pipeline.
@@ -78,6 +142,12 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
 
     # Merge extracted topics with LLM tags
     all_tags = list(set(tags + topics))
+
+    # ── Step 4b: Entity normalization against wiki article titles ──
+    # Collapse tags/domain to canonical wiki article names where close enough.
+    # This prevents "agentic systems", "AI agents", "agent architecture" from
+    # fragmenting into separate concepts instead of mapping to one wiki article.
+    all_tags, domain = _normalize_against_wiki(all_tags, domain, tenant_str)
 
     # ── Step 5: Store in Postgres ──
     seed = Seed(

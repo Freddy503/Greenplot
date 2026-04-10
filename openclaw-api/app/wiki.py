@@ -14,8 +14,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/wiki", tags=["wiki"])
 
 # ── High-Quality Wiki Synthesis Prompts ──────────────
+# Prompts are loaded from app/prompts/wiki_synthesis.md at runtime.
+# Edit that file and restart the container to iterate without redeploying.
 
-WIKI_SYSTEM_PROMPT = """You are a senior encyclopedic writer creating personal knowledge base articles. Your writing quality must match GrokPedia/Wikipedia standards.
+def _load_wiki_system_prompt() -> str:
+    try:
+        from app.prompts import load_prompt
+        p = load_prompt("wiki_synthesis")
+        if p:
+            return p
+    except Exception:
+        pass
+    # Inline fallback in case the file is missing
+    return """You are a senior encyclopedic writer creating personal knowledge base articles. Your writing quality must match GrokPedia/Wikipedia standards.
 
 ## ARTICLE STRUCTURE (follow strictly):
 
@@ -71,8 +82,11 @@ WIKI_SYSTEM_PROMPT = """You are a senior encyclopedic writer creating personal k
 5. Bold key terms on first use
 6. Include "💭 Analysis:" sections for your own insights
 7. End with "What to explore next" suggestions
-8. Minimum 800 words for substantial topics"""
+8. Minimum 800 words for substantial topics
 
+IMPORTANT: Do NOT include a Timeline section — that will be appended automatically after synthesis."""
+
+WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
 WIKI_MODEL = "deepseek/deepseek-v3.2"
 
 async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
@@ -125,6 +139,39 @@ async def _auto_generate_image(article_id: str, title: str, category: str = "", 
 WIKI_FALLBACK_MODEL = "deepseek/deepseek-v3.2"  # Fallback if primary is rate-limited
 WIKI_MAX_TOKENS = 4000
 WIKI_TEMPERATURE = 0.5
+
+# ─── Compiled Truth + Timeline ────────────────────────────────────────────────
+# Inspired by GBrain's page structure: synthesized knowledge above the divider,
+# immutable append-only evidence trail below. This makes articles auditable and
+# reveals when knowledge is stale vs. recently reinforced.
+
+_TIMELINE_DIVIDER = "\n\n---\n\n## Timeline\n\n*Evidence trail — append only. Each entry records when new seeds or sources were incorporated into this article.*\n\n"
+
+def _build_timeline_entry(seed_count: int, link_count: int, source_titles: list[str]) -> str:
+    """Build a single dated timeline entry for a compile event."""
+    from datetime import datetime, timezone
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    sources_str = ""
+    if source_titles:
+        sources_str = "\n" + "\n".join(f"  - {t}" for t in source_titles[:5])
+        if len(source_titles) > 5:
+            sources_str += f"\n  - …and {len(source_titles) - 5} more"
+    return (
+        f"**{date_str}** — Compiled from {seed_count} seed(s) and {link_count} source(s).{sources_str}"
+    )
+
+def _append_timeline_entry(article_content: str, entry: str) -> str:
+    """
+    Append a timeline entry to article content.
+    - If no Timeline section exists yet: add the divider + header + entry.
+    - If Timeline section already exists: append the new entry below existing ones.
+      The Compiled Truth section above the divider is never touched.
+    """
+    if _TIMELINE_DIVIDER.strip() in article_content:
+        # Timeline already exists — append below the last entry
+        return article_content.rstrip() + "\n\n" + entry + "\n"
+    else:
+        return article_content.rstrip() + _TIMELINE_DIVIDER + entry + "\n"
 
 
 def build_wiki_user_prompt(title: str, category: str, links_content: str, seeds_content: str) -> str:
@@ -715,6 +762,11 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         # Rate limit protection between articles
         await asyncio.sleep(3)
 
+        # Append Compiled Truth + Timeline entry (GBrain pattern)
+        source_titles = [l.get("title", "") for l in group[:8] if l.get("title")]
+        timeline_entry = _build_timeline_entry(len(source_seed_ids), len(source_link_ids), source_titles)
+        article_content = _append_timeline_entry(article_content, timeline_entry)
+
         # Extract summary (first paragraph or first 200 chars)
         lines = article_content.split("\n")
         summary_lines = []
@@ -818,7 +870,12 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         
         # Rate limit protection
         await asyncio.sleep(3)
-        
+
+        # Append Compiled Truth + Timeline entry (GBrain pattern)
+        seed_titles = [s.get("title", "") for s in uncovered_seeds[:8] if s.get("title")]
+        timeline_entry = _build_timeline_entry(len(source_seed_ids), 0, seed_titles)
+        article_content = _append_timeline_entry(article_content, timeline_entry)
+
         # Extract summary
         lines = article_content.split("\n")
         summary_lines = []
