@@ -3422,15 +3422,6 @@ def list_scheduler_jobs():
     }
 
 
-@app.post("/api/v1/wiki/auto-compile")
-def wiki_auto_compile(
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
-):
-    """Trigger wiki compilation for the authenticated user. Called from the UI compile button."""
-    background_tasks.add_task(_job_wiki_compile)
-    return {"status": "ok", "compiled": 1, "message": "Wiki compilation started in background"}
-
 
 @app.post("/api/v1/admin/trigger/{job_id}")
 def trigger_job_admin(job_id: str, x_api_key: str = Header(default="")):
