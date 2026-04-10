@@ -40,6 +40,10 @@ function pad(n: number) { return String(n).padStart(2, '0') }
 
 function TimeEditor({ hour, minute, onChange }: { hour: number; minute: number; onChange: (h: number, m: number) => void }) {
   const [val, setVal] = useState(`${pad(hour)}:${pad(minute)}`)
+  // Sync when parent schedule config loads asynchronously
+  useEffect(() => {
+    setVal(`${pad(hour)}:${pad(minute)}`)
+  }, [hour, minute])
   return (
     <input
       type="time"
@@ -69,15 +73,41 @@ export default function SettingsPage() {
  const [editCity, setEditCity] = useState('')
  const [editingNickname, setEditingNickname] = useState(false)
  const [editNickname, setEditNickname] = useState('')
+ const [userEmail, setUserEmail] = useState('')
+ const [sendingTestEmail, setSendingTestEmail] = useState(false)
 
  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
  useEffect(() => {
+   // Seed from localStorage immediately so UI isn't blank
    setNickname(localStorage.getItem('greenplot_nickname') || '')
    try {
      const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
-     setCity(profile.city || '')
+     if (profile.city) setCity(profile.city)
    } catch {}
+
+   // Fetch authoritative profile from backend (overwrites stale localStorage)
+   if (token) {
+     fetch('/api/profile', {
+       headers: { Authorization: `Bearer ${token}` },
+     })
+       .then(r => r.ok ? r.json() : null)
+       .then(data => {
+         if (!data) return
+         if (data.city) {
+           setCity(data.city)
+           const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
+           profile.city = data.city
+           localStorage.setItem('greenplot_profile', JSON.stringify(profile))
+         }
+         if (data.nickname) {
+           setNickname(data.nickname)
+           localStorage.setItem('greenplot_nickname', data.nickname)
+         }
+         if (data.email) setUserEmail(data.email)
+       })
+       .catch(() => {})
+   }
 
    // Fetch schedule config
    fetch('/api/schedule', {
@@ -154,6 +184,23 @@ export default function SettingsPage() {
      toast.error('Failed to save schedule')
    } finally {
      setSavingSchedule(null)
+   }
+ }
+
+ const handleSendTestEmail = async () => {
+   setSendingTestEmail(true)
+   try {
+     const res = await fetch('/api/email/test', {
+       method: 'POST',
+       headers: authHeaders(),
+     })
+     const data = await res.json()
+     if (res.ok) toast.success(data.message || 'Test email sent!')
+     else toast.error(data.detail || data.error || 'Failed to send test email')
+   } catch {
+     toast.error('Could not reach backend')
+   } finally {
+     setSendingTestEmail(false)
    }
  }
 
@@ -281,6 +328,41 @@ export default function SettingsPage() {
                  </p>
                </div>
              )}
+           </div>
+         </section>
+
+         {/* Email Digests */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Email Digests</h2>
+           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+             <div className="flex items-start gap-3">
+               <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>mail</span>
+               <div className="flex-1">
+                 <p className="text-sm font-bold text-on-surface">Daily Email Digests</p>
+                 <p className="text-[11px] text-on-surface-variant mt-0.5">
+                   {userEmail ? `Sending to ${userEmail}` : 'Email from your account registration'}
+                 </p>
+                 <div className="mt-2 space-y-1 text-[10px] text-on-surface-variant/70">
+                   <p>☀️ Enterprise Digest — 09:30 CET</p>
+                   <p>🔬 Academic + Research Digest — 07:00 CET (arXiv PDFs attached)</p>
+                   <p>📊 Weekly Content Eval — Sunday 18:00 CET</p>
+                 </div>
+               </div>
+             </div>
+             <Button
+               size="sm"
+               variant="outline"
+               onClick={handleSendTestEmail}
+               disabled={sendingTestEmail}
+               className="w-full rounded-full text-xs"
+             >
+               {sendingTestEmail ? (
+                 <span className="material-symbols-outlined animate-spin mr-1" style={{ fontSize: '14px' }}>progress_activity</span>
+               ) : (
+                 <span className="material-symbols-outlined mr-1" style={{ fontSize: '14px' }}>send</span>
+               )}
+               {sendingTestEmail ? 'Sending…' : 'Send Test Email'}
+             </Button>
            </div>
          </section>
 

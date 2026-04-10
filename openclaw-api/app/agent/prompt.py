@@ -48,12 +48,12 @@ _TOOL_SELECTION_CONTENT = (
     "MANDATORY EXECUTION ORDER for any topical question:\n"
     "  1. **search_seeds** — the user's Garden: personal notes, captured ideas, raw thinking\n"
     "  2. **search_wiki** — synthesized wiki articles (highest-quality, encyclopedic context)\n"
-    "  3. **web_search** — only if internal results return fewer than 2 relevant hits, "
+    "  3. **web_search** — only if internal results return fewer than 4 relevant hits, "
     "or the user explicitly asks for news/web/current events\n"
     "  4. Synthesize ALL results into one coherent answer — cite internal sources first\n\n"
 
-    "DECISION RULE: After steps 1+2, if you have 2+ relevant internal results → answer without web. "
-    "If internal results are empty or off-topic → proceed to web_search.\n\n"
+    "DECISION RULE: After steps 1+2, if you have 4+ relevant internal results → answer without web. "
+    "If internal results are sparse (fewer than 4) or off-topic → proceed to web_search.\n\n"
 
     "EXPLICIT USER COMMANDS:\n"
     "  • 'search my garden' / 'search seeds' → call search_seeds only\n"

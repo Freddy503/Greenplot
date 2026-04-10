@@ -173,6 +173,18 @@ class ProfileUpdate(BaseModel):
     city: Optional[str] = None
     digest_frequency: Optional[str] = None  # twice-daily, once-daily, bi-weekly, weekly, calendar
 
+@app.get("/api/v1/profile")
+def get_profile(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "status": "ok",
+        "city": current_user.city or "",
+        "email": current_user.email or "",
+        "nickname": getattr(current_user, "nickname", "") or "",
+        "digest_frequency": getattr(current_user, "digest_frequency", "daily") or "daily",
+    }
+
 @app.patch("/api/v1/profile")
 def update_profile(
     req: ProfileUpdate,
@@ -3550,6 +3562,35 @@ def _run_trigger_job(job_id: str):
 def trigger_job_now(job_id: str, current_user: User = Depends(get_current_user)):
     """Manually trigger a scheduled job (requires user auth)."""
     return _run_trigger_job(job_id)
+
+
+@app.post("/api/v1/email/test")
+def send_test_email(current_user: User = Depends(get_current_user)):
+    """Send a test email to the authenticated user to verify Resend is configured."""
+    if not settings.RESEND_API_KEY:
+        raise HTTPException(status_code=503, detail="Email not configured — add RESEND_API_KEY to server .env")
+    if not current_user.email:
+        raise HTTPException(status_code=400, detail="No email address on account")
+    test_briefing = {
+        "type": "daily_briefing",
+        "title": "Seedify Email Test",
+        "subtitle": "Your email delivery is working",
+        "sections": [
+            {
+                "title": "Connection Verified",
+                "icon": "check_circle",
+                "content": (
+                    "This is a test email from Seedify confirming that email delivery is configured correctly.\n\n"
+                    "You will receive your daily digests at the scheduled times automatically."
+                ),
+                "sources": [],
+            }
+        ],
+    }
+    ok = email_sender.send_briefing_email(current_user.email, test_briefing)
+    if ok:
+        return {"status": "ok", "message": f"Test email sent to {current_user.email}"}
+    raise HTTPException(status_code=500, detail="Failed to send email — check RESEND_API_KEY and sender domain")
 
 # ── Debug: test search_wiki directly ──────────────────────
 @app.get("/api/v1/debug/search_wiki")
