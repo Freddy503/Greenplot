@@ -534,21 +534,20 @@ async def compile_article(body: WikiCompileRequest, request: Request, current_us
 async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     """Auto-compile wiki articles from enriched link clusters not yet in wiki.
 
-    Supports both JWT auth and X-API-Key (for cron jobs).
+    Supports both JWT Bearer auth (from UI) and X-API-Key (for cron jobs).
     """
-    # Try API key first (for cron jobs)
     import os
+    from app.database import get_db
+    from app.models import User
+
     harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
+
     if x_api_key == harvest_key:
-        # Use Freddy's tenant (the main user with content)
+        # Cron / admin path — look up Freddy's account
         try:
-            from app.database import get_db
-            from app.models import User
             db = next(get_db())
-            # Look for Freddy's account first, fall back to user with most seeds
             user = db.query(User).filter(User.email == "contact@example.com").first()
             if not user:
-                # Fallback: find user with content
                 user = db.query(User).filter(User.email.like("%@greenplot.%")).first()
             if not user:
                 user = db.query(User).first()
@@ -558,7 +557,28 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         except Exception:
             raise HTTPException(status_code=500, detail="No users found for API key auth")
     else:
-        raise HTTPException(status_code=401, detail="API key required for auto-compile (use X-API-Key header)")
+        # Bearer token path — used by UI compile button
+        auth_header = request.headers.get("authorization", "")
+        token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required (Bearer token or X-API-Key)")
+        try:
+            from app.auth import decode_token
+            payload = decode_token(token)
+            user_id_str = payload.get("sub")
+            if not user_id_str:
+                raise HTTPException(status_code=401, detail="Invalid token")
+            db = next(get_db())
+            user = db.query(User).filter(User.id == user_id_str).first()
+            db.close()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            tenant_id = str(user.tenant_id)
+            user_id = str(user.id)
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=401, detail="Could not validate credentials")
 
     # 1. Get all enriched links
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
