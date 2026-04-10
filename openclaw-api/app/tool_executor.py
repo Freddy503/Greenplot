@@ -12,26 +12,69 @@ from app.weaviate_client import weaviate_client
 from datetime import datetime
 
 
+def _rrf_merge(vector_hits: list, bm25_hits: list, k: int = 60, limit: int = 5) -> list:
+    """
+    Reciprocal Rank Fusion: merge vector and BM25 results into a single ranked list.
+    RRF score = sum(1 / (k + rank)) across all result lists.
+    Deduplicates by title (case-insensitive).
+    """
+    scores: dict[str, float] = {}
+    items: dict[str, dict] = {}
+
+    def key(hit: dict) -> str:
+        return (hit.get("title") or "").strip().lower()
+
+    for rank, hit in enumerate(vector_hits):
+        k_ = key(hit)
+        if not k_:
+            continue
+        scores[k_] = scores.get(k_, 0.0) + 1.0 / (k + rank + 1)
+        items[k_] = hit
+
+    for rank, hit in enumerate(bm25_hits):
+        k_ = key(hit)
+        if not k_:
+            continue
+        scores[k_] = scores.get(k_, 0.0) + 1.0 / (k + rank + 1)
+        if k_ not in items:
+            items[k_] = hit
+
+    ranked = sorted(scores.keys(), key=lambda k_: scores[k_], reverse=True)
+    return [items[k_] for k_ in ranked[:limit]]
+
+
 async def search_seeds(args: dict, user: User, db: Session) -> str:
-    """Semantic search over user's seeds via Weaviate (with enrichment metadata)."""
+    """Hybrid search over user's seeds: vector + BM25 merged via Reciprocal Rank Fusion."""
     query = args["query"]
     limit = args.get("limit", 5)
     try:
         from app.enricher import embed_text
+        import asyncio
+
+        # Run vector and BM25 searches — BM25 is sync, embed is sync too
         embedding = embed_text(query)
-        hits = weaviate_client.search_seeds(
+        vector_hits = weaviate_client.search_seeds(
             tenant_id=str(user.tenant_id),
             embedding=embedding,
-            limit=limit
+            limit=limit * 2,
         )
+        bm25_hits = weaviate_client.search_seeds_bm25(
+            tenant_id=str(user.tenant_id),
+            query=query,
+            limit=limit * 2,
+        )
+
+        # Merge with RRF
+        merged = _rrf_merge(vector_hits, bm25_hits, limit=limit)
+        # If BM25 unavailable, merged == vector_hits[:limit]
+
         results = []
-        for hit in hits:
+        for hit in merged:
             entry = {
                 "title": hit.get("title") or "Untitled",
                 "content": (hit.get("content") or "")[:400],
                 "created_at": hit.get("created_at") or "",
             }
-            # Add enrichment metadata if available
             if hit.get("summary"):
                 entry["summary"] = hit["summary"][:200]
             if hit.get("tags"):
@@ -45,11 +88,12 @@ async def search_seeds(args: dict, user: User, db: Session) -> str:
                     ents = json.loads(hit["entities"])
                     if ents:
                         entry["entities"] = [e.get("name", "") for e in ents[:3]]
-                except:
+                except Exception:
                     pass
             if hit.get("url"):
                 entry["source"] = hit["url"]
             results.append(entry)
+
         if not results:
             return json.dumps({"status": "empty", "message": "No matching seeds found."})
         return json.dumps({"status": "ok", "results": results})

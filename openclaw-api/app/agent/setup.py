@@ -109,7 +109,7 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
 
     registry.register(ToolSpec(
         name="web_search",
-        description="Search the web for current information. Use when the user asks about recent events, news, or topics outside the knowledge base.",
+        description="Search the web for current information. ALWAYS call search_seeds and search_wiki FIRST before calling this tool — only use web_search if internal results are insufficient or the user explicitly asks for web/news results.",
         input_schema={
             "type": "object",
             "properties": {

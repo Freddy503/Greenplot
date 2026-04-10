@@ -223,6 +223,63 @@ class WeaviateClient:
 
         return list(seen.values())
 
+    def search_seeds_bm25(self, tenant_id: str, query: str, limit: int = 10) -> list[dict]:
+        """
+        BM25 keyword search over seeds — complement to vector search for RRF fusion.
+        Searches title, text, tags, domain fields.
+        """
+        try:
+            result = (
+                self.client.query
+                .get(
+                    settings.WEAVIATE_CLASS,
+                    ["title", "text", "source", "url", "created", "notion_id",
+                     "summary", "tags", "entities", "backlinks", "domain", "energy", "tenant_id"]
+                )
+                .with_bm25(query=query, properties=["title", "text", "tags", "domain", "summary"])
+                .with_where({
+                    "path": ["tenant_id"],
+                    "operator": "Equal",
+                    "valueText": tenant_id,
+                })
+                .with_limit(limit * 2)
+                .do()
+            )
+            objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, []) or []
+            seen = {}
+            for o in objects:
+                nid = o.get("notion_id") or o.get("title", "")
+                if nid in seen:
+                    continue
+                metadata = o.get("metadata") or {}
+                if isinstance(metadata, str):
+                    try:
+                        import json as _json
+                        metadata = _json.loads(metadata)
+                    except Exception:
+                        metadata = {}
+                seen[nid] = {
+                    "title": o.get("title", ""),
+                    "content": o.get("text", ""),
+                    "created_at": o.get("created", ""),
+                    "source": o.get("source", ""),
+                    "url": o.get("url", ""),
+                    "summary": o.get("summary") or metadata.get("summary", ""),
+                    "tags": o.get("tags") or metadata.get("tags", ""),
+                    "entities": o.get("entities") or metadata.get("entities", ""),
+                    "domain": o.get("domain") or metadata.get("domain", ""),
+                    "energy": o.get("energy") or metadata.get("energy", ""),
+                    "_bm25_rank": len(seen),  # insertion order = BM25 rank
+                }
+                if len(seen) >= limit:
+                    break
+            return list(seen.values())
+        except Exception as e:
+            # BM25 may not be configured on all Weaviate instances — fail silently
+            import logging
+            logging.getLogger(__name__).debug(f"BM25 search failed: {e}")
+            return []
+
     def delete_tenant_seeds(self, tenant_id: str):
         # Delete all objects for a tenant (for account deletion)
         where = {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id}
