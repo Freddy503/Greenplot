@@ -451,8 +451,8 @@ export default function LinksPage() {
  return l.title.toLowerCase().includes(q) || l.domain.toLowerCase().includes(q) || l.tags.some(t => t.toLowerCase().includes(q))
  })
  .sort((a, b) => {
- const ta = new Date(a.addedAt || a.created_at || 0).getTime()
- const tb = new Date(b.addedAt || b.created_at || 0).getTime()
+ const ta = new Date(a.addedAt || 0).getTime()
+ const tb = new Date(b.addedAt || 0).getTime()
  return sortDir === 'desc' ? tb - ta : ta - tb
  })
 
