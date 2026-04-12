@@ -630,9 +630,11 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     # 1. Get all enriched links (may be empty — that's OK, seed clusters still compile)
     links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
     enriched = [l for l in links if l.get("status") == "enriched" and l.get("summary")]
+    logger.info(f"auto_compile: tenant={tenant_id} total_links={len(links)} enriched={len(enriched)}")
 
     # 1b. Get seeds — prefer Weaviate, fall back to Postgres (source of truth)
     all_seeds = weaviate_client.get_seeds_by_tenant(tenant_id, limit=200)
+    logger.info(f"auto_compile: weaviate seeds={len(all_seeds)}")
     if not all_seeds:
         # Weaviate may be empty or unsynced — read directly from Postgres
         try:
@@ -655,6 +657,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
                     "tags": tags,
                     "summary": meta.get("summary", "") or "",
                 })
+            logger.info(f"auto_compile: postgres fallback seeds={len(all_seeds)}")
         except Exception as e:
             logger.warning(f"Postgres seed fallback failed: {e}")
 
@@ -686,12 +689,12 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         if cat:
             existing_domains.add(cat)
 
-    # 6. Compile eligible clusters (3+ links, no existing article)
+    # 6. Compile eligible clusters (2+ links, no existing article)
     compiled = 0
     results = []
 
     for domain, group in domain_groups.items():
-        if len(group) < 3:
+        if len(group) < 2:
             continue
         if domain in existing_domains:
             continue
@@ -818,15 +821,26 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             continue
 
     # ── Also compile from seed clusters (seeds without links) ──
-    # Group seeds by domain
+    # Group seeds by domain (fall back to primary tag if domain is missing/generic)
+    _SKIP_DOMAINS = {"none", "untagged"}
     seed_groups = {}
     for seed in all_seeds:
         domain = (seed.get("domain", "") or "").strip().lower()
-        if not domain or domain in ("none", "untagged", "general"):
+        # If domain is missing, "general", or meaningless, try the first meaningful tag
+        if not domain or domain in _SKIP_DOMAINS or domain == "general":
+            tags_raw = seed.get("tags", "") or ""
+            tag_list = [t.strip().lower() for t in (tags_raw if isinstance(tags_raw, str) else ", ".join(tags_raw)).split(",") if t.strip() and len(t.strip()) > 2]
+            # Skip noise tags
+            _NOISE = {"general", "idea", "note", "misc", "todo", "untitled", "untagged", "none"}
+            tag_list = [t for t in tag_list if t not in _NOISE]
+            domain = tag_list[0] if tag_list else ""
+        if not domain or domain in _SKIP_DOMAINS:
             continue
         if domain not in seed_groups:
             seed_groups[domain] = []
         seed_groups[domain].append(seed)
+
+    logger.info(f"auto_compile: seed_groups={list(seed_groups.keys())} sizes={[len(v) for v in seed_groups.values()]}")
 
     # Find seed groups not yet covered by wiki
     covered_seed_ids = set()
