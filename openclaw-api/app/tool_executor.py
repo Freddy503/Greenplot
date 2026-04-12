@@ -1355,13 +1355,13 @@ async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
     from app.wiki import synthesize_with_llm, WIKI_SYSTEM_PROMPT, build_wiki_user_prompt
     from app.ingest import generate_concept_image
     import asyncio, re, urllib.request
-    
+
     # Check if domain already has a wiki article
     existing_articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
-    existing = [a for a in existing_articles 
-                if a.get("category", "").lower() == domain.lower() 
+    existing = [a for a in existing_articles
+                if a.get("category", "").lower() == domain.lower()
                 or domain.lower() in (a.get("title", "") or "").lower()]
-    
+
     get_seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
     get_links = weaviate_client.get_links(tenant_id=tenant_id, limit=200)
     domain_seeds = [s for s in get_seeds if (s.get("domain") or "").lower() == domain.lower()]
@@ -1377,6 +1377,35 @@ async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
         l_dom = (l.get("domain") or "").lower().replace("-", "").replace("/", "").replace("_", "")
         if l_dom == domain_normalized and l not in domain_links:
             domain_links.append(l)
+
+    # Postgres fallback: if Weaviate returned nothing for this domain, check by tag
+    if not domain_seeds:
+        try:
+            from app.database import get_db
+            from app.models import Seed as SeedModel
+            import uuid as _uuid
+            db = next(get_db())
+            pg_seeds = db.query(SeedModel).filter(
+                SeedModel.tenant_id == _uuid.UUID(tenant_id)
+            ).order_by(SeedModel.created_at.desc()).limit(500).all()
+            db.close()
+            for s in pg_seeds:
+                meta = s.seed_metadata or {}
+                tags_raw = meta.get("tags", "")
+                tags_str = ", ".join(tags_raw) if isinstance(tags_raw, list) else (tags_raw or "")
+                seed_domain = (meta.get("domain", "") or "").strip().lower()
+                # Match by domain OR by tag containing the domain keyword
+                tag_list = [t.strip().lower() for t in tags_str.split(",") if t.strip()]
+                if seed_domain == domain.lower() or domain.lower() in tag_list:
+                    domain_seeds.append({
+                        "id": str(s.id),
+                        "title": s.title or "",
+                        "content": s.content or "",
+                        "domain": seed_domain or domain,
+                        "tags": tags_str,
+                    })
+        except Exception as e:
+            log.warning(f"auto_compile_for_domain postgres fallback failed: {e}")
 
     if not domain_seeds and not domain_links:
         return None
