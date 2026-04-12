@@ -75,6 +75,7 @@ export default function SettingsPage() {
  const [editNickname, setEditNickname] = useState('')
  const [userEmail, setUserEmail] = useState('')
  const [sendingTestEmail, setSendingTestEmail] = useState(false)
+ const [triggeringWikiCompile, setTriggeringWikiCompile] = useState(false)
 
  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
@@ -204,6 +205,23 @@ export default function SettingsPage() {
    }
  }
 
+ const handleTriggerWikiCompile = async () => {
+   setTriggeringWikiCompile(true)
+   try {
+     const res = await fetch('/api/scheduler/trigger/wiki_compile', {
+       method: 'POST',
+       headers: authHeaders(),
+     })
+     const data = await res.json()
+     if (res.ok) toast.success('Wiki compile started — check Wiki in a few minutes')
+     else toast.error(data.detail || 'Failed to trigger compile')
+   } catch {
+     toast.error('Could not reach backend')
+   } finally {
+     setTriggeringWikiCompile(false)
+   }
+ }
+
  const handleLogout = () => {
    localStorage.removeItem('greenplot_token')
    localStorage.removeItem('greenplot_tenant')
@@ -328,6 +346,37 @@ export default function SettingsPage() {
                  </p>
                </div>
              )}
+           </div>
+         </section>
+
+         {/* Wiki Compile */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Knowledge Base</h2>
+           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+             <div className="flex items-start gap-3">
+               <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>auto_stories</span>
+               <div className="flex-1">
+                 <p className="text-sm font-bold text-on-surface">Wiki Compilation</p>
+                 <p className="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">
+                   Automatically compiles wiki articles from your garden seeds. Runs every 6 hours.
+                   Trigger manually to compile right now.
+                 </p>
+               </div>
+             </div>
+             <Button
+               size="sm"
+               variant="outline"
+               onClick={handleTriggerWikiCompile}
+               disabled={triggeringWikiCompile}
+               className="w-full rounded-full text-xs"
+             >
+               {triggeringWikiCompile ? (
+                 <span className="material-symbols-outlined animate-spin mr-1" style={{ fontSize: '14px' }}>progress_activity</span>
+               ) : (
+                 <span className="material-symbols-outlined mr-1" style={{ fontSize: '14px' }}>auto_awesome</span>
+               )}
+               {triggeringWikiCompile ? 'Compiling…' : 'Compile Wiki Now'}
+             </Button>
            </div>
          </section>
 

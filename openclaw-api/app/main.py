@@ -3330,26 +3330,68 @@ def _job_wiki_compile():
 
         async def _run():
             from app.wiki_pipeline import regenerate_all_backlinks
+            from app.models import Seed as SeedModel
             articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+
+            # Get seeds — prefer Weaviate, fall back to Postgres
             seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+            if not seeds:
+                logger.info("📚 Wiki cron: Weaviate empty, falling back to Postgres")
+                db2 = next(get_db())
+                pg_seeds = db2.query(SeedModel).filter(
+                    SeedModel.tenant_id == user.tenant_id
+                ).order_by(SeedModel.created_at.desc()).limit(500).all()
+                db2.close()
+                seeds = []
+                _NOISE = {"none", "untagged", "agent-insight", "general", ""}
+                for s in pg_seeds:
+                    meta = s.seed_metadata or {}
+                    tags_raw = meta.get("tags", "")
+                    tags = ", ".join(tags_raw) if isinstance(tags_raw, list) else (tags_raw or "")
+                    domain = (meta.get("domain", "") or "").strip().lower()
+                    # Fall back to primary tag if domain missing/generic
+                    if not domain or domain in _NOISE:
+                        tag_list = [t.strip().lower() for t in tags.split(",") if t.strip() and len(t.strip()) > 2]
+                        tag_list = [t for t in tag_list if t not in _NOISE]
+                        domain = tag_list[0] if tag_list else ""
+                    seeds.append({
+                        "id": str(s.id),
+                        "title": s.title or "",
+                        "content": s.content or "",
+                        "domain": domain,
+                        "tags": tags,
+                    })
+
+            # Count seeds per domain — skip noise domains
+            _SKIP = {'', 'none', 'untagged', 'general', 'agent-insight'}
             domain_counts = Counter(
-                s.get('domain', '') for s in seeds
-                if s.get('domain') not in ('', 'None', 'General', 'untagged', 'agent-insight', None)
+                (s.get('domain', '') or '').strip().lower() for s in seeds
+                if (s.get('domain', '') or '').strip().lower() not in _SKIP
             )
             wiki_domains = set((a.get('category', '') or '').lower() for a in articles)
-            gaps = [
-                {'domain': d, 'count': c} for d, c in domain_counts.most_common()
-                if d.lower() not in wiki_domains and c >= 3
-            ]
+            # Also check wiki titles for domain coverage
+            wiki_titles_lower = set((a.get('title', '') or '').lower() for a in articles)
+            gaps = []
+            for d, c in domain_counts.most_common():
+                if not d or d in _SKIP:
+                    continue
+                already_covered = (
+                    d in wiki_domains
+                    or any(d in wt for wt in wiki_titles_lower)
+                )
+                if not already_covered and c >= 2:  # lowered from 3 to 2
+                    gaps.append({'domain': d, 'count': c})
+
+            logger.info(f"📚 Wiki cron: {len(seeds)} seeds, {len(domain_counts)} domains, {len(gaps)} gaps to compile")
             compiled = 0
-            for gap in gaps[:3]:
+            for gap in gaps[:5]:  # up to 5 articles per run (was 3)
                 try:
                     result = await auto_compile_for_domain(gap['domain'], tenant_id, user_id)
                     if result:
                         compiled += 1
                     await asyncio.sleep(2)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"📚 Wiki cron: compile failed for domain '{gap['domain']}': {e}")
             backlinks = await regenerate_all_backlinks(tenant_id)
             logger.info(f"📚 Wiki compile: {compiled} new articles, {backlinks} backlinks updated")
 
@@ -3568,6 +3610,7 @@ def _run_trigger_job(job_id: str):
         "weekly_eval": _job_weekly_eval,
         "biweekly_challenge": _job_biweekly_challenge,
         "academic_digest": _job_academic_digest,
+        "wiki_compile": _job_wiki_compile,
     }
     fn = jobs.get(job_id)
     if not fn:
