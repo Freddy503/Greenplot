@@ -2531,10 +2531,14 @@ def send_push_notification(req: PushNotificationRequest):
 
 @app.get("/api/v1/push/notifications")
 def get_push_notifications(
+    all: bool = False,
     current_user: User = Depends(get_optional_user),
 ):
-    """Get pending push notifications for PWA."""
+    """Get push notifications for PWA. ?all=true returns full history (read + unread)."""
     notifs = _load_notifs()
+    if all:
+        # Return all notifications, newest first, capped at 50
+        return {"notifications": list(reversed(notifs[-50:])), "total": len(notifs)}
     unread = [n for n in notifs if not n.get("read")]
     return {"notifications": unread, "total": len(notifs)}
 
@@ -3003,12 +3007,16 @@ def _job_morning_spark():
                 city = getattr(user, 'city', None)
                 logger.info(f"📍 User {user.id}: city={city}")
 
-                # Fetch weather per user city
+                # Fetch weather per user city — skip notification if unavailable
                 try:
                     weather = asyncio.run(briefings.fetch_weather(city))
                 except Exception as we:
                     logger.error(f"⚠️ Weather fetch failed for {user.id}: {we}")
                     weather = None
+
+                if not weather:
+                    logger.warning(f"⏭️ Skipping morning spark for user {user.id} — no weather data")
+                    continue
 
                 # Build briefing
                 briefing = briefings.build_morning_spark(
@@ -3215,9 +3223,24 @@ def _sto<RESEND_API_KEY>(briefing: dict):
     """
     Persist multi-section briefing + push to all subscribers.
     Briefing structure: { type, title, subtitle, sections: [{title, icon, color, content, sources}], prompt }
+    Dedup: if the same briefing type was already broadcast within the last 4 hours, skip the push.
     """
+    from datetime import timedelta
     try:
         notifs = _load_notifs()
+
+        # ── Dedup guard ──────────────────────────────────────────────────────
+        notif_type = briefing.get("type", "briefing")
+        cutoff = (datetime.utcnow() - timedelta(hours=4)).isoformat()
+        already_sent = any(
+            n.get("briefing", {}).get("type") == notif_type
+            and n.get("timestamp", "") >= cutoff
+            for n in notifs
+        )
+        if already_sent:
+            logger.info(f"⏭️ Skipping push for '{notif_type}' — already broadcast within 4h")
+            return
+        # ─────────────────────────────────────────────────────────────────────
 
         # Extract first section body for push notification preview
         body = briefing.get("sections", [{}])[0].get("content", "")
@@ -3231,7 +3254,7 @@ def _sto<RESEND_API_KEY>(briefing: dict):
         short_prompt = briefing.get("title", "") + (f" — {section_titles[0]}" if section_titles else "")
 
         ts = datetime.utcnow()
-        notif_id = f"{briefing.get('type', 'briefing')}_{ts.strftime('%Y%m%d%H%M')}"
+        notif_id = f"{notif_type}_{ts.strftime('%Y%m%d%H%M')}"
         notifs.append({
             "id": notif_id,
             "title": briefing.get("title", "Briefing"),
@@ -3243,7 +3266,7 @@ def _sto<RESEND_API_KEY>(briefing: dict):
             "read": False,
         })
         _save_notifs(notifs)
-        logger.info(f"✅ Briefing '{briefing.get('type', 'unknown')}' stored with {len(briefing.get('sections', []))} sections")
+        logger.info(f"✅ Briefing '{notif_type}' stored with {len(briefing.get('sections', []))} sections")
 
         # Send Web Push to all subscribers
         title = briefing.get("title", "Briefing")

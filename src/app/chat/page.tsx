@@ -965,49 +965,98 @@ export default function ChatPage() {
                                         />
                                         <ToolContent>
                                           {tp.input != null && <ToolInput input={tp.input} />}
-                                          {vizOutput ? (
-                                            <div className="mt-2 p-4 rounded-2xl bg-surface-container-high border border-outline-variant/15">
-                                              <div className="flex items-center gap-2 mb-3">
-                                                <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
-                                                <p className="text-sm font-semibold text-on-surface">Garden Knowledge Graph</p>
-                                              </div>
-                                              <div className="grid grid-cols-3 gap-3 mb-3">
-                                                <div className="text-center p-2 rounded-xl bg-surface-container">
-                                                  <p className="text-xl font-bold text-primary">{vizOutput.stats.total_seeds}</p>
-                                                  <p className="text-[10px] text-on-surface-variant">Seeds</p>
+                                          {(() => {
+                                            // Parse tool output for rich rendering
+                                            let parsedOutput: any = null
+                                            try {
+                                              parsedOutput = tp.output != null
+                                                ? (typeof tp.output === 'string' ? JSON.parse(tp.output) : tp.output)
+                                                : null
+                                            } catch {}
+
+                                            if (vizOutput) {
+                                              return (
+                                                <div className="mt-2 p-4 rounded-2xl bg-surface-container-high border border-outline-variant/15">
+                                                  <div className="flex items-center gap-2 mb-3">
+                                                    <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
+                                                    <p className="text-sm font-semibold text-on-surface">Garden Knowledge Graph</p>
+                                                  </div>
+                                                  <div className="grid grid-cols-3 gap-3 mb-3">
+                                                    <div className="text-center p-2 rounded-xl bg-surface-container">
+                                                      <p className="text-xl font-bold text-primary">{vizOutput.stats.total_seeds}</p>
+                                                      <p className="text-[10px] text-on-surface-variant">Seeds</p>
+                                                    </div>
+                                                    <div className="text-center p-2 rounded-xl bg-surface-container">
+                                                      <p className="text-xl font-bold text-primary">{vizOutput.links.length}</p>
+                                                      <p className="text-[10px] text-on-surface-variant">Connections</p>
+                                                    </div>
+                                                    <div className="text-center p-2 rounded-xl bg-surface-container">
+                                                      <p className="text-xl font-bold text-primary">{vizOutput.stats.domains?.length || 0}</p>
+                                                      <p className="text-[10px] text-on-surface-variant">Domains</p>
+                                                    </div>
+                                                  </div>
+                                                  {vizOutput.stats.domains && vizOutput.stats.domains.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 mb-3">
+                                                      {vizOutput.stats.domains.map(([domain, count]: [string, number]) => (
+                                                        <span key={domain} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                                                          {domain || 'General'} · {count}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                  <button
+                                                    onClick={() => setGardenVizData(vizOutput)}
+                                                    className="w-full text-sm text-primary font-medium py-2 rounded-xl hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+                                                  >
+                                                    <span className="material-symbols-outlined text-base">open_in_full</span>
+                                                    Open Interactive Graph
+                                                  </button>
                                                 </div>
-                                                <div className="text-center p-2 rounded-xl bg-surface-container">
-                                                  <p className="text-xl font-bold text-primary">{vizOutput.links.length}</p>
-                                                  <p className="text-[10px] text-on-surface-variant">Connections</p>
+                                              )
+                                            }
+
+                                            // Image generated by generate_image tool
+                                            if (parsedOutput?.type === 'image_generated' && parsedOutput?.url) {
+                                              return (
+                                                <div className="mt-2 rounded-2xl overflow-hidden border border-outline-variant/10">
+                                                  <img
+                                                    src={parsedOutput.url}
+                                                    alt={parsedOutput.prompt || 'Generated image'}
+                                                    className="w-full h-auto"
+                                                    loading="lazy"
+                                                  />
+                                                  <div className="px-4 py-2 bg-surface-container/50 flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-xs text-primary" style={{ fontVariationSettings: '"FILL" 1' }}>image</span>
+                                                    <p className="text-[10px] text-on-surface-variant/60 truncate flex-1">{parsedOutput.prompt}</p>
+                                                    <a href={parsedOutput.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline">Open</a>
+                                                  </div>
                                                 </div>
-                                                <div className="text-center p-2 rounded-xl bg-surface-container">
-                                                  <p className="text-xl font-bold text-primary">{vizOutput.stats.domains?.length || 0}</p>
-                                                  <p className="text-[10px] text-on-surface-variant">Domains</p>
+                                              )
+                                            }
+
+                                            // Wiki article created
+                                            if (parsedOutput?.status === 'ok' && parsedOutput?.title && tp.type?.includes('wiki')) {
+                                              return (
+                                                <div className="mt-2 p-3 rounded-2xl bg-primary/5 border border-primary/15 flex items-center gap-3">
+                                                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>auto_stories</span>
+                                                  <div>
+                                                    <p className="text-sm font-semibold text-on-surface">{parsedOutput.title}</p>
+                                                    <p className="text-xs text-on-surface-variant">Wiki article created</p>
+                                                  </div>
                                                 </div>
-                                              </div>
-                                              {vizOutput.stats.domains && vizOutput.stats.domains.length > 0 && (
-                                                <div className="flex flex-wrap gap-1.5 mb-3">
-                                                  {vizOutput.stats.domains.map(([domain, count]: [string, number]) => (
-                                                    <span key={domain} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                                      {domain || 'General'} · {count}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              <button
-                                                onClick={() => setGardenVizData(vizOutput)}
-                                                className="w-full text-sm text-primary font-medium py-2 rounded-xl hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
-                                              >
-                                                <span className="material-symbols-outlined text-base">open_in_full</span>
-                                                Open Interactive Graph
-                                              </button>
-                                            </div>
-                                          ) : (tp.output != null || tp.errorText != null) ? (
-                                            <ToolOutput
-                                              output={tp.output != null ? JSON.stringify(tp.output) : undefined}
-                                              errorText={tp.errorText}
-                                            />
-                                          ) : null}
+                                              )
+                                            }
+
+                                            if (tp.output != null || tp.errorText != null) {
+                                              return (
+                                                <ToolOutput
+                                                  output={tp.output != null ? JSON.stringify(tp.output) : undefined}
+                                                  errorText={tp.errorText}
+                                                />
+                                              )
+                                            }
+                                            return null
+                                          })()}
                                         </ToolContent>
                                       </Tool>
                                     </div>
@@ -1032,29 +1081,39 @@ export default function ChatPage() {
                           {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
                             <ThumbsRating messageId={message.id} />
                           )}
-                          {/* Save to Garden button */}
+                          {/* Save full message to Garden */}
                           {message.parts.some(p => p.type === 'text') && (
                             <button
-                              onClick={() => {
-                                const textPart = message.parts.find(p => p.type === 'text')
-                                if (textPart && 'text' in textPart) {
-                                  const token = localStorage.getItem('greenplot_token')
-                                  fetch('/api/seeds', {
+                              onClick={async () => {
+                                const allText = message.parts
+                                  .filter(p => p.type === 'text')
+                                  .map(p => (p as any).text || '')
+                                  .join('\n')
+                                if (!allText.trim()) return
+                                const token = localStorage.getItem('greenplot_token')
+                                try {
+                                  const res = await fetch('/api/seeds', {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',
                                       ...(token ? { Authorization: `Bearer ${token}` } : {}),
                                     },
                                     body: JSON.stringify({
-                                      text: textPart.text.slice(0, 500),
-                                      title: textPart.text.split('\n')[0].slice(0, 60),
+                                      content: allText.slice(0, 4000),
+                                      source: 'chat_message',
                                     }),
                                   })
-                                  toast.success('Saved to garden 🌱')
+                                  if (res.ok) {
+                                    toast.success('Saved to Garden 🌱')
+                                  } else {
+                                    toast.error('Failed to save')
+                                  }
+                                } catch {
+                                  toast.error('Failed to save')
                                 }
                               }}
                               className="p-1 rounded-full hover:bg-primary/10 text-on-surface-variant/40 hover:text-primary transition-colors"
-                              title="Save to Garden"
+                              title="Save full message to Garden"
                             >
                               <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
                             </button>
