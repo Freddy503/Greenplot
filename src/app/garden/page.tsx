@@ -175,6 +175,7 @@ export default function GardenPage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
 
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
@@ -194,7 +195,6 @@ export default function GardenPage() {
       .then((data) => {
         const raw = data.seeds || data || []
         const parsed = Array.isArray(raw) ? raw.map(parseSeed) : []
-        // Sort newest first
         parsed.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
         setSeeds(parsed)
       })
@@ -300,12 +300,21 @@ export default function GardenPage() {
               <TableHeader>
                 <TableRow className="border-b border-outline-variant/10">
                   <TableHead className="w-12 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Type</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Seed · Date Added</TableHead>
+                  <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">
+                    <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')} className="flex items-center gap-1 hover:text-primary transition-colors">
+                      Seed · Date Added
+                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>
+                    </button>
+                  </TableHead>
                   <TableHead className="text-right w-20 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {seeds.map((seed) => (
+                {[...seeds].sort((a, b) => {
+                  const ta = new Date(a.created).getTime()
+                  const tb = new Date(b.created).getTime()
+                  return sortDir === 'desc' ? tb - ta : ta - tb
+                }).map((seed) => (
                   <SeedRow key={seed.id} seed={seed} allSeeds={seeds} onClick={() => { setSelectedSeed(seed); setDetailOpen(true) }} />
                 ))}
               </TableBody>

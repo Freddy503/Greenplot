@@ -900,6 +900,7 @@ export default function WikiPage() {
  const [filter, setFilter] = useState<string>('all')
  const [search, setSearch] = useState('')
  const [compiling, setCompiling] = useState(false)
+ const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
 
  // Health dashboard state
  const [health, setHealth] = useState<any>(null)
@@ -1003,7 +1004,11 @@ export default function WikiPage() {
  const q = search.toLowerCase()
  return a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q) || a.category.toLowerCase().includes(q)
  })
- .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+ .sort((a, b) => {
+   const ta = new Date(a.createdAt).getTime()
+   const tb = new Date(b.createdAt).getTime()
+   return sortDir === 'desc' ? tb - ta : ta - tb
+ })
 
  // Selected article detail
  if (selectedArticle) {
@@ -1216,8 +1221,16 @@ export default function WikiPage() {
   )}
  </div>
 
- {/* Search + Category filter */}
+ {/* Search + Category filter + Sort */}
  <div className="flex items-center gap-2 px-2 flex-wrap">
+  <button
+  onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+  className="flex items-center gap-1 px-3 py-2 rounded-full bg-surface-container-low border border-outline-variant/10 hover:border-primary/30 text-[10px] font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
+  title={sortDir === 'desc' ? 'Newest first' : 'Oldest first'}
+  >
+  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>
+  {sortDir === 'desc' ? 'Newest' : 'Oldest'}
+  </button>
   <div className="relative flex-1 min-w-[140px]">
   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-lg">search</span>
   <input
