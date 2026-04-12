@@ -365,3 +365,86 @@ TOOLS.append({
         }
     }
 })
+
+# Save a URL to Sources library
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "save_link",
+        "description": "Save a URL to the user's Sources library. Use when the user shares a link or asks to save a URL as a source. Automatically fetches page title and summary.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to save."
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title override (auto-fetched from page if omitted)."
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Optional comma-separated tags."
+                }
+            },
+            "required": ["url"]
+        }
+    }
+})
+
+# Generate an image via BFL FLUX
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "generate_image",
+        "description": "Generate an image using AI (BFL FLUX). Use when the user asks to create, visualize, or generate an image. Returns the image URL.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Detailed description of the image to generate."
+                },
+                "width": {
+                    "type": "integer",
+                    "description": "Image width in pixels (256-2048, default 1024).",
+                    "default": 1024
+                },
+                "height": {
+                    "type": "integer",
+                    "description": "Image height in pixels (256-2048, default 1024).",
+                    "default": 1024
+                }
+            },
+            "required": ["prompt"]
+        }
+    }
+})
+
+# Create a wiki article from chat
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "create_wiki_article",
+        "description": "Create a structured wiki article and save it to the user's knowledge base. Use when the user asks to create a wiki article, document a topic, or compile knowledge into an article. The AI will synthesize the content into Wikipedia-style format.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Title of the wiki article."
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Raw content to structure into the article (can be notes, bullet points, or prose)."
+                },
+                "topic": {
+                    "type": "string",
+                    "description": "Topic or subject area if title not specified."
+                }
+            },
+            "required": ["title", "content"]
+        }
+    }
+})

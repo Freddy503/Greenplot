@@ -9,6 +9,7 @@ const navItems = [
   { href: '/garden', label: 'Garden', icon: 'eco', badge: false },
   { href: '/links', label: 'Sources', icon: 'link', badge: true },
   { href: '/wiki', label: 'Wiki', icon: 'auto_stories', badge: false },
+  { href: '/notifications', label: 'Inbox', icon: 'notifications', badge: false },
   { href: '/settings', label: 'Settings', icon: 'settings', badge: false },
 ]
 

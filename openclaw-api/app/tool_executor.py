@@ -1594,3 +1594,244 @@ async def search_wiki(args: dict, user: User, db: Session) -> str:
         return json.dumps({'status': 'error', 'message': str(e)})
 
 TOOL_HANDLERS["search_wiki"] = search_wiki
+
+
+async def save_link(args: dict, user: User, db: Session) -> str:
+    """Save a URL to the user's Sources library."""
+    import httpx
+    from urllib.parse import urlparse
+
+    url = args.get("url", "").strip()
+    if not url:
+        return json.dumps({"status": "error", "message": "URL is required"})
+    if not url.startswith("http"):
+        url = f"https://{url}"
+
+    tenant_id = str(user.tenant_id)
+
+    # Dedup: check if URL already exists
+    try:
+        existing = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
+        for l in existing:
+            if l.get("url", "") == url:
+                return json.dumps({"status": "exists", "message": f"Already in Sources: {l.get('title', url)}", "id": l.get("id", "")})
+    except Exception:
+        pass
+
+    try:
+        domain = urlparse(url).netloc.replace("www.", "")
+    except Exception:
+        domain = "unknown"
+
+    # Fetch page metadata
+    title = args.get("title", "") or domain
+    summary = args.get("summary", "")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
+            resp = await client.get(url, headers={"User-Agent": "Seedify Bot/1.0"})
+            if resp.status_code == 200:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(resp.text, "html.parser")
+                if not args.get("title"):
+                    t = soup.find("title")
+                    if t and t.string:
+                        title = t.string.strip()[:200]
+                if not summary:
+                    desc = soup.find("meta", attrs={"name": "description"})
+                    if desc:
+                        summary = desc.get("content", "")[:500]
+                    if not summary:
+                        og = soup.find("meta", property="og:description")
+                        if og:
+                            summary = og.get("content", "")[:500]
+    except Exception:
+        pass
+
+    try:
+        link_id = weaviate_client.add_link(
+            tenant_id=tenant_id,
+            user_id=str(user.id),
+            url=url,
+            title=title or domain,
+            summary=summary,
+            domain=domain,
+            tags=args.get("tags", "chat-saved"),
+            favicon=f"https://www.google.com/s2/favicons?domain={domain}&sz=32",
+            og_image="",
+            raw_text=summary,
+            status="enriched" if summary else "pending",
+            starred=False,
+        )
+        try:
+            from app.activity import log_source_found
+            log_source_found(tenant_id, title, url, "chat_save_link")
+        except Exception:
+            pass
+        return json.dumps({"status": "ok", "message": f"Saved to Sources: {title}", "id": link_id, "url": url, "title": title})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["save_link"] = save_link
+
+
+async def generate_image(args: dict, user: User, db: Session) -> str:
+    """Generate an image via BFL FLUX using the user's prompt."""
+    import httpx
+    import asyncio
+    import os
+
+    prompt = args.get("prompt", "").strip()
+    if not prompt:
+        return json.dumps({"status": "error", "message": "Prompt is required"})
+
+    <BFL_API_KEY> = os.environ.get("BFL_API_KEY", "")
+    if not <BFL_API_KEY>:
+        return json.dumps({"status": "error", "message": "Image generation not configured (BFL_API_KEY missing)"})
+
+    width = int(args.get("width", 1024))
+    height = int(args.get("height", 1024))
+    # Clamp to valid range
+    width = max(256, min(2048, width))
+    height = max(256, min(2048, height))
+
+    headers = {"Content-Type": "application/json", "x-key": <BFL_API_KEY>}
+    <BFL_API_KEY> = "https://api.bfl.ai"
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            submit = await client.post(
+                f"{<BFL_API_KEY>}/v1/flux-2-pro",
+                headers=headers,
+                json={"prompt": prompt, "width": width, "height": height},
+            )
+            if submit.status_code == 402:
+                return json.dumps({"status": "error", "message": "BFL credits exhausted"})
+            if submit.status_code != 200:
+                return json.dumps({"status": "error", "message": f"BFL submit failed: {submit.status_code}"})
+
+            task_id = submit.json().get("id")
+            if not task_id:
+                return json.dumps({"status": "error", "message": "BFL did not return a task ID"})
+
+            for _ in range(30):
+                await asyncio.sleep(1)
+                poll = await client.get(
+                    f"{<BFL_API_KEY>}/v1/get_result",
+                    headers={"x-key": <BFL_API_KEY>},
+                    params={"id": task_id},
+                )
+                if poll.status_code != 200:
+                    continue
+                result = poll.json()
+                status = result.get("status", "")
+                if status == "Ready":
+                    sample = result.get("result", {}).get("sample")
+                    if sample:
+                        return json.dumps({
+                            "status": "ok",
+                            "type": "image_generated",
+                            "url": sample,
+                            "prompt": prompt,
+                            "message": f"Image generated: {sample}",
+                        })
+                if status == "Error":
+                    return json.dumps({"status": "error", "message": f"BFL generation failed: {result.get('result', 'unknown')}"})
+
+        return json.dumps({"status": "error", "message": "Image generation timed out"})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["generate_image"] = generate_image
+
+
+async def create_wiki_article(args: dict, user: User, db: Session) -> str:
+    """Create a wiki article from chat content."""
+    import httpx
+
+    title = args.get("title", "").strip()
+    topic = args.get("topic", "").strip()
+    content = args.get("content", "").strip()
+
+    if not title and not topic:
+        return json.dumps({"status": "error", "message": "title or topic is required"})
+
+    title = title or topic
+    if not content:
+        content = f"Overview of {title}"
+
+    if len(content) < 50:
+        content = content + f"\n\nThis article covers {title} as captured from a chat conversation."
+
+    openrouter_key = getattr(settings, "OPENROUTER_API_KEY", None)
+    if not openrouter_key:
+        return json.dumps({"status": "error", "message": "LLM not configured"})
+
+    wiki_model = "deepseek/deepseek-chat-v3-0324"
+    article_content = content
+
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
+                json={
+                    "model": wiki_model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "Turn this raw text into a well-structured wiki article in Wikipedia format. "
+                                "Structure:\n1. # Title\n2. Lead paragraph (2-4 sentences)\n"
+                                "3. ## Sections with ### subsections\n4. ## See Also with [[wikilinks]]\n"
+                                "Keep all substantive content. Use encyclopedic tone."
+                            ),
+                        },
+                        {"role": "user", "content": f"Title: {title}\n\n{content}"},
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 2000,
+                },
+            )
+            if resp.status_code == 200:
+                llm_out = resp.json()["choices"][0]["message"]["content"]
+                if llm_out and len(llm_out) > 50:
+                    article_content = llm_out
+    except Exception:
+        pass
+
+    # Store in Weaviate
+    try:
+        lines = article_content.split("\n")
+        summary_lines = []
+        for line in lines:
+            if line.strip() and not line.startswith("#"):
+                summary_lines.append(line.strip())
+                if len(" ".join(summary_lines)) > 200:
+                    break
+        summary = " ".join(summary_lines)[:300]
+
+        article_id = weaviate_client.add_wiki_article(
+            tenant_id=str(user.tenant_id),
+            user_id=str(user.id),
+            title=title,
+            category="Chat",
+            summary=summary,
+            content=article_content,
+            source_seed_ids="",
+            source_link_ids="",
+            backlinks="",
+            status="published",
+        )
+        return json.dumps({
+            "status": "ok",
+            "message": f"Wiki article '{title}' created successfully.",
+            "id": article_id,
+            "title": title,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["create_wiki_article"] = create_wiki_article
