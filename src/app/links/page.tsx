@@ -192,6 +192,7 @@ export default function LinksPage() {
  const [adding, setAdding] = useState(false)
  const [filter, setFilter] = useState<'all' | 'starred'>('all')
  const [search, setSearch] = useState('')
+ const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
  const [selectedLink, setSelectedLink] = useState<LinkItem | null>(null)
  const [detailOpen, setDetailOpen] = useState(false)
 
@@ -449,6 +450,11 @@ export default function LinksPage() {
  const q = search.toLowerCase()
  return l.title.toLowerCase().includes(q) || l.domain.toLowerCase().includes(q) || l.tags.some(t => t.toLowerCase().includes(q))
  })
+ .sort((a, b) => {
+ const ta = new Date(a.addedAt || a.created_at || 0).getTime()
+ const tb = new Date(b.addedAt || b.created_at || 0).getTime()
+ return sortDir === 'desc' ? tb - ta : ta - tb
+ })
 
  const starredCount = links.filter(l => l.starred).length
 
@@ -488,6 +494,14 @@ export default function LinksPage() {
 
  {/* Search + Filter */}
  <div className="flex items-center gap-2 px-2">
+  <button
+  onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+  className="flex items-center gap-1 px-3 py-2 rounded-full bg-surface-container-low border border-outline-variant/10 hover:border-primary/30 text-[10px] font-bold text-on-surface-variant/60 hover:text-primary transition-colors flex-shrink-0"
+  title={sortDir === 'desc' ? 'Newest first' : 'Oldest first'}
+  >
+  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>
+  {sortDir === 'desc' ? 'Newest' : 'Oldest'}
+  </button>
   <div className="relative flex-1">
   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-lg">search</span>
   <Input
