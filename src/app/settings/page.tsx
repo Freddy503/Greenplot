@@ -262,7 +262,7 @@ export default function SettingsPage() {
          {/* Support */}
          <section>
            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Support</h2>
-           <a href="https://buymeacoffee.com/freddy503" target="_blank" rel="noopener noreferrer"
+           <a href="https://buymeacoffee.com/frederickk1" target="_blank" rel="noopener noreferrer"
              className="flex items-center justify-between px-5 py-4 rounded-2xl bg-[#FFDD00] hover:bg-[#ffda00] transition-colors no-underline">
              <div className="flex items-center gap-3">
                <span className="text-2xl">☕</span>
@@ -443,7 +443,7 @@ export default function SettingsPage() {
          <section>
            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Support</h2>
            <a
-             href="https://buymeacoffee.com/freddy503"
+             href="https://buymeacoffee.com/frederickk1"
              target="_blank"
              rel="noopener noreferrer"
              className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-[#FFDD00]/10 border border-[#FFDD00]/20 hover:border-[#FFDD00]/50 hover:bg-[#FFDD00]/15 transition-all active:scale-[0.98] group"
