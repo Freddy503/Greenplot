@@ -393,7 +393,7 @@ export default function SettingsPage() {
                  </p>
                  <div className="mt-2 space-y-1 text-[10px] text-on-surface-variant/70">
                    <p>☀️ Enterprise Digest — 09:30 CET</p>
-                   <p>🔬 Academic + Research Digest — 07:00 CET (arXiv PDFs attached)</p>
+                   <p>🔬 Academic + Research Digest — 07:00 & 18:00 CET (4 arXiv PDFs attached)</p>
                    <p>📊 Weekly Content Eval — Sunday 18:00 CET</p>
                  </div>
                </div>
@@ -437,6 +437,24 @@ export default function SettingsPage() {
                <p>4. Now tap Share in any app → Greenplot appears in the list</p>
              </div>
            </div>
+         </section>
+
+         {/* Buy Me a Coffee */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Support</h2>
+           <a
+             href="https://buymeacoffee.com/freddy503"
+             target="_blank"
+             rel="noopener noreferrer"
+             className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-[#FFDD00]/10 border border-[#FFDD00]/20 hover:border-[#FFDD00]/50 hover:bg-[#FFDD00]/15 transition-all active:scale-[0.98] group"
+           >
+             <span className="text-2xl">☕</span>
+             <div className="flex-1">
+               <p className="text-sm font-bold text-on-surface">Buy Me a Coffee</p>
+               <p className="text-[11px] text-on-surface-variant mt-0.5">Enjoying Seedify? Support the build.</p>
+             </div>
+             <span className="material-symbols-outlined text-on-surface-variant/40 group-hover:text-[#FFDD00] transition-colors">open_in_new</span>
+           </a>
          </section>
 
          {/* Integrations */}
