@@ -9,7 +9,7 @@ Generates rich, multi-section briefings for:
 - Biweekly Challenge (Cross-domain synthesis)
 
 Uses:
-- OpenRouter (via OpenAI SDK) for LLM: Nemotron Super (deepseek/deepseek-v3.2)
+- OpenRouter (via OpenAI SDK) for LLM: Nemotron Super (qwen/qwen3-235b-a22b)
 - Exa API for web search
 - Open-Meteo for weather (free)
 """
@@ -54,7 +54,7 @@ def get_llm_client():
 def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str = None) -> str:
     """
     Call OpenRouter LLM with a prompt.
-    Default model: Nemotron Super (deepseek/deepseek-v3.2)
+    Default model: Nemotron Super (qwen/qwen3-235b-a22b)
     Returns empty string on failure.
     """
     try:
@@ -65,7 +65,7 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
 
         # Use provided model or default to Nemotron Super
         if not model:
-            model = "deepseek/deepseek-v3.2"
+            model = "qwen/qwen3-235b-a22b"
 
         messages = []
         if system:
@@ -87,9 +87,9 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
     except Exception as e:
         logger.error(f"LLM call failed (model={model}): {e}")
         # Try fallback model
-        if model != "deepseek/deepseek-v3.2":
+        if model != "qwen/qwen3-235b-a22b":
             logger.info("Retrying with Nemotron fallback...")
-            return _call_llm(prompt, system, max_tokens, model="deepseek/deepseek-v3.2")
+            return _call_llm(prompt, system, max_tokens, model="qwen/qwen3-235b-a22b")
         return ""
 
 
@@ -164,14 +164,24 @@ def fetch_user_themes(user_id: str, db) -> List[str]:
         text = " ".join([s.content for s in recent_seeds if s.content])
 
         # Simple keyword extraction
+        _stopwords = {'about', 'which', 'their', 'where', 'these', 'there', 'would',
+                      'could', 'should', 'other', 'being', 'after', 'before', 'while',
+                      'using', 'based', 'given', 'might', 'often', 'since', 'within'}
         keywords = {}
         for word in text.lower().split():
-            if len(word) > 4 and word not in ['about', 'which', 'their', 'where', 'these']:
+            if len(word) > 4 and word not in _stopwords:
                 keywords[word] = keywords.get(word, 0) + 1
 
-        # Top 3 most frequent meaningful words
         top_words = sorted(keywords.items(), key=lambda x: x[1], reverse=True)[:3]
-        return [w[0] for w in top_words] if top_words else ["learning"]
+        keyword_themes = [w[0] for w in top_words]
+
+        # Also pull seed titles as phrase candidates (more meaningful than single words)
+        seed_titles = [s.title for s in recent_seeds if getattr(s, 'title', None) and len(s.title) > 3]
+        title_themes = [t.lower().strip() for t in seed_titles[:5]]
+
+        # Combine, dedup, return top 3
+        combined = list(dict.fromkeys(keyword_themes + title_themes))
+        return combined[:3] if combined else ["learning"]
     except Exception as e:
         logger.error(f"Failed to extract themes: {e}")
         return ["learning", "research"]
@@ -351,7 +361,7 @@ Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Rel
     deep_pattern = _call_llm(
         llm_prompt,
         max_tokens=500,
-        model="deepseek/deepseek-v3.2"  # Nemotron is more reliable
+        model="qwen/qwen3-235b-a22b"  # Nemotron is more reliable
     )
     if not deep_pattern:
         deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
@@ -410,7 +420,7 @@ Keep concise. Format as bullet points.
     news_synthesis = _call_llm(
         news_prompt,
         max_tokens=600,
-        model="deepseek/deepseek-v3.2"  # Longer context for news synthesis
+        model="qwen/qwen3-235b-a22b"  # Longer context for news synthesis
     )
     if not news_synthesis:
         news_synthesis = "• Check recent news on " + theme_str + " for latest enterprise AI developments."
@@ -425,7 +435,7 @@ Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} prac
     academic_synthesis = _call_llm(
         academic_prompt,
         max_tokens=300,
-        model="deepseek/deepseek-v3.2"
+        model="qwen/qwen3-235b-a22b"
     )
     if not academic_synthesis:
         academic_synthesis = "Explore recent academic work in your domain."
@@ -474,7 +484,7 @@ Then propose ONE concrete 15-minute action for tomorrow that tests this contrari
     contrarian = _call_llm(
         contrarian_prompt,
         max_tokens=300,
-        model="deepseek/deepseek-v3.2"
+        model="qwen/qwen3-235b-a22b"
     )
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
@@ -522,7 +532,7 @@ Be analytical. Format: [Theme] / [Gap] / [Next Week's Constraint]
     evaluation = _call_llm(
         eval_prompt,
         max_tokens=400,
-        model="deepseek/deepseek-v3.2"  # Longer context for analysis
+        model="qwen/qwen3-235b-a22b"  # Longer context for analysis
     )
     if not evaluation:
         evaluation = f"Review your {theme_str} work this week. What emerged as most valuable?"
@@ -582,7 +592,7 @@ Be specific, not abstract. 15-min experiment.
     challenge = _call_llm(
         challenge_prompt,
         max_tokens=500,
-        model="deepseek/deepseek-v3.2"  # Creative synthesis task
+        model="qwen/qwen3-235b-a22b"  # Creative synthesis task
     )
     if not challenge:
         challenge = f"Apply concepts from {themes[0]} to solve a challenge in {themes[1]}."
@@ -615,6 +625,66 @@ Be specific, not abstract. 15-min experiment.
     }
 
 
+async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
+    """
+    Search Exa for arXiv papers matching themes, returning only individual
+    abstract pages (arxiv.org/abs/XXXX.XXXXX) — never category listing pages.
+    """
+    import re as _re
+    from app.config import settings as _settings
+    query = " ".join(themes[:3]) + " 2025 2026"
+    try:
+        exa_key = _settings.EXA_API_KEY or os.environ.get('EXA_API_KEY', '')
+        if not exa_key:
+            return []
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.exa.ai/search",
+                headers={"x-api-key": exa_key, "Content-Type": "application/json"},
+                json={
+                    "query": query,
+                    "numResults": limit * 3,
+                    "type": "neural",
+                    "includeDomains": ["arxiv.org"],
+                },
+                timeout=15.0,
+            )
+        if response.status_code != 200:
+            logger.warning(f"[academic_digest] Exa arXiv search returned {response.status_code}")
+            return []
+        results = response.json().get("results", [])
+        abs_re = _re.compile(r'arxiv\.org/abs/\d{4}\.\d{4,5}')
+        filtered = [
+            {
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "snippet": (r.get("text", "") or "")[:300],
+            }
+            for r in results if abs_re.search(r.get("url", ""))
+        ]
+        logger.info(f"[academic_digest] arXiv search: {len(results)} raw → {len(filtered)} abs/ papers for '{query}'")
+        # If not enough abs/ papers, do a second search with different phrasing
+        if len(filtered) < limit:
+            query2 = " ".join(themes[1:3]) + " machine learning agent 2025"
+            resp2 = await client.post(
+                "https://api.exa.ai/search",
+                headers={"x-api-key": exa_key, "Content-Type": "application/json"},
+                json={"query": query2, "numResults": limit * 2, "type": "neural", "includeDomains": ["arxiv.org"]},
+                timeout=15.0,
+            )
+            if resp2.status_code == 200:
+                r2 = resp2.json().get("results", [])
+                seen = {p["url"] for p in filtered}
+                for r in r2:
+                    if abs_re.search(r.get("url", "")) and r.get("url") not in seen:
+                        filtered.append({"title": r.get("title",""), "url": r.get("url",""), "snippet": (r.get("text","") or "")[:300]})
+                        seen.add(r.get("url",""))
+        return filtered[:limit]
+    except Exception as e:
+        logger.error(f"[academic_digest] arXiv paper search failed: {e}")
+        return []
+
+
 async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     """
     Build a daily academic + practical digest that connects new research
@@ -626,6 +696,9 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     import re as _re
 
     themes = fetch_user_themes(user_id, db)
+    # Always lead with "agentic AI" — inject if not already present
+    if "agentic" not in " ".join(themes).lower():
+        themes = ["agentic AI"] + themes[:2]
     theme_str = ", ".join(themes[:3])
     city = get_user_city(user_id, db)
     today = datetime.now().strftime("%a %b %d, %Y")
@@ -635,10 +708,8 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     wiki_ctx = fetch_wiki_context(themes)
     weather = await fetch_weather(city)
 
-    # Exa searches
-    paper_results = []
-    for theme in themes[:2]:
-        paper_results += await fetch_web_search(f"{theme} arxiv preprint 2026", limit=3)
+    # Fetch arXiv papers (abs/ pages only) + enterprise news
+    paper_results = await _fetch_arxiv_papers(themes, limit=8)
     news_results = await fetch_web_search(f"enterprise AI {theme_str} news {today}", limit=3)
 
     # Deduplicate papers by URL
@@ -649,10 +720,10 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
             seen.add(p["url"])
             unique_papers.append(p)
 
-    # Fetch full text for top 2 papers
+    # Fetch full text for top 4 papers
     from app.enricher import fetch_url_content
     paper_texts = []
-    for paper in unique_papers[:2]:
+    for paper in unique_papers[:4]:
         full = fetch_url_content(paper["url"])
         paper_texts.append({
             "title": paper["title"],
@@ -701,20 +772,26 @@ ENTERPRISE AI NEWS TODAY:
 
 Produce a JSON object with this exact structure:
 {{
-  "spotlight_title": "Paper title + authors + year",
-  "spotlight_content": "3-5 sentences: what problem it solves, key finding, why it matters for enterprise AI. Reference the user's existing seeds/wiki where relevant.",
-  "spotlight_sources": [{{"title": "arXiv", "url": "paper_url"}}],
+  "papers": [
+    {{
+      "title": "Paper title + authors + year",
+      "content": "3-4 sentences: what problem it solves, key finding, why it matters for enterprise AI or agentic systems. Connect to user's existing seeds/wiki where relevant.",
+      "url": "arxiv_url"
+    }}
+  ],
   "news_items": [
     {{"headline": "...", "synthesis": "1-2 sentences", "url": "..."}}
   ],
-  "challenging_take": "A counterintuitive observation about one of the papers or news items. 2-3 sentences.",
+  "challenging_take": "A counterintuitive observation connecting one of the papers to a broader trend. 2-3 sentences.",
   "actionable_move": "One specific thing the user can do TODAY based on the research, grounded in their current seeds.",
-  "solution_design_seed": "3-5 bullet markdown sketch of how this research could become a concrete tool or project the user could build.",
+  "solution_design_seed": "3-5 bullet markdown sketch of how the most interesting paper could become a concrete tool or project.",
   "prompt": "A single sentence to open a chat discussion about today's research."
-}}"""
+}}
 
-    raw = _call_llm(user_prompt, system=system_prompt, max_tokens=1500,
-                    model="deepseek/deepseek-v3.2")
+Include all {len(paper_texts)} papers in the "papers" array. Synthesize each independently."""
+
+    raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
+                    model="qwen/qwen3-235b-a22b")
 
     # Parse JSON, strip fences if needed
     cleaned = _re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=_re.IGNORECASE)
@@ -737,17 +814,19 @@ Produce a JSON object with this exact structure:
             "content": weather,
         })
 
-    # Academic spotlight
-    spotlight_sources = data.get("spotlight_sources", [])
-    if paper_texts and not spotlight_sources:
-        spotlight_sources = [{"title": paper_texts[0]["title"][:50], "url": paper_texts[0]["url"]}]
-    sections.append({
-        "title": data.get("spotlight_title", "Academic Spotlight"),
-        "icon": "school",
-        "color": "text-indigo-400",
-        "content": data.get("spotlight_content", "No spotlight generated."),
-        "sources": spotlight_sources,
-    })
+    # Academic spotlights — one section per paper
+    papers = data.get("papers", [])
+    if not papers and paper_texts:
+        # fallback: create stubs from raw paper data
+        papers = [{"title": p["title"], "content": p.get("snippet", ""), "url": p["url"]} for p in paper_texts]
+    for i, paper in enumerate(papers):
+        sections.append({
+            "title": paper.get("title", f"Paper {i+1}"),
+            "icon": "school",
+            "color": "text-indigo-400",
+            "content": paper.get("content", ""),
+            "sources": [{"title": "arXiv", "url": paper.get("url", "")}] if paper.get("url") else [],
+        })
 
     # Enterprise news
     news_items = data.get("news_items", [])
@@ -847,7 +926,7 @@ Write a markdown document with these sections:
 ## Success Criteria
 """
 
-    md_content = _call_llm(prompt, system=system, max_tokens=2000, model="deepseek/deepseek-v3.2")
+    md_content = _call_llm(prompt, system=system, max_tokens=2000, model="qwen/qwen3-235b-a22b")
     if not md_content:
         return None
 

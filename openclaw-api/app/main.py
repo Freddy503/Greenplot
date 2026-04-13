@@ -2066,7 +2066,7 @@ def extract_insights(
 
     try:
         response = openai_client.chat.completions.create(
-            model="deepseek/deepseek-v3.2",
+            model="qwen/qwen3-235b-a22b",
             messages=[
                 {
                     "role": "system",
@@ -3044,7 +3044,7 @@ def _job_daily_briefing():
     """
     try:
         db = next(get_db())
-        default_user = db.query(User).first()
+        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for daily briefing")
             return
@@ -3075,7 +3075,7 @@ def _job_afternoon_reflection():
     """
     try:
         db = next(get_db())
-        default_user = db.query(User).first()
+        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for reflection")
             return
@@ -3119,7 +3119,7 @@ def _job_weekly_eval():
     """
     try:
         db = next(get_db())
-        default_user = db.query(User).first()
+        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for weekly eval")
             return
@@ -3150,7 +3150,7 @@ def _job_biweekly_challenge():
     """
     try:
         db = next(get_db())
-        default_user = db.query(User).first()
+        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for biweekly challenge")
             return
@@ -3175,7 +3175,7 @@ def _job_academic_digest():
     """
     try:
         db = next(get_db())
-        default_user = db.query(User).first()
+        default_user = db.query(User).filter(User.email == 'contact@example.com').first()
         if not default_user:
             logger.warning("No users found for academic digest")
             return
@@ -3450,12 +3450,17 @@ def _start_scheduler():
         id="biweekly_challenge",
         replace_existing=True,
     )
-    # Academic + Practical Digest — daily 07:00 CET
+    # Academic + Practical Digest — 07:00 CET (morning) + 18:00 CET (evening)
     ad_cfg = saved.get("academic_digest", {})
     scheduler.add_job(
         _job_academic_digest,
         CronTrigger(hour=ad_cfg.get("hour", 7), minute=ad_cfg.get("minute", 0), timezone=_CET),
         id="academic_digest", replace_existing=True,
+    )
+    scheduler.add_job(
+        _job_academic_digest,
+        CronTrigger(hour=18, minute=0, timezone=_CET),
+        id="academic_digest_evening", replace_existing=True,
     )
     # Seed enrichment — every 30 minutes
     scheduler.add_job(
@@ -3611,6 +3616,7 @@ def _run_trigger_job(job_id: str):
         "biweekly_challenge": _job_biweekly_challenge,
         "academic_digest": _job_academic_digest,
         "wiki_compile": _job_wiki_compile,
+        "academic_digest_evening": _job_academic_digest,
     }
     fn = jobs.get(job_id)
     if not fn:

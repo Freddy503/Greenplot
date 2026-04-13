@@ -61,6 +61,40 @@ function getDomainIcon(domain: string) {
   return 'eco'
 }
 
+function exportSeedMd(seed: SeedDetail) {
+  const lines = [
+    `# ${seed.title}`,
+    '',
+    seed.domain ? `**Domain:** ${seed.domain}` : '',
+    seed.tags ? `**Tags:** ${seed.tags}` : '',
+    seed.energy ? `**Energy:** ${seed.energy}` : '',
+    seed.created_at || seed.created ? `**Created:** ${new Date(seed.created_at || seed.created || '').toLocaleDateString()}` : '',
+    '',
+    '## Content',
+    '',
+    seed.content || seed.text || seed.summary || '',
+    seed.url ? `\n## Source\n\n${seed.url}` : '',
+  ].filter(l => l !== '').join('\n')
+
+  const blob = new Blob([lines], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${seed.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function shareSeed(seed: SeedDetail) {
+  const text = `${seed.title}\n\n${(seed.content || seed.text || seed.summary || '').slice(0, 500)}`
+  if (navigator.share) {
+    navigator.share({ title: seed.title, text })
+  } else {
+    navigator.clipboard.writeText(text)
+    toast.success('Copied to clipboard')
+  }
+}
+
 export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetProps) {
   const [loadingSearch, setLoadingSearch] = useState(false)
   const [searchResults, setSearchResults] = useState<string[]>([])
@@ -122,7 +156,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
       <SheetContent side="bottom" className="h-[85vh] rounded-t-[2rem] bg-surface border-outline-variant/10 overflow-y-auto">
         <SheetHeader className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
               <span
                 className="material-symbols-outlined text-primary"
                 style={{ fontSize: '22px', fontVariationSettings: '"FILL" 1' }}
@@ -130,7 +164,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
                 {getDomainIcon(domain)}
               </span>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               {domain && (
                 <Badge className="bg-primary/10 text-primary text-[9px] font-bold border-0 mb-1">
                   {domain}
@@ -139,6 +173,23 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
               <SheetTitle className="text-lg font-extrabold text-on-surface leading-tight">
                 {seed.title}
               </SheetTitle>
+            </div>
+            {/* Action buttons */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                onClick={() => shareSeed(seed)}
+                className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant/50 hover:text-primary transition-colors"
+                title="Share"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>share</span>
+              </button>
+              <button
+                onClick={() => exportSeedMd(seed)}
+                className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant/50 hover:text-primary transition-colors"
+                title="Export as Markdown"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>download</span>
+              </button>
             </div>
           </div>
           {energy && (
