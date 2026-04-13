@@ -180,7 +180,7 @@ export default function GardenPage() {
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
     const token = localStorage.getItem('greenplot_token')
-    fetch('/api/seeds?limit=50', {
+    fetch('/api/seeds?limit=200', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((r) => {
