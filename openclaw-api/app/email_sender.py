@@ -15,6 +15,55 @@ except ImportError:
     _resend = None
 
 
+def _md_to_html(text: str, base_color: str = "#D1D5DB") -> str:
+    """Convert basic markdown to inline HTML for email."""
+    lines = text.split("\n")
+    html_parts = []
+    in_list = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if in_list:
+                html_parts.append("</ul>")
+                in_list = False
+            continue
+
+        # Detect bullet lines: * item or - item
+        is_bullet = stripped.startswith("* ") or stripped.startswith("- ")
+        if is_bullet:
+            stripped = stripped[2:]
+
+        # Convert **bold** → <strong>
+        stripped = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', stripped)
+        # Convert *italic* → <em>
+        stripped = re.sub(r'\*(.+?)\*', r'<em>\1</em>', stripped)
+        # Convert [text](url) → <a>
+        stripped = re.sub(
+            r'\[([^\]]+)\]\((https?://[^\)]+)\)',
+            r'<a href="\2" style="color:#6B7280;">\1</a>',
+            stripped
+        )
+
+        if is_bullet:
+            if not in_list:
+                html_parts.append(f'<ul style="margin:8px 0;padding-left:20px;color:{base_color};">')
+                in_list = True
+            html_parts.append(f'<li style="margin:4px 0;line-height:1.6;">{stripped}</li>')
+        else:
+            if in_list:
+                html_parts.append("</ul>")
+                in_list = False
+            html_parts.append(
+                f'<p style="margin:4px 0 10px;color:{base_color};line-height:1.6;">{stripped}</p>'
+            )
+
+    if in_list:
+        html_parts.append("</ul>")
+
+    return "\n".join(html_parts)
+
+
 def _icon_emoji(icon: str) -> str:
     """Map material symbol names to simple emoji for email fallback."""
     _map = {
@@ -56,17 +105,9 @@ def render_briefing_html(briefing: dict) -> str:
         sources = section.get("sources", [])
 
         if isinstance(content, list):
-            content_html = "".join(
-                f'<p style="margin:4px 0;color:#D1D5DB;">{line}</p>'
-                for line in content
-            )
+            content_html = _md_to_html("\n".join(str(item) for item in content))
         else:
-            # Split paragraphs on double newline
-            paragraphs = content.split("\n\n") if content else [""]
-            content_html = "".join(
-                f'<p style="margin:4px 0 12px;color:#D1D5DB;line-height:1.6;">{p.replace(chr(10), "<br>")}</p>'
-                for p in paragraphs if p.strip()
-            )
+            content_html = _md_to_html(content or "")
 
         sources_html = ""
         if sources:

@@ -94,7 +94,7 @@ def confirm_with_llm(
     """
     try:
         response = openai_client.chat.completions.create(
-            model="deepseek/deepseek-v3.2",
+            model="qwen/qwen3-235b-a22b",
             messages=[
                 {"role": "system", "content": """You are a connection finder for a personal knowledge base.
 Two notes were found to be semantically similar. Determine if they are genuinely related.

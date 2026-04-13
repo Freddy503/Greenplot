@@ -182,7 +182,7 @@ def _call_llm_for_seed(thought_text: str, web_context: Optional[str], strict: bo
         user_parts.append(f"Fetched web content:\n{web_context[:4000]}")
 
     response = openai_client.chat.completions.create(
-        model="deepseek/deepseek-v3.2",
+        model="qwen/qwen3-235b-a22b",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "\n\n".join(user_parts)}

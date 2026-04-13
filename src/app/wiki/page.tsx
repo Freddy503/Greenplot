@@ -762,12 +762,33 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   </button>
   <button
   onClick={() => {
+   const text = `${article.title}\n\n${article.summary || ''}\n\n${article.content}`
+   if (navigator.share) {
+   navigator.share({ title: article.title, text: text.slice(0, 600) })
+   } else {
+   navigator.clipboard.writeText(text.slice(0, 600))
+   }
+  }}
+  className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
+  title="Share"
+  >
+  <span className="material-symbols-outlined text-lg">share</span>
+  </button>
+  <button
+  onClick={() => {
   window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')
   }}
   className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
   title="Download as Markdown"
   >
   <span className="material-symbols-outlined text-lg">download</span>
+  </button>
+  <button
+  onClick={() => window.print()}
+  className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
+  title="Export as PDF"
+  >
+  <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
   </button>
  </div>
  </div>

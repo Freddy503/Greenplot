@@ -87,7 +87,7 @@ def _load_wiki_system_prompt() -> str:
 IMPORTANT: Do NOT include a Timeline section — that will be appended automatically after synthesis."""
 
 WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
-WIKI_MODEL = "deepseek/deepseek-v3.2"
+WIKI_MODEL = "qwen/qwen3-235b-a22b"
 
 async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
     """Download BFL image and save to local persistent storage. Returns absolute URL."""
@@ -136,7 +136,7 @@ async def _auto_generate_image(article_id: str, title: str, category: str = "", 
     except Exception as e:
         logger.warning(f"Auto image generation failed for {title}: {e}")
 
-WIKI_FALLBACK_MODEL = "deepseek/deepseek-v3.2"  # Fallback if primary is rate-limited
+WIKI_FALLBACK_MODEL = "qwen/qwen3-235b-a22b"  # Fallback if primary is rate-limited
 WIKI_MAX_TOKENS = 4000
 WIKI_TEMPERATURE = 0.5
 

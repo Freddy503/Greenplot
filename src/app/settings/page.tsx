@@ -76,6 +76,8 @@ export default function SettingsPage() {
  const [userEmail, setUserEmail] = useState('')
  const [sendingTestEmail, setSendingTestEmail] = useState(false)
  const [triggeringWikiCompile, setTriggeringWikiCompile] = useState(false)
+ const [featureRequest, setFeatureRequest] = useState('')
+ const [sendingFeatureRequest, setSendingFeatureRequest] = useState(false)
 
  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
@@ -219,6 +221,28 @@ export default function SettingsPage() {
      toast.error('Could not reach backend')
    } finally {
      setTriggeringWikiCompile(false)
+   }
+ }
+
+ const handleSendFeatureRequest = async () => {
+   if (!featureRequest.trim()) return
+   setSendingFeatureRequest(true)
+   try {
+     const res = await fetch('/api/feedback/feature-request', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ message: featureRequest.trim() }),
+     })
+     if (res.ok) {
+       toast.success('Feature request sent!')
+       setFeatureRequest('')
+     } else {
+       toast.error('Could not send — try again')
+     }
+   } catch {
+     toast.error('Could not reach backend')
+   } finally {
+     setSendingFeatureRequest(false)
    }
  }
 
@@ -505,6 +529,40 @@ export default function SettingsPage() {
                  </div>
                )
              })}
+           </div>
+         </section>
+
+         {/* Feature Request */}
+         <section>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Feature Request</h2>
+           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+             <div className="flex items-start gap-3">
+               <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>lightbulb</span>
+               <div className="flex-1">
+                 <p className="text-sm font-bold text-on-surface">Got an idea?</p>
+                 <p className="text-[11px] text-on-surface-variant mt-0.5">Tell me what you'd like to see next.</p>
+               </div>
+             </div>
+             <textarea
+               value={featureRequest}
+               onChange={e => setFeatureRequest(e.target.value)}
+               placeholder="I'd love to see..."
+               rows={3}
+               className="w-full rounded-2xl bg-surface-container-high border border-outline-variant/20 px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/30 transition-colors resize-none"
+             />
+             <Button
+               size="sm"
+               onClick={handleSendFeatureRequest}
+               disabled={sendingFeatureRequest || !featureRequest.trim()}
+               className="w-full rounded-full text-xs"
+             >
+               {sendingFeatureRequest ? (
+                 <span className="material-symbols-outlined animate-spin mr-1" style={{ fontSize: '14px' }}>progress_activity</span>
+               ) : (
+                 <span className="material-symbols-outlined mr-1" style={{ fontSize: '14px' }}>send</span>
+               )}
+               {sendingFeatureRequest ? 'Sending…' : 'Send Request'}
+             </Button>
            </div>
          </section>
 
