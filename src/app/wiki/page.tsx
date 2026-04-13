@@ -701,7 +701,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
 
  if (seedIds.length > 0) {
  fetches.push(
- fetch(`/api/seeds?limit=50`, {
+ fetch(`/api/seeds?limit=200`, {
   headers: token ? { Authorization: `Bearer ${token}` } : {},
  })
   .then(r => r.ok ? r.json() : { seeds: [] })

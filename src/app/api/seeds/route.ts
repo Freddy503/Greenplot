@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const token = req.headers.get('authorization') || ''
   const { searchParams } = new URL(req.url)
   const query = searchParams.get('query') || ''
-  const limit = searchParams.get('limit') || '50'
+  const limit = searchParams.get('limit') || '200'
 
   // If no query, omit it so backend returns recent seeds from Postgres with real timestamps
   // (Weaviate path sets created_at=utcnow() which breaks date display)

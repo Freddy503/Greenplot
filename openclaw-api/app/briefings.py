@@ -175,9 +175,14 @@ def fetch_user_themes(user_id: str, db) -> List[str]:
         top_words = sorted(keywords.items(), key=lambda x: x[1], reverse=True)[:3]
         keyword_themes = [w[0] for w in top_words]
 
-        # Also pull seed titles as phrase candidates (more meaningful than single words)
+        # Pull seed titles, truncate to first 3 words for clean Exa queries
+        _title_stopwords = {'how', 'why', 'what', 'when', 'the', 'and', 'for', 'with', 'that', 'this', 'from'}
         seed_titles = [s.title for s in recent_seeds if getattr(s, 'title', None) and len(s.title) > 3]
-        title_themes = [t.lower().strip() for t in seed_titles[:5]]
+        title_themes = []
+        for t in seed_titles[:5]:
+            words = [w for w in t.lower().split() if len(w) > 3 and w not in _title_stopwords]
+            if words:
+                title_themes.append(" ".join(words[:3]))
 
         # Combine, dedup, return top 3
         combined = list(dict.fromkeys(keyword_themes + title_themes))
@@ -649,36 +654,36 @@ async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
                 },
                 timeout=15.0,
             )
-        if response.status_code != 200:
-            logger.warning(f"[academic_digest] Exa arXiv search returned {response.status_code}")
-            return []
-        results = response.json().get("results", [])
-        abs_re = _re.compile(r'arxiv\.org/abs/\d{4}\.\d{4,5}')
-        filtered = [
-            {
-                "title": r.get("title", ""),
-                "url": r.get("url", ""),
-                "snippet": (r.get("text", "") or "")[:300],
-            }
-            for r in results if abs_re.search(r.get("url", ""))
-        ]
-        logger.info(f"[academic_digest] arXiv search: {len(results)} raw → {len(filtered)} abs/ papers for '{query}'")
-        # If not enough abs/ papers, do a second search with different phrasing
-        if len(filtered) < limit:
-            query2 = " ".join(themes[1:3]) + " machine learning agent 2025"
-            resp2 = await client.post(
-                "https://api.exa.ai/search",
-                headers={"x-api-key": exa_key, "Content-Type": "application/json"},
-                json={"query": query2, "numResults": limit * 2, "type": "neural", "includeDomains": ["arxiv.org"]},
-                timeout=15.0,
-            )
-            if resp2.status_code == 200:
-                r2 = resp2.json().get("results", [])
-                seen = {p["url"] for p in filtered}
-                for r in r2:
-                    if abs_re.search(r.get("url", "")) and r.get("url") not in seen:
-                        filtered.append({"title": r.get("title",""), "url": r.get("url",""), "snippet": (r.get("text","") or "")[:300]})
-                        seen.add(r.get("url",""))
+            if response.status_code != 200:
+                logger.warning(f"[academic_digest] Exa arXiv search returned {response.status_code}")
+                return []
+            results = response.json().get("results", [])
+            abs_re = _re.compile(r'arxiv\.org/abs/\d{4}\.\d{4,5}')
+            filtered = [
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "snippet": (r.get("text", "") or "")[:300],
+                }
+                for r in results if abs_re.search(r.get("url", ""))
+            ]
+            logger.info(f"[academic_digest] arXiv search: {len(results)} raw → {len(filtered)} abs/ papers for '{query}'")
+            # If not enough abs/ papers, do a second search with different phrasing
+            if len(filtered) < limit:
+                query2 = " ".join(themes[1:3]) + " machine learning agent 2025"
+                resp2 = await client.post(
+                    "https://api.exa.ai/search",
+                    headers={"x-api-key": exa_key, "Content-Type": "application/json"},
+                    json={"query": query2, "numResults": limit * 2, "type": "neural", "includeDomains": ["arxiv.org"]},
+                    timeout=15.0,
+                )
+                if resp2.status_code == 200:
+                    r2 = resp2.json().get("results", [])
+                    seen = {p["url"] for p in filtered}
+                    for r in r2:
+                        if abs_re.search(r.get("url", "")) and r.get("url") not in seen:
+                            filtered.append({"title": r.get("title",""), "url": r.get("url",""), "snippet": (r.get("text","") or "")[:300]})
+                            seen.add(r.get("url",""))
         return filtered[:limit]
     except Exception as e:
         logger.error(f"[academic_digest] arXiv paper search failed: {e}")

@@ -3167,9 +3167,9 @@ def _job_biweekly_challenge():
     except Exception as e:
         logger.error(f"❌ Biweekly Challenge failed: {e}")
 
-def _job_academic_digest():
+def _job_academic_digest(evening: bool = False):
     """
-    Academic + Practical Research Digest — Daily 07:00 CET.
+    Academic + Practical Research Digest — Daily 07:00 + 18:00 CET.
     Connects new arXiv/Semantic Scholar papers to the user's Garden seeds and Wiki,
     produces a practical synthesis and solution design seed.
     """
@@ -3184,6 +3184,9 @@ def _job_academic_digest():
             user_id=str(default_user.id),
             db=db
         ))
+        # Give evening run a distinct type so dedup guard doesn't block it
+        if evening:
+            briefing = {**briefing, "type": "academic_digest_evening"}
 
         _sto<RESEND_API_KEY>(briefing)
 
@@ -3458,7 +3461,7 @@ def _start_scheduler():
         id="academic_digest", replace_existing=True,
     )
     scheduler.add_job(
-        _job_academic_digest,
+        lambda: _job_academic_digest(evening=True),
         CronTrigger(hour=18, minute=0, timezone=_CET),
         id="academic_digest_evening", replace_existing=True,
     )
