@@ -1464,7 +1464,7 @@ async def chat_endpoint(
 
                 # Request: with tools (except final round, force content)
                 payload = {
-                    "model": settings.ENRICH_MODEL,
+                    "model": settings.CHAT_MODEL,
                     "messages": ([system_msg] if system_msg else []) + openai_messages,
                     "stream": True,
                 }
@@ -1814,12 +1814,12 @@ async def chat_v2_endpoint(
     # ── Setup Agent ───────────────────────────────────────────────
     registry = setup_default_registry(
         api_key=settings.OPENROUTER_API_KEY,
-        model=settings.ENRICH_MODEL,
+        model=settings.CHAT_MODEL,
     )
     agent = SeedifyAgent(
         registry=registry,
         api_key=settings.OPENROUTER_API_KEY,
-        model=settings.ENRICH_MODEL,
+        model=settings.CHAT_MODEL,
         max_rounds=8,
         system_prompt=system_prompt,
     )

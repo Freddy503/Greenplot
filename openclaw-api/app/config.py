@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: Optional[str] = None
-    # Model for enrichment (LLM)
+    # Model for chat/agent responses — needs strong tool-use and reasoning
+    CHAT_MODEL: str = "anthropic/claude-sonnet-4-5"
+    # Model for enrichment (structured JSON output, seed generation)
     ENRICH_MODEL: str = "minimax/minimax-m2.7"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
