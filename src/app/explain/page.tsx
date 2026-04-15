@@ -54,7 +54,6 @@ export default function ExplainPage() {
   const [qaBlocks, setQaBlocks] = useState<QABlock[]>([])
   const [followUps, setFollowUps] = useState<string[]>([])
   const [inputValue, setInputValue] = useState('')
-  const [exporting, setExporting] = useState(false)
   const [lastProcessedCount, setLastProcessedCount] = useState(0)
   const contentRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -118,28 +117,27 @@ export default function ExplainPage() {
     submitMessage(inputValue)
   }
 
-  const handleExportPDF = async () => {
-    if (!contentRef.current || exporting) return
-    setExporting(true)
-    try {
-      const html2pdf = (await import('html2pdf.js')).default
-      const filename = `explanation-${topic.slice(0, 40).replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`
-      await html2pdf()
-        .set({
-          margin: [15, 15, 15, 15],
-          filename,
-          html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          // @ts-expect-error html2pdf types incomplete
-          pagebreak: { mode: ['avoid-all', 'css'] },
-        })
-        .from(contentRef.current)
-        .save()
-    } catch (err) {
-      console.error('PDF export failed:', err)
-    } finally {
-      setExporting(false)
-    }
+  const handleExportMD = () => {
+    const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const slug = topic.slice(0, 40).replace(/[^a-z0-9]/gi, '-').toLowerCase()
+    const lines: string[] = [
+      `# ${topic}`,
+      `*Generated: ${date}*`,
+      '',
+    ]
+    qaBlocks.forEach((block, i) => {
+      lines.push(`## Q${i + 1}: ${block.question}`, '', block.answer, '')
+    })
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `explanation-${slug}-${new Date().toISOString().slice(0, 10)}.md`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const handleExportPDF = () => {
+    window.print()
   }
 
   const currentStreamText = messages.at(-1)?.role === 'assistant'
@@ -163,14 +161,22 @@ export default function ExplainPage() {
               <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Explain</h1>
             </div>
             {showExport && (
-              <button
-                onClick={handleExportPDF}
-                disabled={exporting}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>picture_as_pdf</span>
-                {exporting ? 'Exporting…' : 'Export Q&A PDF'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportMD}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>download</span>
+                  MD
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>picture_as_pdf</span>
+                  PDF
+                </button>
+              </div>
             )}
           </div>
 
