@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func, or_
 from typing import Optional, List
 from pydantic import BaseModel, Field
 import os
@@ -505,12 +505,15 @@ def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session 
     bad_seeds = db.query(Seed).filter(
         Seed.user_id == current_user.id,
         Seed.content != None,
-        (
-            Seed.title.ilike('Untitled%') |
-            (Seed.title == '') |
-            (Seed.title == None)
+        or_(
+            Seed.title.ilike('Untitled%'),
+            Seed.title == '',
+            Seed.title == None,
+            func.lower(Seed.title).in_(['insight', 'note', 'idea', 'thought', 'observation', 'summary']),
+            # Title looks like truncated raw content (hard fallback artefact)
+            Seed.title == func.left(Seed.content, 60),
         )
-    ).limit(5).all()
+    ).limit(10).all()
 
     fixed = 0
     errors = []
