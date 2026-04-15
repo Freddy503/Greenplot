@@ -23,14 +23,47 @@ interface Seed {
   text: string
 }
 
-function getDomainColor(domain: string): string {
+// A palette of distinct, accessible colours for dynamically assigned domains
+const DOMAIN_PALETTE = [
+  '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#e11d48',
+  '#0284c7', '#65a30d', '#c026d3', '#f59e0b', '#14b8a6',
+]
+
+function buildDomainColorMap(): Record<string, string> {
+  try {
+    const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
+    const interests: string[] = profile.interests || []
+    const map: Record<string, string> = {}
+    interests.forEach((interest, i) => {
+      map[interest.toLowerCase()] = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length]
+    })
+    return map
+  } catch {
+    return {}
+  }
+}
+
+function getDomainColor(domain: string, colorMap?: Record<string, string>): string {
   const d = domain?.toLowerCase() || ''
-  if (d.includes('agentic') || d.includes('ai')) return '#16a34a'
+  if (!d) return '#5c5d5c'
+
+  // Try dynamic match from user interests
+  if (colorMap) {
+    for (const [key, color] of Object.entries(colorMap)) {
+      if (d.includes(key) || key.includes(d.split(' ')[0])) return color
+    }
+  }
+
+  // Static fallbacks for common domain keywords
+  if (d.includes('agentic') || d.includes('ai') || d.includes('machine')) return '#16a34a'
   if (d.includes('enterprise') || d.includes('business')) return '#d97706'
-  if (d.includes('career') || d.includes('fde')) return '#7c3aed'
-  if (d.includes('creativ')) return '#0891b2'
-  if (d.includes('system') || d.includes('architecture')) return '#58e7ab'
-  if (d.includes('knowledge')) return '#0891b2'
+  if (d.includes('career') || d.includes('fde') || d.includes('work')) return '#7c3aed'
+  if (d.includes('creativ') || d.includes('design')) return '#0891b2'
+  if (d.includes('system') || d.includes('architect')) return '#58e7ab'
+  if (d.includes('knowledge') || d.includes('pkm') || d.includes('learn')) return '#14b8a6'
+  if (d.includes('sustain') || d.includes('eco') || d.includes('green')) return '#65a30d'
+  if (d.includes('health') || d.includes('medic')) return '#e11d48'
+  if (d.includes('law') || d.includes('legal')) return '#c026d3'
   return '#5c5d5c'
 }
 
@@ -56,12 +89,14 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
   const [graphMethod, setGraphMethod] = useState<string>('loading')
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphLink[] } | null>(null)
+  const [colorMap, setColorMap] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!open) return
     const update = () => setDimensions({ width: window.innerWidth, height: window.innerHeight })
     update()
     window.addEventListener('resize', update)
+    setColorMap(buildDomainColorMap())
     return () => window.removeEventListener('resize', update)
   }, [open])
 
@@ -102,6 +137,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
     if (!svgRef.current || !graphData || graphData.nodes.length === 0) return
     const { width, height } = dimensions
     const { nodes, links } = graphData
+    const domColor = (domain: string) => getDomainColor(domain, colorMap)
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()
 
@@ -157,9 +193,9 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
         link.attr('stroke-opacity', l => 0.1 + l.strength * 0.4).attr('stroke', '#e0dfdd')
       })
 
-    node.append('circle').attr('r', d => getNodeRadius(d) + 12).attr('fill', d => getDomainColor(d.domain)).attr('opacity', 0.06)
-    node.append('circle').attr('r', d => getNodeRadius(d)).attr('fill', d => getDomainColor(d.domain)).attr('fill-opacity', 0.6)
-      .attr('stroke', d => getDomainColor(d.domain)).attr('stroke-width', 1).attr('stroke-opacity', 0.3)
+    node.append('circle').attr('r', d => getNodeRadius(d) + 12).attr('fill', d => domColor(d.domain)).attr('opacity', 0.06)
+    node.append('circle').attr('r', d => getNodeRadius(d)).attr('fill', d => domColor(d.domain)).attr('fill-opacity', 0.6)
+      .attr('stroke', d => domColor(d.domain)).attr('stroke-width', 1).attr('stroke-opacity', 0.3)
     node.filter(d => d.connections > 1 || nodes.length < 30).append('text').text(d => truncateTitle(d.title, 25))
       .attr('x', d => getNodeRadius(d) + 8).attr('y', 4).attr('font-size', '11px').attr('font-weight', '600')
       .attr('fill', '#5c5d5c').attr('font-family', 'Plus Jakarta Sans, sans-serif')
@@ -172,7 +208,7 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
 
     setTimeout(() => svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity.translate(0, 0).scale(0.85)), 2000)
     return () => { simulation.stop() }
-  }, [graphData, dimensions, seeds, onNodeClick])
+  }, [graphData, dimensions, seeds, onNodeClick, colorMap])
 
   if (!open) return null
 
@@ -213,14 +249,23 @@ export function FullScreenGraph({ seeds, open, onClose, onNodeClick }: FullScree
           )
         })()}
 
-        <div className="absolute bottom-6 right-6 bg-surface-container-high/80 backdrop-blur-xl rounded-2xl p-3 border border-outline-variant/10">
+        <div className="absolute bottom-6 right-6 bg-surface-container-high/80 backdrop-blur-xl rounded-2xl p-3 border border-outline-variant/10 max-h-48 overflow-y-auto">
           <p className="text-[9px] font-bold uppercase tracking-wider text-on-surface-variant/60 mb-2">Domains</p>
-          {[{ l: 'Agentic AI', c: '#16a34a' }, { l: 'Enterprise', c: '#d97706' }, { l: 'Career', c: '#7c3aed' }, { l: 'Creativity', c: '#0891b2' }, { l: 'Knowledge', c: '#0891b2' }].map(({ l, c }) => (
-            <div key={l} className="flex items-center gap-2 mb-1">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
-              <span className="text-[10px] text-on-surface-variant">{l}</span>
-            </div>
-          ))}
+          {Object.keys(colorMap).length > 0 ? (
+            Object.entries(colorMap).map(([interest, color]) => (
+              <div key={interest} className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-[10px] text-on-surface-variant capitalize">{interest}</span>
+              </div>
+            ))
+          ) : (
+            [{ l: 'Agentic AI', c: '#16a34a' }, { l: 'Enterprise', c: '#d97706' }, { l: 'Career', c: '#7c3aed' }, { l: 'Creativity', c: '#0891b2' }, { l: 'Knowledge', c: '#14b8a6' }].map(({ l, c }) => (
+              <div key={l} className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                <span className="text-[10px] text-on-surface-variant">{l}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
