@@ -64,8 +64,12 @@ export default function ExplainPage() {
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
+      headers: () => {
+        const t = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
+        return t ? { Authorization: `Bearer ${t}` } : {}
+      },
       body: () => ({
-        _auth_token: authToken,
+        _auth_token: typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '',
         _system_override: EXPLAIN_SYSTEM_PROMPT,
       }),
     }),

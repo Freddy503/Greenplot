@@ -231,8 +231,12 @@ export default function ChatPage() {
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
+      headers: () => {
+        const t = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
+        return t ? { Authorization: `Bearer ${t}` } : {}
+      },
       body: () => ({
-        _auth_token: authToken,
+        _auth_token: typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '',
         // Include backend session_id so conversations persist across page loads
         session_id: sessionIdRef.current || '',
       }),

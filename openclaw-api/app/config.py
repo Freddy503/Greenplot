@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: Optional[str] = None
     # Model for chat/agent responses — needs strong tool-use and reasoning
-    CHAT_MODEL: str = "google/gemini-2.5-flash-preview"
+    CHAT_MODEL: str = "google/gemini-3-flash-preview"
     # Model for enrichment (structured JSON output, seed generation)
     ENRICH_MODEL: str = "minimax/minimax-m2.7"
     # Model for embeddings (use OpenRouter's embedding endpoint)
