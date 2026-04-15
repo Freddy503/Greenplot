@@ -176,6 +176,9 @@ export default function GardenPage() {
   const [graphOpen, setGraphOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => {
     setNickname(localStorage.getItem('greenplot_nickname') || '')
@@ -201,6 +204,40 @@ export default function GardenPage() {
       .catch(() => setError('Could not load seeds'))
       .finally(() => setLoading(false))
   }, [])
+
+  const handleSeedDeleted = (id: string) => {
+    setSeeds(prev => prev.filter(s => s.id !== id))
+  }
+
+  const handleBulkDelete = async () => {
+    if (!selected.size || bulkDeleting) return
+    setBulkDeleting(true)
+    const token = localStorage.getItem('greenplot_token')
+    try {
+      const res = await fetch('/api/seeds/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ seed_ids: [...selected] }),
+      })
+      if (res.ok) {
+        setSeeds(prev => prev.filter(s => !selected.has(s.id)))
+        setSelected(new Set())
+        setSelectMode(false)
+      }
+    } catch {}
+    setBulkDeleting(false)
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const focusSeed = seeds[0]
 
@@ -295,11 +332,36 @@ export default function GardenPage() {
             </EmptyContent>
           </Empty>
         ) : (
+          {/* Bulk action bar */}
+          {selectMode && (
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="text-xs text-on-surface-variant flex-1">{selected.size} selected</span>
+              <button
+                onClick={() => { setSelectMode(false); setSelected(new Set()) }}
+                className="text-xs text-on-surface-variant/60 hover:text-on-surface px-2 py-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={!selected.size || bulkDeleting}
+                className="text-xs font-bold text-error border border-error/30 rounded-full px-3 py-1 hover:bg-error/10 disabled:opacity-40"
+              >
+                {bulkDeleting ? 'Deleting…' : `Delete ${selected.size}`}
+              </button>
+            </div>
+          )}
           <Card className="bg-surface-container-low border-outline-variant/10 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-outline-variant/10">
-                  <TableHead className="w-12 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">Type</TableHead>
+                  <TableHead className="w-12 text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">
+                    <button onClick={() => { setSelectMode(m => !m); setSelected(new Set()) }} title="Toggle select mode">
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px', fontVariationSettings: selectMode ? '"FILL" 1' : '"FILL" 0' }}>
+                        {selectMode ? 'check_box' : 'check_box_outline_blank'}
+                      </span>
+                    </button>
+                  </TableHead>
                   <TableHead className="text-[10px] uppercase tracking-[0.1em] text-on-surface-variant font-bold">
                     <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')} className="flex items-center gap-1 hover:text-primary transition-colors">
                       Seed · Date Added
@@ -315,7 +377,24 @@ export default function GardenPage() {
                   const tb = new Date(b.created).getTime()
                   return sortDir === 'desc' ? tb - ta : ta - tb
                 }).map((seed) => (
-                  <SeedRow key={seed.id} seed={seed} allSeeds={seeds} onClick={() => { setSelectedSeed(seed); setDetailOpen(true) }} />
+                  selectMode ? (
+                    <TableRow
+                      key={seed.id}
+                      className={`border-b border-outline-variant/5 cursor-pointer transition-colors ${selected.has(seed.id) ? 'bg-error/5' : 'hover:bg-surface-container'}`}
+                      onClick={() => toggleSelect(seed.id)}
+                    >
+                      <TableCell className="w-12">
+                        <span className="material-symbols-outlined text-xl" style={{ color: selected.has(seed.id) ? 'var(--error)' : 'var(--on-surface-variant)', fontVariationSettings: selected.has(seed.id) ? '"FILL" 1' : '"FILL" 0' }}>
+                          {selected.has(seed.id) ? 'check_box' : 'check_box_outline_blank'}
+                        </span>
+                      </TableCell>
+                      <TableCell colSpan={2}>
+                        <p className="text-sm font-bold text-on-surface">{seed.title}</p>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <SeedRow key={seed.id} seed={seed} allSeeds={seeds} onClick={() => { setSelectedSeed(seed); setDetailOpen(true) }} />
+                  )
                 ))}
               </TableBody>
             </Table>
@@ -423,6 +502,7 @@ export default function GardenPage() {
         seed={selectedSeed}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        onDeleted={handleSeedDeleted}
       />
 
       <FullScreenGraph

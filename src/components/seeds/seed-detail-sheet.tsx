@@ -41,6 +41,7 @@ interface SeedDetailSheetProps {
   seed: SeedDetail | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onDeleted?: (id: string) => void
 }
 
 function getEnergyColor(energy: string) {
@@ -95,11 +96,14 @@ function shareSeed(seed: SeedDetail) {
   }
 }
 
-export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetProps) {
+export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDetailSheetProps) {
   const [loadingSearch, setLoadingSearch] = useState(false)
   const [searchResults, setSearchResults] = useState<string[]>([])
   const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>([])
   const [loadingLinks, setLoadingLinks] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Derive these before hooks so they're available in useEffect
   const tags = seed?.tags ? seed.tags.split(',').map(t => t.trim()).filter(Boolean) : []
@@ -134,6 +138,55 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
   if (!seed) return null
 
   const entities = seed.entities ? seed.entities.split(',').map(e => e.trim()).filter(Boolean) : []
+
+  const handleDelete = async () => {
+    if (!seed) return
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    setDeleting(true)
+    const token = localStorage.getItem('greenplot_token')
+    try {
+      const res = await fetch(`/api/seeds/${seed.id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.ok) {
+        toast.success('Seed deleted')
+        onOpenChange(false)
+        onDeleted?.(seed.id)
+      } else {
+        toast.error('Failed to delete seed')
+      }
+    } catch {
+      toast.error('Could not reach server')
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
+
+  const handleArchive = async () => {
+    if (!seed) return
+    setArchiving(true)
+    const token = localStorage.getItem('greenplot_token')
+    try {
+      const res = await fetch(`/api/seeds/${seed.id}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(data.archived ? 'Seed archived — hidden from Garden' : 'Seed restored to Garden')
+        onOpenChange(false)
+        onDeleted?.(seed.id)
+      } else {
+        toast.error('Failed to archive seed')
+      }
+    } catch {
+      toast.error('Could not reach server')
+    } finally {
+      setArchiving(false)
+    }
+  }
 
   const handleWebSearch = async () => {
     setLoadingSearch(true)
@@ -327,6 +380,30 @@ export function SeedDetailSheet({ seed, open, onOpenChange }: SeedDetailSheetPro
             Created {new Date(seed.created_at || seed.created).toLocaleDateString()}
           </div>
         )}
+
+        {/* Destructive actions */}
+        <div className="flex gap-2 pt-2 pb-6 border-t border-outline-variant/10 mt-2">
+          <button
+            onClick={handleArchive}
+            disabled={archiving}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border border-outline-variant/20 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>archive</span>
+            {archiving ? 'Archiving…' : 'Archive'}
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-xs font-semibold transition-colors disabled:opacity-40 ${
+              confirmDelete
+                ? 'bg-error text-on-error'
+                : 'border border-error/30 text-error hover:bg-error/10'
+            }`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
+            {deleting ? 'Deleting…' : confirmDelete ? 'Confirm delete?' : 'Delete'}
+          </button>
+        </div>
       </SheetContent>
     </Sheet>
   )

@@ -675,6 +675,26 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
  const [generatingImage, setGeneratingImage] = useState(false)
  const [imageUrl, setImageUrl] = useState<string | null>(article.imageUrl || null)
 
+ // Deletion
+ const [confirmDelete, setConfirmDelete] = useState(false)
+ const [deleting, setDeleting] = useState(false)
+
+ const handleDeleteArticle = async () => {
+  if (!confirmDelete) { setConfirmDelete(true); return }
+  setDeleting(true)
+  try {
+   const res = await fetch(`/api/wiki/${article.id}`, {
+    method: 'DELETE',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+   })
+   if (res.ok) {
+    onBack()
+   }
+  } catch {}
+  setDeleting(false)
+  setConfirmDelete(false)
+ }
+
  useEffect(() => {
  const linkIds = article.sourceLinkIds || []
  const seedIds = article.sourceSeedIds || []
@@ -789,6 +809,14 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   title="Export as PDF"
   >
   <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
+  </button>
+  <button
+  onClick={handleDeleteArticle}
+  disabled={deleting}
+  className={`flex items-center gap-1 text-sm transition-colors p-2 rounded-full ${confirmDelete ? 'text-error bg-error/10' : 'text-on-surface-variant/60 hover:text-error hover:bg-error/10'}`}
+  title={confirmDelete ? 'Tap again to confirm delete' : 'Delete article'}
+  >
+  <span className="material-symbols-outlined text-lg">{deleting ? 'progress_activity' : 'delete'}</span>
   </button>
  </div>
  </div>

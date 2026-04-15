@@ -540,6 +540,14 @@ class WeaviateClient:
         except Exception:
             return False
 
+    def delete_seed(self, seed_id: str) -> bool:
+        """Delete a single seed from Weaviate by its UUID (embedding_ref or seed id)."""
+        try:
+            self.client.data_object.delete(uuid=seed_id, class_name="Seed")
+            return True
+        except Exception:
+            return False
+
     def delete_wiki_article(self, article_id: str) -> bool:
         try:
             self.client.data_object.delete(uuid=article_id, class_name="WikiArticle")
