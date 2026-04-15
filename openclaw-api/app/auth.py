@@ -50,20 +50,16 @@ def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session 
 def get_tenant_id(current_user: User = Depends(get_current_user)) -> str:
     return str(current_user.tenant_id)
 
-DEMO_USER_ID = "00000000-0000-0000-0000-000000000001"
-DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000002"
-
 def get_optional_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """Return user if valid token provided, else return a demo user dict."""
+    """Return authenticated user if valid token provided, else raise 401.
+    Named 'optional' for legacy reasons — auth is now always required."""
     if not token:
-        return type("DemoUser", (), {"id": DEMO_USER_ID, "tenant_id": DEMO_TENANT_ID})()
-    try:
-        payload = decode_token(token)
-        user_id = payload.get("sub")
-        if user_id:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user:
-                return user
-    except HTTPException:
-        pass
-    return type("DemoUser", (), {"id": DEMO_USER_ID, "tenant_id": DEMO_TENANT_ID})()
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = decode_token(token)
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
