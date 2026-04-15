@@ -350,10 +350,12 @@ class TestRunner:
     def test_health(self):
         self.section("0. Health")
         try:
-            r = self.client.get(f"{self.base}/api/v1/health")
+            r = self.client.get(f"{self.base}/api/v1/admin/health")
             if r.status_code == 200:
                 data = r.json()
-                self.ok("Health check", f"status={data.get('status','?')}  db={data.get('database','?')}")
+                checks = data.get("checks", {})
+                summary = "  ".join(f"{k}={v}" for k, v in checks.items())
+                self.ok("Health check", summary)
             else:
                 self.fail("Health check", f"HTTP {r.status_code}: {r.text[:200]}")
         except Exception as e:
