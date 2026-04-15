@@ -485,6 +485,56 @@ def archive_seed(seed_id: str, current_user: User = Depends(get_current_user), d
     return {"ok": True, "archived": seed.archived}
 
 
+@app.post("/api/v1/seeds/fix-titles")
+def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Re-generate titles for seeds that have bad/missing titles:
+    - Title is 'Untitled Seed', 'Untitled', blank, or null
+    - Title is the same as the first 60 chars of content (raw fallback)
+    Processes up to 30 seeds per call.
+    """
+    from app.enricher import generate_seed as _generate_seed
+
+    bad_seeds = db.query(Seed).filter(
+        Seed.user_id == current_user.id,
+        Seed.content != None,
+        (
+            Seed.title.ilike('Untitled%') |
+            Seed.title.ilike('Welcome!%') |
+            (Seed.title == '') |
+            (Seed.title == None)
+        )
+    ).limit(30).all()
+
+    fixed = 0
+    for seed in bad_seeds:
+        try:
+            content = seed.content or ""
+            if len(content.strip()) < 20:
+                continue
+            seed_data = _generate_seed(content[:2000])
+            new_title = seed_data.get("title", "").strip()
+            if new_title and new_title.lower() not in ("untitled seed", "untitled", ""):
+                seed.title = new_title[:200]
+                # Also update domain/tags if they were blank
+                meta = seed.seed_metadata or {}
+                if not meta.get("domain") and seed_data.get("domain"):
+                    meta["domain"] = seed_data["domain"]
+                if not meta.get("tags") and seed_data.get("tags"):
+                    meta["tags"] = seed_data["tags"]
+                seed.seed_metadata = meta
+                fixed += 1
+        except Exception as e:
+            logger.warning(f"[fix_titles] Failed on seed {seed.id}: {e}")
+
+    db.commit()
+    remaining = db.query(Seed).filter(
+        Seed.user_id == current_user.id,
+        Seed.title.ilike('Untitled%')
+    ).count()
+    return {"fixed": fixed, "remaining": remaining}
+
+
 class SeedLinksRequest(BaseModel):
     seed_ids: List[str]
 
