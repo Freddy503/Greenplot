@@ -2194,7 +2194,7 @@ def extract_insights(
 
     try:
         response = openai_client.chat.completions.create(
-            model="qwen/qwen3-235b-a22b",
+            model="minimax/minimax-m2.7",
             messages=[
                 {
                     "role": "system",

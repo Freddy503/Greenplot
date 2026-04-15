@@ -9,7 +9,7 @@ Generates rich, multi-section briefings for:
 - Biweekly Challenge (Cross-domain synthesis)
 
 Uses:
-- OpenRouter (via OpenAI SDK) for LLM: Nemotron Super (qwen/qwen3-235b-a22b)
+- OpenRouter (via OpenAI SDK) for LLM: Nemotron Super (minimax/minimax-m2.7)
 - Exa API for web search
 - Open-Meteo for weather (free)
 """
@@ -54,7 +54,7 @@ def get_llm_client():
 def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str = None) -> str:
     """
     Call OpenRouter LLM with a prompt.
-    Default model: Nemotron Super (qwen/qwen3-235b-a22b)
+    Default model: Nemotron Super (minimax/minimax-m2.7)
     Returns empty string on failure.
     """
     try:
@@ -65,7 +65,7 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
 
         # Use provided model or default to Nemotron Super
         if not model:
-            model = "qwen/qwen3-235b-a22b"
+            model = "minimax/minimax-m2.7"
 
         messages = []
         if system:
@@ -87,9 +87,9 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
     except Exception as e:
         logger.error(f"LLM call failed (model={model}): {e}")
         # Try fallback model
-        if model != "qwen/qwen3-235b-a22b":
+        if model != "minimax/minimax-m2.7":
             logger.info("Retrying with Nemotron fallback...")
-            return _call_llm(prompt, system, max_tokens, model="qwen/qwen3-235b-a22b")
+            return _call_llm(prompt, system, max_tokens, model="minimax/minimax-m2.7")
         return ""
 
 
@@ -368,7 +368,7 @@ Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Rel
     deep_pattern = _call_llm(
         llm_prompt,
         max_tokens=500,
-        model="qwen/qwen3-235b-a22b"  # Nemotron is more reliable
+        model="minimax/minimax-m2.7"  # Nemotron is more reliable
     )
     if not deep_pattern:
         deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
@@ -427,7 +427,7 @@ Keep concise. Format as bullet points.
     news_synthesis = _call_llm(
         news_prompt,
         max_tokens=600,
-        model="qwen/qwen3-235b-a22b"  # Longer context for news synthesis
+        model="minimax/minimax-m2.7"  # Longer context for news synthesis
     )
     if not news_synthesis:
         news_synthesis = "• Check recent news on " + theme_str + " for latest enterprise AI developments."
@@ -442,7 +442,7 @@ Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} prac
     academic_synthesis = _call_llm(
         academic_prompt,
         max_tokens=300,
-        model="qwen/qwen3-235b-a22b"
+        model="minimax/minimax-m2.7"
     )
     if not academic_synthesis:
         academic_synthesis = "Explore recent academic work in your domain."
@@ -491,7 +491,7 @@ Then propose ONE concrete 15-minute action for tomorrow that tests this contrari
     contrarian = _call_llm(
         contrarian_prompt,
         max_tokens=300,
-        model="qwen/qwen3-235b-a22b"
+        model="minimax/minimax-m2.7"
     )
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
@@ -539,7 +539,7 @@ Be analytical. Format: [Theme] / [Gap] / [Next Week's Constraint]
     evaluation = _call_llm(
         eval_prompt,
         max_tokens=400,
-        model="qwen/qwen3-235b-a22b"  # Longer context for analysis
+        model="minimax/minimax-m2.7"  # Longer context for analysis
     )
     if not evaluation:
         evaluation = f"Review your {theme_str} work this week. What emerged as most valuable?"
@@ -599,7 +599,7 @@ Be specific, not abstract. 15-min experiment.
     challenge = _call_llm(
         challenge_prompt,
         max_tokens=500,
-        model="nvidia/llama-3.1-nemotron-ultra-253b-v1"
+        model="minimax/minimax-m2.7"
     )
     if not challenge:
         challenge = f"Apply concepts from {themes[0]} to solve a challenge in {themes[1]}."
@@ -845,7 +845,7 @@ Produce a JSON object with this exact structure:
 Include all {len(paper_texts)} papers in the "papers" array. Synthesize each independently."""
 
     raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
-                    model="qwen/qwen3-235b-a22b")
+                    model="minimax/minimax-m2.7")
 
     # Parse JSON, strip fences if needed
     cleaned = _re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=_re.IGNORECASE)
@@ -986,7 +986,7 @@ Write a markdown document with these sections:
 ## Success Criteria
 """
 
-    md_content = _call_llm(prompt, system=system, max_tokens=2000, model="qwen/qwen3-235b-a22b")
+    md_content = _call_llm(prompt, system=system, max_tokens=2000, model="minimax/minimax-m2.7")
     if not md_content:
         return None
 
@@ -1056,7 +1056,7 @@ Produce a well-structured markdown document with these sections:
 ## Next Immediate Steps (copy-paste ready for an agentic coding tool)
 """
 
-    md_content = _call_llm(prompt, system=system, max_tokens=3000, model="qwen/qwen3-235b-a22b")
+    md_content = _call_llm(prompt, system=system, max_tokens=3000, model="minimax/minimax-m2.7")
     if not md_content:
         logger.error(f"[agent] LLM returned no content for topic: {topic[:80]}")
         return None

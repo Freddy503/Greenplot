@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: Optional[str] = None
     # Model for enrichment (LLM)
-    ENRICH_MODEL: str = "qwen/qwen3-235b-a22b"
+    ENRICH_MODEL: str = "minimax/minimax-m2.7"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
     BFL_API_KEY: Optional[str] = None

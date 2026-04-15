@@ -184,7 +184,7 @@ def _call_llm_for_seed(thought_text: str, web_context: Optional[str], strict: bo
 
     try:
         response = openai_client.chat.completions.create(
-            model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
+            model="minimax/minimax-m2.7",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "\n\n".join(user_parts)}
