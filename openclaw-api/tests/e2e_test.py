@@ -61,7 +61,7 @@ class TestRunner:
         self.section("1. Authentication")
         try:
             r = self.client.post(
-                f"{self.base}/api/v1/auth/login",
+                f"{self.base}/api/v1/login",
                 json={"email": self.email, "password": self.password},
             )
             if r.status_code != 200:
@@ -80,7 +80,7 @@ class TestRunner:
 
     def test_me(self):
         try:
-            r = self.client.get(f"{self.base}/api/v1/auth/me", headers=self._headers())
+            r = self.client.get(f"{self.base}/api/v1/account", headers=self._headers())
             if r.status_code == 200:
                 u = r.json()
                 self.ok("GET /auth/me", f"user_id={u.get('id','?')[:8]}…  email={u.get('email','?')}")
