@@ -44,7 +44,13 @@ export async function POST(req: Request) {
   }
   const rawMessages = body.messages || []
 
-  const messages = toBackendMessages(rawMessages)
+  let messages = toBackendMessages(rawMessages)
+
+  // Optional system prompt override (used by Explanation Agent and other modes)
+  const systemOverride: string = body._system_override || ''
+  if (systemOverride) {
+    messages = [{ role: 'system', content: systemOverride }, ...messages]
+  }
 
   // Auth token forwarded from frontend via body
   const token: string = body._auth_token || ''
