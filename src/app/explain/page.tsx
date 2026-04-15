@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import ReactMarkdown from 'react-markdown'
@@ -40,55 +41,77 @@ interface QABlock {
   answer: string
 }
 
+function getMessageText(msg: { content: unknown; parts?: unknown }): string {
+  if (typeof msg.content === 'string') return msg.content
+  const parts = (msg as any).parts
+  if (Array.isArray(parts)) return parts.map((p: any) => p.text || '').join('')
+  return ''
+}
+
 export default function ExplainPage() {
   const [topic, setTopic] = useState('')
   const [topicLocked, setTopicLocked] = useState(false)
   const [qaBlocks, setQaBlocks] = useState<QABlock[]>([])
   const [followUps, setFollowUps] = useState<string[]>([])
+  const [inputValue, setInputValue] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [lastProcessedCount, setLastProcessedCount] = useState(0)
   const contentRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const authToken = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
-    api: '/api/chat',
-    body: {
-      _auth_token: authToken,
-      _system_override: EXPLAIN_SYSTEM_PROMPT,
-    },
-    onFinish: (msg) => {
-      const text = typeof msg.content === 'string'
-        ? msg.content
-        : (msg as any).parts?.map((p: any) => p.text || '').join('') || ''
-      const lastUser = messages.filter(m => m.role === 'user').at(-1)
-      const question = lastUser
-        ? (typeof lastUser.content === 'string' ? lastUser.content : (lastUser as any).parts?.map((p: any) => p.text || '').join('') || '')
-        : ''
-      setQaBlocks(prev => [...prev, { question, answer: stripFollowUps(text) }])
-      setFollowUps(parseFollowUps(text))
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-    },
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      body: () => ({
+        _auth_token: authToken,
+        _system_override: EXPLAIN_SYSTEM_PROMPT,
+      }),
+    }),
   })
+
+  const isLoading = status === 'submitted' || status === 'streaming'
+
+  // Capture Q&A blocks when a new assistant message completes
+  useEffect(() => {
+    if (isLoading) return
+    const assistantMessages = messages.filter(m => m.role === 'assistant')
+    if (assistantMessages.length <= lastProcessedCount) return
+
+    const lastAssistant = assistantMessages.at(-1)!
+    const text = getMessageText(lastAssistant as any)
+    const userMessages = messages.filter(m => m.role === 'user')
+    const lastUser = userMessages.at(-1)
+    const question = lastUser ? getMessageText(lastUser as any) : ''
+
+    setQaBlocks(prev => [...prev, { question, answer: stripFollowUps(text) }])
+    setFollowUps(parseFollowUps(text))
+    setLastProcessedCount(assistantMessages.length)
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }, [isLoading, messages, lastProcessedCount])
+
+  const submitMessage = (text: string) => {
+    if (!text.trim() || isLoading) return
+    setFollowUps([])
+    setInputValue('')
+    sendMessage({ parts: [{ type: 'text', text: text.trim() }] })
+  }
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault()
     if (!topic.trim() || isLoading) return
     setTopicLocked(true)
-    setInput(topic.trim())
-    setTimeout(() => {
-      const form = document.getElementById('explain-form') as HTMLFormElement
-      form?.requestSubmit()
-    }, 0)
+    submitMessage(topic.trim())
   }
 
   const handleFollowUp = (q: string) => {
-    setFollowUps([])
-    setInput(q)
-    setTimeout(() => {
-      const form = document.getElementById('explain-form') as HTMLFormElement
-      form?.requestSubmit()
-    }, 0)
+    submitMessage(q)
+  }
+
+  const handleCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    submitMessage(inputValue)
   }
 
   const handleExportPDF = async () => {
@@ -115,9 +138,7 @@ export default function ExplainPage() {
   }
 
   const currentStreamText = messages.at(-1)?.role === 'assistant'
-    ? (typeof messages.at(-1)!.content === 'string'
-        ? messages.at(-1)!.content
-        : (messages.at(-1) as any).parts?.map((p: any) => p.text || '').join('') || '')
+    ? getMessageText(messages.at(-1) as any)
     : ''
 
   const showExport = qaBlocks.length >= 2
@@ -178,7 +199,7 @@ export default function ExplainPage() {
               <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>school</span>
               <p className="text-sm font-semibold text-on-surface flex-1 truncate">{topic}</p>
               <button
-                onClick={() => { setTopicLocked(false); setQaBlocks([]); setFollowUps([]) }}
+                onClick={() => { setTopicLocked(false); setQaBlocks([]); setFollowUps([]); setLastProcessedCount(0) }}
                 className="text-[10px] text-on-surface-variant/60 hover:text-on-surface-variant transition-colors"
               >
                 New topic
@@ -222,11 +243,7 @@ export default function ExplainPage() {
                       <span className="text-[10px] font-black text-primary">Q</span>
                     </div>
                     <p className="text-sm font-bold text-on-surface leading-snug pt-0.5">
-                      {messages.filter(m => m.role === 'user').at(-1)
-                        ? (typeof messages.filter(m => m.role === 'user').at(-1)!.content === 'string'
-                            ? messages.filter(m => m.role === 'user').at(-1)!.content as string
-                            : '')
-                        : ''}
+                      {getMessageText((messages.filter(m => m.role === 'user').at(-1) ?? { content: '' }) as any)}
                     </p>
                   </div>
                   <div className="ml-9 rounded-2xl bg-surface-container border border-outline-variant/10 p-4">
@@ -266,29 +283,22 @@ export default function ExplainPage() {
 
           {/* Custom follow-up input */}
           {topicLocked && !isLoading && qaBlocks.length > 0 && (
-            <form id="explain-form" onSubmit={handleSubmit} className="mt-4">
+            <form onSubmit={handleCustomSubmit} className="mt-4">
               <div className="flex gap-2">
                 <input
-                  value={input}
-                  onChange={handleInputChange}
+                  value={inputValue}
+                  onChange={e => setInputValue(e.target.value)}
                   placeholder="Or ask your own follow-up…"
                   className="flex-1 rounded-xl bg-surface-container-high border border-outline-variant/20 px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/40"
                 />
                 <button
                   type="submit"
-                  disabled={!input.trim() || isLoading}
+                  disabled={!inputValue.trim() || isLoading}
                   className="rounded-xl bg-primary text-on-primary px-4 py-2.5 text-sm font-bold disabled:opacity-40 active:scale-95 transition-transform"
                 >
                   Ask
                 </button>
               </div>
-            </form>
-          )}
-
-          {/* Hidden submit form for programmatic submits */}
-          {topicLocked && (qaBlocks.length === 0 || isLoading) && (
-            <form id="explain-form" onSubmit={handleSubmit} className="hidden">
-              <input value={input} onChange={handleInputChange} />
             </form>
           )}
 
