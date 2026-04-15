@@ -599,7 +599,7 @@ Be specific, not abstract. 15-min experiment.
     challenge = _call_llm(
         challenge_prompt,
         max_tokens=500,
-        model="qwen/qwen3-235b-a22b"  # Creative synthesis task
+        model="nvidia/llama-3.1-nemotron-ultra-253b-v1"
     )
     if not challenge:
         challenge = f"Apply concepts from {themes[0]} to solve a challenge in {themes[1]}."
@@ -613,7 +613,7 @@ Be specific, not abstract. 15-min experiment.
                 "title": "Challenge Setup",
                 "icon": "emoji_events",
                 "color": "text-red-400",
-                "content": f"Apply [{themes[0]}] to solve [{themes[1]} bottleneck]"
+                "content": f"Apply **{themes[0]}** to solve a **{themes[1]}** bottleneck"
             },
             {
                 "title": "The Idea",

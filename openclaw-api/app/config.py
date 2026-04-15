@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # Email (Resend)
     RESEND_API_KEY: Optional[str] = None
-    EMAIL_FROM: str = "Seedify <digest@seedify.app>"
+    EMAIL_FROM: str = "Greenplot <digest@greenplot.ink>"
 
     # Wiki data path (inside container)
     WIKI_DATA_PATH: str = "/data/wiki"

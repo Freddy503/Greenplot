@@ -80,6 +80,7 @@ export default function SettingsPage() {
  const [sendingFeatureRequest, setSendingFeatureRequest] = useState(false)
  const [showDevTools, setShowDevTools] = useState(false)
  const [devPassword, setDevPassword] = useState('')
+ const [devEmail, setDevEmail] = useState('')
  const [devUnlocking, setDevUnlocking] = useState(false)
  const [devError, setDevError] = useState('')
 
@@ -281,18 +282,20 @@ export default function SettingsPage() {
  }
 
  const handleUnlockDevTools = async () => {
-   if (!devPassword || devUnlocking) return
+   const emailToUse = userEmail || devEmail
+   if (!devPassword || !emailToUse || devUnlocking) return
    setDevUnlocking(true)
    setDevError('')
    try {
      const res = await fetch('/api/login', {
        method: 'POST',
        headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ email: userEmail, password: devPassword }),
+       body: JSON.stringify({ email: emailToUse, password: devPassword }),
      })
      if (res.ok) {
        setShowDevTools(true)
        setDevPassword('')
+       setDevEmail('')
      } else {
        setDevError('Incorrect password')
      }
@@ -591,22 +594,33 @@ export default function SettingsPage() {
                    <p className="text-[11px] text-on-surface-variant mt-0.5">Re-enter your password to access sensitive developer settings.</p>
                  </div>
                </div>
-               <div className="flex gap-2">
-                 <input
-                   type="password"
-                   value={devPassword}
-                   onChange={e => { setDevPassword(e.target.value); setDevError('') }}
-                   onKeyDown={e => e.key === 'Enter' && handleUnlockDevTools()}
-                   placeholder="Your password"
-                   className="flex-1 rounded-xl bg-surface-container-high border border-outline-variant/20 px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
-                 />
-                 <button
-                   onClick={handleUnlockDevTools}
-                   disabled={devUnlocking || !devPassword}
-                   className="rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-bold disabled:opacity-40 active:scale-95 transition-transform"
-                 >
-                   {devUnlocking ? '…' : 'Unlock'}
-                 </button>
+               <div className="flex flex-col gap-2">
+                 {!userEmail && (
+                   <input
+                     type="email"
+                     value={devEmail}
+                     onChange={e => { setDevEmail(e.target.value); setDevError('') }}
+                     placeholder="Your email"
+                     className="w-full rounded-xl bg-surface-container-high border border-outline-variant/20 px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                   />
+                 )}
+                 <div className="flex gap-2">
+                   <input
+                     type="password"
+                     value={devPassword}
+                     onChange={e => { setDevPassword(e.target.value); setDevError('') }}
+                     onKeyDown={e => e.key === 'Enter' && handleUnlockDevTools()}
+                     placeholder="Your password"
+                     className="flex-1 rounded-xl bg-surface-container-high border border-outline-variant/20 px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                   />
+                   <button
+                     onClick={handleUnlockDevTools}
+                     disabled={devUnlocking || !devPassword || (!userEmail && !devEmail)}
+                     className="rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-bold disabled:opacity-40 active:scale-95 transition-transform"
+                   >
+                     {devUnlocking ? '…' : 'Unlock'}
+                   </button>
+                 </div>
                </div>
                {devError && <p className="text-xs text-error">{devError}</p>}
              </div>

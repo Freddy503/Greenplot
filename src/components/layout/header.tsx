@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
   { href: '/garden', label: 'Garden', icon: 'eco' },
-  { href: '/explain', label: 'Explain', icon: 'school' },
+  { href: '/links', label: 'Sources', icon: 'link' },
   { href: '/wiki', label: 'Wiki', icon: 'auto_stories' },
   { href: '/notifications', label: 'Inbox', icon: 'notifications' },
   { href: '/settings', label: 'Settings', icon: 'settings' },
