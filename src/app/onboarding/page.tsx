@@ -35,6 +35,7 @@ const INTEREST_OPTIONS = [
   { label: 'Consulting', icon: 'handshake' },
   { label: 'Law', icon: 'gavel' },
   { label: 'Medicine', icon: 'health_and_safety' },
+  { label: 'Sustainability', icon: 'eco' },
 ]
 
 const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfile['digestFrequency'] }[] = [

@@ -949,3 +949,73 @@ Write a markdown document with these sections:
 
     logger.info(f"[solution_design] Saved to {filepath}")
     return filepath
+
+
+def run_agent_task(topic: str, user_id: str, db) -> Optional[str]:
+    """
+    Long-running agent: generates a strategy/implementation paper on a user-specified topic.
+    Saves to /data/outputs/solution_designs/ and returns the markdown content.
+    Called as a background task — delivers result via _sto<RESEND_API_KEY>().
+    """
+    import os, re as _re
+    logger.info(f"[agent] Starting research paper for topic: {topic[:80]}")
+
+    themes = fetch_user_themes(user_id, db)
+    garden_ctx = fetch_garden_context(user_id, themes, db)
+    wiki_ctx = fetch_wiki_context(themes)
+
+    garden_block = "\n".join(f"- [{s['title']}]: {s['snippet']}" for s in garden_ctx) or "(none)"
+    wiki_block = "\n".join(f"[{w['source']}]: {w['excerpt']}" for w in wiki_ctx) or "(none)"
+
+    system = (
+        "You are a senior solutions architect and strategy consultant. "
+        "Produce a comprehensive, actionable markdown strategy and implementation paper. "
+        "The document must be concrete enough to be executed directly by Claude Code, Cursor, or similar agentic coding tools. "
+        "Use clear headings, numbered steps, and code snippets where relevant."
+    )
+    prompt = f"""Write a detailed strategy and implementation paper on the following topic:
+
+TOPIC:
+{topic}
+
+USER'S EXISTING KNOWLEDGE BASE:
+{wiki_block}
+
+USER'S RECENT CONTEXT (from Garden):
+{garden_block}
+
+Produce a well-structured markdown document with these sections:
+# [Title]
+## Executive Summary (2-3 sentences)
+## Problem & Opportunity
+## Proposed Strategy
+## Technical Architecture
+## Implementation Plan
+### Phase 1 — Foundation (MVP)
+### Phase 2 — Expansion
+### Phase 3 — Scale
+## Key Technical Decisions & Trade-offs
+## Integration with Existing Stack
+## Risks & Mitigations
+## Success Criteria & Metrics
+## Next Immediate Steps (copy-paste ready for an agentic coding tool)
+"""
+
+    md_content = _call_llm(prompt, system=system, max_tokens=3000, model="qwen/qwen3-235b-a22b")
+    if not md_content:
+        logger.error(f"[agent] LLM returned no content for topic: {topic[:80]}")
+        return None
+
+    # Save to disk
+    output_dir = "/data/outputs/solution_designs"
+    os.makedirs(output_dir, exist_ok=True)
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    slug_src = topic[:40]
+    slug = _re.sub(r"[^a-z0-9]+", "-", slug_src.lower()).strip("-")
+    filepath = os.path.join(output_dir, f"{date_str}-agent-{slug}.md")
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(md_content)
+
+    logger.info(f"[agent] Research paper saved to {filepath}")
+    return md_content

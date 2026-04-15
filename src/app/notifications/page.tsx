@@ -24,6 +24,8 @@ const typeConfig: Record<string, { icon: string; color: string; label: string }>
   weekly_eval: { icon: 'assessment', color: 'text-green-400', label: 'Weekly Eval' },
   challenge: { icon: 'emoji_events', color: 'text-red-400', label: 'Challenge' },
   academic_digest: { icon: 'school', color: 'text-indigo-400', label: 'Research Digest' },
+  academic_digest_evening: { icon: 'school', color: 'text-indigo-400', label: 'Research Digest' },
+  solution_design: { icon: 'description', color: 'text-violet-400', label: 'Strategy Paper' },
 }
 
 function timeAgo(ts: number | string): string {
@@ -44,6 +46,9 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SparkNotification | null>(null)
   const [authToken, setAuthToken] = useState('')
+  const [agentTopic, setAgentTopic] = useState('')
+  const [agentRunning, setAgentRunning] = useState(false)
+  const [agentMsg, setAgentMsg] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('greenplot_token') || ''
@@ -74,6 +79,33 @@ export default function NotificationsPage() {
     router.push(`/chat?prompt=${encodeURIComponent(content.slice(0, 300))}`)
   }
 
+  const handleRunAgent = async () => {
+    if (!agentTopic.trim() || agentRunning) return
+    setAgentRunning(true)
+    setAgentMsg('')
+    try {
+      const res = await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ topic: agentTopic.trim() }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setAgentMsg(data.message || 'Agent started — check back in a few minutes.')
+        setAgentTopic('')
+      } else {
+        setAgentMsg(data.error || 'Failed to start agent.')
+      }
+    } catch {
+      setAgentMsg('Could not reach the server.')
+    } finally {
+      setAgentRunning(false)
+    }
+  }
+
   return (
     <div className="h-dvh flex flex-col bg-background">
       <Header />
@@ -90,6 +122,35 @@ export default function NotificationsPage() {
               notifications
             </span>
             <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Inbox</h1>
+          </div>
+
+          {/* Research Paper Agent */}
+          <div className="mb-6 rounded-2xl bg-surface-container border border-outline-variant/10 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-violet-400 text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>description</span>
+              <p className="text-sm font-bold text-on-surface">Research Paper Agent</p>
+            </div>
+            <p className="text-xs text-on-surface-variant/70 mb-3">Ask the agent to write a strategy &amp; implementation paper on any topic. Delivered to your Inbox when ready.</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={agentTopic}
+                onChange={e => setAgentTopic(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleRunAgent()}
+                placeholder="e.g. Context graph system for NemoCore"
+                className="flex-1 rounded-xl bg-surface-container-high border border-outline-variant/20 px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+              />
+              <button
+                onClick={handleRunAgent}
+                disabled={agentRunning || !agentTopic.trim()}
+                className="rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-bold disabled:opacity-40 active:scale-95 transition-transform"
+              >
+                {agentRunning ? '...' : 'Run'}
+              </button>
+            </div>
+            {agentMsg && (
+              <p className="text-xs text-primary/80 mt-2">{agentMsg}</p>
+            )}
           </div>
 
           {loading && (
@@ -116,7 +177,9 @@ export default function NotificationsPage() {
           <div className="flex flex-col gap-3">
             {notifications.map((n) => {
               const briefingType = n.briefing?.type || 'daily_briefing'
-              const cfg = typeConfig[briefingType] || { icon: 'notifications', color: 'text-primary', label: 'Notification' }
+              const cfg = typeConfig[briefingType]
+                || (briefingType.startsWith('solution_design') ? typeConfig.solution_design : null)
+                || { icon: 'notifications', color: 'text-primary', label: 'Notification' }
               const sectionCount = n.briefing?.sections?.length || 0
 
               return (
@@ -146,7 +209,7 @@ export default function NotificationsPage() {
                       </div>
                       <p className="text-sm font-semibold text-on-surface leading-snug">{n.title}</p>
                       {n.body && (
-                        <p className="text-xs text-on-surface-variant/70 mt-0.5 line-clamp-2">{n.body}</p>
+                        <p className="text-xs text-on-surface-variant/70 mt-0.5 line-clamp-2">{n.body.replace(/\*\*|__|\*|_|#{1,6}\s|`/g, '')}</p>
                       )}
                       {sectionCount > 0 && (
                         <p className="text-[10px] text-primary/60 mt-1.5 font-medium">

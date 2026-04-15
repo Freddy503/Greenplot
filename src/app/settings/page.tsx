@@ -461,7 +461,7 @@ export default function SettingsPage() {
              <span className="text-2xl">☕</span>
              <div className="flex-1">
                <p className="text-sm font-bold text-on-surface">Buy Me a Coffee</p>
-               <p className="text-[11px] text-on-surface-variant mt-0.5">Enjoying Seedify? Support the build.</p>
+               <p className="text-[11px] text-on-surface-variant mt-0.5">Enjoying Greenplot? Support the build.</p>
              </div>
              <span className="material-symbols-outlined text-on-surface-variant/40 group-hover:text-[#FFDD00] transition-colors">open_in_new</span>
            </a>
