@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   }
 
   return Response.json({
-    backend_url: process.env.NODE_ENV === 'production' ? '(redacted)' : backend,
+    backend_url: backend,
     backend_status: backendStatus,
     backend_error: backendError,
     node_env: process.env.NODE_ENV,
