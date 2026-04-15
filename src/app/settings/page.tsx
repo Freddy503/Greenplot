@@ -78,6 +78,10 @@ export default function SettingsPage() {
  const [triggeringWikiCompile, setTriggeringWikiCompile] = useState(false)
  const [featureRequest, setFeatureRequest] = useState('')
  const [sendingFeatureRequest, setSendingFeatureRequest] = useState(false)
+ const [showDevTools, setShowDevTools] = useState(false)
+ const [devPassword, setDevPassword] = useState('')
+ const [devUnlocking, setDevUnlocking] = useState(false)
+ const [devError, setDevError] = useState('')
 
  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
@@ -273,6 +277,29 @@ export default function SettingsPage() {
    } finally {
      setDeleting(false)
      setShowDeleteDialog(false)
+   }
+ }
+
+ const handleUnlockDevTools = async () => {
+   if (!devPassword || devUnlocking) return
+   setDevUnlocking(true)
+   setDevError('')
+   try {
+     const res = await fetch('/api/login', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ email: userEmail, password: devPassword }),
+     })
+     if (res.ok) {
+       setShowDevTools(true)
+       setDevPassword('')
+     } else {
+       setDevError('Incorrect password')
+     }
+   } catch {
+     setDevError('Could not verify — check connection')
+   } finally {
+     setDevUnlocking(false)
    }
  }
 
@@ -552,23 +579,54 @@ export default function SettingsPage() {
            </div>
          </section>
 
-         {/* MCP Server */}
+         {/* Developer Tools — password-gated */}
          <section>
-           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">MCP Server (Claude Code / Cursor)</h2>
-           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-4">
-             <div className="flex items-start gap-3">
-               <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>extension</span>
-               <div>
-                 <p className="text-sm font-bold text-on-surface">Connect your knowledge base to Claude Code</p>
-                 <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">
-                   The MCP server lets Claude Code, Claude Desktop, and Cursor search your seeds and wiki while you code.
-                 </p>
+           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Developer Tools</h2>
+           {!showDevTools ? (
+             <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+               <div className="flex items-center gap-3">
+                 <span className="material-symbols-outlined text-on-surface-variant/60 mt-0.5" style={{ fontSize: '20px' }}>lock</span>
+                 <div>
+                   <p className="text-sm font-bold text-on-surface">MCP Server &amp; Data Tools</p>
+                   <p className="text-[11px] text-on-surface-variant mt-0.5">Re-enter your password to access sensitive developer settings.</p>
+                 </div>
                </div>
+               <div className="flex gap-2">
+                 <input
+                   type="password"
+                   value={devPassword}
+                   onChange={e => { setDevPassword(e.target.value); setDevError('') }}
+                   onKeyDown={e => e.key === 'Enter' && handleUnlockDevTools()}
+                   placeholder="Your password"
+                   className="flex-1 rounded-xl bg-surface-container-high border border-outline-variant/20 px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                 />
+                 <button
+                   onClick={handleUnlockDevTools}
+                   disabled={devUnlocking || !devPassword}
+                   className="rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-bold disabled:opacity-40 active:scale-95 transition-transform"
+                 >
+                   {devUnlocking ? '…' : 'Unlock'}
+                 </button>
+               </div>
+               {devError && <p className="text-xs text-error">{devError}</p>}
              </div>
-             <div className="space-y-2">
-               <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Step 1 — Add to ~/.claude/settings.json</p>
-               <div className="relative">
-                 <pre className="text-[10px] text-on-surface/80 bg-surface-container-high rounded-xl p-3 overflow-x-auto leading-relaxed whitespace-pre-wrap break-all">{`{
+           ) : (
+             <div className="space-y-4">
+               {/* MCP Server */}
+               <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-4">
+                 <div className="flex items-start gap-3">
+                   <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>extension</span>
+                   <div>
+                     <p className="text-sm font-bold text-on-surface">MCP Server (Claude Code / Cursor)</p>
+                     <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">
+                       Lets Claude Code, Claude Desktop, and Cursor search your seeds and wiki while you code.
+                     </p>
+                   </div>
+                 </div>
+                 <div className="space-y-2">
+                   <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Add to ~/.claude/settings.json</p>
+                   <div className="relative">
+                     <pre className="text-[10px] text-on-surface/80 bg-surface-container-high rounded-xl p-3 overflow-x-auto leading-relaxed whitespace-pre-wrap break-all">{`{
   "mcpServers": {
     "greenplot": {
       "command": "python3",
@@ -580,84 +638,90 @@ export default function SettingsPage() {
     }
   }
 }`}</pre>
-                 <button
-                   onClick={() => {
-                     const config = JSON.stringify({
-                       mcpServers: {
-                         greenplot: {
-                           command: 'python3',
-                           args: ['~/Seedify/openclaw-api/mcp_server.py'],
-                           env: {
-                             GREENPLOT_API_URL: 'https://api.greenplot.ink',
-                             GREENPLOT_TOKEN: token || '',
+                     <button
+                       onClick={() => {
+                         const config = JSON.stringify({
+                           mcpServers: {
+                             greenplot: {
+                               command: 'python3',
+                               args: ['~/Seedify/openclaw-api/mcp_server.py'],
+                               env: {
+                                 GREENPLOT_API_URL: 'https://api.greenplot.ink',
+                                 GREENPLOT_TOKEN: token || '',
+                               },
+                             },
                            },
-                         },
-                       },
-                     }, null, 2)
-                     navigator.clipboard.writeText(config)
-                     toast.success('Config copied to clipboard')
-                   }}
-                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-container-highest text-on-surface-variant/60 hover:text-primary transition-colors"
-                   title="Copy to clipboard"
-                 >
-                   <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>content_copy</span>
-                 </button>
-               </div>
-             </div>
-             <div className="space-y-1">
-               <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Step 2 — Available tools once connected</p>
-               <div className="grid grid-cols-2 gap-1.5">
-                 {['query_seeds', 'query_wiki', 'capture_thought', 'list_recent_seeds'].map(t => (
-                   <div key={t} className="flex items-center gap-1.5 text-[10px] text-on-surface-variant bg-surface-container-high rounded-lg px-2 py-1.5">
-                     <span className="material-symbols-outlined text-primary" style={{ fontSize: '12px' }}>check_circle</span>
-                     <code>{t}</code>
+                         }, null, 2)
+                         navigator.clipboard.writeText(config)
+                         toast.success('Config copied to clipboard')
+                       }}
+                       className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-container-highest text-on-surface-variant/60 hover:text-primary transition-colors"
+                       title="Copy to clipboard"
+                     >
+                       <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>content_copy</span>
+                     </button>
                    </div>
-                 ))}
+                 </div>
+                 <div className="space-y-1">
+                   <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Available tools once connected</p>
+                   <div className="grid grid-cols-2 gap-1.5">
+                     {['query_seeds', 'query_wiki', 'capture_thought', 'list_recent_seeds'].map(t => (
+                       <div key={t} className="flex items-center gap-1.5 text-[10px] text-on-surface-variant bg-surface-container-high rounded-lg px-2 py-1.5">
+                         <span className="material-symbols-outlined text-primary" style={{ fontSize: '12px' }}>check_circle</span>
+                         <code>{t}</code>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
                </div>
-             </div>
-           </div>
-         </section>
 
-         {/* Data Tools */}
-         <section>
-           <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Data Tools</h2>
-           <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
-             <div className="flex items-start gap-3">
-               <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>auto_fix</span>
-               <div className="flex-1">
-                 <p className="text-sm font-bold text-on-surface">Fix Seed Titles</p>
-                 <p className="text-[11px] text-on-surface-variant mt-0.5">Re-generate titles for seeds that were saved as "Untitled" or with raw content as title. Processes up to 30 seeds per run.</p>
+               {/* Data Tools */}
+               <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+                 <div className="flex items-start gap-3">
+                   <span className="material-symbols-outlined text-primary mt-0.5" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>auto_fix</span>
+                   <div className="flex-1">
+                     <p className="text-sm font-bold text-on-surface">Fix Seed Titles</p>
+                     <p className="text-[11px] text-on-surface-variant mt-0.5">Re-generate titles for seeds saved as "Untitled". Processes 5 seeds per run.</p>
+                   </div>
+                 </div>
+                 <Button
+                   size="sm"
+                   variant="outline"
+                   onClick={async () => {
+                     const t = localStorage.getItem('greenplot_token')
+                     toast.loading('Fixing seed titles…')
+                     try {
+                       const res = await fetch('/api/seeds/fix-titles', {
+                         method: 'POST',
+                         headers: t ? { Authorization: `Bearer ${t}` } : {},
+                       })
+                       const data = await res.json()
+                       toast.dismiss()
+                       if (res.ok) {
+                         toast.success(`Fixed ${data.fixed} seed${data.fixed !== 1 ? 's' : ''}${data.remaining > 0 ? ` · ${data.remaining} remaining (run again)` : ' · all done!'}`)
+                       } else {
+                         toast.error('Failed to fix titles')
+                       }
+                     } catch {
+                       toast.dismiss()
+                       toast.error('Could not reach server')
+                     }
+                   }}
+                   className="w-full rounded-full text-xs"
+                 >
+                   <span className="material-symbols-outlined mr-1" style={{ fontSize: '14px' }}>auto_fix_high</span>
+                   Fix Seed Titles
+                 </Button>
                </div>
+
+               <button
+                 onClick={() => { setShowDevTools(false); setDevPassword('') }}
+                 className="w-full text-xs text-on-surface-variant/50 hover:text-on-surface-variant transition-colors py-1"
+               >
+                 Lock developer tools
+               </button>
              </div>
-             <Button
-               size="sm"
-               variant="outline"
-               onClick={async () => {
-                 const t = localStorage.getItem('greenplot_token')
-                 toast.loading('Fixing seed titles…')
-                 try {
-                   const res = await fetch('/api/seeds/fix-titles', {
-                     method: 'POST',
-                     headers: t ? { Authorization: `Bearer ${t}` } : {},
-                   })
-                   const data = await res.json()
-                   toast.dismiss()
-                   if (res.ok) {
-                     toast.success(`Fixed ${data.fixed} seed${data.fixed !== 1 ? 's' : ''}${data.remaining > 0 ? ` · ${data.remaining} remaining (run again)` : ' · all done!'}`)
-                   } else {
-                     toast.error('Failed to fix titles')
-                   }
-                 } catch {
-                   toast.dismiss()
-                   toast.error('Could not reach server')
-                 }
-               }}
-               className="w-full rounded-full text-xs"
-             >
-               <span className="material-symbols-outlined mr-1" style={{ fontSize: '14px' }}>auto_fix_high</span>
-               Fix Seed Titles
-             </Button>
-           </div>
+           )}
          </section>
 
          {/* Account */}
