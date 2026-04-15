@@ -239,14 +239,7 @@ async def handle_message(msg: dict) -> dict | None:
 
 
 async def main():
-    reader = asyncio.StreamReader()
-    protocol = asyncio.StreamReaderProtocol(reader)
     loop = asyncio.get_event_loop()
-    await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
-    _, writer = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
-
-    # Simpler approach using sys.stdin/stdout directly
-    import io
 
     def write_msg(msg: dict):
         payload = json.dumps(msg)
