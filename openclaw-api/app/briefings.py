@@ -692,6 +692,53 @@ async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
         return []
 
 
+def _save_papers_as_seeds(papers: list, user_id: str, db) -> int:
+    """Save academic digest papers as Garden seeds. Deduplicates by source_url."""
+    import uuid as _uuid
+    from app.models import Seed, User
+    saved = 0
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return 0
+    for paper in papers:
+        url = paper.get("url", "")
+        title = (paper.get("title", "") or "").strip()
+        content = (paper.get("content", "") or paper.get("snippet", "")).strip()
+        if not title or len(content) < 50:
+            continue
+        # Deduplicate: skip if a seed with this source_url already exists
+        try:
+            existing = db.query(Seed).filter(
+                Seed.user_id == user_id,
+                Seed.seed_metadata["source_url"].astext == url
+            ).first()
+            if existing:
+                continue
+        except Exception:
+            pass  # JSON path query not supported — skip dedup, still save
+        seed = Seed(
+            id=_uuid.uuid4(),
+            tenant_id=user.tenant_id,
+            user_id=user_id,
+            title=title[:200],
+            content=content[:3000],
+            created_by="agent_research",
+            created_via="academic_digest",
+            seed_metadata={
+                "tags": ["research-paper", "arxiv"],
+                "domain": "Research",
+                "source_url": url,
+                "energy": "HIGH",
+            },
+        )
+        db.add(seed)
+        saved += 1
+    if saved:
+        db.commit()
+        logger.info(f"[academic_digest] Auto-saved {saved} papers as Garden seeds for user {user_id}")
+    return saved
+
+
 async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     """
     Build a daily academic + practical digest that connects new research
@@ -875,6 +922,12 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
             "content": data["solution_design_seed"],
         })
 
+    # Auto-save papers as Garden seeds (best-effort, never blocks delivery)
+    try:
+        _save_papers_as_seeds(papers, user_id, db)
+    except Exception as e:
+        logger.warning(f"[academic_digest] Failed to save papers as seeds: {e}")
+
     return {
         "type": "academic_digest",
         "title": f"Research Digest — {today}",
@@ -1020,4 +1073,31 @@ Produce a well-structured markdown document with these sections:
         f.write(md_content)
 
     logger.info(f"[agent] Research paper saved to {filepath}")
+
+    # Save as a Garden seed so it's searchable and feeds future briefings
+    try:
+        import uuid as _uuid
+        from app.models import Seed, User
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            seed = Seed(
+                id=_uuid.uuid4(),
+                tenant_id=user.tenant_id,
+                user_id=user_id,
+                title=topic[:200],
+                content=md_content[:5000],
+                created_by="agent_research",
+                created_via="research_paper_agent",
+                seed_metadata={
+                    "tags": ["strategy-paper", "agent-output"],
+                    "domain": "Research",
+                    "energy": "HIGH",
+                },
+            )
+            db.add(seed)
+            db.commit()
+            logger.info(f"[agent] Strategy paper saved as Garden seed for user {user_id}")
+    except Exception as e:
+        logger.warning(f"[agent] Failed to save paper as seed: {e}")
+
     return md_content

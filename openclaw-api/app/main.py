@@ -513,6 +513,7 @@ def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session 
     ).limit(5).all()
 
     fixed = 0
+    errors = []
     for seed in bad_seeds:
         try:
             content = seed.content or ""
@@ -533,13 +534,14 @@ def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session 
                 fixed += 1
         except Exception as e:
             logger.warning(f"[fix_titles] Failed on seed {seed.id}: {e}")
+            errors.append(str(e)[:100])
 
     db.commit()
     remaining = db.query(Seed).filter(
         Seed.user_id == current_user.id,
         Seed.title.ilike('Untitled%')
     ).count()
-    return {"fixed": fixed, "remaining": remaining}
+    return {"fixed": fixed, "remaining": remaining, "errors": errors[:3]}
 
 
 class SeedLinksRequest(BaseModel):

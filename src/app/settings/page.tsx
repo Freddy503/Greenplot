@@ -698,7 +698,11 @@ export default function SettingsPage() {
                        const data = await res.json()
                        toast.dismiss()
                        if (res.ok) {
-                         toast.success(`Fixed ${data.fixed} seed${data.fixed !== 1 ? 's' : ''}${data.remaining > 0 ? ` · ${data.remaining} remaining (run again)` : ' · all done!'}`)
+                         if (data.errors?.length) {
+                           toast.error(`Fixed ${data.fixed} · Error: ${data.errors[0]}`)
+                         } else {
+                           toast.success(`Fixed ${data.fixed} seed${data.fixed !== 1 ? 's' : ''}${data.remaining > 0 ? ` · ${data.remaining} remaining (run again)` : ' · all done!'}`)
+                         }
                        } else {
                          toast.error('Failed to fix titles')
                        }

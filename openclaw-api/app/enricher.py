@@ -167,7 +167,8 @@ def _get_enrichment_base_prompt() -> str:
     )
 
 def _call_llm_for_seed(thought_text: str, web_context: Optional[str], strict: bool = False) -> str:
-    """Single LLM call for seed generation. strict=True adds extra output format pressure."""
+    """Single LLM call for seed generation. strict=True adds extra output format pressure.
+    Uses Nemotron Super — clean JSON output, no thinking tokens."""
     strictness = (
         "\n\nCRITICAL: Your response must be ONLY a JSON object — no prose, no markdown, no explanation. "
         "Start your response with '{' and end with '}'. "
@@ -181,16 +182,20 @@ def _call_llm_for_seed(thought_text: str, web_context: Optional[str], strict: bo
     if web_context:
         user_parts.append(f"Fetched web content:\n{web_context[:4000]}")
 
-    response = openai_client.chat.completions.create(
-        model="qwen/qwen3-235b-a22b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "\n\n".join(user_parts)}
-        ],
-        temperature=0.3 if strict else 0.7,
-        max_tokens=800
-    )
-    return response.choices[0].message.content or ""
+    try:
+        response = openai_client.chat.completions.create(
+            model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "\n\n".join(user_parts)}
+            ],
+            temperature=0.3 if strict else 0.7,
+            max_tokens=800
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e:
+        logger.error(f"[enricher] LLM call failed: {e}")
+        return ""
 
 def generate_seed(thought_text: str, web_context: Optional[str] = None) -> dict:
     """
