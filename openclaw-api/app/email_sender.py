@@ -91,7 +91,7 @@ def render_briefing_html(briefing: dict) -> str:
     }
     accent = type_colors.get(briefing.get("type", ""), "#6366F1")
 
-    title = briefing.get("title", "Seedify Digest")
+    title = briefing.get("title", "Greenplot Digest")
     subtitle = briefing.get("subtitle", "")
     sections = briefing.get("sections", [])
 
@@ -147,7 +147,7 @@ def render_briefing_html(briefing: dict) -> str:
 
         <!-- Header -->
         <tr><td style="background:linear-gradient(135deg,{accent}33,transparent);padding:28px 32px 20px;">
-          <p style="margin:0 0 4px;font-size:11px;font-weight:800;color:{accent};letter-spacing:0.1em;text-transform:uppercase;">Seedify</p>
+          <p style="margin:0 0 4px;font-size:11px;font-weight:800;color:{accent};letter-spacing:0.1em;text-transform:uppercase;">Greenplot</p>
           <h1 style="margin:0;font-size:22px;font-weight:700;color:#F9FAFB;">{title}</h1>
           {f'<p style="margin:6px 0 0;font-size:13px;color:#9CA3AF;">{subtitle}</p>' if subtitle else ''}
         </td></tr>
@@ -158,8 +158,8 @@ def render_briefing_html(briefing: dict) -> str:
         <!-- Footer -->
         <tr><td style="padding:20px 32px;background:#111827;">
           <p style="margin:0;font-size:11px;color:#4B5563;text-align:center;">
-            Seedify · Your personal knowledge flywheel<br>
-            <a href="https://seedify-six.vercel.app" style="color:#6B7280;text-decoration:none;">Open App</a>
+            Greenplot · Your personal knowledge flywheel<br>
+            <a href="https://greenplot.ink" style="color:#6B7280;text-decoration:none;">Open App</a>
           </p>
         </td></tr>
 
@@ -230,7 +230,7 @@ def send_briefing_email(to: str, briefing: dict, attachments: list = None) -> bo
 
     _resend.api_key = settings.RESEND_API_KEY
     html = render_briefing_html(briefing)
-    subject = briefing.get("title", "Seedify Digest")
+    subject = briefing.get("title", "Greenplot Digest")
 
     params: dict = {
         "from": settings.EMAIL_FROM,

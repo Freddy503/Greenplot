@@ -3606,6 +3606,81 @@ def generate_solution_design_endpoint(
     return {"filepath": filepath, "content": content}
 
 
+class AgentRunRequest(BaseModel):
+    topic: str
+
+
+def _run_agent_job_bg(topic: str, user_id: str, db_gen):
+    """Background task: generate a strategy paper and deliver to Inbox."""
+    db = next(db_gen())
+    try:
+        md_content = briefings.run_agent_task(topic, user_id, db)
+        if not md_content:
+            logger.error(f"[agent] run_agent_task returned None for topic: {topic[:60]}")
+            return
+
+        # First 200 chars as preview body
+        preview = md_content.replace("#", "").strip()[:200]
+
+        # Build a SparkCard-compatible briefing
+        sections = []
+        current_title = None
+        current_lines = []
+        for line in md_content.split("\n"):
+            if line.startswith("## "):
+                if current_title:
+                    sections.append({"title": current_title, "icon": "description", "color": "text-purple-400", "content": "\n".join(current_lines).strip()})
+                current_title = line.lstrip("# ").strip()
+                current_lines = []
+            elif line.startswith("# "):
+                pass  # skip top-level title line
+            else:
+                current_lines.append(line)
+        if current_title and current_lines:
+            sections.append({"title": current_title, "icon": "description", "color": "text-purple-400", "content": "\n".join(current_lines).strip()})
+
+        # Fallback: wrap whole doc in one section if parsing failed
+        if not sections:
+            sections = [{"title": "Research Paper", "icon": "description", "color": "text-purple-400", "content": md_content}]
+
+        briefing = {
+            "type": f"solution_design_{topic[:20].replace(' ', '_').lower()}",
+            "title": f"Strategy Paper: {topic[:60]}",
+            "subtitle": "Agentic research paper — tap to read",
+            "sections": sections[:8],  # cap at 8 sections for display
+            "prompt": f"Let's discuss the strategy paper on: {topic}",
+        }
+
+        _sto<RESEND_API_KEY>(briefing)
+        logger.info(f"[agent] Strategy paper delivered to Inbox for topic: {topic[:60]}")
+    except Exception as e:
+        logger.error(f"[agent] Background job failed: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
+@app.post("/api/v1/agents/run")
+async def run_agent_endpoint(
+    req: AgentRunRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Spawn a long-running agent that produces a strategy/implementation paper.
+    Returns immediately — paper is delivered to Inbox via push notification when done.
+    """
+    if not req.topic or not req.topic.strip():
+        raise HTTPException(status_code=400, detail="topic is required")
+
+    topic = req.topic.strip()
+    background_tasks.add_task(_run_agent_job_bg, topic, str(current_user.id), get_db)
+    logger.info(f"[agent] Queued research paper for user {current_user.id}, topic: {topic[:60]}")
+    return {
+        "status": "started",
+        "message": f"Agent is researching '{topic[:60]}' — you'll receive a push notification when the paper is ready (usually 1–3 minutes).",
+    }
+
+
 def _run_trigger_job(job_id: str):
     """Shared logic for triggering a scheduled job by ID."""
     print(f"🔔 TRIGGER ENDPOINT CALLED: job_id={job_id}", flush=True)

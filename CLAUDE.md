@@ -47,6 +47,8 @@ Chat: search_seeds + search_wiki + web_search → better answers
 
 ## For Any AI Reading This
 
+**Before starting any work**, state how you will verify the change works and how you will test it.
+
 When asked a question about a topic:
 1. **Read** `wiki/*.md` files for relevant articles (they're plain text, you can read them).
 2. **Check** `memory/` for recent context (today + yesterday + MEMORY.md).

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
 
 export interface SparkSection {
   title?: string
@@ -141,18 +142,12 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
                   <h3 className="font-semibold text-on-surface">{section.title}</h3>
                 </div>
               )}
-              <div className="text-sm text-on-surface-variant leading-relaxed space-y-2">
+              <div className="text-sm text-on-surface-variant leading-relaxed space-y-2 prose prose-sm prose-invert max-w-none [&>*]:text-on-surface-variant [&_strong]:text-on-surface [&_a]:text-primary [&_ul]:pl-4 [&_ol]:pl-4">
                 {typeof section.content === 'string' ? (
-                  <p>{section.content}</p>
+                  <ReactMarkdown>{section.content}</ReactMarkdown>
                 ) : (
                   section.content.map((line, i) => (
-                    <div key={i}>
-                      {line.startsWith('•') || line.startsWith('-') ? (
-                        <p className="ml-4">{line}</p>
-                      ) : (
-                        <p>{line}</p>
-                      )}
-                    </div>
+                    <ReactMarkdown key={i}>{line}</ReactMarkdown>
                   ))
                 )}
               </div>
