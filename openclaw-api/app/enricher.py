@@ -194,7 +194,7 @@ def _call_llm_for_seed(thought_text: str, web_context: Optional[str], strict: bo
         )
         return response.choices[0].message.content or ""
     except Exception as e:
-        logger.error(f"[enricher] LLM call failed: {e}")
+        print(f"[enricher] LLM call failed: {e}")
         return ""
 
 def generate_seed(thought_text: str, web_context: Optional[str] = None) -> dict:

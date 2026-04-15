@@ -234,7 +234,7 @@ def send_briefing_email(to: str, briefing: dict, attachments: list = None) -> bo
 
     params: dict = {
         "from": settings.EMAIL_FROM,
-        "to": [to],
+        "to": to,
         "subject": subject,
         "html": html,
     }
