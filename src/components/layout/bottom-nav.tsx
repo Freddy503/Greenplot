@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react'
 const navItems = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble', badge: false },
   { href: '/garden', label: 'Garden', icon: 'eco', badge: false },
-  { href: '/explain', label: 'Explain', icon: 'school', badge: false },
+  { href: '/links', label: 'Sources', icon: 'link', badge: true },
   { href: '/wiki', label: 'Wiki', icon: 'auto_stories', badge: false },
   { href: '/notifications', label: 'Inbox', icon: 'notifications', badge: false },
   { href: '/settings', label: 'Settings', icon: 'settings', badge: false },

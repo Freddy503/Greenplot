@@ -153,6 +153,22 @@ export default function NotificationsPage() {
             )}
           </div>
 
+          {/* Explanation Agent */}
+          <div className="mb-6 rounded-2xl bg-surface-container border border-outline-variant/10 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="material-symbols-outlined text-indigo-400 text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>school</span>
+              <p className="text-sm font-bold text-on-surface">Explanation Agent</p>
+            </div>
+            <p className="text-xs text-on-surface-variant/70 mb-3">Deep-dive into any topic with a tutoring-mode Q&A. Exports as a PDF when you're done.</p>
+            <a
+              href="/explain"
+              className="flex items-center justify-center gap-2 rounded-xl bg-surface-container-high border border-outline-variant/20 px-4 py-2 text-sm font-bold text-on-surface hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors active:scale-[0.98]"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>open_in_new</span>
+              Open Explanation Agent
+            </a>
+          </div>
+
           {loading && (
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map(i => (

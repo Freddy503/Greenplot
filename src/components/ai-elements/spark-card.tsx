@@ -14,7 +14,7 @@ export interface SparkSection {
 }
 
 export interface SparkNotification {
-  type: 'morning_spark' | 'daily_briefing' | 'reflection' | 'weekly_eval' | 'challenge' | 'academic_digest'
+  type: string
   title: string
   subtitle?: string
   sections: SparkSection[]
@@ -28,33 +28,43 @@ interface SparkCardProps {
   token: string
 }
 
-const typeConfig = {
+const typeConfig: Record<string, { icon: string; label: string; bgColor: string }> = {
   morning_spark: { icon: 'light_mode', label: 'Morning Spark', bgColor: 'from-amber-500/20' },
   daily_briefing: { icon: 'newspaper', label: 'Daily Briefing', bgColor: 'from-blue-500/20' },
   reflection: { icon: 'psychology', label: 'Evening Reflection', bgColor: 'from-purple-500/20' },
   weekly_eval: { icon: 'assessment', label: 'Weekly Eval', bgColor: 'from-green-500/20' },
   challenge: { icon: 'emoji_events', label: 'Biweekly Challenge', bgColor: 'from-red-500/20' },
   academic_digest: { icon: 'school', label: 'Research Digest', bgColor: 'from-indigo-500/20' },
+  academic_digest_evening: { icon: 'school', label: 'Research Digest', bgColor: 'from-indigo-500/20' },
+  solution_design: { icon: 'description', label: 'Strategy Paper', bgColor: 'from-violet-500/20' },
 }
+
+const DEFAULT_CONFIG = { icon: 'notifications', label: 'Notification', bgColor: 'from-primary/20' }
 
 export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: SparkCardProps) {
   const [addingToGarden, setAddingToGarden] = useState(false)
-  const config = typeConfig[notification.type]
+  const [sharing, setSharing] = useState(false)
+  const type = notification.type?.startsWith('solution_design') ? 'solution_design' : notification.type
+  const config = typeConfig[type] || DEFAULT_CONFIG
 
-  // DEBUG: Log what SparkCard is receiving
-  console.log('🎨 SparkCard rendered with:', {
-    type: notification.type,
-    title: notification.title,
-    subtitle: notification.subtitle,
-    sectionsCount: notification.sections.length,
-    sections: notification.sections.map(s => ({
-      title: s.title,
-      contentType: typeof s.content,
-      contentLength: typeof s.content === 'string' ? s.content.length : s.content.length,
-      hasSources: !!(s.sources?.length)
-    })),
-    fullNotification: notification
-  })
+  const handleShare = async () => {
+    setSharing(true)
+    const text = notification.sections
+      .map(s => `${s.title ? '## ' + s.title + '\n' : ''}${typeof s.content === 'string' ? s.content : s.content.join('\n')}`)
+      .join('\n\n')
+    const shareText = `${notification.title}\n\n${text}`.slice(0, 20000)
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: notification.title, text: shareText })
+      } else {
+        await navigator.clipboard.writeText(shareText)
+        toast.success('Copied to clipboard')
+      }
+    } catch {
+      // user cancelled share
+    }
+    setSharing(false)
+  }
 
   const handleAddToGarden = async () => {
     setAddingToGarden(true)
@@ -193,6 +203,15 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
                 Garden
               </>
             )}
+          </Button>
+          <Button
+            onClick={handleShare}
+            disabled={sharing}
+            variant="outline"
+            className="rounded-2xl border-outline-variant/20 text-on-surface-variant text-sm h-10 px-3"
+            title="Share or copy"
+          >
+            <span className="material-symbols-outlined text-base">share</span>
           </Button>
         </div>
         </div>
