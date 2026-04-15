@@ -233,7 +233,7 @@ export default function ChatPage() {
       api: '/api/chat',
       headers: () => {
         const t = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
-        return t ? { Authorization: `Bearer ${t}` } : {}
+        return { Authorization: t ? `Bearer ${t}` : '' }
       },
       body: () => ({
         _auth_token: typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '',
