@@ -448,10 +448,11 @@ def delete_seed(seed_id: str, current_user: User = Depends(get_current_user), db
     seed = db.query(Seed).filter(Seed.id == seed_id, Seed.user_id == current_user.id).first()
     if not seed:
         raise HTTPException(status_code=404, detail="Seed not found")
+    weaviate_ref = seed.embedding_ref or seed_id
     db.delete(seed)
     db.commit()
     try:
-        weaviate_client.delete_seed(seed_id)
+        weaviate_client.delete_seed(weaviate_ref)
     except Exception:
         pass  # Postgres deletion always wins; Weaviate is best-effort
     return {"ok": True}
@@ -462,14 +463,19 @@ def bulk_delete_seeds(body: dict, current_user: User = Depends(get_current_user)
     seed_ids: list = body.get("seed_ids", [])
     if not seed_ids:
         raise HTTPException(status_code=400, detail="seed_ids required")
+    seeds_to_delete = db.query(Seed).filter(
+        Seed.id.in_(seed_ids),
+        Seed.user_id == current_user.id
+    ).all()
+    weaviate_refs = [s.embedding_ref or str(s.id) for s in seeds_to_delete]
     deleted = db.query(Seed).filter(
         Seed.id.in_(seed_ids),
         Seed.user_id == current_user.id
     ).delete(synchronize_session=False)
     db.commit()
-    for sid in seed_ids:
+    for ref in weaviate_refs:
         try:
-            weaviate_client.delete_seed(sid)
+            weaviate_client.delete_seed(ref)
         except Exception:
             pass
     return {"ok": True, "deleted": deleted}
@@ -494,17 +500,17 @@ def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session 
     Processes up to 30 seeds per call.
     """
     from app.enricher import generate_seed as _generate_seed
+    from sqlalchemy.orm.attributes import flag_modified
 
     bad_seeds = db.query(Seed).filter(
         Seed.user_id == current_user.id,
         Seed.content != None,
         (
             Seed.title.ilike('Untitled%') |
-            Seed.title.ilike('Welcome!%') |
             (Seed.title == '') |
             (Seed.title == None)
         )
-    ).limit(30).all()
+    ).limit(5).all()
 
     fixed = 0
     for seed in bad_seeds:
@@ -517,12 +523,13 @@ def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session 
             if new_title and new_title.lower() not in ("untitled seed", "untitled", ""):
                 seed.title = new_title[:200]
                 # Also update domain/tags if they were blank
-                meta = seed.seed_metadata or {}
+                meta = dict(seed.seed_metadata or {})
                 if not meta.get("domain") and seed_data.get("domain"):
                     meta["domain"] = seed_data["domain"]
                 if not meta.get("tags") and seed_data.get("tags"):
                     meta["tags"] = seed_data["tags"]
                 seed.seed_metadata = meta
+                flag_modified(seed, 'seed_metadata')
                 fixed += 1
         except Exception as e:
             logger.warning(f"[fix_titles] Failed on seed {seed.id}: {e}")
