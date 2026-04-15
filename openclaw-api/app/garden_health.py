@@ -224,7 +224,7 @@ async def ask_garden(body: AskRequest, token: str = Depends(oauth2_scheme), db: 
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "qwen/qwen3-235b-a22b",
+                        "model": "minimax/minimax-m2.7",
                         "messages": [
                             {
                                 "role": "system",
