@@ -332,6 +332,7 @@ export default function GardenPage() {
             </EmptyContent>
           </Empty>
         ) : (
+          <>
           {/* Bulk action bar */}
           {selectMode && (
             <div className="flex items-center gap-2 mb-2 px-1">
@@ -399,6 +400,7 @@ export default function GardenPage() {
               </TableBody>
             </Table>
           </Card>
+          </>
         ))}
 
         {/* Focus Seed Card — always visible */}
