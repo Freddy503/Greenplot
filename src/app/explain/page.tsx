@@ -126,6 +126,7 @@ export default function ExplainPage() {
           filename,
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          // @ts-expect-error html2pdf types incomplete
           pagebreak: { mode: ['avoid-all', 'css'] },
         })
         .from(contentRef.current)
