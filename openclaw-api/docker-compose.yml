@@ -16,8 +16,8 @@ services:
     - WEAVIATE_URL=http://weaviate:8080
     - REDIS_URL=redis://redis:6379/0
     - FRONTEND_URL=https://seedify-six.vercel.app
-    - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
-    - NVIDIA_API_KEY=<NVIDIA_API_KEY>
+    - EXA_API_KEY=${EXA_API_KEY}
+    - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
     - BFL_API_KEY=${BFL_API_KEY}
     - VAPID_PRIVATE_KEY_BASE64=${VAPID_PRIVATE_KEY_BASE64}
@@ -63,8 +63,8 @@ services:
     - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
     - WEAVIATE_URL=http://weaviate:8080
     - REDIS_URL=redis://redis:6379/0
-    - EXA_API_KEY=9c091493-cae9-458e-91e6-018ede5b3b79
-    - NVIDIA_API_KEY=<NVIDIA_API_KEY>
+    - EXA_API_KEY=${EXA_API_KEY}
+    - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
     - BFL_API_KEY=${BFL_API_KEY}
     restart: unless-stopped

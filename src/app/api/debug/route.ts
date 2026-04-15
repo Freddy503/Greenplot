@@ -5,12 +5,9 @@ import { NextRequest, NextResponse } from 'next/server'
  * Exposes backend connectivity info for troubleshooting.
  */
 export async function GET(req: NextRequest) {
-  // Gate in production
+  // Not available in production at all — this endpoint is for local dev only
   if (process.env.NODE_ENV === 'production') {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
-    }
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
   }
 
   const backend = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
