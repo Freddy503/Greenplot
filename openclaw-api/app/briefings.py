@@ -154,7 +154,9 @@ def fetch_user_themes(user_id: str, db) -> List[str]:
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         recent_seeds = db.query(Seed).filter(
             Seed.user_id == user_id,
-            Seed.created_at >= thirty_days_ago
+            Seed.created_at >= thirty_days_ago,
+            (Seed.archived == False) | (Seed.archived == None),
+            (Seed.quality_score >= 0.3) | (Seed.quality_score == None)
         ).order_by(Seed.created_at.desc()).limit(20).all()
 
         if not recent_seeds:

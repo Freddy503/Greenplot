@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Integer, JSON, Boolean, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, Integer, Float, JSON, Boolean, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, declarative_base
 import uuid
@@ -58,6 +58,8 @@ class Seed(Base):
     provenance_log = Column(JSON, nullable=True)  # List of provenance events
     last_interacted_at = Column(DateTime, nullable=True)  # For decay scoring
     interaction_count = Column(Integer, default=0)  # How many times seed was accessed
+    quality_score = Column(Float, nullable=True)  # 0.0–1.0 composite quality score set at enrichment
+    archived = Column(Boolean, default=False)  # Archived seeds hidden from Garden/briefings but not deleted
 
     user = relationship("User", back_populates="seeds")
     thought = relationship("Thought", back_populates="seeds")

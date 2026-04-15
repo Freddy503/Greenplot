@@ -11,6 +11,7 @@ const tabs = [
   { href: '/garden', label: 'Garden', icon: 'eco' },
   { href: '/links', label: 'Sources', icon: 'link' },
   { href: '/wiki', label: 'Wiki', icon: 'auto_stories' },
+  { href: '/notifications', label: 'Inbox', icon: 'notifications' },
   { href: '/settings', label: 'Settings', icon: 'settings' },
 ]
 

@@ -121,6 +121,15 @@ with engine.connect() as conn:
     if not result5.fetchone():
         conn.execute(text("ALTER TABLE seeds ADD COLUMN visit_count INTEGER DEFAULT 0"))
         conn.commit()
+    # Quality scoring + archive columns
+    result6 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='quality_score'"))
+    if not result6.fetchone():
+        conn.execute(text("ALTER TABLE seeds ADD COLUMN quality_score FLOAT"))
+        conn.commit()
+    result7 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='archived'"))
+    if not result7.fetchone():
+        conn.execute(text("ALTER TABLE seeds ADD COLUMN archived BOOLEAN DEFAULT FALSE"))
+        conn.commit()
 
 app = FastAPI(title="OpenClaw API", version="0.1.0")
 
@@ -201,6 +210,18 @@ def update_profile(
 
 # --- Thoughts ---
 
+def _is_valid_thought(content: str) -> bool:
+    """Minimal quality gate — rejects noise captures before they enter the PKM."""
+    stripped = content.strip()
+    if len(stripped) < 20:
+        return False
+    words = stripped.lower().split()
+    unique_ratio = len(set(words)) / max(len(words), 1)
+    if unique_ratio < 0.25:
+        return False  # >75% repeated words
+    return True
+
+
 @app.post("/api/v1/thoughts", response_model=ThoughtResponse)
 def create_thought(
     req: ThoughtCreate,
@@ -208,6 +229,11 @@ def create_thought(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if not _is_valid_thought(req.content):
+        raise HTTPException(
+            status_code=422,
+            detail="Thought too short or too repetitive to be useful. Add more detail."
+        )
     thought = Thought(
         tenant_id=current_user.tenant_id,
         user_id=current_user.id,
@@ -319,7 +345,8 @@ def list_seeds(
         # type errors (string id/created_at, missing new columns) that silently
         # returned empty seed lists to the frontend.
         seeds = db.query(Seed).filter(
-            Seed.tenant_id == current_user.tenant_id
+            Seed.tenant_id == current_user.tenant_id,
+            (Seed.archived == False) | (Seed.archived == None)
         ).order_by(Seed.created_at.desc()).limit(limit).all()
 
         # Attach metadata fields as convenience attributes for serialization.
@@ -414,6 +441,48 @@ def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: S
     seed.summary = metadata.get("summary", "")
     
     return seed
+
+
+@app.delete("/api/v1/seeds/{seed_id}")
+def delete_seed(seed_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    seed = db.query(Seed).filter(Seed.id == seed_id, Seed.user_id == current_user.id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Seed not found")
+    db.delete(seed)
+    db.commit()
+    try:
+        weaviate_client.delete_seed(seed_id)
+    except Exception:
+        pass  # Postgres deletion always wins; Weaviate is best-effort
+    return {"ok": True}
+
+
+@app.post("/api/v1/seeds/bulk-delete")
+def bulk_delete_seeds(body: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    seed_ids: list = body.get("seed_ids", [])
+    if not seed_ids:
+        raise HTTPException(status_code=400, detail="seed_ids required")
+    deleted = db.query(Seed).filter(
+        Seed.id.in_(seed_ids),
+        Seed.user_id == current_user.id
+    ).delete(synchronize_session=False)
+    db.commit()
+    for sid in seed_ids:
+        try:
+            weaviate_client.delete_seed(sid)
+        except Exception:
+            pass
+    return {"ok": True, "deleted": deleted}
+
+
+@app.post("/api/v1/seeds/{seed_id}/archive")
+def archive_seed(seed_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    seed = db.query(Seed).filter(Seed.id == seed_id, Seed.user_id == current_user.id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Seed not found")
+    seed.archived = not seed.archived
+    db.commit()
+    return {"ok": True, "archived": seed.archived}
 
 
 class SeedLinksRequest(BaseModel):
@@ -872,7 +941,7 @@ async def generate_image(
     # 1. Submit generation task
     async with httpx.AsyncClient(timeout=60) as client:
         submit_resp = await client.post(
-            f"{BFL_BASE_URL}/v1/flux-2-pro",
+            f"{BFL_BASE_URL}/v1/flux-pro-1.1",
             headers=headers,
             json={
                 "prompt": req.prompt,
