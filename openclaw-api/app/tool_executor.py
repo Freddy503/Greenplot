@@ -1228,6 +1228,63 @@ async def read_source(args: dict, user: User, db: Session) -> str:
 
 TOOL_HANDLERS["read_source"] = read_source
 
+
+async def create_calendar_event(args: dict, user: User, db: Session) -> str:
+    """Create a Google Calendar event on behalf of the user."""
+    import httpx
+    from app.models import CalendarConnection
+    from app.calendar_helper import get_fresh_token, GOOGLE_CALENDAR_API
+
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == user.id,
+        CalendarConnection.enabled == True,
+    ).first()
+    if not conn:
+        return json.dumps({"status": "error", "message": "No Google Calendar connected. Ask the user to connect it in Settings."})
+
+    token = get_fresh_token(conn, db)
+    if not token:
+        return json.dumps({"status": "error", "message": "Calendar token expired — user needs to reconnect Google Calendar in Settings."})
+
+    tz = conn.calendar_timezone or "UTC"
+
+    def _dt(iso: str) -> dict:
+        return {"dateTime": iso if "T" in iso else f"{iso}T00:00:00", "timeZone": tz}
+
+    event_body: dict = {
+        "summary": args.get("summary", "New Event"),
+        "start": _dt(args["start_time"]),
+        "end": _dt(args["end_time"]),
+    }
+    if args.get("description"):
+        event_body["description"] = args["description"]
+    if args.get("location"):
+        event_body["location"] = args["location"]
+
+    try:
+        resp = httpx.post(
+            f"{GOOGLE_CALENDAR_API}/calendars/primary/events",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=event_body,
+            timeout=10,
+        )
+        if resp.status_code not in (200, 201):
+            return json.dumps({"status": "error", "message": f"Google Calendar returned {resp.status_code}: {resp.text[:200]}"})
+        created = resp.json()
+        return json.dumps({
+            "status": "created",
+            "summary": created.get("summary"),
+            "start": created.get("start", {}).get("dateTime"),
+            "end": created.get("end", {}).get("dateTime"),
+            "link": created.get("htmlLink"),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["create_calendar_event"] = create_calendar_event
+
+
 async def garden_skimmer(args: dict, user: User, db: Session) -> str:
     """Run sub-agent garden analysis. Discovers patterns, gaps, trends, quality issues."""
     from app.weaviate_client import weaviate_client
