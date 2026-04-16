@@ -71,6 +71,10 @@ _TOOL_SELECTION_CONTENT = (
     "NEVER answer a topical question without first calling search_seeds and search_wiki. "
     "Skipping internal search means the user gets answers that ignore their own accumulated knowledge.\n\n"
 
+    "IMAGE GENERATION: If the message starts with 'Generate an image of:' or the user asks to "
+    "create/generate/visualize an image → call **generate_image** immediately. Never respond with "
+    "text or a prompt suggestion — always call the tool.\n\n"
+
     "EXCEPTIONS (no tools required): greetings, casual chat, meta-questions about the system.\n\n"
 
     "AFTER ANSWERING: if the user expressed a new idea or insight, call **create_seed** to capture it."
