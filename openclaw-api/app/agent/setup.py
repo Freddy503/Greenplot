@@ -248,6 +248,41 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("visualize_garden"),
     ))
 
+    # ── Calendar ──────────────────────────────────────────────────
+
+    registry.register(ToolSpec(
+        name="create_calendar_event",
+        description="Create a new event in the user's Google Calendar. Use when the user asks to schedule something, block time, add a meeting, or set a reminder.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "Event title.",
+                },
+                "start_time": {
+                    "type": "string",
+                    "description": "Start datetime in ISO 8601 format, e.g. '2025-06-10T14:00:00'. Use the user's local timezone.",
+                },
+                "end_time": {
+                    "type": "string",
+                    "description": "End datetime in ISO 8601 format. Default to 1 hour after start if not specified.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional event notes or agenda.",
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Optional location or meeting link.",
+                },
+            },
+            "required": ["summary", "start_time", "end_time"],
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("create_calendar_event"),
+    ))
+
     # ── Sub-Agent System ───────────────────────────────────────────
     from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
 
