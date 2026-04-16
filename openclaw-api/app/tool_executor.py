@@ -1321,6 +1321,8 @@ async def create_calendar_event(args: dict, user: User, db: Session) -> str:
             json=event_body,
             timeout=10,
         )
+        if resp.status_code == 403:
+            return json.dumps({"status": "error", "message": "Permission denied by Google Calendar (403). The connected account does not have write access. Tell the user to disconnect and reconnect Google Calendar in Settings to grant calendar write permissions."})
         if resp.status_code not in (200, 201):
             return json.dumps({"status": "error", "message": f"Google Calendar returned {resp.status_code}: {resp.text[:200]}"})
         created = resp.json()
