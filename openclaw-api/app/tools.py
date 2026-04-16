@@ -85,6 +85,29 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_calendar_events",
+            "description": "Fetch upcoming Google Calendar events. Use when the user asks what's on their calendar, schedule, or meetings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "hours": {
+                        "type": "integer",
+                        "description": "How many hours ahead to look (default 24).",
+                        "default": 24
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Max events to return (default 10).",
+                        "default": 10
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_calendar_event",
             "description": "Create a new event in the user's Google Calendar. Use when the user asks to schedule something, block time, or add a meeting.",
             "parameters": {

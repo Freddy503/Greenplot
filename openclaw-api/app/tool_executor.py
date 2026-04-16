@@ -1229,6 +1229,59 @@ async def read_source(args: dict, user: User, db: Session) -> str:
 TOOL_HANDLERS["read_source"] = read_source
 
 
+async def get_calendar_events(args: dict, user: User, db: Session) -> str:
+    """Fetch upcoming Google Calendar events for the user."""
+    import httpx
+    from app.models import CalendarConnection
+    from app.calendar_helper import get_fresh_token, GOOGLE_CALENDAR_API
+    from datetime import datetime, timedelta
+
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == user.id,
+        CalendarConnection.enabled == True,
+    ).first()
+    if not conn:
+        return json.dumps({"status": "error", "message": "No Google Calendar connected."})
+
+    token = get_fresh_token(conn, db)
+    if not token:
+        return json.dumps({"status": "error", "message": "Calendar token expired — reconnect in Settings."})
+
+    hours = int(args.get("hours", 24))
+    now = datetime.utcnow()
+    params = {
+        "timeMin": now.isoformat() + "Z",
+        "timeMax": (now + timedelta(hours=hours)).isoformat() + "Z",
+        "singleEvents": "true",
+        "orderBy": "startTime",
+        "maxResults": args.get("max_results", 10),
+    }
+    try:
+        resp = httpx.get(
+            f"{GOOGLE_CALENDAR_API}/calendars/primary/events",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return json.dumps({"status": "error", "message": f"Google Calendar error {resp.status_code}"})
+        events = []
+        for item in resp.json().get("items", []):
+            start = item.get("start", {})
+            events.append({
+                "summary": item.get("summary", "(No title)"),
+                "start": start.get("dateTime", start.get("date", "")),
+                "end": item.get("end", {}).get("dateTime", ""),
+                "location": item.get("location", ""),
+            })
+        return json.dumps({"events": events, "timezone": conn.calendar_timezone, "count": len(events)})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["get_calendar_events"] = get_calendar_events
+
+
 async def create_calendar_event(args: dict, user: User, db: Session) -> str:
     """Create a Google Calendar event on behalf of the user."""
     import httpx

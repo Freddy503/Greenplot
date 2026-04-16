@@ -251,6 +251,29 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
     # ── Calendar ──────────────────────────────────────────────────
 
     registry.register(ToolSpec(
+        name="get_calendar_events",
+        description="Fetch upcoming Google Calendar events. Use when the user asks what's on their calendar, what meetings they have, or to check their schedule.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "hours": {
+                    "type": "integer",
+                    "description": "How many hours ahead to look (default 24, use 48 for tomorrow, 168 for this week).",
+                    "default": 24,
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of events to return (default 10).",
+                    "default": 10,
+                },
+            },
+            "required": [],
+        },
+        permission=PermissionLevel.READ,
+        handler=TOOL_HANDLERS.get("get_calendar_events"),
+    ))
+
+    registry.register(ToolSpec(
         name="create_calendar_event",
         description="Create a new event in the user's Google Calendar. Use when the user asks to schedule something, block time, add a meeting, or set a reminder.",
         input_schema={
