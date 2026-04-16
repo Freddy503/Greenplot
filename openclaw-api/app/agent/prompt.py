@@ -76,6 +76,7 @@ _CAPABILITIES_CONTENT = (
     "You have access to the following capabilities:\n\n"
     "- **search_seeds**: Search the user's Idea Garden by natural language query\n"
     "- **web_search**: Search the web for current, real-time information\n"
+    "- **get_calendar_events**: View upcoming Google Calendar events (hours ahead, max results)\n"
     "- **create_calendar_event**: Create an event in Google Calendar (summary, start_time, end_time)\n"
     "- **create_seed**: Plant a new idea from user thoughts\n"
     "- **list_seeds**: Browse recent or categorized ideas\n"
