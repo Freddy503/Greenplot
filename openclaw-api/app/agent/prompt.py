@@ -26,16 +26,21 @@ class Section:
     order: int = 0
 
 
-# Default identity section for Seedify
-_IDENTITY_CONTENT = (
-    "You are Greenplot, an AI-powered Idea Garden assistant. "
-    "You help users capture, organize, and grow their ideas — "
-    "turning fleeting thoughts into structured knowledge. "
-    "You can search seeds, create new ones, find connections, "
-    "search the web for current information, and help users think through complex problems.\n\n"
-    "Be concise, thoughtful, and proactive. Suggest connections "
-    "when relevant. Treat every idea as a seed with potential to grow."
-)
+def _get_identity_content() -> str:
+    """Build identity string with live date/time injected at request time."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    date_str = now.strftime("%A, %B %-d, %Y %H:%M UTC")  # e.g. "Thursday, April 16, 2026 14:30 UTC"
+    return (
+        "You are Greenplot, an AI-powered Idea Garden assistant. "
+        "You help users capture, organize, and grow their ideas — "
+        "turning fleeting thoughts into structured knowledge. "
+        "You can search seeds, create new ones, find connections, "
+        "search the web for current information, and help users think through complex problems.\n\n"
+        f"Current date and time: {date_str}. Always use this when scheduling calendar events or referencing dates.\n\n"
+        "Be concise, thoughtful, and proactive. Suggest connections "
+        "when relevant. Treat every idea as a seed with potential to grow."
+    )
 
 # Tool selection rules
 _TOOL_SELECTION_CONTENT = (
@@ -253,8 +258,8 @@ class SystemPromptBuilder:
         Returns:
             List of Section objects in render order.
         """
-        # Identity is always first
-        all_sections = [Section(title="Identity", content=_IDENTITY_CONTENT, order=1)]
+        # Identity is always first — computed at request time so date is current
+        all_sections = [Section(title="Identity", content=_get_identity_content(), order=1)]
 
         # Add user sections (sorted by order, then by insertion)
         all_sections.extend(sorted(self._sections, key=lambda s: s.order))

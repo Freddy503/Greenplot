@@ -1301,13 +1301,27 @@ async def create_calendar_event(args: dict, user: User, db: Session) -> str:
 
     tz = conn.calendar_timezone or "UTC"
 
+    from datetime import datetime as _datetime, timedelta as _timedelta
+
     def _dt(iso: str) -> dict:
         return {"dateTime": iso if "T" in iso else f"{iso}T00:00:00", "timeZone": tz}
 
+    def _default_end(start_iso: str) -> str:
+        """Default end_time = start + 1 hour."""
+        try:
+            fmt = "%Y-%m-%dT%H:%M:%SZ" if start_iso.endswith("Z") else "%Y-%m-%dT%H:%M:%S"
+            dt = _datetime.strptime(start_iso.rstrip("Z").split("+")[0], "%Y-%m-%dT%H:%M:%S")
+            return (dt + _timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+        except Exception:
+            return start_iso
+
+    start_iso = args["start_time"]
+    end_iso = args.get("end_time") or _default_end(start_iso)
+
     event_body: dict = {
         "summary": args.get("summary", "New Event"),
-        "start": _dt(args["start_time"]),
-        "end": _dt(args["end_time"]),
+        "start": _dt(start_iso),
+        "end": _dt(end_iso),
     }
     if args.get("description"):
         event_body["description"] = args["description"]
