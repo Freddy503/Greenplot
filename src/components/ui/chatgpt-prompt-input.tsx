@@ -103,11 +103,11 @@ const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 )
 
-const GlobeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+const ImageIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="M2 12h20" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    <rect x="3" y="3" width="18" height="18" rx="3" ry="3" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
   </svg>
 )
 
@@ -139,6 +139,7 @@ export const PromptBox = React.forwardRef<
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
   const [imagePreview, setImagePreview] = React.useState<string | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = React.useState(false)
+  const [imageMode, setImageMode] = React.useState(false)
 
   React.useImperativeHandle(ref, () => internalTextareaRef.current!, [])
 
@@ -193,6 +194,9 @@ export const PromptBox = React.forwardRef<
 
   // Dynamic input hints
   const getHint = (): { icon: string; text: string; color: string } | null => {
+    if (imageMode) {
+      return { icon: 'image', text: 'Image mode — describe what to generate', color: 'text-primary' }
+    }
     const trimmed = value.trim()
     if (!trimmed || trimmed.length < 3) return null
 
@@ -224,9 +228,13 @@ export const PromptBox = React.forwardRef<
   const handleSubmit = () => {
     const currentValue = textareaRef.current?.value ?? value
     if (currentValue.trim() || imagePreview) {
-      onSubmit?.(currentValue)
+      const message = imageMode && currentValue.trim()
+        ? `Generate an image of: ${currentValue.trim()}`
+        : currentValue
+      onSubmit?.(message)
       setValue('')
       if (textareaRef.current) textareaRef.current.value = ''
+      if (imageMode) setImageMode(false)
     }
   }
 
@@ -316,19 +324,25 @@ export const PromptBox = React.forwardRef<
               </TooltipContent>
             </Tooltip>
 
-            {/* Web search */}
+            {/* Generate image */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container focus-visible:outline-none"
+                  onClick={() => setImageMode(m => !m)}
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none',
+                    imageMode
+                      ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                      : 'text-on-surface-variant hover:bg-surface-container'
+                  )}
                 >
-                  <GlobeIcon className="h-5 w-5" />
-                  <span className="sr-only">Search the web</span>
+                  <ImageIcon className="h-5 w-5" />
+                  <span className="sr-only">{imageMode ? 'Cancel image generation' : 'Generate image'}</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" showArrow>
-                <p>Search the web</p>
+                <p>{imageMode ? 'Image mode active — describe what to generate' : 'Generate image with BFL FLUX'}</p>
               </TooltipContent>
             </Tooltip>
 
