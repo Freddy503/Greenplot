@@ -2238,7 +2238,7 @@ from app.calendar_helper import get_fresh_token, GOOGLE_CALENDAR_API as _CAL_API
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-SCOPES = "https://www.googleapis.com/auth/calendar.readonly"
+SCOPES = "https://www.googleapis.com/auth/calendar.events"
 
 class CalendarStatusResponse(BaseModel):
     connected: bool
@@ -2515,6 +2515,61 @@ def get_upcoming_events(
         })
 
     return {"events": events, "connected": True, "timezone": conn.calendar_timezone}
+
+
+@app.post("/api/v1/calendar/events")
+def create_calendar_event(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new event in the user's Google Calendar."""
+    import httpx
+
+    conn = db.query(CalendarConnection).filter(
+        CalendarConnection.user_id == current_user.id,
+        CalendarConnection.enabled == True,
+    ).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="No calendar connected")
+
+    token = get_fresh_token(conn, db)
+    if not token:
+        raise HTTPException(status_code=401, detail="Calendar token expired — reconnect Google Calendar")
+
+    tz = body.get("timezone") or conn.calendar_timezone or "UTC"
+
+    def _dt(iso: str) -> dict:
+        """Wrap a datetime string in the Google Calendar dateTime object."""
+        return {"dateTime": iso if "T" in iso else f"{iso}T00:00:00", "timeZone": tz}
+
+    event_body = {
+        "summary": body.get("summary", "New Event"),
+        "start": _dt(body["start_time"]),
+        "end": _dt(body["end_time"]),
+    }
+    if body.get("description"):
+        event_body["description"] = body["description"]
+    if body.get("location"):
+        event_body["location"] = body["location"]
+
+    resp = httpx.post(
+        f"{_CAL_API}/calendars/primary/events",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json=event_body,
+    )
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=resp.status_code, detail=f"Google Calendar error: {resp.text[:300]}")
+
+    created = resp.json()
+    return {
+        "id": created.get("id"),
+        "summary": created.get("summary"),
+        "start": created.get("start", {}).get("dateTime"),
+        "end": created.get("end", {}).get("dateTime"),
+        "link": created.get("htmlLink"),
+    }
 
 
 # --- Push Notifications (persistent store for PWA) ---

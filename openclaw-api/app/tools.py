@@ -82,6 +82,39 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_calendar_event",
+            "description": "Create a new event in the user's Google Calendar. Use when the user asks to schedule something, block time, or add a meeting.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": "Event title / name."
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Start datetime in ISO 8601 format, e.g. '2025-06-10T14:00:00'. Use the user's local timezone."
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "End datetime in ISO 8601 format. If not specified, default to 1 hour after start."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional event notes or agenda."
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "Optional location or meeting link."
+                    }
+                },
+                "required": ["summary", "start_time", "end_time"]
+            }
+        }
+    },
 ]
 
 # Add web_search after the existing TOOLS list
