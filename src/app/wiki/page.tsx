@@ -22,6 +22,12 @@ import {
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
 import { WikiLintPanel } from '@/components/wiki/wiki-lint-panel'
+import {
+ DropdownMenu,
+ DropdownMenuContent,
+ DropdownMenuItem,
+ DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -768,6 +774,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   <span className="font-bold">Plants</span>
  </button>
  <div className="flex items-center gap-1">
+  {/* Generate image */}
   <button
   onClick={handleGenerateImage}
   disabled={generatingImage}
@@ -780,6 +787,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   <span className="material-symbols-outlined text-lg">image</span>
   )}
   </button>
+  {/* Share */}
   <button
   onClick={() => {
    const text = `${article.title}\n\n${article.summary || ''}\n\n${article.content}`
@@ -794,26 +802,30 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   >
   <span className="material-symbols-outlined text-lg">share</span>
   </button>
-  <button
-  onClick={() => {
-  window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')
-  }}
-  className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
-  title="Download as Markdown"
+  {/* More actions — Download + Print */}
+  <DropdownMenu>
+  <DropdownMenuTrigger
+   className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
+   title="More actions"
   >
-  <span className="material-symbols-outlined text-lg">download</span>
-  </button>
-  <button
-  onClick={() => window.print()}
-  className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
-  title="Export as PDF"
-  >
-  <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
-  </button>
+   <span className="material-symbols-outlined text-lg">more_vert</span>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="end">
+   <DropdownMenuItem onClick={() => window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')}>
+   <span className="material-symbols-outlined text-base mr-2">download</span>
+   Download as Markdown
+   </DropdownMenuItem>
+   <DropdownMenuItem onClick={() => window.print()}>
+   <span className="material-symbols-outlined text-base mr-2">picture_as_pdf</span>
+   Export as PDF
+   </DropdownMenuItem>
+  </DropdownMenuContent>
+  </DropdownMenu>
+  {/* Delete */}
   <button
   onClick={handleDeleteArticle}
   disabled={deleting}
-  className={`flex items-center gap-1 text-sm transition-colors p-2 rounded-full ${confirmDelete ? 'text-error bg-error/10' : 'text-on-surface-variant/60 hover:text-error hover:bg-error/10'}`}
+  className={`flex items-center gap-1 text-sm transition-colors p-2 rounded-full ml-1 ${confirmDelete ? 'text-error bg-error/10' : 'text-on-surface-variant/60 hover:text-error hover:bg-error/10'}`}
   title={confirmDelete ? 'Tap again to confirm delete' : 'Delete article'}
   >
   <span className="material-symbols-outlined text-lg">{deleting ? 'progress_activity' : 'delete'}</span>
