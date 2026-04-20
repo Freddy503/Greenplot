@@ -819,7 +819,7 @@ function Testimonial() {
       <div ref={ref} style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center', opacity: inView ? 1 : 0, transform: inView ? 'translateY(0)' : 'translateY(24px)', transition: 'all 0.7s ease' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, color: T.green, lineHeight: 0.6, marginBottom: '1.5rem', fontStyle: 'italic' }}>&ldquo;</div>
         <blockquote style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(20px,3vw,30px)', fontWeight: 400, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, letterSpacing: '-0.01em', fontStyle: 'italic', border: 'none', margin: 0, padding: 0 }}>
-          I used to lose my best ideas in 47 different apps, countless bookmarks and unstructured notes.
+          I used to lose my best ideas in many different apps, countless bookmarks and unstructured notes.
           Now they all live in one garden.
         </blockquote>
       </div>
