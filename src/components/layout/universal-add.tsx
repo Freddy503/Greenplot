@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -41,7 +42,11 @@ function getTypeInfo(type: DetectedType) {
 
 export default function UniversalAdd() {
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
+
+  // Hide on the landing page
+  if (pathname === '/') return null
   const [text, setText] = useState('')
   const [adding, setAdding] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)

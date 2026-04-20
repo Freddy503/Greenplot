@@ -168,7 +168,7 @@ function LinkCard({ link, onStar, onDelete, onClick, onSaveToGarden }: { link: L
   {/* Delete */}
   <button
   onClick={(e) => { e.stopPropagation(); onDelete() }}
-  className="flex-shrink-0 p-1.5 rounded-full text-on-surface-variant/30 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+  className="flex-shrink-0 p-1.5 rounded-full text-on-surface-variant/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
   >
   <span className="material-symbols-outlined text-sm">close</span>
   </button>
