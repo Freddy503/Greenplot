@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM = 'Greenplot <digest@greenplot.ink>'
 const NOTIFY_TO = 'contact@example.com'
 
@@ -11,11 +10,11 @@ function validEmail(e: string): boolean {
   return typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()) && e.length <= 320
 }
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(apiKey: string, to: string, subject: string, html: string) {
   return fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ from: FROM, to: [to], subject, html }),
@@ -23,6 +22,9 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Read inside handler so Vercel always picks up the live value
+  const apiKey = process.env.RESEND_API_KEY
+
   try {
     const { email } = await req.json()
 
@@ -33,16 +35,17 @@ export async function POST(req: NextRequest) {
     const normalized = email.trim().toLowerCase()
 
     if (recentEmails.has(normalized)) {
-      // Already submitted in this process — return success silently
       return NextResponse.json({ ok: true })
     }
 
-    if (!RESEND_API_KEY) {
+    if (!apiKey) {
+      console.error('[waitlist] RESEND_API_KEY is not set')
       return NextResponse.json({ error: 'Email service not configured' }, { status: 503 })
     }
 
     // Send confirmation to the user
     const confirmRes = await sendEmail(
+      apiKey,
       normalized,
       "You're on the Greenplot waitlist 🌱",
       `
@@ -71,25 +74,25 @@ export async function POST(req: NextRequest) {
 
     if (!confirmRes.ok) {
       const err = await confirmRes.json().catch(() => ({}))
-      console.error('Resend error (confirmation):', err)
+      console.error('[waitlist] Resend error:', err)
       return NextResponse.json({ error: 'Failed to send confirmation' }, { status: 500 })
     }
 
-    // Notify operator
-    await sendEmail(
+    // Notify operator (non-critical)
+    sendEmail(
+      apiKey,
       NOTIFY_TO,
       `🌱 New Greenplot waitlist signup — ${normalized}`,
       `
       <div style="font-family:sans-serif;max-width:500px;background:#111;color:#f9fafb;padding:32px;border-radius:12px;">
         <h2 style="margin:0 0 16px;font-size:18px;">🌱 New waitlist signup</h2>
         <p style="margin:0;font-size:16px;color:#22c55e;font-weight:700;">${normalized}</p>
-        <p style="margin-top:16px;font-size:12px;color:#6b7280;">greenplot.ink/waitlist</p>
+        <p style="margin-top:16px;font-size:12px;color:#6b7280;">greenplot.ink</p>
       </div>
       `
-    ).catch(() => { /* non-critical */ })
+    ).catch(() => {})
 
     recentEmails.add(normalized)
-    // Clear after 10 min to allow re-submission if needed
     setTimeout(() => recentEmails.delete(normalized), 10 * 60 * 1000)
 
     return NextResponse.json({ ok: true })
