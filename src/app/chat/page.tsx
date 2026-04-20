@@ -244,10 +244,11 @@ export default function ChatPage() {
     onError: (err) => {
       console.error('[chat] useChat error:', err)
       const msg = String(err)
-      if (msg.includes('401') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('not authenticated')) {
-        toast.error('Session expired — please log in again', {
-          action: { label: 'Log in', onClick: () => { window.location.href = '/login' } },
-        })
+      if (msg.includes('401') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('not authenticated') || msg.toLowerCase().includes('could not validate')) {
+        localStorage.removeItem('greenplot_token')
+        localStorage.removeItem('greenplot_tenant')
+        localStorage.removeItem('greenplot_nickname')
+        window.location.href = '/login'
       }
     },
   })
