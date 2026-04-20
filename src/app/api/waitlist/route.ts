@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 const FROM = 'Greenplot <digest@greenplot.ink>'
 const NOTIFY_TO = 'contact@example.com'
 
-// Simple in-process dedup (resets on cold start, but prevents double-click spam)
 const recentEmails = new Set<string>()
 
 function validEmail(e: string): boolean {
@@ -13,17 +12,22 @@ function validEmail(e: string): boolean {
 async function sendEmail(apiKey: string, to: string, subject: string, html: string) {
   return fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: FROM, to: [to], subject, html }),
   })
 }
 
+async function addToAudience(apiKey: string, audienceId: string, email: string) {
+  return fetch(`https://api.resend.com/audiences/${audienceId}/contacts`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, unsubscribed: false }),
+  })
+}
+
 export async function POST(req: NextRequest) {
-  // Read inside handler so Vercel always picks up the live value
   const apiKey = process.env.RESEND_API_KEY
+  const audienceId = process.env.RESEND_AUDIENCE_ID
 
   try {
     const { email } = await req.json()
@@ -40,15 +44,16 @@ export async function POST(req: NextRequest) {
 
     if (!apiKey) {
       console.error('[waitlist] RESEND_API_KEY is not set')
-      return NextResponse.json({
-        error: 'Email service not configured',
-        debug: {
-          hasResend: !!process.env.RESEND_API_KEY,
-          resendLength: (process.env.RESEND_API_KEY ?? '').length,
-          projectName: process.env.VERCEL_PROJECT_NAME,
-          env: process.env.VERCEL_ENV,
-        }
-      }, { status: 503 })
+      return NextResponse.json({ error: 'Email service not configured' }, { status: 503 })
+    }
+
+    // Add to Resend Audience for future broadcasts (non-critical)
+    if (audienceId) {
+      addToAudience(apiKey, audienceId, normalized).catch(err =>
+        console.error('[waitlist] Failed to add to audience:', err)
+      )
+    } else {
+      console.warn('[waitlist] RESEND_AUDIENCE_ID not set — skipping audience add')
     }
 
     // Send confirmation to the user
