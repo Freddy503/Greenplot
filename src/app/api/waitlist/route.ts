@@ -44,11 +44,9 @@ export async function POST(req: NextRequest) {
         error: 'Email service not configured',
         debug: {
           hasResend: !!process.env.RESEND_API_KEY,
-          hasTest: !!process.env.RESEND_TEST,
-          testValue: process.env.RESEND_TEST,
+          resendLength: (process.env.RESEND_API_KEY ?? '').length,
           projectName: process.env.VERCEL_PROJECT_NAME,
           env: process.env.VERCEL_ENV,
-          envCount: Object.keys(process.env).length,
         }
       }, { status: 503 })
     }
