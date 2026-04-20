@@ -80,7 +80,6 @@ import {
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
-import { PaperclipIcon, GlobeIcon } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -1290,7 +1289,7 @@ export default function ChatPage() {
       {/* ── Input area ───────────────────────────────── */}
       <div
         className="shrink-0 px-4 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent relative"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4.5rem)' }}
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height) + 0.5rem)' }}
       >
         {/* Recording indicator */}
         {voiceState === 'recording' && (
@@ -1309,6 +1308,7 @@ export default function ChatPage() {
           <PromptBox
             name="message"
             disabled={isStreaming}
+            isDisabled={isStreaming}
             isRecording={voiceState === 'recording'}
             isProcessingVoice={voiceState === 'processing'}
             recordingDuration={voiceDuration}

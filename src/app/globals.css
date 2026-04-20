@@ -189,6 +189,8 @@ body {
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   /* Header height grows to include the status-bar safe area */
   --header-height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  /* Bottom nav height — single source of truth for input area padding */
+  --bottom-nav-height: 4rem;
 }
 
 /* ── Full-screen layout ──────────────────────────── */
