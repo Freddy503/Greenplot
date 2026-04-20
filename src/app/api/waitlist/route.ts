@@ -40,7 +40,14 @@ export async function POST(req: NextRequest) {
 
     if (!apiKey) {
       console.error('[waitlist] RESEND_API_KEY is not set')
-      return NextResponse.json({ error: 'Email service not configured' }, { status: 503 })
+      return NextResponse.json({
+        error: 'Email service not configured',
+        debug: {
+          hasResend: !!process.env.RESEND_API_KEY,
+          envCount: Object.keys(process.env).length,
+          knownKeys: Object.keys(process.env).filter(k => !k.match(/key|secret|token|password|url/i)),
+        }
+      }, { status: 503 })
     }
 
     // Send confirmation to the user
