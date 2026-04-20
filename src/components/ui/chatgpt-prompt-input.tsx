@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
-import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { cn } from '@/lib/utils'
 
 // --- Radix Primitives ---
@@ -32,74 +31,13 @@ const TooltipContent = React.forwardRef<
 ))
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
-const Dialog = DialogPrimitive.Root
-const DialogPortal = DialogPrimitive.Portal
-const DialogOverlay = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-      'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm',
-      'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-      className
-    )}
-    {...props}
-  />
-))
-DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
-
-const DialogContent = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-[90vw] md:max-w-[800px] translate-x-[-50%] translate-y-[-50%] gap-4 border-none bg-transparent p-0 shadow-none duration-300',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        className
-      )}
-      {...props}
-    >
-      <div className="relative bg-card rounded-[28px] overflow-hidden shadow-2xl p-1">
-        {children}
-        <DialogPrimitive.Close className="absolute right-3 top-3 z-10 rounded-full bg-background/50 p-1 hover:bg-accent transition-all">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
-      </div>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-))
-DialogContent.displayName = DialogPrimitive.Content.displayName
 
 // --- SVG Icons ---
-
-const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M12 5V19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M5 12H19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
 
 const SendIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
     <path d="M12 5.25L12 18.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M18.75 12L12 5.25L5.25 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
-const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 )
 
@@ -131,14 +69,13 @@ export const PromptBox = React.forwardRef<
     onToggleVoice?: () => void
     /** Opens the full-screen Siri-style voice overlay (preferred over onToggleVoice on mobile) */
     onOpenVoice?: () => void
+    /** Disables image mode toggle and mic while streaming */
+    isDisabled?: boolean
   }
->(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, onOpenVoice, ...props }, ref) => {
+>(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, onOpenVoice, isDisabled, ...props }, ref) => {
   const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [value, setValue] = React.useState('')
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
-  const [imagePreview, setImagePreview] = React.useState<string | null>(null)
-  const [isImageDialogOpen, setIsImageDialogOpen] = React.useState(false)
   const [imageMode, setImageMode] = React.useState(false)
 
   React.useImperativeHandle(ref, () => internalTextareaRef.current!, [])
@@ -167,30 +104,6 @@ export const PromptBox = React.forwardRef<
     ta.addEventListener('input', handler, { passive: true })
     return () => ta.removeEventListener('input', handler)
   }, [value])
-
-  const handlePlusClick = () => {
-    fileInputRef.current?.click()
-  }
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-    event.target.value = ''
-  }
-
-  const handleRemoveImage = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation()
-    setImagePreview(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
 
   // Dynamic input hints
   const getHint = (): { icon: string; text: string; color: string } | null => {
@@ -227,8 +140,8 @@ export const PromptBox = React.forwardRef<
 
   const handleSubmit = () => {
     const currentValue = textareaRef.current?.value ?? value
-    if (currentValue.trim() || imagePreview) {
-      const message = imageMode && currentValue.trim()
+    if (currentValue.trim()) {
+      const message = imageMode
         ? `Generate an image of: ${currentValue.trim()}`
         : currentValue
       onSubmit?.(message)
@@ -245,7 +158,7 @@ export const PromptBox = React.forwardRef<
     }
   }
 
-  const hasValue = (textareaRef.current?.value ?? value).trim().length > 0 || imagePreview
+  const hasValue = (textareaRef.current?.value ?? value).trim().length > 0
 
   return (
     <div
@@ -255,28 +168,6 @@ export const PromptBox = React.forwardRef<
         className
       )}
     >
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-
-      {imagePreview && (
-        <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
-          <div className="relative mb-1 w-fit rounded-[1rem] px-1 pt-1">
-            <button type="button" className="transition-transform" onClick={() => setIsImageDialogOpen(true)}>
-              <img src={imagePreview} alt="Image preview" className="h-14 w-14 rounded-[1rem] object-cover" />
-            </button>
-            <button
-              onClick={handleRemoveImage}
-              className="absolute right-2 top-2 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-background/50 text-foreground transition-colors hover:bg-accent"
-              aria-label="Remove image"
-            >
-              <XIcon className="h-4 w-4" />
-            </button>
-          </div>
-          <DialogContent>
-            <img src={imagePreview} alt="Full size preview" className="w-full max-h-[95vh] object-contain rounded-[24px]" />
-          </DialogContent>
-        </Dialog>
-      )}
-
       <textarea
         ref={(el) => {
           textareaRef.current = el
@@ -307,31 +198,15 @@ export const PromptBox = React.forwardRef<
       <div className="mt-0.5 p-1 pt-0">
         <TooltipProvider delayDuration={100}>
           <div className="flex items-center gap-2">
-            {/* Attach */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handlePlusClick}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container focus-visible:outline-none"
-                >
-                  <PlusIcon className="h-6 w-6" />
-                  <span className="sr-only">Attach image</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" showArrow>
-                <p>Attach image</p>
-              </TooltipContent>
-            </Tooltip>
-
             {/* Generate image */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   onClick={() => setImageMode(m => !m)}
+                  disabled={isDisabled}
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none',
+                    'flex h-8 w-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none disabled:opacity-40 disabled:pointer-events-none',
                     imageMode
                       ? 'bg-primary/20 text-primary hover:bg-primary/30'
                       : 'text-on-surface-variant hover:bg-surface-container'
@@ -355,9 +230,9 @@ export const PromptBox = React.forwardRef<
                 <button
                   type="button"
                   onClick={onOpenVoice ?? onToggleVoice}
-                  disabled={isProcessingVoice}
+                  disabled={isProcessingVoice || isDisabled}
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-all focus-visible:outline-none',
+                    'flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-all focus-visible:outline-none disabled:opacity-40',
                     isRecording
                       ? 'bg-error/15 text-error animate-pulse hover:bg-error/25'
                       : isProcessingVoice
