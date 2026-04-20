@@ -107,6 +107,11 @@ export async function POST(req: Request) {
 
         if (!res.ok) {
           const errorText = await res.text()
+          if (res.status === 401) {
+            // Surface as a real HTTP error so useChat's onError handler fires
+            // and the frontend can redirect to login.
+            throw new Error(`401: ${errorText}`)
+          }
           ensureTextStarted()
           writer.write({
             type: 'text-delta',

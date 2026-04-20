@@ -1009,7 +1009,14 @@ export default function WikiPage() {
  fetch('/api/wiki', {
  headers: token ? { Authorization: `Bearer ${token}` } : {},
  })
- .then(r => r.json())
+ .then(r => {
+  if (r.status === 401) {
+   localStorage.removeItem('greenplot_token')
+   window.location.href = '/login'
+   return { articles: [] }
+  }
+  return r.json()
+ })
  .then(data => {
  setArticles(data.articles || [])
  })
