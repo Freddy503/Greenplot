@@ -692,20 +692,21 @@ function FeaturesShowcase() {
                 <button key={f.name} onClick={() => setActive(i)}
                   className={isActive ? 'liquid-glass' : ''}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.85rem 1.1rem',
+                    display: 'flex', alignItems: 'flex-start', gap: '0.9rem', padding: '0.85rem 1.1rem',
                     borderRadius: '0.85rem',
                     border: isActive ? 'none' : '1px solid rgba(255,255,255,0.08)',
                     background: isActive ? undefined : 'transparent',
                     cursor: 'pointer', textAlign: 'left', transition: 'all 0.22s ease',
                     fontFamily: 'var(--font-ui)',
                     transform: isActive ? 'translateX(4px)' : 'translateX(0)',
+                    width: '100%',
                   }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '0.6rem', flexShrink: 0, background: isActive ? f.color + '30' : 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.22s' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '0.6rem', flexShrink: 0, background: isActive ? f.color + '30' : 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, transition: 'all 0.22s' }}>
                     <Icon name={f.icon} size={16} color={isActive ? f.color : 'rgba(255,255,255,0.4)'} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, color: isActive ? '#fff' : 'rgba(255,255,255,0.6)', lineHeight: 1.3 }}>{f.name}</div>
-                    {isActive && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.desc}</div>}
+                    {isActive && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2, lineHeight: 1.6, whiteSpace: 'normal' }}>{f.desc}</div>}
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? f.color : 'rgba(255,255,255,0.25)', background: isActive ? f.color + '20' : 'transparent', borderRadius: 999, padding: '2px 8px', flexShrink: 0, transition: 'all 0.22s', fontFamily: 'var(--font-ui)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{f.tag}</span>
                 </button>
