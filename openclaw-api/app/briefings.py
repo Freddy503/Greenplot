@@ -739,6 +739,24 @@ def _save_papers_as_seeds(papers: list, user_id: str, db) -> int:
     return saved
 
 
+def _get_seen_paper_urls(user_id: str, db) -> set:
+    """Return source_urls of all research papers already saved for this user."""
+    from app.models import Seed
+    try:
+        rows = db.query(Seed.seed_metadata).filter(
+            Seed.user_id == user_id,
+            Seed.seed_metadata["tags"].astext.contains("research-paper"),
+        ).all()
+        urls = set()
+        for (meta,) in rows:
+            if isinstance(meta, dict) and meta.get("source_url"):
+                urls.add(meta["source_url"])
+        return urls
+    except Exception as e:
+        logger.warning(f"[academic_digest] Could not load seen paper URLs: {e}")
+        return set()
+
+
 async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     """
     Build a daily academic + practical digest that connects new research
@@ -763,16 +781,21 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     weather = await fetch_weather(city)
 
     # Fetch arXiv papers (abs/ pages only) + enterprise news
-    paper_results = await _fetch_arxiv_papers(themes, limit=8)
+    paper_results = await _fetch_arxiv_papers(themes, limit=12)
     news_results = await fetch_web_search(f"enterprise AI {theme_str} news {today}", limit=3)
 
-    # Deduplicate papers by URL
+    # Deduplicate: remove papers already saved to this user's Garden
+    seen_urls = _get_seen_paper_urls(user_id, db)
     seen = set()
     unique_papers = []
     for p in paper_results:
-        if p["url"] not in seen:
-            seen.add(p["url"])
+        url = p["url"]
+        if url not in seen and url not in seen_urls:
+            seen.add(url)
             unique_papers.append(p)
+
+    # If all fetched papers were already seen, note it for the digest
+    all_papers_seen = len(paper_results) > 0 and len(unique_papers) == 0
 
     # Fetch full text for top 4 papers
     from app.enricher import fetch_url_content
@@ -792,10 +815,13 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     wiki_block = "\n".join(
         f"[{w['source']}]: {w['excerpt']}" for w in wiki_ctx
     ) or "No wiki articles found."
-    papers_block = "\n\n".join(
-        f"PAPER: {p['title']}\nURL: {p['url']}\n{p['text']}"
-        for p in paper_texts
-    ) or "No papers found."
+    if all_papers_seen:
+        papers_block = "All recent papers matching these themes have already been shown in prior briefings. Focus the Academic Spotlight on synthesizing the user's existing wiki knowledge instead, and note that no new papers were found."
+    else:
+        papers_block = "\n\n".join(
+            f"PAPER: {p['title']}\nURL: {p['url']}\n{p['text']}"
+            for p in paper_texts
+        ) or "No papers found."
     news_block = "\n".join(
         f"- {n['title']} ({n['url']}): {n['snippet']}"
         for n in news_results[:3]

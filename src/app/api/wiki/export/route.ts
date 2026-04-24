@@ -6,7 +6,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const articleId = searchParams.get('id')
   const format = searchParams.get('format') || 'md'
-  const token = req.headers.get('authorization') || ''
+  // Accept token from Authorization header OR query param (needed for window.open downloads)
+  const token = req.headers.get('authorization') || (searchParams.get('token') ? `Bearer ${searchParams.get('token')}` : '')
 
   if (!articleId) {
     return NextResponse.json({ error: 'Article ID required' }, { status: 400 })
@@ -25,11 +26,42 @@ export async function GET(req: NextRequest) {
     }
 
     if (format === 'md') {
+      const now = new Date().toISOString().slice(0, 10)
+      const backlinks = Array.isArray(article.backlinks) && article.backlinks.length
+        ? article.backlinks.map((b: string) => `- [[${b}]]`).join('\n')
+        : '_None_'
+      const seedCount = Array.isArray(article.sourceSeedIds)
+        ? article.sourceSeedIds.length
+        : Array.isArray(article.seedIds)
+          ? article.seedIds.length
+          : 0
+      const summaryLine = article.summary
+        ? `\n## Summary\n\n${article.summary}\n`
+        : ''
+
+      const md = `# ${article.title}
+
+> **Category**: ${article.category || 'General'}
+> **Last updated**: ${article.updatedAt ? new Date(article.updatedAt).toISOString().slice(0, 10) : now}
+> **Built from**: ${seedCount} idea${seedCount !== 1 ? 's' : ''}
+> **Exported**: ${now}
+${summaryLine}
+## Article
+
+${article.content}
+
+## Related Topics
+
+${backlinks}
+
+---
+*Exported from Greenplot — your living knowledge garden.*
+`
       const headers = {
         'Content-Disposition': `attachment; filename="${article.title.replace(/[^a-z0-9]/gi, '_')}.md"`,
-        'Content-Type': 'text/markdown',
+        'Content-Type': 'text/markdown; charset=utf-8',
       }
-      return new NextResponse(article.content, { headers })
+      return new NextResponse(md, { headers })
     }
 
     if (format === 'html') {
