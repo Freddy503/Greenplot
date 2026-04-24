@@ -121,7 +121,7 @@ export default function NotificationsPage() {
             >
               notifications
             </span>
-            <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Inbox</h1>
+            <h1 className="text-2xl font-normal tracking-tight text-on-surface">Inbox</h1>
           </div>
 
           {/* Research Paper Agent */}

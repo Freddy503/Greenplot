@@ -206,7 +206,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[85vh] rounded-t-[2rem] bg-surface border-outline-variant/10 overflow-y-auto">
+      <SheetContent side="bottom" className="h-[85vh] rounded-t-[2rem] glass-card border-outline-variant/10 overflow-y-auto">
         <SheetHeader className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

@@ -17,7 +17,7 @@ export default function ErrorPage({
   return (
     <div className="flex flex-col items-center justify-center h-dvh gap-4 bg-background text-on-surface">
       <span className="material-symbols-outlined text-6xl text-error">error</span>
-      <h1 className="text-2xl font-bold text-on-surface">Something went wrong</h1>
+      <h1 className="text-2xl font-normal text-on-surface">Something went wrong</h1>
       <p className="text-sm text-on-surface-variant max-w-sm text-center">
         We encountered an unexpected error. Please try again.
       </p>

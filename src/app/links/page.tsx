@@ -468,11 +468,11 @@ export default function LinksPage() {
  <div className="h-dvh flex flex-col bg-background">
  <Header />
 
- <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}>
+ <main className="flex-1 overflow-y-auto animate-fade-rise" style={{ paddingTop: 'var(--header-height)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}>
  {/* Hero */}
  <section className=" px-2">
   <div className="flex items-center justify-between ">
-  <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
+  <h1 className="text-3xl font-normal tracking-tight leading-tight text-on-surface">
   Link <span className="text-primary">Sources</span>
   </h1>
   <div className="flex items-center gap-2">

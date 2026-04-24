@@ -63,7 +63,7 @@ export default function WikiFilesPage() {
         <section className="px-4 pt-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-2xl font-bold text-on-surface">
+              <h1 className="text-2xl font-normal text-on-surface">
                 Wiki <span className="text-primary">Files</span>
               </h1>
               <p className="text-sm text-on-surface-variant mt-1">
