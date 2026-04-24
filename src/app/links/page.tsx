@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -181,7 +180,7 @@ function LinkCard({ link, onStar, onDelete, onClick, onSaveToGarden }: { link: L
 // ── Page ──────────────────────────────────────────────
 
 export default function LinksPage() {
- const router = useRouter()
+
  const [links, setLinks] = useState<LinkItem[]>([])
  const [loading, setLoading] = useState(true)
  const [addOpen, setAddOpen] = useState(false)
@@ -196,40 +195,47 @@ export default function LinksPage() {
  const [selectedLink, setSelectedLink] = useState<LinkItem | null>(null)
  const [detailOpen, setDetailOpen] = useState(false)
 
- // Load from API
- useEffect(() => {
+ // Fetch links from API — shared by initial load and polling
+ const fetchLinks = useCallback(async (silent = false) => {
+ if (!silent) setLoading(true)
  const token = localStorage.getItem('greenplot_token')
- fetch('/api/links', {
- headers: token ? { Authorization: `Bearer ${token}` } : {},
- })
- .then(r => r.json())
- .then(data => {
- const allLinks = data.links || []
- setLinks(allLinks)
+ try {
+  const r = await fetch('/api/links', {
+  headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  const data = await r.json()
+  const allLinks = data.links || []
+  setLinks(allLinks)
 
- // Calculate new sources (last 7 days) for badge
- const weekAgo = new Date()
- weekAgo.setDate(weekAgo.getDate() - 7)
- const lastSeen = parseInt(localStorage.getItem('greenplot_last_sources_visit') || '0', 10)
- const newCount = allLinks.filter((l: any) => {
+  // Badge: count new sources since last visit
+  const lastSeen = parseInt(localStorage.getItem('greenplot_last_sources_visit') || '0', 10)
+  const newCount = allLinks.filter((l: any) => {
   const ts = new Date(l.created_at || l.addedAt).getTime()
   return ts > lastSeen
- }).length
- if (newCount > 0) {
-  localStorage.setItem('greenplot_new_sources', newCount.toString())
+  }).length
+  if (newCount > 0) localStorage.setItem('greenplot_new_sources', newCount.toString())
+  localStorage.setItem('greenplot_last_sources_visit', Date.now().toString())
+  localStorage.setItem('greenplot_new_sources', '0')
+ } catch {
+  if (!silent) {
+  const stored = localStorage.getItem('greenplot_links')
+  if (stored) { try { setLinks(JSON.parse(stored)) } catch {} }
+  }
+ } finally {
+  if (!silent) setLoading(false)
  }
-
- // Mark as seen when user visits this page
- localStorage.setItem('greenplot_last_sources_visit', Date.now().toString())
- localStorage.setItem('greenplot_new_sources', '0')
- })
- .catch(() => {
- // Fallback to localStorage
- const stored = localStorage.getItem('greenplot_links')
- if (stored) { try { setLinks(JSON.parse(stored)) } catch {} }
- })
- .finally(() => setLoading(false))
  }, [])
+
+ // Initial load
+ useEffect(() => { fetchLinks() }, [fetchLinks])
+
+ // Poll every 20s — picks up backend enrichment (title, summary, tags)
+ // without the user needing to refresh
+ const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+ useEffect(() => {
+ pollRef.current = setInterval(() => fetchLinks(true), 20_000)
+ return () => { if (pollRef.current) clearInterval(pollRef.current) }
+ }, [fetchLinks])
 
  // Save to localStorage as cache
  const saveLinksCache = useCallback((updated: LinkItem[]) => {
