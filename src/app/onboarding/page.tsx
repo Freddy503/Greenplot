@@ -229,7 +229,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       </div>
 
       <div className="text-center mb-10">
-        <h1 className="text-5xl font-extrabold tracking-tighter leading-[1.1] mb-6 text-on-surface">
+        <h1 className="text-5xl font-normal tracking-tighter leading-[1.1] mb-6 text-on-surface">
           Welcome to{'\n'}Greenplot
         </h1>
         <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
@@ -294,7 +294,7 @@ function StepWhoAreYou({
       </div>
 
       <div className="text-center mb-8">
-        <h2 className="text-4xl font-extrabold tracking-tight mb-3 text-on-surface">
+        <h2 className="text-4xl font-normal tracking-tight mb-3 text-on-surface">
           Tell us about your roots
         </h2>
         <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
@@ -342,7 +342,7 @@ function StepInterests({
   return (
     <StepShell step={2}>
       <div className="text-left mb-10 w-full">
-        <h2 className="text-[2.5rem] leading-[1.1] font-extrabold tracking-[-0.04em] text-on-surface mb-4">
+        <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
           What seeds should<br />we plant?
         </h2>
         <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
@@ -410,7 +410,7 @@ function StepNurtureFocus({
   return (
     <StepShell step={3}>
       <div className="text-left mb-10 w-full">
-        <h2 className="text-[2.5rem] leading-[1.1] font-extrabold tracking-[-0.04em] text-on-surface mb-4">
+        <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
           Nurture your focus.
         </h2>
         <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
@@ -518,7 +518,7 @@ function StepHowItWorks({
   return (
     <StepShell step={4}>
       <div className="text-left mb-8 w-full">
-        <h2 className="text-[2.5rem] leading-[1.1] font-extrabold tracking-[-0.04em] text-on-surface mb-4">
+        <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
           The Living Intelligence
         </h2>
         <p className="text-base text-on-surface-variant max-w-md leading-relaxed">

@@ -69,7 +69,7 @@ export default function SetupPage() {
           <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'var(--primary)' }}>
             <span className="material-symbols-outlined text-3xl" style={{ color: 'var(--on-primary)' }}>eco</span>
           </div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--on-surface)' }}>Welcome to Greenplot</h1>
+          <h1 className="text-2xl font-normal" style={{ color: 'var(--on-surface)' }}>Welcome to Greenplot</h1>
           <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--on-surface-variant)' }}>
             Greenplot is your personal AI second brain. Plant ideas, articles, and notes as <strong style={{ color: 'var(--primary)' }}>seeds</strong>. Your AI grows them into a searchable knowledge garden — enriched with web research, connected by meaning, and surfaced back to you as daily briefings.
           </p>

@@ -71,7 +71,7 @@ function ShareHandler() {
       </span>
 
       <div>
-        <h1 className="text-2xl font-extrabold text-on-surface mb-1">
+        <h1 className="text-2xl font-normal text-on-surface mb-1">
           {saved ? 'Saved to Garden!' : saving ? 'Saving…' : 'Save to Garden'}
         </h1>
         {(sharedTitle || sharedUrl) && (

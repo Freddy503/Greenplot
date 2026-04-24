@@ -105,7 +105,7 @@ export default function WikiIndexPage() {
  <section className="">
   <div className="flex items-center justify-between ">
   <div>
-  <h1 className="text-3xl font-extrabold tracking-tight text-on-surface">
+  <h1 className="text-3xl font-normal tracking-tight text-on-surface">
   Wiki <span className="text-primary">Index</span>
   </h1>
   <p className="text-sm text-on-surface-variant mt-1">
@@ -189,7 +189,7 @@ export default function WikiIndexPage() {
   
   {/* Content */}
   <div className="flex-1 min-w-0">
-   <h3 className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors truncate">
+   <h3 className="text-sm font-normal text-on-surface group-hover:text-primary transition-colors truncate">
    {article.title}
    </h3>
    <div className="flex items-center gap-2 mt-0.5">

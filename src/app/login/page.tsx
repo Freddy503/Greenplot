@@ -79,7 +79,7 @@ function LoginForm() {
               forest
             </span>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">
+          <h1 className="text-2xl font-normal tracking-tight text-on-surface">
             Welcome back
           </h1>
           <p className="mt-1 text-sm font-medium text-on-surface-variant">

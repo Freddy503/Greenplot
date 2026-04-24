@@ -505,7 +505,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
  {/* Sections — rendered with react-markdown for tables, code blocks, etc. */}
  {parsed.sections.map((section) => (
  <section key={section.id} id={section.id} className=" scroll-mt-24">
-  <h2 className="text-lg font-extrabold text-on-surface mt-6 border-b border-outline-variant/10">
+  <h2 className="text-lg font-normal text-on-surface mt-6 border-b border-outline-variant/10">
   {section.title}
   </h2>
   <div className="prose-sm prose-invert prose max-w-none
@@ -527,7 +527,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
  {/* See Also */}
  {parsed.seeAlso.length > 0 && (
  <section className="">
-  <h2 className="text-lg font-extrabold text-on-surface mt-6 border-b border-outline-variant/10">
+  <h2 className="text-lg font-normal text-on-surface mt-6 border-b border-outline-variant/10">
   See Also
   </h2>
   <div className="flex flex-wrap gap-2">
@@ -543,7 +543,7 @@ function WikiContent({ parsed, article }: { parsed: ParsedArticle; article: Wiki
  {/* References */}
  {parsed.references.length > 0 && (
  <section className="" id="source-links">
-  <h2 className="text-lg font-extrabold text-on-surface mt-6 border-b border-outline-variant/10">
+  <h2 className="text-lg font-normal text-on-surface mt-6 border-b border-outline-variant/10">
   References
   </h2>
   <ol className="space-y-1 text-xs text-on-surface-variant">
@@ -632,7 +632,7 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
 
   {/* Content */}
   <div className="flex-1 min-w-0">
-  <h3 className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors leading-snug">
+  <h3 className="text-sm font-normal text-on-surface group-hover:text-primary transition-colors leading-snug">
   {article.title}
   </h3>
   <p className="text-xs text-on-surface-variant/60 mt-1 leading-relaxed line-clamp-2">
@@ -863,7 +863,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   </span>
  </div>
  <div>
-  <h1 className="text-2xl font-extrabold tracking-tight text-on-surface leading-tight">
+  <h1 className="text-2xl font-normal tracking-tight text-on-surface leading-tight">
   {article.title}
   </h1>
   <div className="flex items-center gap-2 mt-1">
@@ -878,7 +878,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
  </div>
 
  {/* Wikipedia-Style Content */}
- <Card className="bg-surface-container-low border-outline-variant/10 ">
+ <Card className="glass-card border-0">
  <CardContent className="p-5">
   <WikiContent parsed={parsed} article={article} />
  </CardContent>
@@ -1118,7 +1118,7 @@ export default function WikiPage() {
  {/* Hero */}
  <section className=" px-2">
   <div className="flex items-center justify-between ">
-  <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-on-surface">
+  <h1 className="text-3xl font-normal tracking-tight leading-tight text-on-surface">
   Knowledge <span className="text-primary">Plants</span>
   </h1>
   <div className="flex items-center gap-1">

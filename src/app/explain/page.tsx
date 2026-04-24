@@ -158,7 +158,7 @@ export default function ExplainPage() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-primary" style={{ fontSize: '22px', fontVariationSettings: '"FILL" 1' }}>school</span>
-              <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Explain</h1>
+              <h1 className="text-2xl font-normal tracking-tight text-on-surface">Explain</h1>
             </div>
             {showExport && (
               <div className="flex items-center gap-2">

@@ -771,7 +771,7 @@ export default function ChatPage() {
 
                   {/* Title */}
                   <div className="text-center">
-                    <h2 className="text-xl font-extrabold tracking-tight mb-1.5 text-on-surface">
+                    <h2 className="text-xl font-normal tracking-tight mb-1.5 text-on-surface">
                       Start a conversation
                     </h2>
                     <p className="text-sm font-medium leading-relaxed text-on-surface-variant">
