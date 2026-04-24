@@ -1,6 +1,5 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import UniversalAdd from "@/components/layout/universal-add";
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Barlow, Sora } from "next/font/google";
 import "./globals.css";
@@ -74,7 +73,6 @@ export default function RootLayout({
         className="min-h-screen bg-[#fafaf8] text-[#111211]"
       >
         <TooltipProvider>{children}</TooltipProvider>
-        <UniversalAdd />
         <Toaster theme="dark" position="top-center" richColors closeButton />
       </body>
     </html>
