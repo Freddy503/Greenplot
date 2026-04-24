@@ -113,10 +113,16 @@ body {
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* ── Design system font roles ────────────────────── */
+/* --font-display  → Instrument Serif italic  (headings, editorial moments) */
+/* --font-body     → Barlow                   (body copy, prose, descriptions) */
+/* --font-ui       → Sora                     (buttons, labels, metadata, nav) */
+/* These vars are injected by next/font and available globally via className on <html> */
+
 /* ── Shadcn bridge ───────────────────────────────── */
 @theme inline {
-  --font-heading: var(--font-jakarta);
-  --font-sans: var(--font-jakarta);
+  --font-heading: var(--font-display);
+  --font-sans: var(--font-body);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -166,8 +172,21 @@ body {
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  body { @apply bg-background text-foreground; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body, 'Barlow', system-ui, sans-serif);
+    font-weight: 400;
+    line-height: 1.6;
+  }
   html { @apply font-sans; }
+
+  /* Display headings — Instrument Serif italic */
+  h1, h2, h3 {
+    font-family: var(--font-display, 'Instrument Serif', Georgia, serif);
+    font-style: italic;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+  }
 }
 
 /* ── User chat bubble — light green ─────────────── */
@@ -232,4 +251,154 @@ html, body {
 
 .safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+
+/* ── Glass card utility (light-mode frosted glass) ── */
+/*
+ * Same technique as the landing page's dark liquid-glass, adapted for the
+ * off-white background. Use class="glass-card" on any Card or panel that
+ * should appear to float over the surface.
+ *
+ * Elevation model:
+ *   Level 1 → ring-1 ring-foreground/10 (standard card, no blur)
+ *   Level 2 → .glass-card (frosted, for widgets / feature panels)
+ */
+.glass-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Gradient border mask — light hits the glass edge from above */
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    175deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.35) 30%,
+    rgba(200, 200, 200, 0.08) 60%,
+    rgba(255, 255, 255, 0.25) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Design system typography utilities ──────────── */
+.font-display {
+  font-family: var(--font-display, 'Instrument Serif', Georgia, serif);
+  font-style: italic;
+}
+
+.font-body {
+  font-family: var(--font-body, 'Barlow', system-ui, sans-serif);
+  font-style: normal;
+}
+
+.font-ui {
+  font-family: var(--font-ui, 'Sora', system-ui, sans-serif);
+  font-style: normal;
+}
+
+/* ── Entrance animations ─────────────────────────── */
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+.animate-fade-rise {
+  animation: fade-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease both;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Staggered children: add [data-delay="1"] through [data-delay="6"] */
+[data-delay="1"] { animation-delay: 0.05s; }
+[data-delay="2"] { animation-delay: 0.10s; }
+[data-delay="3"] { animation-delay: 0.15s; }
+[data-delay="4"] { animation-delay: 0.20s; }
+[data-delay="5"] { animation-delay: 0.25s; }
+[data-delay="6"] { animation-delay: 0.30s; }
+
+/* ── Print styles ─────────────────────────────────── */
+.hidden-for-screen {
+  display: none;
+}
+
+@media print {
+  /* Show elements marked as print-only */
+  .hidden-for-screen {
+    display: block !important;
+  }
+
+  /* Hide navigation, buttons, and app chrome */
+  header,
+  nav,
+  [data-radix-popper-content-wrapper],
+  .no-print,
+  button:not(.print-visible) {
+    display: none !important;
+  }
+
+  /* Reset backgrounds and overflow so full content flows */
+  html, body {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Page size and margins */
+  @page {
+    size: A4;
+    margin: 20mm 15mm;
+  }
+
+  /* Let scrollable containers show all content */
+  main, .overflow-y-auto, .overflow-y-scroll {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Keep headings with their following content */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Avoid splitting these elements across pages */
+  img, figure, pre, blockquote, table {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Prose (markdown) should use full page width */
+  .prose {
+    max-width: none !important;
+  }
 }

@@ -608,6 +608,7 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
  const icon = getCategoryIcon(article.category)
  const color = getCategoryColor(article.category)
  const preview = truncate(article.summary || article.content.replace(/[#*_`]/g, ''), 120)
+ const seedCount = (article.sourceSeedIds || article.seedIds || []).length
 
  return (
  <Card
@@ -646,6 +647,12 @@ function WikiCard({ article, onClick }: { article: WikiArticle; onClick: () => v
   <span className="flex items-center gap-0.5 text-[9px] text-secondary/60">
    <span className="material-symbols-outlined" >link</span>
    {article.backlinks.length}
+  </span>
+  )}
+  {seedCount > 0 && (
+  <span className="flex items-center gap-0.5 text-[9px] text-on-surface-variant/50">
+   <span className="material-symbols-outlined text-[11px]">eco</span>
+   {seedCount} idea{seedCount !== 1 ? 's' : ''}
   </span>
   )}
   <span className="text-[9px] text-on-surface-variant/40 ml-auto">
@@ -811,13 +818,21 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
    <span className="material-symbols-outlined text-lg">more_vert</span>
   </DropdownMenuTrigger>
   <DropdownMenuContent align="end">
-   <DropdownMenuItem onClick={() => window.open(`/api/wiki/${article.id}/export?token=${token}`, '_blank')}>
+   <DropdownMenuItem onClick={() => window.open(`/api/wiki/export?id=${article.id}&token=${token}`, '_blank')}>
    <span className="material-symbols-outlined text-base mr-2">download</span>
    Download as Markdown
    </DropdownMenuItem>
    <DropdownMenuItem onClick={() => window.print()}>
    <span className="material-symbols-outlined text-base mr-2">picture_as_pdf</span>
    Export as PDF
+   </DropdownMenuItem>
+   <DropdownMenuItem onClick={() => {
+    const seedCount = (article.sourceSeedIds || []).length
+    const agentPrompt = `You are working in a codebase. Here is a project spec from my personal knowledge base:\n\n# ${article.title}\n\n${article.summary ? `**Summary:** ${article.summary}\n\n` : ''}${article.content}\n\n---\nCategory: ${article.category} · Built from ${seedCount} idea${seedCount !== 1 ? 's' : ''}\n\nUse this as context for the task I'm about to describe.`
+    navigator.clipboard.writeText(agentPrompt)
+   }}>
+   <span className="material-symbols-outlined text-base mr-2">smart_toy</span>
+   Copy for coding agent
    </DropdownMenuItem>
   </DropdownMenuContent>
   </DropdownMenu>
