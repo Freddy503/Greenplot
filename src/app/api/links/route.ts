@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         ...(token ? { Authorization: token } : {}),
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(45000),
     })
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })

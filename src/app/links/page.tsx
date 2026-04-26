@@ -22,6 +22,7 @@ import {
  DialogHeader,
  DialogTitle,
 } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
@@ -91,16 +92,16 @@ function LinkCard({ link, onStar, onDelete, onClick, onSaveToGarden }: { link: L
  <CardContent className="p-4">
  <div className="flex gap-3">
   {/* Favicon */}
-  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center overflow-hidden">
+  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center overflow-hidden relative">
+  <span className="material-symbols-outlined text-sm text-on-surface-variant/50 absolute">language</span>
   <img
   src={link.favicon || getFavicon(link.domain)}
   alt=""
-  className="w-5 h-5"
+  className="w-5 h-5 relative z-10 bg-surface-container-high"
   onError={(e) => {
   (e.target as HTMLImageElement).style.display = 'none'
   }}
   />
-  <span className="material-symbols-outlined text-sm text-on-surface-variant/50" >language</span>
   </div>
 
   {/* Content */}
@@ -184,7 +185,6 @@ export default function LinksPage() {
  const [links, setLinks] = useState<LinkItem[]>([])
  const [loading, setLoading] = useState(true)
  const [addOpen, setAddOpen] = useState(false)
- const [bulkOpen, setBulkOpen] = useState(false)
  const [bulkText, setBulkText] = useState('')
  const [bulkImporting, setBulkImporting] = useState(false)
  const [newUrl, setNewUrl] = useState('')
@@ -244,78 +244,48 @@ export default function LinksPage() {
 
  // Add link via backend API
  const handleAdd = async () => {
- if (!newUrl.trim()) return
- setAdding(true)
-
- try {
- const token = localStorage.getItem('greenplot_token')
- const res = await fetch('/api/links', {
- method: 'POST',
- headers: {
-  'Content-Type': 'application/json',
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
- },
- body: JSON.stringify({ url: newUrl }),
- })
-
- if (res.ok) {
- const data = await res.json()
- const newLink: LinkItem = {
-  id: data.id,
-  url: data.url,
-  title: data.title || extractDomain(data.url),
-  summary: data.summary || '',
-  domain: data.domain || extractDomain(data.url),
-  tags: [],
-  favicon: getFavicon(data.domain || extractDomain(data.url)),
-  addedAt: new Date().toISOString(),
-  starred: false,
- }
- const updated = [newLink, ...links]
- setLinks(updated)
- saveLinksCache(updated)
- } else {
- // Fallback: local add
- const url = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`
- const domain = extractDomain(url)
- const newLink: LinkItem = {
-  id: crypto.randomUUID(),
-  url,
-  title: domain,
-  summary: '',
-  domain,
-  tags: [],
-  favicon: getFavicon(domain),
-  addedAt: new Date().toISOString(),
-  starred: false,
- }
- const updated = [newLink, ...links]
- setLinks(updated)
- saveLinksCache(updated)
- }
- } catch {
- // Fallback: local add
- const url = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`
- const domain = extractDomain(url)
- const newLink: LinkItem = {
- id: crypto.randomUUID(),
- url,
- title: domain,
- summary: '',
- domain,
- tags: [],
- favicon: getFavicon(domain),
- addedAt: new Date().toISOString(),
- starred: false,
- }
- const updated = [newLink, ...links]
- setLinks(updated)
- saveLinksCache(updated)
- }
-
- setNewUrl('')
- setAddOpen(false)
- setAdding(false)
+   if (!newUrl.trim()) return
+   setAdding(true)
+   const toastId = toast.loading('Adding link…')
+   try {
+     const token = localStorage.getItem('greenplot_token')
+     const res = await fetch('/api/links', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+       },
+       body: JSON.stringify({ url: newUrl }),
+     })
+     const data = await res.json()
+     if (res.ok) {
+       if (data.status === 'exists') {
+         toast.info('Already in your sources', { id: toastId })
+       } else {
+         const newLink: LinkItem = {
+           id: data.id,
+           url: data.url,
+           title: data.title || extractDomain(data.url),
+           summary: data.summary || '',
+           domain: data.domain || extractDomain(data.url),
+           tags: [],
+           favicon: getFavicon(data.domain || extractDomain(data.url)),
+           addedAt: new Date().toISOString(),
+           starred: false,
+         }
+         setLinks(prev => [newLink, ...prev])
+         saveLinksCache([newLink, ...links])
+         toast.success('Link added!', { id: toastId })
+       }
+     } else {
+       toast.error(data.error || 'Failed to add link', { id: toastId })
+     }
+   } catch {
+     toast.error('Could not reach backend', { id: toastId })
+   }
+   setNewUrl('')
+   setAddOpen(false)
+   setAdding(false)
  }
 
  const toggleStar = async (id: string) => {
@@ -392,32 +362,38 @@ export default function LinksPage() {
  // Cap at 20
  urls = urls.slice(0, 20)
 
+ const toastId = toast.loading(`Importing ${urls.length} URL${urls.length !== 1 ? 's' : ''}…`)
  try {
- const token = localStorage.getItem('greenplot_token')
- const res = await fetch('/api/links', {
- method: 'POST',
- headers: {
-  'Content-Type': 'application/json',
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
- },
- body: JSON.stringify({ urls }), // Will hit bulk endpoint
- })
-
- if (res.ok) {
- // Refresh links
- const listRes = await fetch('/api/links', {
-  headers: token ? { Authorization: `Bearer ${token}` } : {},
- })
- const data = await listRes.json()
- if (data.links) {
-  setLinks(data.links)
-  saveLinksCache(data.links)
+   const token = localStorage.getItem('greenplot_token')
+   const res = await fetch('/api/links/bulk', {
+     method: 'POST',
+     headers: {
+       'Content-Type': 'application/json',
+       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+     },
+     body: JSON.stringify({ urls }),
+   })
+   const data = await res.json()
+   if (res.ok) {
+     toast.success(`Imported ${data.created ?? urls.length} link${(data.created ?? urls.length) !== 1 ? 's' : ''}${data.skipped ? ` · ${data.skipped} duplicates skipped` : ''}`, { id: toastId })
+     // Refresh list
+     const listRes = await fetch('/api/links', {
+       headers: token ? { Authorization: `Bearer ${token}` } : {},
+     })
+     const listData = await listRes.json()
+     if (listData.links) {
+       setLinks(listData.links)
+       saveLinksCache(listData.links)
+     }
+   } else {
+     toast.error(data.error || 'Import failed', { id: toastId })
+   }
+ } catch {
+   toast.error('Could not reach backend', { id: toastId })
  }
- }
- } catch {}
 
  setBulkText('')
- setBulkOpen(false)
+ setAddOpen(false)
  setBulkImporting(false)
  }
 
@@ -470,72 +446,60 @@ export default function LinksPage() {
 
  <main className="flex-1 overflow-y-auto animate-fade-rise" style={{ paddingTop: 'var(--header-height)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}>
  {/* Hero */}
- <section className=" px-2">
-  <div className="flex items-center justify-between ">
-  <h1 className="text-3xl font-normal tracking-tight leading-tight text-on-surface">
-  Link <span className="text-primary">Sources</span>
-  </h1>
-  <div className="flex items-center gap-2">
-  <Button
-  onClick={() => setBulkOpen(true)}
-  variant="outline"
-  className="rounded-full text-sm px-4"
-  >
-  <span className="material-symbols-outlined text-lg mr-1">upload</span>
-  Import
-  </Button>
-  <Button
-  onClick={() => setAddOpen(true)}
-  className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm px-5"
-  >
-  <span className="material-symbols-outlined text-lg mr-1" >add_link</span>
-  Add
-  </Button>
-  </div>
-  </div>
-  <p className="text-sm leading-relaxed max-w-xs text-on-surface-variant">
-  Drop links. Auto-enrich. Grow your knowledge garden.
-  </p>
+ <section className="px-2">
+   <div className="flex items-center justify-between">
+     <h1 className="text-3xl font-normal tracking-tight leading-tight text-on-surface">
+       Link <span className="text-primary">Sources</span>
+     </h1>
+     <Button
+       onClick={() => setAddOpen(true)}
+       className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm px-5"
+     >
+       <span className="material-symbols-outlined text-lg mr-1">add_link</span>
+       Add
+     </Button>
+   </div>
+   <p className="text-sm leading-relaxed max-w-xs text-on-surface-variant mt-1">
+     Drop links. Auto-enrich. Grow your knowledge garden.
+   </p>
  </section>
 
- {/* Search + Filter */}
- <div className="flex items-center gap-2 px-2">
-  <button
-  onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
-  className="flex items-center gap-1 px-3 py-2 rounded-full bg-surface-container-low border border-outline-variant/10 hover:border-primary/30 text-[10px] font-bold text-on-surface-variant/60 hover:text-primary transition-colors flex-shrink-0"
-  title={sortDir === 'desc' ? 'Newest first' : 'Oldest first'}
-  >
-  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>
-  {sortDir === 'desc' ? 'Newest' : 'Oldest'}
-  </button>
-  <div className="relative flex-1">
-  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-lg">search</span>
-  <Input
-  placeholder="Search links..."
-  value={search}
-  onChange={(e) => setSearch(e.target.value)}
-  className="pl-10 rounded-full bg-surface-container-low border-outline-variant/10 text-sm"
-  />
-  </div>
-  <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-full">
-  <button
-  onClick={() => setFilter('all')}
-  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-  filter === 'all' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/60'
-  }`}
-  >
-  All ({links.length})
-  </button>
-  <button
-  onClick={() => setFilter('starred')}
-  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
-  filter === 'starred' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/60'
-  }`}
-  >
-  <span className="material-symbols-outlined text-sm" >star</span>
-  ({starredCount})
-  </button>
-  </div>
+ {/* Search */}
+ <div className="px-2">
+   <div className="relative">
+     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 pointer-events-none" style={{ fontSize: '18px' }}>search</span>
+     <Input
+       placeholder="Search links..."
+       value={search}
+       onChange={(e) => setSearch(e.target.value)}
+       className="pl-10 rounded-full bg-surface-container-low border-outline-variant/10 text-sm"
+     />
+   </div>
+   {/* Filter + Sort row */}
+   <div className="flex items-center gap-2 mt-2">
+     <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-full flex-1">
+       <button
+         onClick={() => setFilter('all')}
+         className={`flex-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${filter === 'all' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/60'}`}
+       >
+         All ({links.length})
+       </button>
+       <button
+         onClick={() => setFilter('starred')}
+         className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${filter === 'starred' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/60'}`}
+       >
+         <span className="material-symbols-outlined" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>star</span>
+         ({starredCount})
+       </button>
+     </div>
+     <button
+       onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+       className="flex items-center gap-1 px-3 py-2 rounded-full bg-surface-container-low border border-outline-variant/10 hover:border-primary/30 text-[10px] font-bold text-on-surface-variant/60 hover:text-primary transition-colors flex-shrink-0"
+     >
+       <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>
+       {sortDir === 'desc' ? 'Newest' : 'Oldest'}
+     </button>
+   </div>
  </div>
 
  {/* Links */}
@@ -594,87 +558,61 @@ export default function LinksPage() {
 
  <BottomNav />
 
- {/* Add Link Dialog */}
+ {/* Add / Import Dialog */}
  <Dialog open={addOpen} onOpenChange={setAddOpen}>
- <DialogContent className="sm:max-w-md bg-surface-container border-outline-variant/10">
-  <DialogHeader>
-  <DialogTitle className="text-on-surface font-extrabold">Add Link</DialogTitle>
-  <DialogDescription className="text-on-surface-variant">
-  Paste a URL and we'll fetch the title, summary, and tags automatically.
-  </DialogDescription>
-  </DialogHeader>
-  <div className="py-4">
-  <Input
-  placeholder="https://example.com/article"
-  value={newUrl}
-  onChange={(e) => setNewUrl(e.target.value)}
-  onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-  className="rounded-xl bg-surface-container-low border-outline-variant/10"
-  autoFocus
-  />
-  </div>
-  <DialogFooter>
-  <Button variant="ghost" onClick={() => setAddOpen(false)} className="rounded-full">
-  Cancel
-  </Button>
-  <Button
-  onClick={handleAdd}
-  disabled={!newUrl.trim() || adding}
-  className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold"
-  >
-  {adding ? (
-  <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-  ) : (
-  <>
-   <span className="material-symbols-outlined text-lg mr-1" >add</span>
-   Add Link
-  </>
-  )}
-  </Button>
-  </DialogFooter>
- </DialogContent>
- </Dialog>
+   <DialogContent className="sm:max-w-lg bg-surface-container border-outline-variant/10">
+     <DialogHeader>
+       <DialogTitle className="text-on-surface font-extrabold">Add Link</DialogTitle>
+       <DialogDescription className="sr-only">Add a single URL or import multiple links at once.</DialogDescription>
+     </DialogHeader>
+     <Tabs defaultValue="single" className="mt-1">
+       <TabsList className="w-full bg-surface-container-high rounded-xl p-1 h-auto grid grid-cols-2 mb-4">
+         <TabsTrigger value="single" className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm py-2">Single URL</TabsTrigger>
+         <TabsTrigger value="bulk" className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm py-2">Bulk Import</TabsTrigger>
+       </TabsList>
 
- {/* Bulk Import Dialog */}
- <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
- <DialogContent className="sm:max-w-2xl bg-surface-container border-outline-variant/10">
-  <DialogHeader>
-  <DialogTitle className="text-on-surface font-extrabold">Import Links</DialogTitle>
-  <DialogDescription className="text-on-surface-variant">
-  Paste URLs (one per line) or Chrome bookmark JSON export.
-  </DialogDescription>
-  </DialogHeader>
-  <div className="py-4">
-  <textarea
-  placeholder={"https://example.com/article\nhttps://another-link.com\n\nOr paste Chrome bookmarks JSON..."}
-  value={bulkText}
-  onChange={(e) => setBulkText(e.target.value)}
-  className="w-full h-40 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/10 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/30 transition-colors resize-none font-mono"
-  />
-  <p className="text-[10px] text-on-surface-variant/50 mt-2">
-  {bulkText.split('\n').filter(l => l.trim()).length} URLs detected · Max 20 per batch
-  </p>
-  </div>
-  <DialogFooter>
-  <Button variant="ghost" onClick={() => setBulkOpen(false)} className="rounded-full">
-  Cancel
-  </Button>
-  <Button
-  onClick={handleBulkImport}
-  disabled={!bulkText.trim() || bulkImporting}
-  className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold"
-  >
-  {bulkImporting ? (
-  <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-  ) : (
-  <>
-   <span className="material-symbols-outlined text-lg mr-1" >upload</span>
-   Import
-  </>
-  )}
-  </Button>
-  </DialogFooter>
- </DialogContent>
+       <TabsContent value="single" className="mt-0 space-y-4">
+         <p className="text-xs text-on-surface-variant">Paste a URL and we'll fetch the title, summary, and tags automatically.</p>
+         <Input
+           placeholder="https://example.com/article"
+           value={newUrl}
+           onChange={(e) => setNewUrl(e.target.value)}
+           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+           className="rounded-xl bg-surface-container-low border-outline-variant/10"
+           autoFocus
+         />
+         <div className="flex gap-2 justify-end">
+           <Button variant="ghost" onClick={() => setAddOpen(false)} className="rounded-full">Cancel</Button>
+           <Button onClick={handleAdd} disabled={!newUrl.trim() || adding} className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold">
+             {adding
+               ? <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+               : <><span className="material-symbols-outlined text-lg mr-1">add</span>Add Link</>}
+           </Button>
+         </div>
+       </TabsContent>
+
+       <TabsContent value="bulk" className="mt-0 space-y-4">
+         <p className="text-xs text-on-surface-variant">Paste URLs (one per line) or a Chrome bookmark JSON export.</p>
+         <textarea
+           placeholder={"https://example.com/article\nhttps://another-link.com\n\nOr paste Chrome bookmarks JSON..."}
+           value={bulkText}
+           onChange={(e) => setBulkText(e.target.value)}
+           className="w-full h-36 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/10 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/30 transition-colors resize-none font-mono"
+         />
+         <p className="text-[10px] text-on-surface-variant/50 -mt-2">
+           {bulkText.split('\n').filter(l => l.trim()).length} URLs detected · Max 20 per batch
+         </p>
+         <div className="flex gap-2 justify-end">
+           <Button variant="ghost" onClick={() => setAddOpen(false)} className="rounded-full">Cancel</Button>
+           <Button onClick={handleBulkImport} disabled={!bulkText.trim() || bulkImporting} className="rounded-full bg-primary text-on-primary hover:bg-primary/90 font-bold">
+             {bulkImporting
+               ? <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+               : <><span className="material-symbols-outlined text-lg mr-1">upload</span>Import</>}
+           </Button>
+         </div>
+       </TabsContent>
+     </Tabs>
+   </DialogContent>
  </Dialog>
 
  {/* Link Detail Sheet */}
