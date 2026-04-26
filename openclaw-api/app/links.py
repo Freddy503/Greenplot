@@ -114,6 +114,19 @@ async def create_link(body: LinkCreate, request: Request, current_user = Depends
     if not url.startswith("http"):
         url = f"https://{url}"
 
+    # Dedup: return existing link if this URL is already saved
+    existing = weaviate_client.find_link_by_url(tenant_id=tenant_id, url=url)
+    if existing:
+        return {
+            "id": existing["id"],
+            "url": existing["url"],
+            "title": existing["title"],
+            "summary": existing["summary"],
+            "domain": existing["domain"],
+            "status": "exists",
+            "message": "Link already in your sources",
+        }
+
     domain = extract_domain(url)
 
     # Auto-fetch metadata
@@ -405,13 +418,22 @@ async def bulk_create_links(body: LinkBulkCreate, request: Request, current_user
     tenant_id = str(user.tenant_id)
     user_id = str(user.id)
 
+    # Build existing-URL set to avoid duplicates across the whole batch
+    existing_links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
+    existing_urls = {lnk.get("url", "") for lnk in existing_links}
+
     results = []
+    skipped = 0
     for url in body.urls[:20]:  # Cap at 20
         url = url.strip()
         if not url:
             continue
         if not url.startswith("http"):
             url = f"https://{url}"
+
+        if url in existing_urls:
+            skipped += 1
+            continue
 
         domain = extract_domain(url)
         meta = await fetch_page_metadata(url)
@@ -434,9 +456,10 @@ async def bulk_create_links(body: LinkBulkCreate, request: Request, current_user
             raw_text=meta.get("raw_text", ""),
             status="enriched" if summary else "pending",
         )
+        existing_urls.add(url)  # prevent intra-batch duplicates
         results.append({"id": link_id, "url": url, "title": title})
 
-    return {"created": len(results), "links": results}
+    return {"created": len(results), "skipped": skipped, "links": results}
 
 
 # ── P1: Connection Detection ──────────────────────────

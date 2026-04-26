@@ -692,10 +692,12 @@ async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
         return []
 
 
-def _save_papers_as_seeds(papers: list, user_id: str, db) -> int:
+def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set = None) -> int:
     """Save academic digest papers as Garden seeds. Deduplicates by source_url."""
     import uuid as _uuid
     from app.models import Seed, User
+    if seen_paper_urls is None:
+        seen_paper_urls = set()
     saved = 0
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -707,15 +709,8 @@ def _save_papers_as_seeds(papers: list, user_id: str, db) -> int:
         if not title or len(content) < 50:
             continue
         # Deduplicate: skip if a seed with this source_url already exists
-        try:
-            existing = db.query(Seed).filter(
-                Seed.user_id == user_id,
-                Seed.seed_metadata["source_url"].astext == url
-            ).first()
-            if existing:
-                continue
-        except Exception:
-            pass  # JSON path query not supported — skip dedup, still save
+        if url in seen_paper_urls:
+            continue
         seed = Seed(
             id=_uuid.uuid4(),
             tenant_id=user.tenant_id,
@@ -745,12 +740,13 @@ def _get_seen_paper_urls(user_id: str, db) -> set:
     try:
         rows = db.query(Seed.seed_metadata).filter(
             Seed.user_id == user_id,
-            Seed.seed_metadata["tags"].astext.contains("research-paper"),
         ).all()
         urls = set()
         for (meta,) in rows:
-            if isinstance(meta, dict) and meta.get("source_url"):
-                urls.add(meta["source_url"])
+            if isinstance(meta, dict) and "research-paper" in meta.get("tags", []):
+                url = meta.get("source_url")
+                if url:
+                    urls.add(url)
         return urls
     except Exception as e:
         logger.warning(f"[academic_digest] Could not load seen paper URLs: {e}")
@@ -950,7 +946,7 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
 
     # Auto-save papers as Garden seeds (best-effort, never blocks delivery)
     try:
-        _save_papers_as_seeds(papers, user_id, db)
+        _save_papers_as_seeds(papers, user_id, db, seen_paper_urls=seen_urls)
     except Exception as e:
         logger.warning(f"[academic_digest] Failed to save papers as seeds: {e}")
 

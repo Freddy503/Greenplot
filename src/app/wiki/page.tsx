@@ -1140,16 +1140,6 @@ export default function WikiPage() {
   >
   <span className="material-symbols-outlined text-lg">folder_zip</span>
   </button>
-  <button
-  onClick={() => {
-   const token = localStorage.getItem('greenplot_token')
-   window.open(`/api/garden/export-training?token=${token}`, '_blank')
-  }}
-  className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant/60 hover:text-primary"
-  title="Export training data"
-  >
-  <span className="material-symbols-outlined text-lg">model_training</span>
-  </button>
   </div>
   </div>
   <p className="text-sm leading-relaxed max-w-xs text-on-surface-variant mt-1">
