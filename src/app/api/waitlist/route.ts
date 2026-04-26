@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import fs from 'fs'
+import path from 'path'
 
 const FROM = 'Greenplot <digest@greenplot.ink>'
 const NOTIFY_TO = 'contact@example.com'
@@ -43,8 +45,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (!apiKey) {
-      console.error('[waitlist] RESEND_API_KEY is not set')
-      return NextResponse.json({ error: 'Email service not configured' }, { status: 503 })
+      // Fallback: persist email to filesystem when Resend is not configured
+      try {
+        const filePath = process.env.WAITLIST_FILE || path.join(process.cwd(), 'data', 'waitlist.json')
+        const dir = path.dirname(filePath)
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        const existing: { email: string; joinedAt: string }[] = fs.existsSync(filePath)
+          ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
+          : []
+        if (!existing.some(e => e.email === normalized)) {
+          existing.push({ email: normalized, joinedAt: new Date().toISOString() })
+          fs.writeFileSync(filePath, JSON.stringify(existing, null, 2))
+        }
+        console.info(`[waitlist] No RESEND_API_KEY — saved ${normalized} to ${filePath}`)
+      } catch (err) {
+        console.error('[waitlist] Fallback write failed:', err)
+      }
+      recentEmails.add(normalized)
+      setTimeout(() => recentEmails.delete(normalized), 10 * 60 * 1000)
+      return NextResponse.json({ ok: true })
     }
 
     // Add to Resend Audience for future broadcasts (non-critical)

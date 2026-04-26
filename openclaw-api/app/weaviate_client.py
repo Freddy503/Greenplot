@@ -329,6 +329,37 @@ class WeaviateClient:
 
     # ── Link CRUD (Hub) ───────────────────────────────
 
+    def find_link_by_url(self, tenant_id: str, url: str) -> dict | None:
+        """Return the first Link with matching tenant_id + url, or None."""
+        try:
+            result = (
+                self.client.query
+                .get("Link", ["url", "title", "domain", "summary"])
+                .with_additional("id")
+                .with_where({
+                    "operator": "And",
+                    "operands": [
+                        {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id},
+                        {"path": ["url"], "operator": "Equal", "valueText": url},
+                    ],
+                })
+                .with_limit(1)
+                .do()
+            )
+            objects = result.get("data", {}).get("Get", {}).get("Link", []) or []
+            if objects:
+                obj = objects[0]
+                return {
+                    "id": obj.get("_additional", {}).get("id", ""),
+                    "url": obj.get("url", ""),
+                    "title": obj.get("title", ""),
+                    "domain": obj.get("domain", ""),
+                    "summary": obj.get("summary", ""),
+                }
+            return None
+        except Exception:
+            return None
+
     def add_link(self, tenant_id: str, user_id: str, url: str, title: str, summary: str,
                  domain: str, tags: str, favicon: str, og_image: str = None,
                  raw_text: str = None, status: str = "pending", starred: bool = False) -> str:

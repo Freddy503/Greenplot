@@ -27,8 +27,25 @@ from app.models import Thought, Seed
 # Whisper transcription
 # ---------------------------------------------------------------------------
 
-WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions"
+# Use Groq Whisper (whisper-large-v3-turbo) when GROQ_API_KEY is set — 10× faster
+# than OpenAI whisper-1. Both endpoints share the same HTTP interface.
+_GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+WHISPER_URL = (
+    "https://api.groq.com/openai/v1/audio/transcriptions"
+    if _GROQ_API_KEY
+    else "https://api.openai.com/v1/audio/transcriptions"
+)
+_WHISPER_MODEL = "whisper-large-v3-turbo" if _GROQ_API_KEY else "whisper-1"
+
 VISION_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _stt_headers() -> dict:
+    """Return auth headers for the active STT provider."""
+    key = _GROQ_API_KEY or getattr(settings, "OPENAI_API_KEY", "")
+    if not key:
+        raise HTTPException(status_code=500, detail="No STT API key configured (set GROQ_API_KEY or OPENAI_API_KEY)")
+    return {"Authorization": f"Bearer {key}"}
 
 
 def _openai_headers() -> dict:
@@ -39,7 +56,7 @@ def _openai_headers() -> dict:
 
 
 async def transcribe_audio(file: UploadFile) -> str:
-    """Send audio to OpenAI Whisper and return transcript text."""
+    """Send audio to Whisper (Groq if GROQ_API_KEY set, else OpenAI) and return transcript."""
     audio_bytes = await file.read()
     if len(audio_bytes) == 0:
         raise HTTPException(status_code=400, detail="Empty audio file")
@@ -67,10 +84,10 @@ async def transcribe_audio(file: UploadFile) -> str:
             with open(tmp_path, "rb") as f:
                 resp = await client.post(
                     WHISPER_URL,
-                    headers=_openai_headers(),
-                    data={"model": "whisper-1", "language": "en"},
+                    headers=_stt_headers(),
+                    data={"model": _WHISPER_MODEL, "language": "en"},
                     files={"file": (file.filename or "audio" + ext, f)},
-                    timeout=90.0,
+                    timeout=60.0,
                 )
         if resp.status_code != 200:
             raise HTTPException(
@@ -83,7 +100,10 @@ async def transcribe_audio(file: UploadFile) -> str:
             raise HTTPException(status_code=422, detail="Whisper returned empty transcript")
         return transcript
     finally:
-        os.unlink(tmp_path)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
