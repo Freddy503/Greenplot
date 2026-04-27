@@ -130,6 +130,15 @@ with engine.connect() as conn:
     if not result7.fetchone():
         conn.execute(text("ALTER TABLE seeds ADD COLUMN archived BOOLEAN DEFAULT FALSE"))
         conn.commit()
+    # User profile columns: nickname + interests
+    result8 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='nickname'"))
+    if not result8.fetchone():
+        conn.execute(text("ALTER TABLE users ADD COLUMN nickname VARCHAR(100)"))
+        conn.commit()
+    result9 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='interests'"))
+    if not result9.fetchone():
+        conn.execute(text("ALTER TABLE users ADD COLUMN interests JSONB DEFAULT '[]'::jsonb"))
+        conn.commit()
 
 app = FastAPI(title="OpenClaw API", version="0.1.0")
 
@@ -159,6 +168,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         password_hash=get_password_hash(req.password),
         tenant_id=uuid.uuid4(),
         city=req.city,
+        nickname=req.nickname,
+        interests=req.interests or [],
         digest_frequency=req.digest_frequency or 'once-daily'
     )
     db.add(user)
@@ -180,6 +191,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 class ProfileUpdate(BaseModel):
     city: Optional[str] = None
+    nickname: Optional[str] = None
+    interests: Optional[List[str]] = None
     digest_frequency: Optional[str] = None  # twice-daily, once-daily, bi-weekly, weekly, calendar
 
 @app.get("/api/v1/profile")
@@ -191,6 +204,7 @@ def get_profile(
         "city": current_user.city or "",
         "email": current_user.email or "",
         "nickname": getattr(current_user, "nickname", "") or "",
+        "interests": getattr(current_user, "interests", None) or [],
         "digest_frequency": getattr(current_user, "digest_frequency", "daily") or "daily",
     }
 
@@ -202,11 +216,21 @@ def update_profile(
 ):
     if req.city is not None:
         current_user.city = req.city
+    if req.nickname is not None:
+        current_user.nickname = req.nickname
+    if req.interests is not None:
+        current_user.interests = req.interests
     if req.digest_frequency is not None:
         current_user.digest_frequency = req.digest_frequency
     db.commit()
     db.refresh(current_user)
-    return {"status": "ok", "city": current_user.city, "digest_frequency": current_user.digest_frequency}
+    return {
+        "status": "ok",
+        "city": current_user.city,
+        "nickname": current_user.nickname or "",
+        "interests": current_user.interests or [],
+        "digest_frequency": current_user.digest_frequency,
+    }
 
 # --- Thoughts ---
 

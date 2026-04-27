@@ -145,12 +145,20 @@ async def fetch_web_search(query: str, limit: int = 5) -> List[Dict[str, str]]:
 
 def fetch_user_themes(user_id: str, db) -> List[str]:
     """
-    Extract dominant themes from user's recent chats/seeds.
-    Returns: ["agentic systems", "PKM", ...]
+    Extract dominant themes from user's profile interests, then recent seeds.
+    Returns: ["Medicine", "Legal", ...] or seed-derived themes
+    Priority: 1) user.interests from DB  2) seed-derived keywords  3) fallback
     """
     try:
-        from app.models import Thought, Seed
-        # Get recent seeds (last 30 days)
+        from app.models import Thought, Seed, User
+        # Priority 1: explicit interests from user profile
+        user = db.query(User).filter(User.id == user_id).first()
+        if user and getattr(user, 'interests', None):
+            stored = [i for i in user.interests if isinstance(i, str) and i.strip()]
+            if stored:
+                return stored[:5]
+
+        # Priority 2: infer from recent seeds (last 30 days)
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         recent_seeds = db.query(Seed).filter(
             Seed.user_id == user_id,
@@ -764,9 +772,6 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     import re as _re
 
     themes = fetch_user_themes(user_id, db)
-    # Always lead with "agentic AI" — inject if not already present
-    if "agentic" not in " ".join(themes).lower():
-        themes = ["agentic AI"] + themes[:2]
     theme_str = ", ".join(themes[:3])
     city = get_user_city(user_id, db)
     today = datetime.now().strftime("%a %b %d, %Y")
@@ -776,22 +781,31 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     wiki_ctx = fetch_wiki_context(themes)
     weather = await fetch_weather(city)
 
-    # Fetch arXiv papers (abs/ pages only) + enterprise news
+    # Fetch arXiv papers (abs/ pages only) + topic news
     paper_results = await _fetch_arxiv_papers(themes, limit=12)
-    news_results = await fetch_web_search(f"enterprise AI {theme_str} news {today}", limit=3)
+    news_results = await fetch_web_search(f"{theme_str} news {today}", limit=3)
 
     # Deduplicate: remove papers already saved to this user's Garden
     seen_urls = _get_seen_paper_urls(user_id, db)
-    seen = set()
-    unique_papers = []
-    for p in paper_results:
-        url = p["url"]
-        if url not in seen and url not in seen_urls:
-            seen.add(url)
-            unique_papers.append(p)
 
-    # If all fetched papers were already seen, note it for the digest
-    all_papers_seen = len(paper_results) > 0 and len(unique_papers) == 0
+    def _deduplicate(papers: list, seen: set) -> list:
+        result, visited = [], set()
+        for p in papers:
+            url = p["url"]
+            if url not in visited and url not in seen:
+                visited.add(url)
+                result.append(p)
+        return result
+
+    unique_papers = _deduplicate(paper_results, seen_urls)
+
+    # If all fetched papers were already seen, retry with expanded limit + broader date range
+    all_papers_seen = False
+    if len(paper_results) > 0 and len(unique_papers) == 0:
+        retry_results = await _fetch_arxiv_papers(themes, limit=24)
+        unique_papers = _deduplicate(retry_results, seen_urls)
+        if not unique_papers:
+            all_papers_seen = True
 
     # Fetch full text for top 4 papers
     from app.enricher import fetch_url_content
@@ -823,12 +837,12 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
         for n in news_results[:3]
     ) or "No news results."
 
+    user_context = f"The user's interests are: {theme_str}. Relate all findings to these interests and how they apply in practice."
     system_prompt = (
         "You are a research-to-practice synthesizer for a personal knowledge management system. "
         "Your job: connect new academic research to the user's existing knowledge and ongoing work, "
         "producing insights that are both intellectually rigorous and immediately actionable. "
-        "The user's focus areas: " + theme_str + ". "
-        "Always relate findings back to how they apply to enterprise AI deployment and forward-deployed engineering. "
+        f"{user_context} "
         "Output valid JSON only (no markdown fences)."
     )
 
@@ -843,7 +857,7 @@ USER'S WIKI KNOWLEDGE (what they already know well):
 NEW ACADEMIC PAPERS:
 {papers_block}
 
-ENTERPRISE AI NEWS TODAY:
+RECENT NEWS ({theme_str}):
 {news_block}
 
 Produce a JSON object with this exact structure:
@@ -851,7 +865,7 @@ Produce a JSON object with this exact structure:
   "papers": [
     {{
       "title": "Paper title + authors + year",
-      "content": "3-4 sentences: what problem it solves, key finding, why it matters for enterprise AI or agentic systems. Connect to user's existing seeds/wiki where relevant.",
+      "content": "3-4 sentences: what problem it solves, key finding, why it matters for the user's interests. Connect to user's existing seeds/wiki where relevant.",
       "url": "arxiv_url"
     }}
   ],
