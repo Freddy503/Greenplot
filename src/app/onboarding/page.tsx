@@ -250,10 +250,12 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 // ── STEP 1: Who Are You ───────────────────────────────
 
 function StepWhoAreYou({
+  email,
   nickname,
   city,
   password,
   confirmPassword,
+  onEmail,
   onNickname,
   onCity,
   onPassword,
@@ -261,10 +263,12 @@ function StepWhoAreYou({
   onNext,
   onLogin,
 }: {
+  email: string
   nickname: string
   city: string
   password: string
   confirmPassword: string
+  onEmail: (v: string) => void
   onNickname: (v: string) => void
   onCity: (v: string) => void
   onPassword: (v: string) => void
@@ -272,9 +276,10 @@ function StepWhoAreYou({
   onNext: () => void
   onLogin: () => void
 }) {
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
   const passwordsMatch = password === confirmPassword
   const passwordValid = password.length >= 6
-  const canProceed = nickname.trim() && passwordValid && passwordsMatch
+  const canProceed = emailValid && nickname.trim() && passwordValid && passwordsMatch
 
   return (
     <StepShell step={1}>
@@ -303,7 +308,11 @@ function StepWhoAreYou({
       </div>
 
       <div className="w-full space-y-4 mb-8">
-        <StitchInput label="Nickname" icon="face" value={nickname} onChange={(e) => onNickname(e.target.value)} placeholder="Seedling_42" autoFocus />
+        <StitchInput label="Email" icon="mail" type="email" value={email} onChange={(e) => onEmail(e.target.value)} placeholder="you@example.com" autoFocus />
+        {email.length > 0 && !emailValid && (
+          <p className="text-xs text-error ml-4">Enter a valid email address</p>
+        )}
+        <StitchInput label="Nickname" icon="face" value={nickname} onChange={(e) => onNickname(e.target.value)} placeholder="Seedling_42" />
         <StitchInput label="Password" icon="lock" type="password" value={password} onChange={(e) => onPassword(e.target.value)} placeholder="Min. 6 characters" />
         {password.length > 0 && !passwordValid && (
           <p className="text-xs text-error ml-4">At least 6 characters</p>
@@ -573,6 +582,7 @@ export default function OnboardingPage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(0)
 
+  const [email, setEmail] = useState('')
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [password, setPassword] = useState('')
@@ -600,15 +610,15 @@ export default function OnboardingPage() {
     setError('')
 
     try {
-      const slug = nickname.toLowerCase().replace(/\s+/g, '')
-
       const registerRes = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: `${slug}@greenplot.app`,
+          email: email.trim(),
           password,
           city: city.trim() || undefined,
+          nickname: nickname.trim() || undefined,
+          interests: allInterests.length > 0 ? allInterests : undefined,
           digest_frequency: digestFrequency,
         }),
       })
@@ -631,7 +641,7 @@ export default function OnboardingPage() {
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
       localStorage.setItem('greenplot_nickname', nickname.trim())
-      localStorage.setItem('greenplot_email', `${slug}@greenplot.app`)
+      localStorage.setItem('greenplot_email', email.trim())
       localStorage.setItem('greenplot_profile', JSON.stringify(profile))
 
       const interestStr = allInterests.length > 0 ? allInterests.join(', ') : 'general ideas'
@@ -672,10 +682,12 @@ export default function OnboardingPage() {
         {currentStep === 0 && <StepWelcome onNext={next} />}
         {currentStep === 1 && (
           <StepWhoAreYou
+            email={email}
             nickname={nickname}
             city={city}
             password={password}
             confirmPassword={confirmPassword}
+            onEmail={setEmail}
             onNickname={setNickname}
             onCity={setCity}
             onPassword={setPassword}

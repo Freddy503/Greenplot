@@ -19,11 +19,24 @@ router = APIRouter(prefix="/api/v1/wiki-pipeline", tags=["wiki-pipeline"])
 async def regenerate_all_backlinks(tenant_id):
     """Regenerate backlinks for all wiki articles"""
     articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
-    
+
+    # Build topic list dynamically from article titles and categories
+    _stopwords = {'the', 'and', 'for', 'with', 'that', 'this', 'from', 'are', 'was',
+                  'how', 'why', 'what', 'when', 'not', 'but', 'its', 'can', 'has'}
+    dynamic_topics = set()
+    for a in articles:
+        for field in ('title', 'category'):
+            val = a.get(field) or ''
+            for word in val.lower().split():
+                word = word.strip('.,;:()[]"\'')
+                if len(word) > 3 and word not in _stopwords:
+                    dynamic_topics.add(word)
+    topics = list(dynamic_topics) if dynamic_topics else [
+        'agentic', 'ai', 'knowledge', 'wiki', 'seed', 'systems', 'llm', 'agent'
+    ]
+
     def extract_topics(article):
         text = ((article.get('content', '') or '') + ' ' + (article.get('title', '') or '')).lower()
-        topics = ['agentic', 'ai', 'sap', 'creativity', 'career', 'enterprise', 'knowledge',
-                  'wiki', 'seed', 'nemo', 'fde', 'devops', 'design', 'systems', 'llm', 'agent']
         return set(t for t in topics if text.count(t) > 2)
     
     updates = 0

@@ -223,8 +223,7 @@ TOOLS.append({
             "properties": {
                 "domain": {
                     "type": "string",
-                    "description": "Filter by domain: agentic-ai, career, enterprise, systems, learning, creativity.",
-                    "enum": ["agentic-ai", "career", "enterprise", "systems", "learning", "creativity"]
+                    "description": "Filter by domain (e.g. agentic-ai, career, medicine, legal, finance — any subject)."
                 },
                 "tags": {
                     "type": "string",

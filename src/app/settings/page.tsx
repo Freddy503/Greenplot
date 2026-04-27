@@ -82,6 +82,9 @@ export default function SettingsPage() {
  const [devError, setDevError] = useState('')
  const [featureRequest, setFeatureRequest] = useState('')
  const [sendingFeatureRequest, setSendingFeatureRequest] = useState(false)
+ const [interests, setInterests] = useState<string[]>([])
+ const [interestInput, setInterestInput] = useState('')
+ const [savingInterests, setSavingInterests] = useState(false)
 
  const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
@@ -90,6 +93,7 @@ export default function SettingsPage() {
    try {
      const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
      if (profile.city) setCity(profile.city)
+     if (profile.interests) setInterests(profile.interests)
    } catch {}
 
    if (token) {
@@ -110,6 +114,7 @@ export default function SettingsPage() {
            localStorage.setItem('greenplot_nickname', data.nickname)
          }
          if (data.email) setUserEmail(data.email)
+         if (data.interests) setInterests(data.interests)
        })
        .catch(() => {})
    }
@@ -156,6 +161,41 @@ export default function SettingsPage() {
    localStorage.setItem('greenplot_nickname', editNickname.trim())
    setEditingNickname(false)
    toast.success('Nickname updated')
+ }
+
+ const handleAddInterest = () => {
+   const val = interestInput.trim()
+   if (!val || interests.includes(val)) { setInterestInput(''); return }
+   const next = [...interests, val]
+   setInterests(next)
+   setInterestInput('')
+   handleSaveInterestList(next)
+ }
+
+ const handleRemoveInterest = (val: string) => {
+   const next = interests.filter(i => i !== val)
+   setInterests(next)
+   handleSaveInterestList(next)
+ }
+
+ const handleSaveInterestList = async (list: string[]) => {
+   setSavingInterests(true)
+   try {
+     const res = await fetch(`${BACKEND}/profile`, {
+       method: 'PATCH',
+       headers: authHeaders(),
+       body: JSON.stringify({ interests: list }),
+     })
+     if (!res.ok) throw new Error('Failed')
+     const profile = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
+     profile.interests = list
+     localStorage.setItem('greenplot_profile', JSON.stringify(profile))
+     toast.success('Interests saved')
+   } catch {
+     toast.error('Failed to save interests')
+   } finally {
+     setSavingInterests(false)
+   }
  }
 
  const { status: pushStatus, requestPermission, unsubscribe } = usePushNotifications()
@@ -342,6 +382,39 @@ export default function SettingsPage() {
                        <button onClick={() => { setEditCity(city); setEditingCity(true) }} className="text-xs text-primary font-medium">Edit</button>
                      </div>
                    )}
+                 </div>
+               </div>
+             </section>
+
+             {/* Interests */}
+             <section>
+               <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Interests</h2>
+               <div className="px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 space-y-3">
+                 <p className="text-xs text-on-surface-variant">Topics that shape your digests and research papers. Add or remove at any time.</p>
+                 <div className="flex flex-wrap gap-2">
+                   {interests.map(i => (
+                     <span key={i} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                       {i}
+                       <button onClick={() => handleRemoveInterest(i)} className="ml-0.5 text-primary/60 hover:text-error transition-colors leading-none">
+                         <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                       </button>
+                     </span>
+                   ))}
+                   {interests.length === 0 && (
+                     <span className="text-xs text-on-surface-variant/50 italic">No interests yet — add one below</span>
+                   )}
+                 </div>
+                 <div className="flex items-center gap-2">
+                   <Input
+                     value={interestInput}
+                     onChange={e => setInterestInput(e.target.value)}
+                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddInterest() } }}
+                     placeholder="Add interest (e.g. Medicine)"
+                     className="flex-1 rounded-full bg-surface-container-highest border-0 text-sm"
+                   />
+                   <Button size="sm" onClick={handleAddInterest} disabled={!interestInput.trim() || savingInterests} className="rounded-full px-4">
+                     Add
+                   </Button>
                  </div>
                </div>
              </section>
