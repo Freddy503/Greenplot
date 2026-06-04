@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = 100  # per minute per tenant
+    DAILY_TOKEN_LIMIT: int = 100_000  # LLM tokens per user per day (0 = unlimited)
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
