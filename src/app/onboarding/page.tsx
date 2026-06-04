@@ -519,10 +519,12 @@ function StepHowItWorks({
   onEnter,
   loading,
   error,
+  showIOSPrompt = false,
 }: {
   onEnter: () => void
   loading: boolean
   error: string
+  showIOSPrompt?: boolean
 }) {
   return (
     <StepShell step={4}>
@@ -534,6 +536,28 @@ function StepHowItWorks({
           Experience how your digital greenhouse breathes, learns, and connects.
         </p>
       </div>
+
+      {/* iOS home-screen install prompt — required for push notifications on Safari */}
+      {showIOSPrompt && (
+        <div className="w-full rounded-2xl px-5 py-4 mb-5 bg-primary/8 border border-primary/20">
+          <div className="flex items-start gap-3">
+            <span
+              className="material-symbols-outlined text-primary mt-0.5 shrink-0"
+              style={{ fontSize: 22, fontVariationSettings: '"FILL" 1' }}
+            >
+              ios_share
+            </span>
+            <div>
+              <p className="text-sm font-bold text-on-surface mb-1">Enable push notifications</p>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                To receive daily briefings on iOS, add this app to your Home Screen first:
+                tap <strong>Share</strong> <span className="inline-block">↑</span> then{' '}
+                <strong>Add to Home Screen</strong>. Then reopen and continue.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bento grid */}
       <div className="grid grid-cols-2 gap-3 w-full mb-6">
@@ -592,7 +616,7 @@ export default function OnboardingPage() {
   const [digestFrequency, setDigestFrequency] = useState<OnboardingProfile['digestFrequency']>('once-daily')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { requestPermission } = usePushNotifications()
+  const { requestPermission, isIOS, isStandalone } = usePushNotifications()
 
   const toggleInterest = (val: string) => {
     setSelectedInterests((prev) =>
@@ -717,6 +741,7 @@ export default function OnboardingPage() {
             onEnter={handleEnter}
             loading={loading}
             error={error}
+            showIOSPrompt={isIOS && !isStandalone}
           />
         )}
       </AnimatePresence>
