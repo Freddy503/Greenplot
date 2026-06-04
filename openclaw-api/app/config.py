@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     # Sentry error monitoring
     SENTRY_DSN: Optional[str] = None
 
+    # GitHub integration (for Spec → Issue export)
+    GITHUB_TOKEN: Optional[str] = None
+    GITHUB_REPO: str = "Freddy503/Seedify"  # default repo for issue filing
+
     class Config:
         env_file = ".env"
 

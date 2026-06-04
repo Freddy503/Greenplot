@@ -1685,6 +1685,42 @@ async def chat_v2_endpoint(
         except Exception:
             pass
 
+    # ── Taste Memory injection (3.17) ────────────────────────────
+    if current_user:
+        try:
+            from app.taste_memory import format_for_prompt as _taste_fmt
+            taste_section = _taste_fmt(str(current_user.tenant_id))
+            if taste_section:
+                prompt_builder = prompt_builder.with_context(taste_section)
+        except Exception:
+            pass
+
+    # ── Prior learnings injection (3.20) ─────────────────────────
+    if current_user:
+        try:
+            recent_learnings = db.query(Seed).filter(
+                Seed.tenant_id == current_user.tenant_id,
+                Seed.seed_type == "learning",
+            ).order_by(Seed.created_at.desc()).limit(5).all()
+            if recent_learnings:
+                lines = "\n".join(f"- {s.title}: {s.content[:120]}" for s in recent_learnings)
+                prompt_builder = prompt_builder.with_context(
+                    f"**Prior Learnings** (apply these patterns; confidence rated by user):\n{lines}"
+                )
+        except Exception:
+            pass
+
+    # ── Evidence-anchored recommendations (3.19) + Completeness mode (3.22) ─
+    prompt_builder = prompt_builder.append_section(
+        "Thinking Partner Instructions",
+        "When making recommendations:\n"
+        "1. **Cite your sources**: Name the specific seeds, wiki articles, or sources that motivated each recommendation. If you cannot cite one, flag it as an assumption.\n"
+        "2. **Completeness by default**: AI makes comprehensiveness cheap. Recommend the full solution — all edge cases, all failure modes — not the shortcut.\n"
+        "3. **User sovereignty**: You recommend; the user decides. Present trade-offs, not just a single path.\n"
+        "4. **Premise before implementation**: Before expanding scope, confirm the core premise is valid.\n"
+        "5. **develop_idea tool**: Use it proactively when the user expresses a vague idea that deserves rigorous development.",
+    )
+
     system_prompt = prompt_builder.render()
 
     # ── Setup Agent ───────────────────────────────────────────────
@@ -1768,6 +1804,13 @@ async def chat_v2_endpoint(
                             )
                             save_db.commit()
                             logger.info(f"Session {session_id} saved ({len(actual_session.messages)} messages)")
+                            # Taste memory extraction (3.17) — non-blocking
+                            try:
+                                from app.taste_memory import extract_and_record as _tm_extract
+                                raw_msgs = [{"role": m.role, "content": str(m.content)} for m in actual_session.messages]
+                                _tm_extract(str(current_user.tenant_id), raw_msgs)
+                            except Exception:
+                                pass
                         except Exception as e:
                             logger.error(f"Session save failed for {session_id}: {e}")
                             save_db.rollback()

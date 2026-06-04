@@ -2030,3 +2030,305 @@ async def create_wiki_article(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["create_wiki_article"] = create_wiki_article
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Thinking Partner Tools (Phase 3C)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def develop_idea(args: dict, user: User, db: Session) -> str:
+    """
+    Transform a raw idea or seed into a structured spec using gstack forcing questions.
+    Creates a Spec seed with full YAML frontmatter when complete.
+    """
+    import httpx as _httpx
+
+    idea_text = args.get("idea") or ""
+    seed_id = args.get("seed_id") or ""
+    phase = args.get("phase", "interrogate")  # interrogate | finalize
+
+    # Load seed content if seed_id provided
+    if seed_id and not idea_text:
+        try:
+            seed_obj = db.query(Seed).filter(
+                Seed.id == seed_id,
+                Seed.tenant_id == user.tenant_id
+            ).first()
+            if seed_obj:
+                idea_text = f"{seed_obj.title}\n\n{seed_obj.content}"
+        except Exception:
+            pass
+
+    if not idea_text:
+        return json.dumps({"status": "error", "message": "Provide either idea text or a valid seed_id."})
+
+    try:
+        system = (
+            "You are a rigorous product strategist using gstack's spec methodology. "
+            "Your role is to interrogate vague ideas until they become executable specs. "
+            "Never accept hand-wavy answers. Push for specifics.\n\n"
+            "## Forcing Questions Framework\n"
+            "1. **Demand reality**: Who DESPERATELY needs this today? Name them specifically.\n"
+            "2. **Status quo**: What do they do instead right now?\n"
+            "3. **Desperate specificity**: What is the narrowest possible first use case?\n"
+            "4. **Narrowest wedge**: If you had to ship one thing in one week, what is it?\n"
+            "5. **Observation**: What have you PERSONALLY observed that makes you believe this?\n"
+            "6. **Future-fit**: Why will this be MORE important in 2 years, not less?\n\n"
+            "## Spec Output Format (when phase=finalize)\n"
+            "Produce YAML frontmatter followed by prose explanation:\n"
+            "```yaml\n"
+            "who: [specific user or role]\n"
+            "current_behavior: [what they do today]\n"
+            "desired_behavior: [what they want to do]\n"
+            "urgency: [why now]\n"
+            "success_criteria: [measurable outcome]\n"
+            "scope_in: [explicitly included]\n"
+            "scope_out: [explicitly excluded]\n"
+            "mvp: [smallest shippable version]\n"
+            "failure_modes: [what could go wrong + rollback]\n"
+            "```"
+        )
+
+        if phase == "interrogate":
+            user_msg = (
+                f"Here is the raw idea:\n\n{idea_text}\n\n"
+                "Apply the 6 forcing questions. Ask them one by one and wait for answers. "
+                "Start with question 1 now. Be direct and challenging."
+            )
+        else:
+            user_msg = (
+                f"Raw idea:\n\n{idea_text}\n\n"
+                "The user has answered the forcing questions. Now produce a complete spec in the YAML format. "
+                "After the YAML, add a 1-paragraph 'Implementation Notes' section. "
+                "Be specific, not generic."
+            )
+
+        resp = _httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": settings.CHAT_MODEL,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
+                "max_tokens": 1200,
+                "temperature": 0.4,
+            },
+            timeout=30,
+        )
+        spec_text = resp.json()["choices"][0]["message"]["content"]
+
+        if phase == "finalize":
+            # Create a Spec seed
+            spec_seed = Seed(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                title=f"Spec: {idea_text[:60].split(chr(10))[0]}",
+                content=spec_text,
+                seed_metadata={
+                    "seed_type": "spec",
+                    "source": "develop_idea",
+                    "status": "draft",
+                },
+                seed_type="spec",
+                created_by="agent_synthesis",
+                created_via="develop_idea",
+                created_at=__import__("datetime").datetime.utcnow(),
+            )
+            db.add(spec_seed)
+            db.commit()
+            db.refresh(spec_seed)
+
+            # Dual-voice review (CEO + Engineering lenses in parallel)
+            import asyncio
+            ceo_review, eng_review = await asyncio.gather(
+                _spec_review(spec_text, "CEO", settings),
+                _spec_review(spec_text, "Engineering", settings),
+            )
+
+            return json.dumps({
+                "status": "ok",
+                "phase": "finalized",
+                "spec": spec_text,
+                "spec_seed_id": str(spec_seed.id),
+                "reviews": {"ceo": ceo_review, "engineering": eng_review},
+                "message": "Spec seed created. Use create_github_issue to file it as a GitHub issue.",
+            })
+        else:
+            return json.dumps({
+                "status": "ok",
+                "phase": "interrogating",
+                "response": spec_text,
+                "next_step": "Answer the questions, then call develop_idea again with phase='finalize'.",
+            })
+
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+async def _spec_review(spec_text: str, lens: str, _settings) -> str:
+    """Run a single-lens review of a spec. Returns a short findings string."""
+    import httpx as _httpx
+
+    prompts = {
+        "CEO": (
+            "You are a CEO reviewer. Evaluate this spec from a strategic lens:\n"
+            "1. Is the demand real or assumed? 2. Is the scope too broad/narrow?\n"
+            "3. What are 2 alternative approaches? 4. What is the biggest assumption?\n"
+            "Keep response under 150 words. Be direct."
+        ),
+        "Engineering": (
+            "You are an engineering manager reviewer. Evaluate this spec:\n"
+            "1. Is the MVP achievable in 1 week? 2. What are the 2 hardest technical challenges?\n"
+            "3. What existing code/patterns can be reused? 4. What edge cases are missing?\n"
+            "Keep response under 150 words. Be direct."
+        ),
+    }
+    try:
+        resp = _httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {_settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": _settings.CHAT_MODEL,
+                "messages": [
+                    {"role": "system", "content": prompts.get(lens, "Review this spec concisely.")},
+                    {"role": "user", "content": spec_text[:1500]},
+                ],
+                "max_tokens": 250,
+                "temperature": 0.5,
+            },
+            timeout=20,
+        )
+        return resp.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Review unavailable: {e}"
+
+
+TOOL_HANDLERS["develop_idea"] = develop_idea
+
+
+async def captu<RESEND_API_KEY>(args: dict, user: User, db: Session) -> str:
+    """Capture a learning or decision from the current session as a learning-type seed."""
+    learning = args.get("learning", "")
+    confidence = min(10, max(1, int(args.get("confidence", 7))))
+    if not learning:
+        return json.dumps({"status": "error", "message": "Provide learning text."})
+    try:
+        seed = Seed(
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            title=f"Learning: {learning[:60]}",
+            content=learning,
+            seed_metadata={
+                "seed_type": "learning",
+                "confidence": confidence,
+                "source": "captu<RESEND_API_KEY>",
+            },
+            seed_type="learning",
+            created_by="agent_synthesis",
+            created_via="captu<RESEND_API_KEY>",
+            created_at=__import__("datetime").datetime.utcnow(),
+        )
+        db.add(seed)
+        db.commit()
+        db.refresh(seed)
+
+        # Taste memory signal
+        try:
+            from app.taste_memory import record as _tm_record
+            _tm_record(str(user.tenant_id), "recent_learning", learning[:80], confidence / 10)
+        except Exception:
+            pass
+
+        return json.dumps({
+            "status": "ok",
+            "message": f"Learning captured (confidence {confidence}/10).",
+            "seed_id": str(seed.id),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["captu<RESEND_API_KEY>"] = captu<RESEND_API_KEY>
+
+
+async def create_github_issue(args: dict, user: User, db: Session) -> str:
+    """File a GitHub issue from a spec seed. Requires GITHUB_TOKEN in environment."""
+    import httpx as _httpx
+
+    title = args.get("title", "")
+    body = args.get("body", "")
+    seed_id = args.get("seed_id", "")
+    repo = args.get("repo", "")  # e.g. "Freddy503/Seedify"
+
+    # Load from spec seed if seed_id provided
+    if seed_id and not body:
+        try:
+            spec_seed = db.query(Seed).filter(
+                Seed.id == seed_id,
+                Seed.tenant_id == user.tenant_id
+            ).first()
+            if spec_seed:
+                title = title or spec_seed.title
+                body = spec_seed.content
+        except Exception:
+            pass
+
+    if not title or not body:
+        return json.dumps({"status": "error", "message": "Provide title and body (or a valid spec seed_id)."})
+
+    token = getattr(settings, "GITHUB_TOKEN", None) or __import__("os").environ.get("GITHUB_TOKEN", "")
+    if not token:
+        return json.dumps({
+            "status": "error",
+            "message": "GITHUB_TOKEN not configured. Set GITHUB_TOKEN environment variable.",
+        })
+
+    repo = repo or getattr(settings, "GITHUB_REPO", "")
+    if not repo or "/" not in repo:
+        return json.dumps({
+            "status": "error",
+            "message": "Provide repo in 'owner/name' format (e.g. 'Freddy503/Seedify').",
+        })
+
+    try:
+        issue_body = body + "\n\n---\n*Created from Seedify Thinking Partner*"
+        resp = _httpx.post(
+            f"https://api.github.com/repos/{repo}/issues",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json",
+            },
+            json={"title": title, "body": issue_body},
+            timeout=15,
+        )
+        if resp.status_code == 201:
+            data = resp.json()
+            # Update spec seed metadata with issue URL
+            if seed_id:
+                try:
+                    s = db.query(Seed).filter(Seed.id == seed_id).first()
+                    if s:
+                        meta = s.seed_metadata or {}
+                        meta["github_issue_url"] = data.get("html_url")
+                        meta["github_issue_number"] = data.get("number")
+                        meta["status"] = "filed"
+                        s.seed_metadata = meta
+                        db.commit()
+                except Exception:
+                    pass
+            return json.dumps({
+                "status": "ok",
+                "issue_url": data.get("html_url"),
+                "issue_number": data.get("number"),
+                "message": f"Issue #{data.get('number')} filed: {data.get('html_url')}",
+            })
+        else:
+            return json.dumps({"status": "error", "message": f"GitHub API error {resp.status_code}: {resp.text[:200]}"})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["create_github_issue"] = create_github_issue
