@@ -808,7 +808,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
             all_papers_seen = True
 
     # Fetch full text for top 4 papers
-    from app.enricher import fetch_url_content
+    from app.enricher_v2 import fetch_url_content
     paper_texts = []
     for paper in unique_papers[:4]:
         full = fetch_url_content(paper["url"])

@@ -319,7 +319,7 @@ def list_seeds(
             return SeedSearchResponse(seeds=cached, total=len(cached))
 
         # Vector search via Weaviate
-        from app.enricher import embed_text
+        from app.enricher_v2 import embed_text
         embedding = embed_text(query)
         weaviate_hits = weaviate_client.search_seeds(
             tenant_id=tenant_id,
@@ -396,7 +396,7 @@ def search_seeds_endpoint(
     db: Session = Depends(get_db)
 ):
     """Semantic search over user's seeds via Weaviate."""
-    from app.enricher import embed_text
+    from app.enricher_v2 import embed_text
 
     try:
         embedding = embed_text(req.query)
@@ -523,7 +523,7 @@ def fix_seed_titles(current_user: User = Depends(get_current_user), db: Session 
     - Title is the same as the first 60 chars of content (raw fallback)
     Processes up to 30 seeds per call.
     """
-    from app.enricher import generate_seed as _generate_seed
+    from app.enricher_v2 import generate_seed as _generate_seed
     from sqlalchemy.orm.attributes import flag_modified
 
     bad_seeds = db.query(Seed).filter(
@@ -631,66 +631,6 @@ def get_seed_links(req: SeedLinksRequest, current_user: User = Depends(get_curre
         for l in all_links
     ])
 
-
-class SeedLinksRequest(BaseModel):
-    seed_ids: List[str]
-
-
-class SeedLinkItem(BaseModel):
-    source_seed_id: str
-    target_seed_id: str
-    link_type: str
-    confidence: int
-
-
-class SeedLinksResponse(BaseModel):
-    links: List[SeedLinkItem]
-
-
-@app.post("/api/v1/seeds/links", response_model=SeedLinksResponse)
-def get_seed_links(req: SeedLinksRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """
-    Return all SeedLink records for the given seed IDs.
-    Used by the Knowledge Graph frontend to draw edges from real backlinks.
-    """
-    from app.models import SeedLink
-    from uuid import UUID
-
-    if not req.seed_ids:
-        return SeedLinksResponse(links=[])
-
-    # Convert string IDs to UUIDs
-    try:
-        uuid_ids = [UUID(sid) for sid in req.seed_ids]
-    except ValueError:
-        return SeedLinksResponse(links=[])
-
-    links = db.query(SeedLink).join(
-        Seed, SeedLink.source_seed_id == Seed.id
-    ).filter(
-        Seed.tenant_id == current_user.tenant_id,
-        SeedLink.source_seed_id.in_(uuid_ids)
-    ).all()
-
-    # Also get reverse links (where this seed is the target)
-    reverse_links = db.query(SeedLink).join(
-        Seed, SeedLink.target_seed_id == Seed.id
-    ).filter(
-        Seed.tenant_id == current_user.tenant_id,
-        SeedLink.target_seed_id.in_(uuid_ids)
-    ).all()
-
-    all_links = links + reverse_links
-
-    return SeedLinksResponse(links=[
-        SeedLinkItem(
-            source_seed_id=str(l.source_seed_id),
-            target_seed_id=str(l.target_seed_id),
-            link_type=l.link_type,
-            confidence=l.confidence or 700,
-        )
-        for l in all_links
-    ])
 
 
 @app.get("/api/v1/seeds/garden/intelligence")
@@ -868,7 +808,7 @@ def create_seeds_bulk(
 
         # Store in Weaviate (non-blocking)
         try:
-            from app.enricher import embed_text
+            from app.enricher_v2 import embed_text
             embedding = embed_text(f"{item.title} {item.content}")
             weaviate_client.store_seed(
                 tenant_id=str(current_user.tenant_id),
@@ -1386,235 +1326,6 @@ def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
                 })
     return content_parts
 
-
-# --- Chat (NDJSON streaming with tool calling loop) ---
-
-@app.post("/api/v1/chat")
-async def chat_endpoint(
-    request: Request,
-    current_user = Depends(get_optional_user),
-    db: Session = Depends(get_db)
-):
-    from app.tools import TOOLS
-    from app.tool_executor import TOOL_HANDLERS
-    from app.session_store import SessionRecorder
-
-    body = await request.json()
-    messages = body.get("messages", [])
-    attachments = body.get("attachments", [])
-    max_tool_rounds = 3  # prevent infinite loops
-
-    # Process attachments once (apply to last user message)
-    attachment_parts = process_attachments(attachments, settings.MAX_ATTACHMENT_SIZE_MB) if attachments else []
-
-    # Build OpenAI-compatible messages
-    openai_messages = []
-    for i, msg in enumerate(messages):
-        role = msg.get("role")
-        text_content = extract_text(msg)
-
-        is_last_user = (role == "user" and i == len(messages) - 1) or (
-            role == "user" and all(m.get("role") != "user" for m in messages[i+1:])
-        )
-
-        if is_last_user and attachment_parts:
-            content = [{"type": "text", "text": text_content}] + attachment_parts
-            openai_messages.append({"role": role, "content": content})
-        else:
-            openai_messages.append({"role": role, "content": text_content})
-
-    headers = {
-        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": settings.APP_URL or "https://your-domain.com",
-        "X-Title": settings.APP_NAME or "Second Brain",
-    }
-
-    async def generate():
-        nonlocal openai_messages
-        import asyncio
-        import uuid
-        
-        # Session recording
-        last_prompt = extract_text(messages[-1]) if messages else ""
-        recorder = SessionRecorder(
-            user_id=str(current_user.id) if current_user else "anonymous",
-            tenant_id=str(current_user.tenant_id) if current_user else "",
-            prompt=last_prompt[:500],
-        )
-        
-        yield json.dumps({"type": "status", "text": "Thinking…"}) + "\n"
-        recorder.event("message", "user", last_prompt[:200])
-        await asyncio.sleep(0)
-
-        async with httpx.AsyncClient() as client:
-            for round_num in range(max_tool_rounds + 1):
-                is_final_round = round_num == max_tool_rounds
-
-                # Inject source context into system prompt for first round
-                system_msg = None
-                if round_num == 0 and current_user:
-                    source_parts = []
-                    # Garden stats
-                    try:
-                        seed_count = db.query(Seed).filter(Seed.tenant_id == current_user.tenant_id).count()
-                        source_parts.append(f"You have access to {seed_count} seeds in the Garden.")
-                    except:
-                        pass
-                    # Relevant sources
-                    try:
-                        user_sources = weaviate_client.get_links(tenant_id=str(current_user.tenant_id), limit=100)
-                        if user_sources:
-                            last_user_text = extract_text(messages[-1]) if messages else ""
-                            prompt_words = set(last_user_text.lower().split())
-                            matched = []
-                            for link in user_sources:
-                                title = (link.get("title") or "").lower()
-                                tags = (link.get("tags") or "").lower()
-                                domain = (link.get("domain") or "").lower()
-                                combined = f"{title} {tags} {domain}"
-                                overlap = len(prompt_words & set(combined.split()))
-                                if overlap >= 2:
-                                    matched.append((overlap, link))
-                            matched.sort(key=lambda x: -x[0])
-                            if matched:
-                                source_lines = [f"  • {l.get('title','')[:50]} ({l.get('domain','')}) — {l.get('url','')}" for _, l in matched[:3]]
-                                source_parts.append(f"Relevant saved sources:\n" + "\n".join(source_lines))
-                                source_parts.append("Mention these when relevant — the user may not remember they saved them. Use read_source to fetch full content when answering complex questions about these topics.")
-                    except:
-                        pass
-                    if source_parts:
-                        system_msg = {"role": "system", "content": "You are a helpful assistant with access to the user's knowledge base. " + "\n".join(source_parts)}
-
-                # Request: with tools (except final round, force content)
-                payload = {
-                    "model": settings.CHAT_MODEL,
-                    "messages": ([system_msg] if system_msg else []) + openai_messages,
-                    "stream": True,
-                }
-                if not is_final_round and TOOLS:
-                    payload["tools"] = TOOLS
-
-                async with client.stream(
-                    "POST", "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers, json=payload, timeout=120.0
-                ) as resp:
-                    if resp.status_code != 200:
-                        error_text = await resp.aread()
-                        yield json.dumps({"type": "error", "text": f"API error: {error_text.decode()}"}) + "\n"
-                        return
-
-                    # Collect streaming response
-                    content_buffer = ""
-                    tool_calls_acc = {}  # index -> {id, name, arguments_str}
-                    finish_reason = None
-                    got_any = False
-
-                    async for line in resp.aiter_lines():
-                        if line.startswith("data: "):
-                            data = line[6:].strip()
-                            if data == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(data)
-                                choice = chunk["choices"][0]
-                                delta = choice.get("delta", {})
-                                finish_reason = choice.get("finish_reason") or finish_reason
-
-                                # Content chunk
-                                text = delta.get("content", "")
-                                if text:
-                                    if not got_any:
-                                        yield json.dumps({"type": "status", "text": ""}) + "\n"
-                                        got_any = True
-                                    content_buffer += text
-                                    yield json.dumps({"type": "content", "text": text}) + "\n"
-
-                                # Tool call chunks (streamed in pieces)
-                                for tc in delta.get("tool_calls", []) or []:
-                                    idx = tc["index"]
-                                    if idx not in tool_calls_acc:
-                                        tool_calls_acc[idx] = {"id": "", "name": "", "arguments": ""}
-                                    if tc.get("id"):
-                                        tool_calls_acc[idx]["id"] = tc["id"]
-                                    fn = tc.get("function", {})
-                                    if fn.get("name"):
-                                        tool_calls_acc[idx]["name"] = fn["name"]
-                                    if fn.get("arguments"):
-                                        tool_calls_acc[idx]["arguments"] += fn["arguments"]
-                            except Exception as e:
-                                continue
-
-                    # If we got tool_calls, execute them
-                    if tool_calls_acc and finish_reason == "tool_calls":
-                        # Add assistant message with tool_calls to history
-                        assistant_msg = {
-                            "role": "assistant",
-                            "content": content_buffer or None,
-                            "tool_calls": [
-                                {
-                                    "id": tc["id"],
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc["name"],
-                                        "arguments": tc["arguments"]
-                                    }
-                                }
-                                for tc in tool_calls_acc.values()
-                            ]
-                        }
-                        openai_messages.append(assistant_msg)
-
-                        # Execute each tool
-                        for tc in tool_calls_acc.values():
-                            tool_name = tc["name"]
-                            tool_id = tc["id"]
-                            yield json.dumps({
-                                "type": "tool_call",
-                                "id": tool_id,
-                                "name": tool_name,
-                                "input": tc["arguments"][:200]
-                            }) + "\n"
-                            recorder.event("tool_call", tool_name, tc["arguments"][:200])
-
-                            try:
-                                args = json.loads(tc["arguments"])
-                            except json.JSONDecodeError:
-                                args = {}
-
-                            # Execute
-                            handler = TOOL_HANDLERS.get(tool_name)
-                            if handler:
-                                try:
-                                    result = await handler(args, current_user, db)
-                                except Exception as e:
-                                    result = json.dumps({"status": "error", "message": str(e)})
-                            else:
-                                result = json.dumps({"status": "error", "message": f"Unknown tool: {tool_name}"})
-
-                            yield json.dumps({
-                                "type": "tool_result",
-                                "id": tool_id,
-                                "result": result[:8000]
-                            }) + "\n"
-                            recorder.event("tool_result", tool_name, result[:200])
-
-                            # Add tool result to messages
-                            openai_messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_id,
-                                "content": result
-                            })
-
-                        # Continue to next round
-                        continue
-                    else:
-                        # No tool calls — we're done
-                        break
-
-        yield json.dumps({"type": "done"}) + "\n"
-
-    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 # --- Heartbeat (multi-modal ingestion coordination) ---
 
