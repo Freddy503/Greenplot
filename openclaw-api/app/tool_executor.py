@@ -48,7 +48,7 @@ async def search_seeds(args: dict, user: User, db: Session) -> str:
     query = args["query"]
     limit = args.get("limit", 5)
     try:
-        from app.enricher import embed_text
+        from app.enricher_v2 import embed_text
         import asyncio
 
         # Run vector and BM25 searches — BM25 is sync, embed is sync too
@@ -121,7 +121,7 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
 
         # Also index in Weaviate (best-effort)
         try:
-            from app.enricher import embed_text
+            from app.enricher_v2 import embed_text
             embedding = embed_text(f"{title}\n{content}")
             weaviate_client.add_seed(
                 tenant_id=str(user.tenant_id),
@@ -395,7 +395,7 @@ async def list_recent_seeds(args: dict, user: User, db: Session) -> str:
             return json.dumps({"status": "ok", "results": results})
 
         # Fallback: search Weaviate for recent seeds
-        from app.enricher import embed_text
+        from app.enricher_v2 import embed_text
         embedding = embed_text("recent ideas knowledge seeds")
         hits = weaviate_client.search_seeds(
             tenant_id=str(user.tenant_id),
@@ -876,7 +876,7 @@ async def create_seed_from_source(args: dict, user: User, db: Session) -> str:
 
         # Index in Weaviate
         try:
-            from app.enricher import embed_text
+            from app.enricher_v2 import embed_text
             embedding = embed_text(f"{title}\n{content}")
             weaviate_client.add_seed(
                 tenant_id=str(user.tenant_id),
@@ -1696,7 +1696,7 @@ async def search_wiki(args: dict, user: User, db: Session) -> str:
 
     try:
         # Primary: vector search over WikiArticle class
-        from app.enricher import embed_text
+        from app.enricher_v2 import embed_text
         embedding = embed_text(query)
         articles = weaviate_client.search_wiki_articles(
             tenant_id=tenant_id,

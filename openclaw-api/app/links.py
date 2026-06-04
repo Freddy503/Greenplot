@@ -227,7 +227,7 @@ def _auto_create_seed_from_link(link_id: str, tenant_id: str, title: str, summar
     logger = logging.getLogger(__name__)
     
     try:
-        from app.enricher import embed_text
+        from app.enricher_v2 import embed_text
         
         # Build seed content
         seed_content = f"Source: {title}\n\n{summary}" if summary else f"Source: {title}"
@@ -624,7 +624,7 @@ async def create_seed_from_link(link_id: str, request: Request, current_user = D
     seed_content = f"Source: {url}\n\n{summary}" if summary else f"Source: {url}"
 
     # Create seed in Weaviate
-    from app.enricher import embed_text
+    from app.enricher_v2 import embed_text
     try:
         embedding = embed_text(f"{title} {summary}")
     except:
