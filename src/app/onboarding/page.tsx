@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'motion/react'
 
 import { Button } from '@/components/ui/button'
@@ -604,9 +604,16 @@ function StepHowItWorks({
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [currentStep, setCurrentStep] = useState(0)
 
   const [email, setEmail] = useState('')
+
+  // Pre-fill email from invite link (?email=...)
+  useEffect(() => {
+    const inviteEmail = searchParams.get('email')
+    if (inviteEmail) setEmail(inviteEmail)
+  }, [searchParams])
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [password, setPassword] = useState('')
