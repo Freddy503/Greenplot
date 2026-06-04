@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 import base64
 import mimetypes
 from app.database import engine, get_db
-from app.models import Base, User, Thought, Seed, Usage, CalendarConnection
+from app.models import Base, User, Thought, Seed, Usage, CalendarConnection, ChatSession, Rating, WikiArticle
 from app.schemas import (
     RegisterRequest, LoginRequest, AuthResponse,
     ThoughtCreate, ThoughtResponse, SeedResponse, SeedSearchResponse,
@@ -1272,6 +1272,83 @@ def public_health():
     return {"status": "ok" if all_ok else "degraded", "services": services}
 
 
+# --- Invite flow ---
+
+class InviteRequest(BaseModel):
+    emails: List[str]
+
+@app.post("/api/v1/admin/invite")
+def admin_send_invites(
+    req: InviteRequest,
+    x_api_key: str = Header(default=""),
+):
+    """Send magic-link invite emails to waitlist users. Requires HARVEST_API_KEY."""
+    expected = settings.HARVEST_API_KEY
+    if not expected:
+        raise HTTPException(status_code=503, detail="Invite API not configured")
+    if x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    from app.auth import create_access_token
+    from app.email_sender import send_briefing_email
+
+    sent, failed = [], []
+    for email in req.emails[:50]:  # cap at 50 per call
+        email = email.strip().lower()
+        if not email or "@" not in email:
+            failed.append(email)
+            continue
+        try:
+            # 7-day invite token with special 'invite' claim
+            token = create_access_token(
+                data={"invite_email": email, "type": "invite"},
+                expires_minutes=60 * 24 * 7,
+            )
+            invite_url = f"{settings.FRONTEND_URL}/invite?token={token}"
+            briefing = {
+                "type": "invite",
+                "title": "You're invited to Seedify",
+                "subtitle": "Your personal AI knowledge garden is ready",
+                "sections": [
+                    {
+                        "title": "Get started",
+                        "icon": "eco",
+                        "content": (
+                            f"You've been invited to Seedify — an AI-powered second brain "
+                            f"that captures, enriches, and synthesizes your ideas into a living knowledge garden.\n\n"
+                            f"[Accept your invite and create your account]({invite_url})\n\n"
+                            f"This invite link expires in 7 days."
+                        ),
+                    }
+                ],
+            }
+            send_briefing_email(email, briefing)
+            sent.append(email)
+        except Exception as e:
+            logger.error(f"Invite failed for {email}: {e}")
+            failed.append(email)
+
+    return {"sent": sent, "failed": failed}
+
+
+@app.get("/api/v1/auth/validate-invite")
+def validate_invite(token: str):
+    """Validate a magic-link invite token. Returns the pre-filled email on success."""
+    from app.auth import decode_token
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "invite":
+            raise HTTPException(status_code=400, detail="Invalid invite token")
+        email = payload.get("invite_email", "")
+        if not email:
+            raise HTTPException(status_code=400, detail="Malformed invite token")
+        return {"valid": True, "email": email}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired invite token")
+
+
 # --- Admin (protected by is_admin check; for MVP we'll skip and use direct DB)
 
 @app.get("/api/v1/admin/health")
@@ -1487,6 +1564,22 @@ async def chat_v2_endpoint(
             content = last_user.get("content", "") or ""
             if isinstance(content, str) and len(content) > 10_000:
                 raise HTTPException(status_code=422, detail="Message too long (max 10,000 characters)")
+
+    # Daily token budget check
+    if current_user and settings.DAILY_TOKEN_LIMIT > 0:
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        from app.models import Usage as UsageModel
+        today_usage = db.query(func.coalesce(func.sum(UsageModel.llm_tokens), 0)).filter(
+            UsageModel.user_id == current_user.id,
+            UsageModel.date >= today_start,
+        ).scalar() or 0
+        if today_usage >= settings.DAILY_TOKEN_LIMIT:
+            reset_time = (today_start + timedelta(days=1)).isoformat() + "Z"
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily token limit reached ({settings.DAILY_TOKEN_LIMIT:,} tokens). Resets at {reset_time}.",
+                headers={"X-RateLimit-Reset": reset_time},
+            )
 
     # ── Session Persistence ───────────────────────────────────────
     store = ChatSessionStore(db)
@@ -2522,6 +2615,20 @@ def mark_notifications_read():
     _save_notifs(notifs)
     return {"success": True}
 
+@app.delete("/api/v1/push/notifications")
+def clear_all_notifications(current_user: User = Depends(get_current_user)):
+    """Delete all notifications (clear inbox)."""
+    _save_notifs([])
+    return {"success": True}
+
+@app.delete("/api/v1/push/notifications/{notif_id}")
+def dismiss_notification(notif_id: str, current_user: User = Depends(get_current_user)):
+    """Dismiss a single notification by id."""
+    notifs = _load_notifs()
+    notifs = [n for n in notifs if n.get("id") != notif_id]
+    _save_notifs(notifs)
+    return {"success": True}
+
 class PushSubscriptionRequest(BaseModel):
     subscription: dict
     userId: Optional[str] = None
@@ -2769,12 +2876,86 @@ def delete_account(
         del mem[tenant_id]
         _save_mem(mem)
 
-    # 4. Delete Postgres data (cascades: thoughts, seeds, usage via SQLAlchemy)
-    db.query(CalendarConnection).filter(CalendarConnection.tenant_id == current_user.tenant_id).delete()
+    # 4. Delete Postgres data — explicit deletes for tables without cascade
+    db.query(ChatSession).filter(ChatSession.user_id == current_user.id).delete()
+    db.query(Rating).filter(Rating.user_id == current_user.id).delete()
+    db.query(CalendarConnection).filter(CalendarConnection.user_id == current_user.id).delete()
+    # Seeds, Thoughts, Usage cascade from User via SQLAlchemy relationship
     db.delete(current_user)
     db.commit()
 
     return {"status": "ok", "message": "Account and all data deleted"}
+
+
+@app.get("/api/v1/me/export")
+def export_my_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """GDPR data export — returns all user data as JSON."""
+    from fastapi.responses import JSONResponse
+
+    def _ser(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        return str(obj)
+
+    seeds = db.query(Seed).filter(Seed.user_id == current_user.id).all()
+    thoughts = db.query(Thought).filter(Thought.user_id == current_user.id).all()
+    sessions = db.query(ChatSession).filter(ChatSession.user_id == current_user.id).all()
+    ratings = db.query(Rating).filter(Rating.user_id == current_user.id).all()
+
+    export = {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "user": {
+            "id": str(current_user.id),
+            "email": current_user.email,
+            "nickname": getattr(current_user, "nickname", ""),
+            "city": current_user.city or "",
+            "interests": getattr(current_user, "interests", []) or [],
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        },
+        "seeds": [
+            {
+                "id": str(s.id),
+                "title": s.title,
+                "content": s.content,
+                "metadata": s.seed_metadata,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            }
+            for s in seeds
+        ],
+        "thoughts": [
+            {
+                "id": str(t.id),
+                "content": t.content,
+                "source": t.source,
+                "status": t.status,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in thoughts
+        ],
+        "chat_sessions": [
+            {
+                "id": str(s.id),
+                "title": s.title,
+                "message_count": len(s.messages or []),
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            }
+            for s in sessions
+        ],
+        "ratings": [
+            {"message_id": r.message_id, "score": r.score, "created_at": r.created_at.isoformat() if r.created_at else None}
+            for r in ratings
+        ],
+    }
+
+    return JSONResponse(
+        content=export,
+        headers={"Content-Disposition": f'attachment; filename="seedify-export-{current_user.id}.json"'},
+    )
 
 
 # --- Batch Enrichment ---
