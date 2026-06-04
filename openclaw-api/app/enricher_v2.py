@@ -449,6 +449,73 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
     except Exception as e:
         print(f"Backlinking error: {e}")
 
+    # Step 7b: Contradiction detection
+    # Flag seeds with same domain but conflicting energy as potential contradictions.
+    try:
+        similar = weaviate_client.search_seeds(
+            tenant_id=tenant_str,
+            embedding=embeddings[0],
+            limit=5,
+        )
+        contradictions = []
+        for s in similar:
+            sim_energy = (s.get("energy") or "").upper()
+            sim_domain = (s.get("domain") or "").lower()
+            sim_id = s.get("seed_id") or s.get("id", "")
+            if (
+                sim_id
+                and sim_domain == domain.lower()
+                and sim_energy
+                and sim_energy != energy.upper()
+                and {sim_energy, energy.upper()} in ({"HIGH", "LOW"},)
+            ):
+                contradictions.append({"id": sim_id, "title": s.get("title", ""), "energy": sim_energy})
+        if contradictions:
+            meta = seed.seed_metadata or {}
+            meta["contradiction_candidates"] = contradictions
+            seed.seed_metadata = meta
+            db.commit()
+    except Exception as e:
+        print(f"[enricher_v2] Contradiction detection error (non-fatal): {e}")
+
+    # Step 7c: Suggested links (auto-link suggestions for Garden UI)
+    # Find top-5 semantically similar seeds not already linked.
+    try:
+        similar_for_suggestions = weaviate_client.search_seeds(
+            tenant_id=tenant_str,
+            embedding=embeddings[0],
+            limit=8,
+        )
+        existing_link_ids = {str(l.target_seed_id) for l in created_links} if created_links else set()
+        suggestions = []
+        for s in similar_for_suggestions:
+            sid = s.get("seed_id") or s.get("id", "")
+            if sid and sid != str(seed.id) and sid not in existing_link_ids:
+                suggestions.append({"id": sid, "title": s.get("title", "Untitled")})
+            if len(suggestions) >= 5:
+                break
+        if suggestions:
+            meta = seed.seed_metadata or {}
+            meta["suggested_links"] = suggestions
+            seed.seed_metadata = meta
+            db.commit()
+    except Exception as e:
+        print(f"[enricher_v2] Suggested links error (non-fatal): {e}")
+
+    # Step 7d: Ingest log
+    try:
+        from app.ingest_log import append_log_entry
+        source_label = detected_url or "manual"
+        append_log_entry(
+            tenant_id=tenant_str,
+            action="seed_ingested",
+            source=source_label,
+            summary=f"{title[:80]} [{domain}]",
+            db=db,
+        )
+    except Exception:
+        pass
+
     # Step 8: Update usage
     today = date.today().replace(day=1)
     usage = db.query(Usage).filter(
