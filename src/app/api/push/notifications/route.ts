@@ -59,3 +59,17 @@ export async function GET(req: Request) {
   return NextResponse.json({ notifications: [] })
 }
 
+// DELETE /api/push/notifications — clear all
+export async function DELETE(req: Request) {
+  const authHeader = req.headers.get('authorization') || ''
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/push/notifications`, {
+      method: 'DELETE',
+      headers: authHeader ? { Authorization: authHeader } : {},
+    })
+    const data = await res.json().catch(() => ({}))
+    return NextResponse.json(data, { status: res.status })
+  } catch {
+    return NextResponse.json({ success: false }, { status: 502 })
+  }
+}

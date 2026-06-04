@@ -795,6 +795,25 @@ export default function SettingsPage() {
                      <p className="text-xs text-on-surface-variant">Sign out of your account</p>
                    </div>
                  </button>
+                 <button
+                   onClick={async () => {
+                     const token = localStorage.getItem('greenplot_token') || ''
+                     const res = await fetch('/api/me/export', { headers: { Authorization: `Bearer ${token}` } })
+                     if (res.ok) {
+                       const blob = await res.blob()
+                       const url = URL.createObjectURL(blob)
+                       const a = document.createElement('a')
+                       a.href = url; a.download = 'seedify-export.json'; a.click()
+                       URL.revokeObjectURL(url)
+                     }
+                   }}
+                   className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-surface-container border border-outline-variant/10 transition-colors hover:bg-surface-container-high">
+                   <span className="material-symbols-outlined text-on-surface-variant">download</span>
+                   <div className="text-left">
+                     <p className="text-sm font-bold text-on-surface">Export My Data</p>
+                     <p className="text-xs text-on-surface-variant">Download all your seeds, sessions, and data as JSON</p>
+                   </div>
+                 </button>
                  <button onClick={() => setShowDeleteDialog(true)}
                    className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-error/5 border border-error/10 transition-colors hover:bg-error/10">
                    <span className="material-symbols-outlined text-error">delete_forever</span>
@@ -805,6 +824,9 @@ export default function SettingsPage() {
                  </button>
                </div>
              </section>
+             <p className="text-xs text-on-surface-variant/40 text-center mt-2">
+               <a href="/privacy" className="underline underline-offset-2 hover:text-on-surface-variant transition-colors">Privacy Policy</a>
+             </p>
            </TabsContent>
          </Tabs>
        </div>

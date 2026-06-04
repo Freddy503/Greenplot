@@ -64,14 +64,34 @@ export default function NotificationsPage() {
   }, [])
 
   const handleOpen = (n: StoredNotification) => {
+    // Mark as read locally immediately
+    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     if (n.briefing) {
       setSelected(n.briefing)
-    } else {
-      // Plain notification with no briefing — open chat with its prompt
-      if (n.prompt) {
-        router.push(`/chat?prompt=${encodeURIComponent(n.prompt)}`)
-      }
+    } else if (n.prompt) {
+      router.push(`/chat?prompt=${encodeURIComponent(n.prompt)}`)
     }
+  }
+
+  const handleDismiss = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    setNotifications(prev => prev.filter(x => x.id !== id))
+    try {
+      await fetch(`/api/push/notifications/${id}`, {
+        method: 'DELETE',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      })
+    } catch {}
+  }
+
+  const handleClearAll = async () => {
+    setNotifications([])
+    try {
+      await fetch('/api/push/notifications', {
+        method: 'DELETE',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      })
+    } catch {}
   }
 
   const handleChatAbout = (content: string) => {
@@ -114,14 +134,29 @@ export default function NotificationsPage() {
         style={{ paddingTop: 'var(--header-height)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
       >
         <section className="px-4 py-4">
-          <div className="flex items-center gap-2 mb-6">
-            <span
-              className="material-symbols-outlined text-primary"
-              style={{ fontVariationSettings: '"FILL" 1', fontSize: '22px' }}
-            >
-              notifications
-            </span>
-            <h1 className="text-2xl font-normal tracking-tight text-on-surface">Inbox</h1>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <span
+                className="material-symbols-outlined text-primary"
+                style={{ fontVariationSettings: '"FILL" 1', fontSize: '22px' }}
+              >
+                notifications
+              </span>
+              <h1 className="text-2xl font-normal tracking-tight text-on-surface">Inbox</h1>
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="text-xs font-bold bg-primary text-on-primary rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                  {notifications.filter(n => !n.read).length}
+                </span>
+              )}
+            </div>
+            {notifications.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors px-2 py-1"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
           {/* Research Paper Agent */}
@@ -234,9 +269,18 @@ export default function NotificationsPage() {
                       )}
                     </div>
 
-                    {!n.read && (
-                      <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary mt-2" />
-                    )}
+                    <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                      {!n.read && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                      <button
+                        onClick={e => handleDismiss(e, n.id)}
+                        className="text-on-surface-variant/30 hover:text-on-surface-variant transition-colors p-0.5 rounded"
+                        aria-label="Dismiss"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                      </button>
+                    </div>
                   </div>
                 </button>
               )
