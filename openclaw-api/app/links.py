@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from app.auth import get_current_user
 from app.models import User
@@ -17,6 +17,14 @@ class LinkCreate(BaseModel):
     summary: Optional[str] = None
     tags: Optional[str] = None
     starred: bool = False
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        parsed = urlparse(v.strip())
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("url must be a valid http or https URL")
+        return v.strip()
 
 
 class LinkUpdate(BaseModel):
