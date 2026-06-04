@@ -12,11 +12,18 @@ from app.weaviate_client import weaviate_client
 from datetime import datetime
 
 
-def _rrf_merge(vector_hits: list, bm25_hits: list, k: int = 60, limit: int = 5) -> list:
+def _rrf_merge(
+    vector_hits: list,
+    bm25_hits: list,
+    k: int = 60,
+    limit: int = 5,
+    centrality: dict | None = None,
+) -> list:
     """
-    Reciprocal Rank Fusion: merge vector and BM25 results into a single ranked list.
-    RRF score = sum(1 / (k + rank)) across all result lists.
-    Deduplicates by title (case-insensitive).
+    Reciprocal Rank Fusion: merge vector, BM25, and graph centrality signals.
+
+    RRF score = 1/(k+rank_vector) + 1/(k+rank_bm25) + centrality_boost
+    centrality: dict mapping seed title (lower) → normalised inbound-link score (0-1).
     """
     scores: dict[str, float] = {}
     items: dict[str, dict] = {}
@@ -39,19 +46,25 @@ def _rrf_merge(vector_hits: list, bm25_hits: list, k: int = 60, limit: int = 5) 
         if k_ not in items:
             items[k_] = hit
 
+    # Centrality boost: highly-linked seeds get a small additive signal
+    if centrality:
+        for k_, boost in centrality.items():
+            if k_ in scores:
+                scores[k_] += boost * 0.1  # weight kept small vs. semantic signal
+
     ranked = sorted(scores.keys(), key=lambda k_: scores[k_], reverse=True)
     return [items[k_] for k_ in ranked[:limit]]
 
 
 async def search_seeds(args: dict, user: User, db: Session) -> str:
-    """Hybrid search over user's seeds: vector + BM25 merged via Reciprocal Rank Fusion."""
+    """Hybrid search over user's seeds: vector + BM25 + graph centrality via RRF."""
     query = args["query"]
     limit = args.get("limit", 5)
     try:
         from app.enricher_v2 import embed_text
-        import asyncio
+        from app.models import SeedLink, Seed as SeedModel
+        from sqlalchemy import func as _func
 
-        # Run vector and BM25 searches — BM25 is sync, embed is sync too
         embedding = embed_text(query)
         vector_hits = weaviate_client.search_seeds(
             tenant_id=str(user.tenant_id),
@@ -64,8 +77,23 @@ async def search_seeds(args: dict, user: User, db: Session) -> str:
             limit=limit * 2,
         )
 
-        # Merge with RRF
-        merged = _rrf_merge(vector_hits, bm25_hits, limit=limit)
+        # Build graph centrality map: inbound link count per seed title (normalised 0-1)
+        centrality: dict = {}
+        try:
+            rows = (
+                db.query(SeedModel.title, _func.count(SeedLink.id).label("cnt"))
+                .join(SeedLink, SeedLink.target_seed_id == SeedModel.id)
+                .filter(SeedModel.tenant_id == user.tenant_id)
+                .group_by(SeedModel.title)
+                .all()
+            )
+            if rows:
+                max_cnt = max(r.cnt for r in rows) or 1
+                centrality = {r.title.strip().lower(): r.cnt / max_cnt for r in rows}
+        except Exception:
+            pass
+
+        merged = _rrf_merge(vector_hits, bm25_hits, limit=limit, centrality=centrality)
         # If BM25 unavailable, merged == vector_hits[:limit]
 
         results = []
@@ -533,6 +561,18 @@ async def web_search(args: dict, user: User, db: Session) -> str:
                 })
             # Bridge: auto-save web results as Links (Sources page)
             await _save_web_results_as_links(results, user)
+
+            # Ingest log
+            try:
+                from app.ingest_log import append_log_entry
+                append_log_entry(
+                    tenant_id=str(user.tenant_id),
+                    action="web_search",
+                    source="exa",
+                    summary=f'"{query}" → {len(results)} results',
+                )
+            except Exception:
+                pass
 
             return json.dumps({"status": "ok", "results": results, "query": query})
     except Exception as e:

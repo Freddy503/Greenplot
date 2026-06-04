@@ -3276,6 +3276,73 @@ def _job_enrich_pending_seeds():
         logger.error(f"❌ Enrichment job failed: {e}")
 
 
+def _job_wiki_lint():
+    """Weekly wiki health check — runs Sunday 08:00 CET. Stores report as seed + emails user."""
+    try:
+        import asyncio
+        from app.database import get_db
+        from app.models import User
+        from app.wiki_lint import lint_articles, generate_lint_report
+
+        db = next(get_db())
+        users = db.query(User).all()
+        db.close()
+        if not users:
+            return
+
+        seen = set()
+        for u in users:
+            tid = str(u.tenant_id)
+            if tid in seen:
+                continue
+            seen.add(tid)
+            try:
+                articles = weaviate_client.get_wiki_articles(tenant_id=tid, limit=200)
+                seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tid, limit=500)
+                results = lint_articles(articles, seeds)
+                if results["total_issues"] == 0:
+                    logger.info(f"✅ Wiki lint: no issues for tenant {tid}")
+                    continue
+                report = generate_lint_report(results)
+
+                # Store as a seed so it's queryable via chat
+                db2 = next(get_db())
+                from app.models import Seed as SeedModel
+                import uuid as _uuid
+                lint_seed = SeedModel(
+                    tenant_id=u.tenant_id,
+                    user_id=u.id,
+                    title=f"Wiki Lint Report — {datetime.utcnow().strftime('%Y-%m-%d')}",
+                    content=report,
+                    seed_metadata={"source": "wiki_lint_cron", "issues": results["total_issues"]},
+                    created_at=datetime.utcnow(),
+                )
+                db2.add(lint_seed)
+                db2.commit()
+                db2.close()
+
+                # Email report
+                if u.email:
+                    from app.email_sender import send_briefing_email
+                    briefing = {
+                        "type": "wiki_lint",
+                        "title": f"🔍 Weekly Wiki Health Report — {results['total_issues']} issues found",
+                        "subtitle": f"Checked {len(articles)} articles, {len(seeds)} seeds",
+                        "sections": [
+                            {"title": "Report", "icon": "checklist", "content": report},
+                        ],
+                    }
+                    send_briefing_email(u.email, briefing)
+
+                # Ingest log
+                from app.ingest_log import append_log_entry
+                append_log_entry(tid, "wiki_lint", "cron", f"{results['total_issues']} issues found")
+            except Exception as e:
+                logger.error(f"Wiki lint failed for tenant {tid}: {e}")
+    except Exception as e:
+        logger.error(f"❌ Wiki lint job failed: {e}")
+
+
 def _job_wiki_compile():
     """Compile wiki articles from enriched seeds — runs every 6 hours."""
     try:
@@ -3368,6 +3435,11 @@ def _job_wiki_compile():
                     logger.warning(f"📚 Wiki cron: compile failed for domain '{gap['domain']}': {e}")
             backlinks = await regenerate_all_backlinks(tenant_id)
             logger.info(f"📚 Wiki compile: {compiled} new articles, {backlinks} backlinks updated")
+            try:
+                from app.ingest_log import append_log_entry
+                append_log_entry(tenant_id, "wiki_compile", "cron", f"{compiled} articles compiled, {backlinks} backlinks updated")
+            except Exception:
+                pass
 
         asyncio.run(_run())
     except Exception as e:
@@ -3450,9 +3522,16 @@ def _start_scheduler():
         id="wiki_compile",
         replace_existing=True,
     )
+    # Wiki lint health check — weekly Sunday 08:00 CET
+    scheduler.add_job(
+        _job_wiki_lint,
+        CronTrigger(day_of_week="sun", hour=8, minute=0, timezone=_CET),
+        id="wiki_lint",
+        replace_existing=True,
+    )
 
     scheduler.start()
-    logger.info("✅ APScheduler started — spark 08:30, briefing 09:30, reflection 16:00, weekly eval Sun 18:00, challenge 1st/15th 10:00, enrich */30min, wiki compile */6h CET")
+    logger.info("✅ APScheduler started — spark 08:30, briefing 09:30, reflection 16:00, weekly eval Sun 18:00, challenge 1st/15th 10:00, enrich */30min, wiki compile */6h, wiki lint Sun 08:00 CET")
     return scheduler
 
 
