@@ -71,7 +71,6 @@ Your AI-powered second brain. Capture ideas through chat, voice, or notes — en
 
 ![Greenplot Architecture](./public/wiki-architecture.png)
 
-![Greenplot Architecture](./public/wiki-architecture.png)
 
 ## Core Concepts
 
