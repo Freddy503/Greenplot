@@ -62,6 +62,7 @@ class Seed(Base):
     interaction_count = Column(Integer, default=0)  # How many times seed was accessed
     quality_score = Column(Float, nullable=True)  # 0.0–1.0 composite quality score set at enrichment
     archived = Column(Boolean, default=False)  # Archived seeds hidden from Garden/briefings but not deleted
+    seed_type = Column(String(32), nullable=True, default="idea")  # idea, spec, learning, log, wiki
 
     user = relationship("User", back_populates="seeds")
     thought = relationship("Thought", back_populates="seeds")

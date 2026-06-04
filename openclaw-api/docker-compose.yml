@@ -25,6 +25,9 @@ services:
     - CORS_ORIGINS=https://seedify-six.vercel.app,https://greenplot.ink,https://www.greenplot.ink,https://api.greenplot.ink,http://localhost:3000,http://localhost:5173
     - SENTRY_DSN=${SENTRY_DSN}
     - HARVEST_API_KEY=${HARVEST_API_KEY}
+    - GITHUB_TOKEN=${GITHUB_TOKEN}
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    - RESEND_API_KEY=${RESEND_API_KEY}
     ports:
     - 8001:8000
     volumes:

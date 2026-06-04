@@ -503,3 +503,98 @@ TOOLS.append({
         }
     }
 })
+
+# ── Thinking Partner Tools ────────────────────────────────────────────────────
+
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "develop_idea",
+        "description": (
+            "Transform a raw idea into a structured spec using forcing questions. "
+            "Call with phase='interrogate' to start the questioning process, then "
+            "phase='finalize' after the user has answered to produce a Spec seed with "
+            "YAML frontmatter (WHO, CURRENT, DESIRED, SUCCESS CRITERIA, MVP, FAILURE MODES) "
+            "plus a dual-voice CEO + Engineering review."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "idea": {
+                    "type": "string",
+                    "description": "Raw idea text to develop into a spec."
+                },
+                "seed_id": {
+                    "type": "string",
+                    "description": "ID of an existing seed to use as the starting idea."
+                },
+                "phase": {
+                    "type": "string",
+                    "enum": ["interrogate", "finalize"],
+                    "description": "interrogate: ask forcing questions. finalize: produce the spec."
+                }
+            },
+            "required": ["phase"]
+        }
+    }
+})
+
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "captu<RESEND_API_KEY>",
+        "description": (
+            "Save a learning, decision, or insight from this conversation as a learning-type seed. "
+            "Use after a key decision is made or a pattern is discovered. "
+            "Future sessions will be primed with high-confidence learnings."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "learning": {
+                    "type": "string",
+                    "description": "The learning or decision to capture (1-3 sentences)."
+                },
+                "confidence": {
+                    "type": "integer",
+                    "description": "Confidence level 1-10 (10 = highly certain).",
+                    "default": 7
+                }
+            },
+            "required": ["learning"]
+        }
+    }
+})
+
+TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "create_github_issue",
+        "description": (
+            "File a GitHub issue from a spec seed. Use after develop_idea has produced a spec "
+            "to create a trackable issue ready for Claude Code or Codex to implement."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Issue title."
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Issue body (markdown). If omitted, uses the spec seed content."
+                },
+                "seed_id": {
+                    "type": "string",
+                    "description": "ID of the Spec seed to file as an issue."
+                },
+                "repo": {
+                    "type": "string",
+                    "description": "GitHub repo in owner/name format, e.g. 'Freddy503/Seedify'."
+                }
+            },
+            "required": ["repo"]
+        }
+    }
+})
