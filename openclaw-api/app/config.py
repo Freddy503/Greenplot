@@ -64,8 +64,11 @@ class Settings(BaseSettings):
     # Wiki data path (inside container)
     WIKI_DATA_PATH: str = "/data/wiki"
 
-    # Harvest / internal API key
-    HARVEST_API_KEY: str = "<HARVEST_API_KEY>"
+    # Harvest / internal API key — must be set via environment variable
+    HARVEST_API_KEY: Optional[str] = None
+
+    # Sentry error monitoring
+    SENTRY_DSN: Optional[str] = None
 
     class Config:
         env_file = ".env"

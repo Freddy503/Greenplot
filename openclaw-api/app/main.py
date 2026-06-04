@@ -1,3 +1,7 @@
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -139,6 +143,20 @@ with engine.connect() as conn:
     if not result9.fetchone():
         conn.execute(text("ALTER TABLE users ADD COLUMN interests JSONB DEFAULT '[]'::jsonb"))
         conn.commit()
+
+# --- Sentry ---
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+
+# --- HARVEST_API_KEY guard ---
+if not settings.HARVEST_API_KEY:
+    import sys
+    logger.warning("HARVEST_API_KEY not set — harvest endpoints will return 503")
 
 app = FastAPI(title="OpenClaw API", version="0.1.0")
 
@@ -1232,6 +1250,28 @@ def migrate_nodes(
     return {"ok": True, "migrated": stats}
 
 
+# --- Public health endpoint (no auth required) ---
+
+@app.get("/api/v1/health")
+def public_health():
+    """Quick liveness check for load balancers and monitoring."""
+    from app.database import engine
+    services: dict = {}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        services["postgres"] = "ok"
+    except Exception:
+        services["postgres"] = "down"
+    try:
+        weaviate_client.client.is_live()
+        services["weaviate"] = "ok"
+    except Exception:
+        services["weaviate"] = "down"
+    all_ok = all(v == "ok" for v in services.values())
+    return {"status": "ok" if all_ok else "degraded", "services": services}
+
+
 # --- Admin (protected by is_admin check; for MVP we'll skip and use direct DB)
 
 @app.get("/api/v1/admin/health")
@@ -1439,6 +1479,14 @@ async def chat_v2_endpoint(
     messages = body.get("messages", [])
     attachments = body.get("attachments", [])
     session_id = body.get("session_id", "")
+
+    # Input validation
+    if messages:
+        last_user = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+        if last_user:
+            content = last_user.get("content", "") or ""
+            if isinstance(content, str) and len(content) > 10_000:
+                raise HTTPException(status_code=422, detail="Message too long (max 10,000 characters)")
 
     # ── Session Persistence ───────────────────────────────────────
     store = ChatSessionStore(db)
@@ -1708,7 +1756,9 @@ def harvest_all(
     System endpoint: Harvest ALL users' recent chat sessions.
     Requires X-API-Key header matching HARVEST_API_KEY env var.
     """
-    harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
+    harvest_key = settings.HARVEST_API_KEY
+    if not harvest_key:
+        raise HTTPException(status_code=503, detail="Harvest API not configured")
     if x_api_key != harvest_key:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
@@ -3432,8 +3482,10 @@ def list_scheduler_jobs():
 @app.post("/api/v1/admin/trigger/{job_id}")
 def trigger_job_admin(job_id: str, x_api_key: str = Header(default="")):
     """Trigger a scheduled job via API key — for cron jobs, no user auth required."""
-    expected = settings.HARVEST_API_KEY or os.environ.get("HARVEST_API_KEY", "")
-    if not expected or x_api_key != expected:
+    expected = settings.HARVEST_API_KEY
+    if not expected:
+        raise HTTPException(status_code=503, detail="Harvest API not configured")
+    if x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return _run_trigger_job(job_id)
 

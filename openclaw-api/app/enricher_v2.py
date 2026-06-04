@@ -13,6 +13,7 @@ from datetime import datetime, date
 from typing import Optional
 
 import openai
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from app.chunker import chunk_text, should_chunk
 from app.entity_extractor import extract_entities
 from app.backlinker import find_and_create_links
@@ -65,6 +66,12 @@ def fetch_url_content(url: str) -> Optional[str]:
         return None
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    reraise=True,
+)
 def embed_text(text: str) -> list:
     if not settings.OPENROUTER_API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY not set")

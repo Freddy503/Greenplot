@@ -13,8 +13,9 @@ GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3"
 
 
 def get_fresh_token(conn, db) -> Optional[str]:
-    """Get a valid access token, refreshing if expired."""
-    if conn.token_expiry and conn.token_expiry > datetime.utcnow():
+    """Get a valid access token, refreshing proactively 5 min before expiry."""
+    buffer = timedelta(minutes=5)
+    if conn.token_expiry and conn.token_expiry > datetime.utcnow() + buffer:
         return conn.access_token
 
     if not conn.refresh_token:
