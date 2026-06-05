@@ -10,6 +10,7 @@ import { GlobalSearch } from '@/components/layout/global-search'
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
   { href: '/garden', label: 'Garden', icon: 'eco' },
+  { href: '/studio', label: 'Studio', icon: 'science' },
   { href: '/links', label: 'Sources', icon: 'link' },
   { href: '/wiki', label: 'Wiki', icon: 'auto_stories' },
   { href: '/notifications', label: 'Inbox', icon: 'notifications' },

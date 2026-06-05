@@ -863,7 +863,7 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   </span>
  </div>
  <div>
-  <h1 className="text-2xl font-normal tracking-tight text-on-surface leading-tight">
+  <h1 className="display-md text-on-surface">
   {article.title}
   </h1>
   <div className="flex items-center gap-2 mt-1">
@@ -1141,7 +1141,7 @@ export default function WikiPage() {
  {/* Hero */}
  <section className=" px-2">
   <div className="flex items-center justify-between ">
-  <h1 className="text-3xl font-normal tracking-tight leading-tight text-on-surface">
+  <h1 className="display-lg text-on-surface">
   Knowledge <span className="text-primary">Plants</span>
   </h1>
   <div className="flex items-center gap-1">
