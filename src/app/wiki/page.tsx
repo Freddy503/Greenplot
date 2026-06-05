@@ -1034,6 +1034,9 @@ export default function WikiPage() {
  })
  .then(data => {
  setArticles(data.articles || [])
+ if (data.articles?.length > 0) {
+  localStorage.setItem('greenplot_wiki', JSON.stringify(data.articles))
+ }
  })
  .catch(() => {
  const stored = localStorage.getItem('greenplot_wiki')

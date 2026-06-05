@@ -330,7 +330,24 @@ export default function ChatPage() {
       // Load messages for active conversation
       const msgs = loadConvMessages(activeId)
       if (msgs.length > 0) {
-        setMessages(msgs)
+        // Re-attach source-url parts — AI SDK setMessages may strip them during reconstruction
+        let mergedMsgs = msgs
+        try {
+          const sourcesRaw = localStorage.getItem(`greenplot_sources_${activeId}`)
+          if (sourcesRaw) {
+            const sourcesMap: Record<string, any[]> = JSON.parse(sourcesRaw)
+            mergedMsgs = msgs.map((m: any) => {
+              const saved = sourcesMap[m.id]
+              if (!saved?.length) return m
+              const existingUrls = new Set(
+                (m.parts as any[]).filter((p: any) => p.type === 'source-url').map((p: any) => p.url)
+              )
+              const toAdd = saved.filter((p: any) => !existingUrls.has(p.url))
+              return toAdd.length > 0 ? { ...m, parts: [...m.parts, ...toAdd] } : m
+            })
+          }
+        } catch {}
+        setMessages(mergedMsgs)
       }
 
       // Merge backend sessions into conversation list (best-effort, async)
@@ -464,6 +481,15 @@ export default function ChatPage() {
     if (!restored || !activeConversationId) return
     if (messages.length > 0) {
       saveConvMessages(activeConversationId, messages)
+      // Save source-url parts separately — AI SDK setMessages may strip them on restore
+      const sourcesMap: Record<string, any[]> = {}
+      for (const msg of messages) {
+        const srcs = (msg.parts as any[]).filter((p: any) => p.type === 'source-url')
+        if (srcs.length > 0) sourcesMap[msg.id] = srcs
+      }
+      try {
+        localStorage.setItem(`greenplot_sources_${activeConversationId}`, JSON.stringify(sourcesMap))
+      } catch {}
       // Update conversation title from first user message and bump updatedAt
       const firstUser = messages.find(m => m.role === 'user')
       const title = (firstUser?.parts?.find((p: any) => p.type === 'text') as any)?.text?.slice(0, 40) || 'New chat'
