@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { GlobalSearch } from '@/components/layout/global-search'
 
 const tabs = [
   { href: '/chat', label: 'Chat', icon: 'chat_bubble' },
@@ -54,7 +55,9 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           </div>
         </div>
 
-        {/* Desktop nav */}
+        {/* Search + Desktop nav */}
+        <div className="flex items-center gap-1">
+        <GlobalSearch />
         <nav className="hidden md:flex items-center gap-1">
           {tabs.map((tab) => {
             const active = pathname === tab.href
@@ -76,6 +79,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             )
           })}
         </nav>
+        </div>
       </div>
     </header>
   )
