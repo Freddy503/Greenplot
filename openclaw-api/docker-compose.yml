@@ -106,6 +106,14 @@ services:
     - weaviate_data:/var/lib/weaviate
 version: '3.8'
 volumes:
-  postgres_data: null
-  redis_data: null
-  weaviate_data: null
+  # External volumes — immune to `docker compose down -v`.
+  # Create manually on first deploy: docker volume create openclaw_postgres_data
+  postgres_data:
+    external: true
+    name: openclaw_postgres_data
+  redis_data:
+    external: true
+    name: openclaw_redis_data
+  weaviate_data:
+    external: true
+    name: openclaw_weaviate_data

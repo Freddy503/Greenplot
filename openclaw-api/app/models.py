@@ -224,6 +224,33 @@ class WikiArticle(Base):
     )
 
 
+class LinkCache(Base):
+    """
+    Postgres shadow store for Weaviate Link objects.
+    Written on every link creation so a Weaviate data loss can be recovered via
+    scripts/resto<RESEND_API_KEY> using this table as source of truth.
+    """
+    __tablename__ = 'link_cache'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    weaviate_id = Column(String, nullable=True, index=True)  # Weaviate object UUID
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False)
+    url = Column(String(2000), nullable=False)
+    title = Column(String(500), nullable=True)
+    summary = Column(String, nullable=True)
+    domain = Column(String(200), nullable=True)
+    tags = Column(String, nullable=True)
+    favicon = Column(String(500), nullable=True)
+    og_image = Column(String(500), nullable=True)
+    starred = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_link_cache_tenant', tenant_id),
+        Index('idx_link_cache_url', tenant_id, url),
+    )
+
+
 class CalendarConnection(Base):
     """Google Calendar OAuth tokens per user."""
     __tablename__ = 'calendar_connections'

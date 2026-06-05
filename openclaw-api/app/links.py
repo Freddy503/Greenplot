@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from app.auth import get_current_user
-from app.models import User
+from app.models import User, LinkCache
 from app.weaviate_client import weaviate_client
 import httpx
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+import uuid as _uuid
 
 router = APIRouter(prefix="/api/v1/links", tags=["links"])
 
@@ -161,6 +162,31 @@ async def create_link(body: LinkCreate, request: Request, current_user = Depends
         status="enriched" if summary else "pending",
         starred=body.starred,
     )
+
+    # Dual-write to Postgres link_cache (survives Weaviate data loss)
+    try:
+        from app.database import SessionLocal
+        _db = SessionLocal()
+        try:
+            _db.add(LinkCache(
+                id=_uuid.uuid4(),
+                weaviate_id=link_id,
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                url=url,
+                title=title,
+                summary=summary,
+                domain=domain,
+                tags=tags if isinstance(tags, str) else ",".join(tags or []),
+                favicon=favicon,
+                og_image=og_image,
+                starred=body.starred,
+            ))
+            _db.commit()
+        finally:
+            _db.close()
+    except Exception:
+        pass  # non-fatal — Weaviate is still the primary store
 
     # Auto-connect to related seeds (best-effort, non-blocking)
     try:
