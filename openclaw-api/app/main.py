@@ -3189,8 +3189,8 @@ def _job_morning_spark():
     """
     print("🌅 MORNING SPARK JOB CALLED", flush=True)
     logger.info("🌅 Starting morning spark job...")
+    db = next(get_db())
     try:
-        db = next(get_db())
         users = db.query(User).all()
         if not users:
             logger.warning("❌ No users found for morning spark")
@@ -3202,7 +3202,6 @@ def _job_morning_spark():
                 city = getattr(user, 'city', None)
                 logger.info(f"📍 User {user.id}: city={city}")
 
-                # Fetch weather per user city — skip notification if unavailable
                 try:
                     weather = asyncio.run(briefings.fetch_weather(city))
                 except Exception as we:
@@ -3213,7 +3212,6 @@ def _job_morning_spark():
                     logger.warning(f"⏭️ Skipping morning spark for user {user.id} — no weather data")
                     continue
 
-                # Build briefing
                 briefing = briefings.build_morning_spark(
                     user_id=str(user.id),
                     db=db,
@@ -3221,8 +3219,6 @@ def _job_morning_spark():
                     weather=weather or f"Check weather in {city or 'your location'}"
                 )
                 logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
-
-                # Store and broadcast
                 _sto<RESEND_API_KEY>(briefing)
                 logger.info(f"✅ Morning Spark sent to user {user.id}")
             except Exception as ue:
@@ -3230,6 +3226,8 @@ def _job_morning_spark():
 
     except Exception as e:
         logger.error(f"❌ Morning Spark job failed: {e}", exc_info=True)
+    finally:
+        db.close()
 
 
 def _job_daily_briefing():
@@ -3237,22 +3235,18 @@ def _job_daily_briefing():
     Daily Briefing — 09:30 CET.
     Generates multi-section briefing: Enterprise AI News + Academic Papers.
     """
+    db = next(get_db())
     try:
-        db = next(get_db())
         default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for daily briefing")
             return
 
-        # Build briefing (async)
         briefing = asyncio.run(briefings.build_daily_briefing(
             user_id=str(default_user.id),
             db=db
         ))
-
-        # Store and broadcast
         _sto<RESEND_API_KEY>(briefing)
-        # Email delivery (Enterprise Digest)
         if settings.RESEND_API_KEY and default_user.email:
             try:
                 email_sender.send_briefing_email(default_user.email, briefing)
@@ -3261,6 +3255,8 @@ def _job_daily_briefing():
         logger.info("✅ Daily Briefing generated")
     except Exception as e:
         logger.error(f"❌ Daily Briefing failed: {e}")
+    finally:
+        db.close()
 
 
 def _job_afternoon_reflection():
@@ -3268,24 +3264,23 @@ def _job_afternoon_reflection():
     Evening Reflection — 16:00 CET.
     Generates multi-section briefing: Contrarian View + Actionable Move.
     """
+    db = next(get_db())
     try:
-        db = next(get_db())
         default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for reflection")
             return
 
-        # Build briefing
         briefing = briefings.build_reflection(
             user_id=str(default_user.id),
             db=db
         )
-
-        # Store and broadcast
         _sto<RESEND_API_KEY>(briefing)
         logger.info("✅ Evening Reflection generated")
     except Exception as e:
         logger.error(f"❌ Evening Reflection failed: {e}")
+    finally:
+        db.close()
 
 
 def _job_weekly_digest():
@@ -3312,22 +3307,18 @@ def _job_weekly_eval():
     Weekly Content Eval — Sundays 18:00 CET.
     Generates multi-section briefing: What Stuck + Creative Constraint.
     """
+    db = next(get_db())
     try:
-        db = next(get_db())
         default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for weekly eval")
             return
 
-        # Build briefing
         briefing = briefings.build_weekly_eval(
             user_id=str(default_user.id),
             db=db
         )
-
-        # Store and broadcast
         _sto<RESEND_API_KEY>(briefing)
-        # Email delivery (Content Evaluation)
         if settings.RESEND_API_KEY and default_user.email:
             try:
                 email_sender.send_briefing_email(default_user.email, briefing)
@@ -3336,6 +3327,8 @@ def _job_weekly_eval():
         logger.info("✅ Weekly Content Eval generated")
     except Exception as e:
         logger.error(f"❌ Weekly Content Eval failed: {e}")
+    finally:
+        db.close()
 
 
 def _job_biweekly_challenge():
@@ -3343,24 +3336,23 @@ def _job_biweekly_challenge():
     Biweekly Challenge — 1st & 15th at 10:00 CET.
     Generates multi-section briefing: Cross-domain synthesis experiment.
     """
+    db = next(get_db())
     try:
-        db = next(get_db())
         default_user = db.query(User).filter(User.email != 'admin@example.com').first()
         if not default_user:
             logger.warning("No users found for biweekly challenge")
             return
 
-        # Build briefing
         briefing = briefings.build_biweekly_challenge(
             user_id=str(default_user.id),
             db=db
         )
-
-        # Store and broadcast
         _sto<RESEND_API_KEY>(briefing)
         logger.info("✅ Biweekly Challenge generated")
     except Exception as e:
         logger.error(f"❌ Biweekly Challenge failed: {e}")
+    finally:
+        db.close()
 
 def _job_academic_digest(evening: bool = False):
     """
@@ -3368,8 +3360,8 @@ def _job_academic_digest(evening: bool = False):
     Connects new arXiv/Semantic Scholar papers to the user's Garden seeds and Wiki,
     produces a practical synthesis and solution design seed.
     """
+    db = next(get_db())
     try:
-        db = next(get_db())
         default_user = db.query(User).filter(User.email == 'contact@example.com').first()
         if not default_user:
             logger.warning("No users found for academic digest")
@@ -3379,13 +3371,11 @@ def _job_academic_digest(evening: bool = False):
             user_id=str(default_user.id),
             db=db
         ))
-        # Give evening run a distinct type so dedup guard doesn't block it
         if evening:
             briefing = {**briefing, "type": "academic_digest_evening"}
 
         _sto<RESEND_API_KEY>(briefing)
 
-        # Email with arXiv PDF attachments
         if settings.RESEND_API_KEY and default_user.email:
             try:
                 attachments = email_sender.collect_arxiv_pdfs(briefing)
@@ -3396,6 +3386,8 @@ def _job_academic_digest(evening: bool = False):
         logger.info("✅ Academic Digest generated")
     except Exception as e:
         logger.error(f"❌ Academic Digest failed: {e}", exc_info=True)
+    finally:
+        db.close()
 
 
 def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
