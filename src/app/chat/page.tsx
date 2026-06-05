@@ -24,6 +24,7 @@ import { pollNotifications } from '@/hooks/use-push-notifications'
 
 // Reflection detection & image generation
 import { isReflection } from '@/lib/reflection-detect'
+import { THINKING_MODES, getMode, type ThinkingMode } from '@/lib/thinking-modes'
 import { CreateImageButton } from '@/components/ai-elements/create-image-button'
 import { AddToGardenButton } from '@/components/ai-elements/add-to-garden-button'
 
@@ -176,6 +177,14 @@ export default function ChatPage() {
   // Track if we've already fetched suggestions on mount
   const suggestionsInitializedRef = useRef(false)
 
+  // ── Thinking-partner modes (GStack personas via _system_override) ──
+  const [selectedMode, setSelectedMode] = useState<ThinkingMode | undefined>(undefined)
+  const activeModeRef = useRef<ThinkingMode | undefined>(undefined)
+  useEffect(() => { activeModeRef.current = selectedMode }, [selectedMode])
+  // Ref to the composer textarea — used to pre-fill from "Develop into a spec"
+  const promptRef = useRef<HTMLTextAreaElement | null>(null)
+  const modeInitRef = useRef(false)
+
   const fetchSuggestions = useCallback((token: string) => {
     console.log('[suggestions] Fetching...')
     fetch('/api/garden/prompt-suggestions', {
@@ -238,6 +247,8 @@ export default function ChatPage() {
         _auth_token: typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '',
         // Include backend session_id so conversations persist across page loads
         session_id: sessionIdRef.current || '',
+        // Active thinking-partner persona (empty string = default assistant)
+        _system_override: activeModeRef.current?.systemPrompt || '',
       }),
     }),
     experimental_throttle: 50,
@@ -388,6 +399,72 @@ export default function ChatPage() {
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
+
+  // Activate a thinking mode from ?mode= and pre-fill the composer from a seed
+  // ("Develop into a spec"). Uses window.location.search (NOT useSearchParams) to
+  // avoid a Suspense-boundary requirement at build time.
+  useEffect(() => {
+    if (!restored || modeInitRef.current) return
+    if (typeof window === 'undefined') return
+    modeInitRef.current = true
+
+    const params = new URLSearchParams(window.location.search)
+    const modeId = params.get('mode')
+    const mode = getMode(modeId)
+    if (mode) setSelectedMode(mode)
+
+    // Pre-fill from a seed handed off by the seed detail sheet
+    const prefillRaw = localStorage.getItem('greenplot_spec_prefill')
+    if (prefillRaw) {
+      localStorage.removeItem('greenplot_spec_prefill')
+      try {
+        const prefill = JSON.parse(prefillRaw)
+        if (!mode) setSelectedMode(getMode('spec'))
+        const text = `I want to spec out this idea:\n\n${prefill.title ? prefill.title + '\n\n' : ''}${prefill.content || ''}`.trim()
+        // Defer until the PromptBox has mounted, then inject + sync internal state
+        setTimeout(() => {
+          const ta = promptRef.current
+          if (ta) {
+            ta.value = text
+            ta.dispatchEvent(new Event('input', { bubbles: true }))
+            ta.focus()
+          }
+        }, 120)
+      } catch {}
+    }
+
+    // Strip ?mode= so a refresh doesn't re-trigger, preserving any other params
+    if (modeId) {
+      params.delete('mode')
+      const qs = params.toString()
+      window.history.replaceState({}, '', '/chat' + (qs ? `?${qs}` : ''))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restored])
+
+  // Save the latest assistant message as a PRD (spec mode). localStorage is the
+  // guaranteed path; the backend write is best-effort (routes via /thoughts).
+  const handleSaveAsPRD = useCallback((text: string) => {
+    if (!text.trim()) return
+    const firstLine = text.split('\n').map(l => l.replace(/^#+\s*/, '').trim()).find(Boolean) || 'Untitled spec'
+    const title = firstLine.slice(0, 80)
+    try {
+      const raw = localStorage.getItem('greenplot_prds')
+      const list = raw ? JSON.parse(raw) : []
+      const entry = { id: `local_${Date.now()}`, title, content: text, createdAt: new Date().toISOString(), source: 'spec_mode' }
+      localStorage.setItem('greenplot_prds', JSON.stringify([entry, ...(Array.isArray(list) ? list : [])].slice(0, 100)))
+    } catch {}
+    // Best-effort backend persistence
+    const token = localStorage.getItem('greenplot_token')
+    fetch('/api/seeds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ content: text.slice(0, 8000), source: 'spec_mode', seed_type: 'spec', metadata: { tags: ['prd', 'spec'] } }),
+    }).catch(() => {})
+    toast.success('Saved as PRD — view it in Studio', {
+      action: { label: 'Studio', onClick: () => { window.location.href = '/studio' } },
+    })
+  }, [])
 
   // Show SparkCard from push notification click (?spark_prompt=...) — initial page load
   useEffect(() => {
@@ -797,7 +874,7 @@ export default function ChatPage() {
 
                   {/* Title */}
                   <div className="text-center">
-                    <h2 className="text-xl font-normal tracking-tight mb-1.5 text-on-surface">
+                    <h2 className="display-md mb-1.5 text-on-surface">
                       Start a conversation
                     </h2>
                     <p className="text-sm font-medium leading-relaxed text-on-surface-variant">
@@ -1148,6 +1225,23 @@ export default function ChatPage() {
                               <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
                             </button>
                           )}
+                          {/* Save as PRD — spec mode, latest assistant message */}
+                          {selectedMode?.id === 'spec' && isLastAssistant && message.parts.some(p => p.type === 'text') && (
+                            <button
+                              onClick={() => {
+                                const allText = message.parts
+                                  .filter(p => p.type === 'text')
+                                  .map(p => (p as any).text || '')
+                                  .join('\n')
+                                handleSaveAsPRD(allText)
+                              }}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors"
+                              title="Save this spec to your PRD library"
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>draft</span>
+                              Save as PRD
+                            </button>
+                          )}
                         </div>
 
                         {/* Create Image button — only on reflection responses */}
@@ -1331,8 +1425,47 @@ export default function ChatPage() {
             Transcribing…
           </div>
         )}
+        {/* Thinking-partner mode chips */}
+        <div className="max-w-2xl mx-auto mb-2">
+          {selectedMode && (
+            <div className={`flex items-center gap-1.5 mb-2 px-3 py-1.5 rounded-full w-fit ${selectedMode.accentBg}`}>
+              <span className={`material-symbols-outlined ${selectedMode.accentText}`} style={{ fontSize: '14px' }}>{selectedMode.icon}</span>
+              <span className={`text-[11px] font-bold ${selectedMode.accentText}`}>{selectedMode.label}</span>
+              <span className="text-[10px] text-on-surface-variant/60 hidden sm:inline">· {selectedMode.blurb}</span>
+              <button
+                onClick={() => setSelectedMode(undefined)}
+                className="ml-0.5 text-on-surface-variant/50 hover:text-on-surface transition-colors"
+                title="Exit mode"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
+            <span className="material-symbols-outlined text-on-surface-variant/40 shrink-0" style={{ fontSize: '15px' }}>auto_awesome</span>
+            {THINKING_MODES.map((m) => {
+              const active = selectedMode?.id === m.id
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedMode(active ? undefined : m)}
+                  className={`flex items-center gap-1 shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+                    active
+                      ? `${m.accentBg} ${m.accentText} border-transparent`
+                      : 'bg-surface-container border-outline-variant/15 text-on-surface-variant/70 hover:text-on-surface hover:border-outline-variant/30'
+                  }`}
+                  title={m.blurb}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{m.icon}</span>
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
         <div className="max-w-2xl mx-auto">
           <PromptBox
+            ref={promptRef}
             name="message"
             disabled={isStreaming}
             isDisabled={isStreaming}

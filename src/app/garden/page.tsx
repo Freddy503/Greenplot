@@ -249,7 +249,7 @@ export default function GardenPage() {
         {/* Hero */}
         <section className="mb-3 px-2">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-3xl font-normal tracking-tight leading-tight text-on-surface">
+            <h1 className="display-lg text-on-surface">
               Knowledge <span className="text-primary">Garden</span>
             </h1>
             {/* View toggle */}
@@ -411,7 +411,7 @@ export default function GardenPage() {
               <Badge className="bg-secondary/20 text-secondary text-[10px] font-bold uppercase tracking-widest mb-4 border-0">
                 Focus Seed
               </Badge>
-              <h4 className="text-xl font-bold text-on-surface mb-2">{focusSeed.title}</h4>
+              <h4 className="heading text-on-surface mb-2">{focusSeed.title}</h4>
               <p className="text-xs leading-relaxed text-on-surface-variant mb-4">
                 Your garden is currently enriching this seed. Estimated bloom soon.
               </p>

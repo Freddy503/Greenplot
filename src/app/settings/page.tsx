@@ -349,7 +349,7 @@ export default function SettingsPage() {
      <Header />
      <main className="flex-1 overflow-y-auto" style={{ paddingTop: 'var(--header-height)' }}>
        <div className="px-4 max-w-2xl mx-auto" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
-         <h1 className="text-3xl font-normal tracking-tight text-on-surface mt-4 mb-5">Settings</h1>
+         <h1 className="display-lg text-on-surface mt-4 mb-5">Settings</h1>
 
          <Tabs defaultValue="essentials">
            <TabsList className="w-full mb-6 bg-surface-container rounded-2xl p-1 h-auto grid grid-cols-4">

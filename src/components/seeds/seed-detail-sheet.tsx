@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -97,6 +98,7 @@ function shareSeed(seed: SeedDetail) {
 }
 
 export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDetailSheetProps) {
+  const router = useRouter()
   const [loadingSearch, setLoadingSearch] = useState(false)
   const [searchResults, setSearchResults] = useState<string[]>([])
   const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>([])
@@ -253,7 +255,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
         </SheetHeader>
 
         {/* Full Content */}
-        <div className="mb-6">
+        <div className="mb-4">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">Content</h3>
           <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/10">
             <p className="text-sm leading-relaxed text-on-surface whitespace-pre-wrap">
@@ -261,6 +263,28 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
             </p>
           </div>
         </div>
+
+        {/* Develop into a spec — thinking-partner nudge */}
+        <button
+          onClick={() => {
+            try {
+              localStorage.setItem('greenplot_spec_prefill', JSON.stringify({
+                id: seed.id,
+                title: seed.title,
+                content: seed.content || seed.text || seed.summary || '',
+              }))
+            } catch {}
+            router.push('/chat?mode=spec')
+          }}
+          className="w-full mb-6 flex items-center gap-3 p-4 rounded-2xl bg-primary/8 border border-primary/20 hover:bg-primary/12 transition-colors text-left"
+        >
+          <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: '22px', fontVariationSettings: '"FILL" 1' }}>draft</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-on-surface">Develop into a spec</p>
+            <p className="text-[11px] text-on-surface-variant/70">Turn this idea into a structured PRD with guided questions</p>
+          </div>
+          <span className="material-symbols-outlined text-primary/60 shrink-0" style={{ fontSize: '18px' }}>arrow_forward</span>
+        </button>
 
         {/* Tags */}
         {tags.length > 0 && (
