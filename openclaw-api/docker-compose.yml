@@ -107,13 +107,14 @@ services:
 version: '3.8'
 volumes:
   # External volumes — immune to `docker compose down -v`.
-  # Create manually on first deploy: docker volume create openclaw_postgres_data
+  # These reference the volumes already on the server (openclaw-api_* prefix
+  # was assigned by Docker Compose when the project was first created).
   postgres_data:
     external: true
-    name: openclaw_postgres_data
+    name: openclaw-api_postgres_data
   redis_data:
     external: true
-    name: openclaw_redis_data
+    name: openclaw-api_redis_data
   weaviate_data:
     external: true
-    name: openclaw_weaviate_data
+    name: openclaw-api_weaviate_data
