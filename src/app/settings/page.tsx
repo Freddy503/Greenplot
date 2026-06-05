@@ -68,6 +68,7 @@ export default function SettingsPage() {
  const [deleteConfirmText, setDeleteConfirmText] = useState('')
  const [scheduleConfig, setScheduleConfig] = useState<Record<string, JobConfig>>({})
  const [savingSchedule, setSavingSchedule] = useState<string | null>(null)
+ const [triggeringJob, setTriggeringJob] = useState<string | null>(null)
 
  const [editingCity, setEditingCity] = useState(false)
  const [editCity, setEditCity] = useState('')
@@ -250,6 +251,24 @@ export default function SettingsPage() {
      toast.error('Failed to save schedule')
    } finally {
      setSavingSchedule(null)
+   }
+ }
+
+ const handleTriggerJob = async (jobId: string) => {
+   setTriggeringJob(jobId)
+   const toastId = toast.loading(`Running ${PIPELINE_JOBS.find(j => j.id === jobId)?.label ?? jobId}…`)
+   try {
+     const res = await fetch(`/api/scheduler/trigger/${jobId}`, {
+       method: 'POST',
+       headers: authHeaders(),
+     })
+     const data = await res.json()
+     if (res.ok) toast.success(data.message || 'Job triggered!', { id: toastId })
+     else toast.error(data.error || 'Trigger failed', { id: toastId })
+   } catch {
+     toast.error('Could not reach backend', { id: toastId })
+   } finally {
+     setTriggeringJob(null)
    }
  }
 
@@ -534,7 +553,7 @@ export default function SettingsPage() {
                            </div>
                            <p className="text-[10px] text-on-surface-variant mb-2">{job.description}</p>
                            {enabled && (
-                             <div className="flex items-center gap-2">
+                             <div className="flex items-center gap-2 flex-wrap">
                                <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: '14px' }}>schedule</span>
                                <TimeEditor
                                  hour={hour}
@@ -545,6 +564,17 @@ export default function SettingsPage() {
                                {savingSchedule === job.id && (
                                  <span className="material-symbols-outlined text-primary animate-spin" style={{ fontSize: '14px' }}>progress_activity</span>
                                )}
+                               <button
+                                 onClick={() => handleTriggerJob(job.id)}
+                                 disabled={triggeringJob === job.id}
+                                 className="ml-auto flex items-center gap-1 text-[10px] font-bold text-primary/80 hover:text-primary px-2.5 py-1 rounded-full bg-primary/8 hover:bg-primary/15 transition-colors disabled:opacity-40"
+                               >
+                                 {triggeringJob === job.id
+                                   ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: '13px' }}>progress_activity</span>
+                                   : <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>play_arrow</span>
+                                 }
+                                 Run now
+                               </button>
                              </div>
                            )}
                          </div>

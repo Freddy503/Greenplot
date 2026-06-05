@@ -982,6 +982,11 @@ export default function WikiPage() {
  const [health, setHealth] = useState<any>(null)
  const [healthOpen, setHealthOpen] = useState(false)
 
+ // Garden Intelligence state
+ const [intelligence, setIntelligence] = useState<any>(null)
+ const [intelligenceOpen, setIntelligenceOpen] = useState(false)
+ const [intelligenceLoading, setIntelligenceLoading] = useState(false)
+
  // Ask Garden state
  const [askQuestion, setAskQuestion] = useState('')
  const [askAnswer, setAskAnswer] = useState('')
@@ -1016,6 +1021,21 @@ export default function WikiPage() {
   } finally {
    setCompiling(false)
   }
+ }
+
+ const handleLoadIntelligence = async () => {
+  if (intelligence) { setIntelligenceOpen(v => !v); return }
+  setIntelligenceLoading(true)
+  setIntelligenceOpen(true)
+  try {
+   const token = localStorage.getItem('greenplot_token')
+   const res = await fetch('/api/seeds/garden/intelligence', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+   })
+   const data = await res.json()
+   if (!data.error) setIntelligence(data)
+  } catch {}
+  setIntelligenceLoading(false)
  }
 
  // Load wiki articles from API
@@ -1217,6 +1237,77 @@ export default function WikiPage() {
   )}
   </div>
  )}
+
+ {/* Garden Intelligence */}
+ <div className="">
+  <button
+  onClick={handleLoadIntelligence}
+  className="w-full flex items-center justify-between p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 transition-all"
+  >
+  <div className="flex items-center gap-3">
+   <span className="material-symbols-outlined text-tertiary" style={{ fontVariationSettings: '"FILL" 1' }}>neurology</span>
+   <div className="text-left">
+   <p className="text-sm font-bold text-on-surface">Garden Intelligence</p>
+   <p className="text-[10px] text-on-surface-variant">Patterns, clusters &amp; growth insights from your seeds</p>
+   </div>
+  </div>
+  <span className={`material-symbols-outlined text-on-surface-variant/40 transition-transform duration-200 ${intelligenceOpen ? 'rotate-180' : ''}`}>expand_more</span>
+  </button>
+
+  {intelligenceOpen && (
+  <div className="mt-3 animate-in slide-in-from-top duration-200">
+   {intelligenceLoading ? (
+   <div className="flex items-center justify-center py-8 gap-2 text-on-surface-variant/40">
+    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+    <span className="text-xs">Analysing your garden…</span>
+   </div>
+   ) : intelligence ? (
+   <Card className="bg-surface-container-low border-outline-variant/10">
+    <CardContent className="p-4 space-y-3">
+    {intelligence.summary && (
+     <p className="text-sm text-on-surface leading-relaxed">{intelligence.summary}</p>
+    )}
+    {intelligence.clusters && intelligence.clusters.length > 0 && (
+     <div>
+     <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60 mb-2">Topic clusters</p>
+     <div className="flex flex-wrap gap-2">
+      {intelligence.clusters.map((c: string, i: number) => (
+      <span key={i} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary">{c}</span>
+      ))}
+     </div>
+     </div>
+    )}
+    {intelligence.insights && intelligence.insights.length > 0 && (
+     <div>
+     <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60 mb-2">Insights</p>
+     <ul className="space-y-1.5">
+      {intelligence.insights.map((ins: string, i: number) => (
+      <li key={i} className="flex items-start gap-2 text-xs text-on-surface-variant">
+       <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>lightbulb</span>
+       {ins}
+      </li>
+      ))}
+     </ul>
+     </div>
+    )}
+    {intelligence.suggested_topics && intelligence.suggested_topics.length > 0 && (
+     <div>
+     <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60 mb-2">Suggested next topics</p>
+     <div className="flex flex-wrap gap-2">
+      {intelligence.suggested_topics.map((t: string, i: number) => (
+      <span key={i} className="text-[10px] px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20">{t}</span>
+      ))}
+     </div>
+     </div>
+    )}
+    </CardContent>
+   </Card>
+   ) : (
+   <p className="text-xs text-on-surface-variant/40 text-center py-4">Intelligence unavailable — try again later.</p>
+   )}
+  </div>
+  )}
+ </div>
 
  {/* Wiki Lint */}
  <div className="">
