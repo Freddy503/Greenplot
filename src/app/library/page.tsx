@@ -71,7 +71,7 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
   }
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Minimal header */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
@@ -371,7 +371,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       <Header />
 
       <Hero

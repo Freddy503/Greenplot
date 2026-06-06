@@ -844,7 +844,7 @@ export default function ChatPage() {
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Compact dark header for chat — not a full tall hero */}
       <div style={{ background: 'var(--forest-1)', position: 'sticky', top: 0, zIndex: 40, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px' }}>

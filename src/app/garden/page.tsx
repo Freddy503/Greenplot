@@ -12,6 +12,7 @@ import Segmented from '@/components/ui/v2/segmented'
 import Pill from '@/components/ui/v2/pill'
 import SectionHeader from '@/components/ui/v2/section-header'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
+import KnowledgeGraph from '@/components/focus/knowledge-graph'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -168,7 +169,7 @@ export default function GardenPage() {
   })
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       <Header />
 
       {/* Dark forest hero — tall variant with stat chips */}
@@ -287,6 +288,11 @@ export default function GardenPage() {
           onOpenChange={setDetailOpen}
           onDeleted={handleSeedDeleted}
         />
+      )}
+
+      {/* Knowledge Graph overlay */}
+      {graphOpen && (
+        <KnowledgeGraph onClose={() => { setGraphOpen(false); setViewMode('list') }} />
       )}
 
       <style>{`

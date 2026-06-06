@@ -120,7 +120,7 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
   }
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Minimal header */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', height: 56 }}>
@@ -209,7 +209,7 @@ export default function StudioPage() {
   }
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       <Header />
 
       <Hero

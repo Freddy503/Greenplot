@@ -90,7 +90,7 @@ export default function Hero({
   return (
     <div
       className="hero-forest"
-      style={{ borderRadius: '0 0 30px 30px', paddingTop: 60, paddingBottom: tall ? 30 : 26, position: 'relative', zIndex: 2 }}
+      style={{ borderRadius: '0 0 30px 30px', paddingTop: 'max(52px, calc(env(safe-area-inset-top, 0px) + 18px))', paddingBottom: tall ? 30 : 26, position: 'relative', zIndex: 2 }}
     >
       <div style={{ position: 'relative', zIndex: 2, padding: '0 22px' }}>
         {/* Chrome row */}
