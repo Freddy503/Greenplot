@@ -523,6 +523,54 @@ def bulk_delete_seeds(body: dict, current_user: User = Depends(get_current_user)
     return {"ok": True, "deleted": deleted}
 
 
+@app.post("/api/v1/seeds/deduplicate")
+def deduplicate_seeds(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Delete duplicate seeds for the current user.
+    Within each group of seeds sharing the same normalized title, keeps the one with the
+    richest metadata (has summary + domain) and falls back to the oldest if equal.
+    """
+    from collections import defaultdict
+
+    seeds = db.query(Seed).filter(
+        Seed.user_id == current_user.id
+    ).order_by(Seed.created_at.asc()).all()
+
+    # Group by normalized title
+    groups: dict = defaultdict(list)
+    for s in seeds:
+        key = (s.title or "").lower().strip()[:120]
+        groups[key].append(s)
+
+    deleted_ids: list = []
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+        # Score: prefer seeds with richer metadata
+        def _score(s):
+            meta = s.seed_metadata or {}
+            return (
+                bool(meta.get("summary")),
+                bool(meta.get("domain") and meta["domain"] not in ("General", "")),
+                bool(meta.get("tags")),
+                s.created_at or 0,
+            )
+        group.sort(key=_score, reverse=True)
+        keep = group[0]
+        for dup in group[1:]:
+            db.delete(dup)
+            deleted_ids.append(str(dup.id))
+            # Best-effort: remove from Weaviate
+            try:
+                ref = dup.embedding_ref or str(dup.id)
+                weaviate_client.delete_seed(ref)
+            except Exception:
+                pass
+
+    db.commit()
+    return {"ok": True, "deduped": len(deleted_ids), "deleted_ids": deleted_ids}
+
+
 @app.post("/api/v1/seeds/{seed_id}/archive")
 def archive_seed(seed_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     seed = db.query(Seed).filter(Seed.id == seed_id, Seed.user_id == current_user.id).first()

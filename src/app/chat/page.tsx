@@ -81,7 +81,7 @@ import {
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
-import { Plus, ChevronRight, Leaf, Globe, Share2 } from 'lucide-react'
+import { Plus, ChevronRight, Leaf, Globe, Share2, FileText } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -945,6 +945,10 @@ export default function ChatPage() {
                     } catch {}
                     return false // Don't render as a clickable source
                   }
+                  if (sp.title?.startsWith('__spec__:')) {
+                    // Spec sentinel — filtered out; write_spec card is rendered via tool output
+                    return false
+                  }
                   return true
                 })
                 const isUser = message.role === 'user'
@@ -1138,6 +1142,24 @@ export default function ChatPage() {
                                                     <p className="text-[10px] truncate flex-1" style={{ color: 'var(--ink-3)' }}>{parsedOutput.prompt}</p>
                                                     <a href={parsedOutput.url} target="_blank" rel="noopener noreferrer" className="text-[10px]" style={{ color: 'var(--green-700)', fontWeight: 600 }}>Open</a>
                                                   </div>
+                                                </div>
+                                              )
+                                            }
+
+                                            // write_spec — PRD saved to Studio & Library
+                                            if (tp.type === 'write_spec' && parsedOutput?.status === 'ok') {
+                                              return (
+                                                <div className="mt-2 p-3 rounded-2xl flex items-center gap-3" style={{ background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)' }}>
+                                                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <FileText size={19} color="#06281a" strokeWidth={1.75} />
+                                                  </div>
+                                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <p className="ui" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green-deep)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{parsedOutput.title}</p>
+                                                    <p className="body-text" style={{ fontSize: 11.5, color: 'var(--green-700)' }}>PRD saved to Studio & Library</p>
+                                                  </div>
+                                                  <a href="/studio" className="tap" style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none', padding: '4px 10px', background: 'rgba(34,197,94,0.15)', borderRadius: 9 }}>
+                                                    Open →
+                                                  </a>
                                                 </div>
                                               )
                                             }

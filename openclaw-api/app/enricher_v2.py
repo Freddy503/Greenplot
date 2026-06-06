@@ -334,6 +334,31 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
     all_tags, domain = _normalize_against_wiki(all_tags, domain, tenant_str)
 
     # Step 5: Store in Postgres
+    # Dedup: if a seed with the same normalized title already exists for this user, skip creation
+    try:
+        from sqlalchemy import func as _func
+        _existing_seed = db.query(Seed).filter(
+            Seed.user_id == thought.user_id,
+            _func.lower(_func.trim(Seed.title)) == title.lower().strip()
+        ).first()
+        if _existing_seed:
+            # Prefer the richer content
+            if len(seed_content) > len(_existing_seed.content or ""):
+                _existing_seed.content = seed_content
+            db.commit()
+            print(f"[enricher_v2] Dedup: skipping duplicate seed '{title}' (exists as {_existing_seed.id})")
+            return {
+                "seed": _existing_seed,
+                "entities": entities,
+                "topics": topics,
+                "summary": summary,
+                "chunks": len(chunks),
+                "links_created": 0,
+                "links": [],
+            }
+    except Exception as _dedup_err:
+        print(f"[enricher_v2] Dedup check failed (non-fatal): {_dedup_err}")
+
     seed = Seed(
         tenant_id=uuid.UUID(tenant_str),
         user_id=thought.user_id,

@@ -7,7 +7,7 @@ import { usePushNotifications } from '@/hooks/use-push-notifications'
 import { toast } from 'sonner'
 import {
   Bell, Sun, Mail, Download, LogOut, ChevronRight, Copy, Plus, X,
-  Plug, Calendar, Trash2, MessageSquarePlus, Send, Loader2,
+  Plug, Calendar, Trash2, MessageSquarePlus, Send, Loader2, Leaf,
 } from 'lucide-react'
 import {
   Dialog,
@@ -221,6 +221,34 @@ export default function SettingsPage() {
     } catch { toast.error('Could not reach backend') } finally { setSendingTestEmail(false) }
   }
 
+  const [deduping, setDeduping] = useState(false)
+
+  const handleDeduplicate = async () => {
+    if (deduping) return
+    setDeduping(true)
+    const id = toast.loading('Scanning for duplicate seeds…')
+    try {
+      const res = await fetch('/api/seeds/deduplicate', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) {
+        if (data.deduped === 0) {
+          toast.success('No duplicates found — Garden is clean!', { id })
+        } else {
+          toast.success(`Removed ${data.deduped} duplicate seed${data.deduped === 1 ? '' : 's'}`, { id })
+        }
+      } else {
+        toast.error(data.error || 'Dedup failed', { id })
+      }
+    } catch {
+      toast.error('Could not reach backend', { id })
+    } finally {
+      setDeduping(false)
+    }
+  }
+
   const initial = (nickname || userEmail || 'G')[0].toUpperCase()
 
   return (
@@ -416,6 +444,14 @@ export default function SettingsPage() {
         <SettingsGroup label="Account">
           <SettingsRow Icon={Download} title="Export My Data" sub="Download all seeds and sessions as JSON" right={<ChevronRight size={16} color="var(--ink-3)" strokeWidth={1.75} />}
             last={false} onClick={handleExport} />
+          <SettingsRow
+            Icon={deduping ? Loader2 : Leaf}
+            title="Clean up duplicates"
+            sub="Remove duplicate seeds — keeps the richest version"
+            right={deduping ? <Loader2 size={16} color="var(--ink-3)" strokeWidth={1.75} className="animate-spin" /> : <ChevronRight size={16} color="var(--ink-3)" strokeWidth={1.75} />}
+            last={false}
+            onClick={handleDeduplicate}
+          />
           <SettingsRow Icon={LogOut} title="Log Out" sub="Sign out of your account" right={<ChevronRight size={16} color="var(--ink-3)" strokeWidth={1.75} />}
             last={false} onClick={handleLogout} />
           <SettingsRow Icon={Trash2} title="Delete Account" sub="Permanently delete all data" right={<ChevronRight size={16} color="var(--red)" strokeWidth={1.75} />}

@@ -266,6 +266,53 @@ async def synthesize_with_llm(system_prompt: str, user_prompt: str) -> str | Non
     return None
 
 
+async def compile_single_spec(
+    title: str,
+    content: str,
+    category: str,
+    seed_id: str,
+    user_id: str,
+    tenant_id: str,
+) -> Optional[str]:
+    """
+    Immediately compile a single spec seed into a Library wiki article.
+    Returns article_id (str) or None on failure.
+    """
+    try:
+        seeds_content = f"## {title}\nContent: {content}\n"
+        user_prompt = build_wiki_user_prompt(title, category, "", seeds_content)
+        article_content = await synthesize_with_llm(WIKI_SYSTEM_PROMPT, user_prompt)
+
+        if not article_content:
+            # Fallback: use spec content verbatim
+            article_content = f"# {title}\n\n{content}"
+
+        # Extract a summary from the first non-header paragraph
+        summary = ""
+        for line in article_content.split("\n"):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                summary = stripped[:300]
+                break
+
+        article_id = weaviate_client.add_wiki_article(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            title=title,
+            category=category,
+            summary=summary or content[:300],
+            content=article_content,
+            source_seed_ids=seed_id,
+            source_link_ids="",
+            status="published",
+        )
+        logger.info(f"compile_single_spec: article '{title}' created as {article_id}")
+        return article_id
+    except Exception as e:
+        logger.warning(f"compile_single_spec failed for '{title}': {e}")
+        return None
+
+
 class WikiCompileRequest(BaseModel):
     seed_ids: Optional[List[str]] = None  # If empty, auto-detect clusters
     link_ids: Optional[List[str]] = None
