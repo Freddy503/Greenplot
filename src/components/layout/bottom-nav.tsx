@@ -2,57 +2,68 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { MessageCircle, Sprout, FlaskConical, BookOpen, Settings } from 'lucide-react'
 
-const navItems = [
-  { href: '/chat', label: 'Chat', icon: 'chat_bubble', badge: false },
-  { href: '/garden', label: 'Garden', icon: 'eco', badge: false },
-  { href: '/studio', label: 'Studio', icon: 'science', badge: false },
-  { href: '/links', label: 'Sources', icon: 'link', badge: true },
-  { href: '/wiki', label: 'Wiki', icon: 'auto_stories', badge: false },
-  { href: '/notifications', label: 'Inbox', icon: 'notifications', badge: false },
-  { href: '/settings', label: 'Settings', icon: 'settings', badge: false },
+const NAV = [
+  { key: 'chat',     href: '/chat',     Icon: MessageCircle, label: 'Chat'    },
+  { key: 'garden',   href: '/garden',   Icon: Sprout,        label: 'Garden'  },
+  { key: 'studio',   href: '/studio',   Icon: FlaskConical,  label: 'Studio'  },
+  { key: 'library',  href: '/library',  Icon: BookOpen,      label: 'Library' },
+  { key: 'settings', href: '/settings', Icon: Settings,      label: 'Settings'},
 ]
 
 export default function BottomNav() {
   const pathname = usePathname()
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  useEffect(() => {
-    // Get count from localStorage (the Links page updates this)
-    const stored = localStorage.getItem('greenplot_new_sources')
-    if (stored) {
-      setUnreadCount(parseInt(stored, 10))
-    }
-  }, [])
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border/10 md:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      className="md:hidden"
+      style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 35,
+        background: 'rgba(250,249,246,0.82)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: '0 -0.5px 0 rgba(22,21,15,0.07)',
+        paddingTop: 9,
+        paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+      }}
     >
-      <div className="flex justify-between items-center py-1.5 px-1 max-w-lg mx-auto">
-        {navItems.map((item) => {
-          const active = pathname === item.href
-          const showBadge = item.badge && unreadCount > 0
-
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-start', padding: '0 8px' }}>
+        {NAV.map(({ key, href, Icon, label }) => {
+          const active = pathname === href || pathname.startsWith(href + '/')
           return (
-            <Link key={item.href} href={item.href} className="no-underline relative flex-1 min-w-0">
-              {showBadge && (
-                <span className="absolute -top-0.5 right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-[8px] font-bold text-white flex items-center justify-center leading-none px-0.5 shadow-sm">
-                  {unreadCount > 9 ? '9+' : unreadCount}
+            <Link
+              key={key}
+              href={href}
+              style={{ textDecoration: 'none' }}
+            >
+              <div
+                className="tap"
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                  width: 60, padding: '2px 0',
+                }}
+              >
+                <Icon
+                  size={23}
+                  strokeWidth={active ? 2 : 1.75}
+                  color={active ? 'var(--green-700)' : '#9a978c'}
+                />
+                <span style={{
+                  fontFamily: 'var(--ui)', fontSize: 10.5,
+                  fontWeight: active ? 600 : 500,
+                  color: active ? 'var(--green-700)' : '#9a978c',
+                }}>
+                  {label}
                 </span>
-              )}
-              <div className={`flex flex-col items-center gap-0.5 py-1 px-0.5 rounded-xl transition-colors
-                ${active ? 'text-primary' : 'text-muted-foreground'}`}>
-                <span className="material-symbols-outlined text-xl" >
-                  {item.icon}
-                </span>
-                <span className="text-[9px] font-medium truncate max-w-full">{item.label}</span>
               </div>
             </Link>
           )
         })}
+      </div>
+      {/* Home indicator */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
+        <div style={{ width: 134, height: 5, borderRadius: 99, background: 'rgba(22,21,15,0.22)' }} />
       </div>
     </nav>
   )
