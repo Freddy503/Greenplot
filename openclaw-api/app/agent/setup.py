@@ -335,6 +335,38 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("generate_image"),
     ))
 
+    # ── Spec / PRD Tools ─────────────────────────────────────────
+
+    registry.register(ToolSpec(
+        name="write_spec",
+        description=(
+            "Save a completed Product Requirements Document (PRD) to the user's Studio and Library. "
+            "Call this ONCE after synthesising all 11 answers in spec mode. "
+            "Provide the full structured PRD markdown in `content`."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Short feature name for the PRD (e.g. 'Real-time Collaboration').",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Full PRD in structured markdown (all sections from Problem Alignment through Risks).",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional tags. Defaults to ['prd', 'spec'].",
+                },
+            },
+            "required": ["title", "content"],
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("write_spec"),
+    ))
+
     # ── Sub-Agent System ───────────────────────────────────────────
     from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
 

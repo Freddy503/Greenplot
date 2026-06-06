@@ -250,6 +250,17 @@ export async function POST(req: Request) {
                     break
                   }
 
+                  // write_spec result — emit a sentinel so chat page can render the PRD card
+                  if (event.name === 'write_spec' && parsed?.status === 'ok') {
+                    writer.write({
+                      type: 'source-url',
+                      sourceId: `__spec__:${parsed.seed_id || 'unknown'}`,
+                      url: `spec://${parsed.seed_id || 'unknown'}?article=${parsed.article_id || ''}&title=${encodeURIComponent(parsed.title || '')}`,
+                      title: `__spec__:${JSON.stringify({ seed_id: parsed.seed_id, article_id: parsed.article_id, title: parsed.title })}`,
+                    })
+                    break
+                  }
+
                   // Web search sources
                   if (parsed.results && Array.isArray(parsed.results)) {
                     const seen = new Set<string>()

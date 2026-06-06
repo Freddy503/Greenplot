@@ -135,6 +135,19 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
     content = args["content"]
     tags = args.get("tags", [])
     try:
+        # Dedup: return existing seed if title already exists for this user
+        existing = db.query(Seed).filter(
+            Seed.user_id == user.id,
+            sa_func.lower(sa_func.trim(Seed.title)) == title.lower().strip()
+        ).first()
+        if existing:
+            return json.dumps({
+                "status": "ok",
+                "seed_id": str(existing.id),
+                "title": title,
+                "message": f"Seed '{title}' already exists — skipped duplicate.",
+            })
+
         seed = Seed(
             tenant_id=user.tenant_id,
             user_id=user.id,
@@ -2332,3 +2345,92 @@ async def create_github_issue(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["create_github_issue"] = create_github_issue
+
+
+# ── write_spec: save PRD and compile wiki article ─────────────────────────────
+
+async def write_spec(args: dict, user: User, db: Session) -> str:
+    """Save a completed PRD to Studio and immediately compile a Library article."""
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+
+    title = (args.get("title") or "").strip()
+    content = (args.get("content") or "").strip()
+    tags = args.get("tags", ["prd", "spec"])
+
+    if not title or not content:
+        return json.dumps({"status": "error", "message": "title and content are required"})
+
+    try:
+        # Dedup: return existing spec if title already exists
+        existing = db.query(Seed).filter(
+            Seed.user_id == user.id,
+            sa_func.lower(sa_func.trim(Seed.title)) == title.lower().strip()
+        ).first()
+        if existing:
+            return json.dumps({
+                "status": "ok",
+                "seed_id": str(existing.id),
+                "article_id": None,
+                "title": title,
+                "message": f"PRD '{title}' already exists in Studio.",
+            })
+
+        # Save spec seed
+        seed = Seed(
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            title=title,
+            content=content,
+            seed_metadata={"tags": tags, "source": "spec_mode", "seed_type": "spec"},
+            created_at=datetime.utcnow(),
+        )
+        db.add(seed)
+        db.commit()
+        db.refresh(seed)
+
+        # Index in Weaviate (best-effort)
+        try:
+            from app.enricher_v2 import embed_text
+            embedding = embed_text(f"{title}\n{content[:500]}")
+            weaviate_client.add_seed(
+                tenant_id=str(user.tenant_id),
+                user_id=str(user.id),
+                thought_id=None,
+                title=title,
+                content=content,
+                embedding=embedding,
+                metadata={"tags": tags, "seed_type": "spec"},
+                image_url=None,
+                created_at=seed.created_at.isoformat(),
+            )
+        except Exception as e:
+            _log.warning(f"Weaviate indexing failed for spec '{title}': {e}")
+
+        # Compile wiki article immediately
+        article_id = None
+        try:
+            from app.wiki import compile_single_spec
+            article_id = await compile_single_spec(
+                title=title,
+                content=content,
+                category="Spec",
+                seed_id=str(seed.id),
+                user_id=str(user.id),
+                tenant_id=str(user.tenant_id),
+            )
+        except Exception as e:
+            _log.warning(f"Spec wiki compile failed for '{title}': {e}")
+
+        return json.dumps({
+            "status": "ok",
+            "seed_id": str(seed.id),
+            "article_id": article_id,
+            "title": title,
+            "message": f"PRD '{title}' saved to Studio and Library.",
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["write_spec"] = write_spec
