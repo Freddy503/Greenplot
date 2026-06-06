@@ -840,9 +840,38 @@ export default function ChatPage() {
 
   const isStreaming = status === 'submitted' || status === 'streaming'
 
+  // Day name for hero eyebrow
+  const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
+
   return (
-    <div className="flex flex-col h-dvh bg-background">
-      <Header onMenuClick={() => setSidebarOpen(true)} />
+    <div style={{ background: 'var(--bg)', minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+      {/* Compact dark header for chat — not a full tall hero */}
+      <div style={{ background: 'var(--forest-1)', position: 'sticky', top: 0, zIndex: 40, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px' }}>
+          {/* Brand mark */}
+          <button onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #22c55e, #15803d)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2C7 2 3 5 3 8.5C3 10.43 4.84 12 7 12C9.16 12 11 10.43 11 8.5C11 5 7 2 7 2Z" fill="#fff" opacity="0.9"/><path d="M7 2L7 12" stroke="#fff" strokeWidth="0.8" opacity="0.4"/></svg>
+            </div>
+            <div>
+              <div className="caps" style={{ fontSize: 9, color: 'rgba(180,240,205,0.7)' }}>{dayName} · LIVING LABORATORY</div>
+              {selectedMode && (
+                <div className="ui" style={{ fontSize: 11, fontWeight: 600, color: '#7ef0a8' }}>{selectedMode.label} mode</div>
+              )}
+            </div>
+          </button>
+          {/* Mode chip */}
+          {selectedMode && (
+            <button onClick={() => setSelectedMode(undefined)} className="glass-dark tap" style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 9999, padding: '5px 10px', border: 'none', cursor: 'pointer' }}>
+              <span className="ui" style={{ fontSize: 11, fontWeight: 600, color: '#7ef0a8' }}>{selectedMode.label}</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2L8 8M8 2L2 8" stroke="rgba(126,240,168,0.7)" strokeWidth="1.5"/></svg>
+            </button>
+          )}
+          <button onClick={handleNewChat} className="glass-dark tap" style={{ width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="rgba(180,240,205,0.85)" strokeWidth="1.75" strokeLinecap="round"/></svg>
+          </button>
+        </div>
+      </div>
 
       {/* ── Conversation Sidebar ─────────────────────────── */}
       <ConversationSidebar
@@ -855,7 +884,7 @@ export default function ChatPage() {
       />
 
       {/* ── Messages ─────────────────────────────────────── */}
-      <main className="flex-1 min-h-0 overflow-hidden" style={{ paddingTop: 'var(--header-height)' }}>
+      <main className="flex-1 min-h-0 overflow-hidden" style={{ paddingTop: 0 }}>
         <Conversation className="h-full">
           <ConversationContent>
             {messages.length === 0 ? (
@@ -964,7 +993,8 @@ export default function ChatPage() {
                       <div className="flex flex-col items-end gap-2 pl-12 mb-8">
                         <Message from="user">
                           <MessageContent
-                            className="user-bubble bg-surface-container-high text-on-surface px-5 py-3 shadow-sm"
+                            className="user-bubble px-5 py-3 shadow-sm"
+                            style={{ background: 'var(--green-tint)', color: 'var(--green-deep)', borderRadius: '18px 18px 5px 18px', fontFamily: 'var(--body)', fontSize: 15 } as React.CSSProperties}
                           >
                             {message.parts.map((part, i) => {
                               if (part.type === 'text') {
@@ -993,7 +1023,8 @@ export default function ChatPage() {
                       <div className="flex flex-col items-start gap-3 pr-12 mb-8">
                         <Message from="assistant">
                           <MessageContent
-                            className="assistant-bubble bg-surface-container-high text-on-surface px-6 py-5 border border-outline-variant/10 relative overflow-hidden"
+                            className="assistant-bubble px-6 py-5 relative overflow-hidden"
+                            style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 18, boxShadow: '0 1px 2px rgba(20,19,12,0.03)' } as React.CSSProperties}
                           >
                             {/* Decorative bg icon */}
                             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none" aria-hidden>
@@ -1188,7 +1219,7 @@ export default function ChatPage() {
                           {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
                             <ThumbsRating messageId={message.id} />
                           )}
-                          {/* Save full message to Garden */}
+                          {/* Plant this insight → Garden */}
                           {message.parts.some(p => p.type === 'text') && (
                             <button
                               onClick={async () => {
@@ -1210,19 +1241,16 @@ export default function ChatPage() {
                                       source: 'chat_message',
                                     }),
                                   })
-                                  if (res.ok) {
-                                    toast.success('Saved to Garden 🌱')
-                                  } else {
-                                    toast.error('Failed to save')
-                                  }
-                                } catch {
-                                  toast.error('Failed to save')
-                                }
+                                  if (res.ok) toast.success('Planted in Garden 🌱')
+                                  else toast.error('Failed to plant')
+                                } catch { toast.error('Failed to plant') }
                               }}
-                              className="p-1 rounded-full hover:bg-primary/10 text-on-surface-variant/40 hover:text-primary transition-colors"
-                              title="Save full message to Garden"
+                              className="tap"
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 9999, padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 700, color: 'var(--green-700)' }}
+                              title="Plant this insight"
                             >
-                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 0' }}>eco</span>
+                              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="6" stroke="var(--green-700)" strokeWidth="1.5"/><path d="M6.5 4V9M4 6.5H9" stroke="var(--green-700)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                              Plant this insight
                             </button>
                           )}
                           {/* Save as PRD — spec mode, latest assistant message */}
@@ -1409,8 +1437,8 @@ export default function ChatPage() {
 
       {/* ── Input area ───────────────────────────────── */}
       <div
-        className="shrink-0 px-4 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent relative"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height) + 0.5rem)' }}
+        className="shrink-0 px-4 pt-4 relative"
+        style={{ background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height) + 0.5rem)', borderTop: '0.5px solid var(--hairline)' }}
       >
         {/* Recording indicator */}
         {voiceState === 'recording' && (
@@ -1427,36 +1455,24 @@ export default function ChatPage() {
         )}
         {/* Thinking-partner mode chips */}
         <div className="max-w-2xl mx-auto mb-2">
-          {selectedMode && (
-            <div className={`flex items-center gap-1.5 mb-2 px-3 py-1.5 rounded-full w-fit ${selectedMode.accentBg}`}>
-              <span className={`material-symbols-outlined ${selectedMode.accentText}`} style={{ fontSize: '14px' }}>{selectedMode.icon}</span>
-              <span className={`text-[11px] font-bold ${selectedMode.accentText}`}>{selectedMode.label}</span>
-              <span className="text-[10px] text-on-surface-variant/60 hidden sm:inline">· {selectedMode.blurb}</span>
-              <button
-                onClick={() => setSelectedMode(undefined)}
-                className="ml-0.5 text-on-surface-variant/50 hover:text-on-surface transition-colors"
-                title="Exit mode"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
-              </button>
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
-            <span className="material-symbols-outlined text-on-surface-variant/40 shrink-0" style={{ fontSize: '15px' }}>auto_awesome</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
             {THINKING_MODES.map((m) => {
               const active = selectedMode?.id === m.id
               return (
                 <button
                   key={m.id}
                   onClick={() => setSelectedMode(active ? undefined : m)}
-                  className={`flex items-center gap-1 shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
-                    active
-                      ? `${m.accentBg} ${m.accentText} border-transparent`
-                      : 'bg-surface-container border-outline-variant/15 text-on-surface-variant/70 hover:text-on-surface hover:border-outline-variant/30'
-                  }`}
+                  className="tap"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    padding: '6px 11px', borderRadius: 9999,
+                    fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 700,
+                    border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                    background: active ? 'var(--green-tint)' : 'var(--surface-sunk)',
+                    color: active ? 'var(--green-700)' : 'var(--ink-2)',
+                  }}
                   title={m.blurb}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{m.icon}</span>
                   {m.label}
                 </button>
               )

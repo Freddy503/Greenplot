@@ -6,8 +6,55 @@
 
 /* ── Greenplot / Off-White SaaS Design System ────── */
 :root {
+  /* ── v2 Design System tokens ─────────────────────── */
+  /* Surfaces */
+  --bg: #faf9f6;
+  --surface-raised: #fbfaf7;
+  --surface-sunk: #f1efe9;
+  --surface-2: #f6f4ef;
+
+  /* Ink */
+  --ink: #16150f;
+  --ink-2: #5f5d54;
+  --ink-3: #908d80;
+  --ink-on-dark: #f4f3ec;
+
+  /* Lines */
+  --border-2: #dedacd;
+  --hairline: rgba(22, 21, 15, 0.08);
+
+  /* Brand green */
+  --green: #22c55e;
+  --green-600: #16a34a;
+  --green-700: #15803d;
+  --green-deep: #0f4d2e;
+  --green-tint: #eafaf0;
+  --green-tint-2: #dcf6e6;
+  --on-green: #06281a;
+
+  /* Forest (dark hero) */
+  --forest-1: #0a2618;
+  --forest-2: #0d3a25;
+  --forest-3: #15573a;
+
+  /* Feedback */
+  --amber: #c98a1b;
+  --red: #d4503e;
+
+  /* Type families (next/font vars injected by layout.tsx) */
+  --serif: var(--font-display, 'Instrument Serif', Georgia, serif);
+  --body: var(--font-body, 'Barlow', system-ui, sans-serif);
+  --ui: var(--font-ui, 'Sora', system-ui, sans-serif);
+
+  /* Radius */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+  --r-2xl: 32px;
+
   /* Background: warm off-white */
-  --background: #fafaf8;
+  --background: #faf9f6;
   --foreground: #141413;
   --surface: #fafaf8;
   --surface-dim: #e8e8e5;
@@ -101,7 +148,90 @@ body {
   @apply bg-white border border-outline-variant/50 rounded-2xl shadow-sm;
 }
 
-/* ── Material Icons ─────────────────────────────── */
+/* ── v2 Type helpers ─────────────────────────────── */
+.serif { font-family: var(--serif); font-style: italic; font-weight: 400; }
+.ui    { font-family: var(--ui); }
+.body-text  { font-family: var(--body); }
+.caps  { font-family: var(--ui); font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; }
+
+/* ── v2 Glass system ─────────────────────────────── */
+/* Light frosted card over off-white */
+.glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 1px 2px rgba(20, 19, 12, 0.03), 0 10px 30px -12px rgba(20, 19, 12, 0.10);
+}
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(170deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.35) 28%, rgba(180,178,168,0.06) 60%, rgba(255,255,255,0.30) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Translucent chip on the dark forest hero */
+.glass-dark {
+  position: relative;
+  background: rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.10);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+}
+
+/* Dark forest hero gradient */
+.hero-forest {
+  position: relative;
+  background:
+    radial-gradient(120% 120% at 82% -20%, rgba(34,197,94,0.32) 0%, rgba(34,197,94,0) 46%),
+    radial-gradient(90% 120% at 0% 0%, rgba(20,184,166,0.16) 0%, rgba(20,184,166,0) 50%),
+    linear-gradient(165deg, var(--forest-3) 0%, var(--forest-2) 38%, var(--forest-1) 100%);
+  overflow: hidden;
+}
+.hero-forest::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 40% at 20% 110%, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 60%);
+  pointer-events: none;
+}
+
+/* Flat card for dense lists */
+.v2-card {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 1px 2px rgba(20, 19, 12, 0.03);
+}
+
+/* Tap feedback for interactive elements */
+.tap { transition: transform 0.12s ease; cursor: pointer; }
+.tap:active { transform: scale(0.97); }
+
+/* ── v2 Animations ───────────────────────────────── */
+@keyframes rise    { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.25); opacity: 0.18; } }
+@keyframes growbar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.rise { animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+[data-d="1"] { animation-delay: 0.05s; }
+[data-d="2"] { animation-delay: 0.10s; }
+[data-d="3"] { animation-delay: 0.16s; }
+[data-d="4"] { animation-delay: 0.22s; }
+[data-d="5"] { animation-delay: 0.28s; }
+[data-d="6"] { animation-delay: 0.34s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, [data-d] { animation: none !important; opacity: 1 !important; }
+}
+
+/* ── Material Icons (kept for backward compat during migration) ── */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
