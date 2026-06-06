@@ -224,7 +224,7 @@ export default function SettingsPage() {
   const initial = (nickname || userEmail || 'G')[0].toUpperCase()
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       <Header />
 
       <Hero
