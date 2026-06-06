@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { Search, Bell, Leaf } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import NotificationPopup from '@/components/ui/v2/notification-popup'
 
 interface HeroProps {
   eyebrow?: string
@@ -81,6 +82,7 @@ export default function Hero({
 }: HeroProps) {
   const router = useRouter()
   const [hasUnread, setHasUnread] = useState(false)
+  const [showPopup, setShowPopup] = useState(false)
 
   useEffect(() => {
     const count = parseInt(localStorage.getItem('greenplot_new_sources') || '0', 10)
@@ -101,7 +103,7 @@ export default function Hero({
               <Search size={19} color="rgba(255,255,255,0.92)" strokeWidth={1.75} />
             </HeroIconBtn>
             {showBell && (
-              <HeroIconBtn badge={hasUnread} onClick={onBellClick || (() => router.push('/notifications'))}>
+              <HeroIconBtn badge={hasUnread} onClick={onBellClick || (() => setShowPopup(p => !p))}>
                 <Bell size={19} color="rgba(255,255,255,0.92)" strokeWidth={1.75} />
               </HeroIconBtn>
             )}
@@ -133,6 +135,11 @@ export default function Hero({
         {/* Hero content slot */}
         {children}
       </div>
+
+      {/* Notification popup — anchored inside the hero so it overlays correctly */}
+      {showPopup && (
+        <NotificationPopup onClose={() => setShowPopup(false)} unreadCount={hasUnread ? 4 : 0} />
+      )}
     </div>
   )
 }

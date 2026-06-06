@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Leaf, Link2, BookOpen, Sparkles, ChevronRight, Plus, Globe, ArrowLeft, Download, Share2 } from 'lucide-react'
+import { Leaf, Link2, BookOpen, Sparkles, ChevronRight, Plus, Globe, ArrowLeft, Download, Share2, ArrowUp } from 'lucide-react'
+import DetailHero, { DetailHeroBtn } from '@/components/ui/v2/detail-hero'
 import { toast } from 'sonner'
 
 import Hero from '@/components/layout/hero'
@@ -62,6 +63,9 @@ function extractDomain(url: string): string {
 // ── Article Detail ─────────────────────────────────────
 
 function ArticleDetail({ article, onBack }: { article: Article; onBack: () => void }) {
+  const router = useRouter()
+  const [bookmarked, setBookmarked] = useState(false)
+
   const handleDownload = () => {
     const blob = new Blob([`# ${article.title}\n\n${article.content}`], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -70,52 +74,135 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
     a.click(); URL.revokeObjectURL(url)
   }
 
+  const eyebrow = [article.category || 'Article', 'Living article'].join(' · ')
+
+  // Extract section headers and a first insight from markdown
+  const contentLines = (article.content || article.summary || '').split('\n')
+  const firstParagraph = contentLines.find(l => l.trim() && !l.startsWith('#')) || ''
+  const sections = contentLines.filter(l => l.startsWith('## ') || l.startsWith('# ')).slice(0, 4)
+
   return (
-    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
-      {/* Minimal header */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-        background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)',
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        borderBottom: '1px solid var(--hairline)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', height: 56 }}>
-          <button onClick={onBack} className="tap" style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green-700)', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 600 }}>
-            <ArrowLeft size={18} strokeWidth={2} color="var(--green-700)" />
-            Library
-          </button>
-          <div style={{ flex: 1 }} />
-          <button onClick={handleDownload} className="tap" style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--ink-2)', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600 }}>
-            <Download size={16} strokeWidth={1.75} />
-          </button>
+    <div style={{ position: 'relative', background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
+      <DetailHero
+        tall
+        eyebrow={eyebrow}
+        title={article.title}
+        onClose={onBack}
+        right={
+          <DetailHeroBtn
+            name="bookmark"
+            onClick={() => { setBookmarked(p => !p); handleDownload() }}
+          />
+        }
+      >
+        {/* Meta chips */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16 }}>
+          {article.seed_count != null && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Leaf size={13} color="#7ef0a8" strokeWidth={1.75} />
+              <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(233,250,239,0.8)' }}>{article.seed_count} seeds</span>
+            </span>
+          )}
+          {article.source_count != null && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Link2 size={13} color="#7ef0a8" strokeWidth={1.75} />
+              <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(233,250,239,0.8)' }}>{article.source_count} sources</span>
+            </span>
+          )}
+          {article.updated_at && (
+            <span className="body-text" style={{ fontSize: 11, color: 'rgba(233,250,239,0.6)', marginLeft: 'auto' }}>
+              Updated {timeAgo(article.updated_at)}
+            </span>
+          )}
         </div>
+        {/* Decorative leaf watermark */}
+        <Leaf size={120} color="rgba(126,240,168,0.12)" style={{ position: 'absolute', right: -14, top: -4, zIndex: -1 }} />
+      </DetailHero>
+
+      {/* Article body */}
+      <div style={{ position: 'relative', zIndex: 3, padding: '24px 20px 140px' }}>
+        {/* Lead paragraph — serif */}
+        {firstParagraph && (
+          <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, color: 'var(--ink)', letterSpacing: '-0.01em', marginBottom: 20 }}>
+            {firstParagraph}
+          </p>
+        )}
+
+        {/* Full article content */}
+        <div
+          className="prose prose-sm max-w-none"
+          style={{ fontFamily: 'var(--body)', fontSize: 14.5, lineHeight: 1.75, color: 'var(--ink-2)' }}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h1: ({ children }) => (
+                <h2 className="ui" style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', marginTop: 28, marginBottom: 10 }}>{children}</h2>
+              ),
+              h2: ({ children }) => (
+                <h2 className="ui" style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', marginTop: 26, marginBottom: 9 }}>{children}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="ui" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--ink)', marginTop: 20, marginBottom: 7 }}>{children}</h3>
+              ),
+              p: ({ children }) => (
+                <p style={{ marginBottom: 14 }}>{children}</p>
+              ),
+              blockquote: ({ children }) => (
+                <div className="glass" style={{ borderRadius: 18, padding: '18px 18px', margin: '20px 0', background: 'rgba(234,250,240,0.7)', borderLeft: '3px solid var(--green)' }}>
+                  <div className="caps" style={{ fontSize: 10, color: 'var(--green-700)', marginBottom: 7 }}>Key insight</div>
+                  <div className="serif" style={{ fontSize: 20, lineHeight: 1.4, color: 'var(--green-deep)' }}>{children}</div>
+                </div>
+              ),
+            }}
+          >
+            {article.content || article.summary || ''}
+          </ReactMarkdown>
+        </div>
+
+        {/* Tags as seed chips */}
+        {article.tags && article.tags.length > 0 && (
+          <div style={{ marginTop: 28 }}>
+            <div className="caps" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 10, letterSpacing: '0.08em' }}>Grown from</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {article.tags.map((tag, i) => (
+                <button
+                  key={i}
+                  className="tap"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '8px 13px', cursor: 'pointer' }}
+                >
+                  <Leaf size={14} color="var(--green-700)" strokeWidth={1.75} />
+                  <span className="ui" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)' }}>{tag}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px))', paddingBottom: 100, padding: '0 18px' }}>
-        <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)', paddingBottom: 100 }}>
-          {article.category && (
-            <Pill tone="soft" size="xs">{article.category.toUpperCase()}</Pill>
-          )}
-          <h1 className="serif" style={{ fontSize: 32, lineHeight: 1.1, color: 'var(--ink)', marginTop: 12, marginBottom: 16, letterSpacing: '-0.02em' }}>
-            {article.title}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
-            {article.seed_count != null && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Leaf size={13} color="var(--green-700)" strokeWidth={1.75} />
-                <span className="ui" style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600 }}>{article.seed_count} seeds</span>
-              </span>
-            )}
-            {article.updated_at && (
-              <span className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 'auto' }}>
-                Updated {timeAgo(article.updated_at)}
-              </span>
-            )}
-          </div>
-          <div className="prose prose-sm max-w-none" style={{ fontFamily: 'var(--body)', fontSize: 15, lineHeight: 1.65, color: 'var(--ink)' }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{article.content || article.summary || ''}</ReactMarkdown>
-          </div>
-        </div>
+      {/* Sticky "Ask about this article" bar */}
+      <div style={{ position: 'sticky', left: 0, right: 0, bottom: 0, padding: '10px 16px 18px', zIndex: 6, background: 'linear-gradient(to top, var(--bg) 60%, transparent)' }}>
+        <button
+          onClick={() => router.push(`/chat?prompt=${encodeURIComponent(`Tell me more about the article: ${article.title}`)}`)}
+          className="glass tap"
+          style={{
+            width: '100%', borderRadius: 18, padding: '12px 14px 12px 16px',
+            display: 'flex', alignItems: 'center', gap: 11,
+            border: 'none', cursor: 'pointer',
+            boxShadow: '0 10px 30px -10px rgba(20,30,20,0.3)',
+          }}
+        >
+          <Sparkles size={19} color="var(--green-700)" strokeWidth={1.75} />
+          <span className="body-text" style={{ flex: 1, textAlign: 'left', fontSize: 14, color: 'var(--ink-3)' }}>
+            Ask about this article…
+          </span>
+          <span
+            className="tap"
+            style={{ width: 38, height: 38, borderRadius: 99, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          >
+            <ArrowUp size={19} color="#fff" strokeWidth={2} />
+          </span>
+        </button>
       </div>
     </div>
   )
@@ -338,15 +425,37 @@ export default function LibraryPage() {
 
   const handleCompile = async () => {
     const token = localStorage.getItem('greenplot_token')
-    toast.loading('Compiling new articles…')
+    const id = toast.loading('Compiling new articles…')
     try {
       const res = await fetch('/api/wiki/auto-compile', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.ok) toast.success('New articles compiled!')
-      else toast.error('Could not compile')
-    } catch { toast.error('Could not compile') }
+      if (res.ok) {
+        toast.success('New articles compiled!', { id })
+        // Re-fetch articles so the list updates without a page reload
+        fetch('/api/wiki', { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : { articles: [] })
+          .then(wikiData => {
+            const rawArticles = wikiData.articles || []
+            setArticles(rawArticles.map((a: any) => ({
+              id: a.id || a.notion_id || '',
+              title: a.title || 'Untitled',
+              content: a.content || '',
+              summary: a.summary || a.metadata?.summary || '',
+              category: a.category || a.tags?.[0] || 'Article',
+              tags: a.tags || [],
+              created_at: a.created_at || a.created || '',
+              updated_at: a.updated_at || a.created_at || '',
+              seed_count: a.seed_count,
+              source_count: a.source_count,
+            })))
+            if (rawArticles.length > 0) localStorage.setItem('greenplot_wiki', JSON.stringify(rawArticles))
+          }).catch(() => {})
+      } else {
+        toast.error('Could not compile', { id })
+      }
+    } catch { toast.error('Could not compile', { id }) }
   }
 
   const handlePlant = async (linkId: string) => {
