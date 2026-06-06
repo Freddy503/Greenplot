@@ -81,6 +81,7 @@ import {
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
+import { Plus, ChevronRight, Leaf, Globe, Share2 } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -127,24 +128,14 @@ function ThumbsRating({ messageId }: { messageId: string }) {
         className="p-1 rounded-full transition-colors hover:bg-surface-container active:scale-90"
         aria-label="Thumbs up"
       >
-        <span
-          className={`material-symbols-outlined text-[18px] transition-colors ${rating === 'up' ? 'text-primary' : 'text-on-surface-variant/60'}`}
-          style={{ fontVariationSettings: rating === 'up' ? '"FILL" 1' : '"FILL" 0' }}
-        >
-          thumb_up
-        </span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill={rating === 'up' ? 'var(--green-700)' : 'none'} stroke={rating === 'up' ? 'var(--green-700)' : 'var(--ink-3)'} strokeWidth="1.5"><path d="M2 10V14h2.5L8 14l5-4.5V8h-3V2.5C10 1.5 9 1 8.5 1.5L5 6v4H2Z"/></svg>
       </button>
       <button
         onClick={() => handleRate('down')}
         className="p-1 rounded-full transition-colors hover:bg-surface-container active:scale-90"
         aria-label="Thumbs down"
       >
-        <span
-          className={`material-symbols-outlined text-[18px] transition-colors ${rating === 'down' ? 'text-error' : 'text-on-surface-variant/60'}`}
-          style={{ fontVariationSettings: rating === 'down' ? '"FILL" 1' : '"FILL" 0' }}
-        >
-          thumb_down
-        </span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill={rating === 'down' ? 'var(--red)' : 'none'} stroke={rating === 'down' ? 'var(--red)' : 'var(--ink-3)'} strokeWidth="1.5"><path d="M14 6V2h-2.5L8 2l-5 4.5V8h3v5.5C6 14.5 7 15 7.5 14.5L11 10V6h3Z"/></svg>
       </button>
     </div>
   )
@@ -891,23 +882,20 @@ export default function ChatPage() {
               <ConversationEmptyState>
                 <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full">
                   {/* Brand icon */}
-                  <div className="relative">
-                    <div className="absolute inset-0 rounded-full blur-2xl opacity-30 bg-primary scale-[1.8]" />
-                    <span
-                      className="material-symbols-outlined relative text-primary"
-                      style={{ fontSize: 56, fontVariationSettings: '"FILL" 1' }}
-                    >
-                      forest
-                    </span>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: 99, filter: 'blur(20px)', opacity: 0.3, background: 'var(--green)', transform: 'scale(1.8)' }} />
+                    <div style={{ width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(160deg,#34d97a,#15803d)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                      <Leaf size={30} color="#06281a" strokeWidth={1.75} />
+                    </div>
                   </div>
 
                   {/* Title */}
-                  <div className="text-center">
-                    <h2 className="display-md mb-1.5 text-on-surface">
+                  <div style={{ textAlign: 'center' }}>
+                    <h2 className="serif" style={{ fontSize: 26, color: 'var(--ink)', marginBottom: 8 }}>
                       Start a conversation
                     </h2>
-                    <p className="text-sm font-medium leading-relaxed text-on-surface-variant">
-                      Ask questions, capture ideas, or search the web. Your AI second brain is ready to grow with you.
+                    <p className="body-text" style={{ fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-2)', maxWidth: 280, margin: '0 auto' }}>
+                      Ask questions, capture ideas, or search the web. Your thinking partner is ready.
                     </p>
                   </div>
 
@@ -969,25 +957,6 @@ export default function ChatPage() {
 
                 return (
                   <div key={message.id}>
-                    {/* Sources (shown above assistant messages) */}
-                    {!isUser && sourceParts.length > 0 && (
-                      <Sources className="mb-2">
-                        <SourcesTrigger count={sourceParts.length} />
-                        <SourcesContent>
-                          {sourceParts.map((part, i) => {
-                            const p = part as { url: string; title?: string }
-                            return (
-                              <Source
-                                key={`${message.id}-src-${i}`}
-                                href={p.url}
-                                title={p.title || p.url}
-                              />
-                            )
-                          })}
-                        </SourcesContent>
-                      </Sources>
-                    )}
-
                     {/* ── User message ─────────────────────────── */}
                     {isUser ? (
                       <div className="flex flex-col items-end gap-2 pl-12 mb-8">
@@ -1010,30 +979,36 @@ export default function ChatPage() {
                         </Message>
                         <div className="flex items-center gap-2 pr-2">
                           <span className="text-[10px] text-on-surface-variant/60">{timeStr}</span>
-                          <span
-                            className="material-symbols-outlined text-primary/60"
-                            style={{ fontSize: '14px' }}
-                          >
-                            person
-                          </span>
                         </div>
                       </div>
                     ) : (
                       /* ── Assistant message ────────────────────── */
-                      <div className="flex flex-col items-start gap-3 pr-12 mb-8">
+                      <div style={{ display: 'flex', gap: 10, marginBottom: 24, paddingRight: 8 }} className="rise">
+                        {/* Green gradient leaf avatar */}
+                        <div style={{
+                          width: 30, height: 30, borderRadius: 10, flexShrink: 0, marginTop: 2,
+                          background: 'linear-gradient(160deg,#34d97a,#15803d)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Leaf size={16} color="#06281a" strokeWidth={1.75} />
+                        </div>
+                        {/* Content column */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* "Searched your garden" chip — shown when garden seeds were used */}
+                        {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', borderRadius: 9999, padding: '5px 10px' }}>
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5C6 1.5 3 4 3 6.5C3 7.88 4.34 9 6 9C7.66 9 9 7.88 9 6.5C9 4 6 1.5 6 1.5Z" fill="var(--green-700)"/></svg>
+                              <span className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)' }}>Searched your garden · {lastGardenSeeds.length} seed{lastGardenSeeds.length !== 1 ? 's' : ''}</span>
+                            </div>
+                          </div>
+                        )}
                         <Message from="assistant">
                           <MessageContent
-                            className="assistant-bubble px-6 py-5 relative overflow-hidden"
+                            className="assistant-bubble px-5 py-4"
                             style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 18, boxShadow: '0 1px 2px rgba(20,19,12,0.03)' } as React.CSSProperties}
                           >
-                            {/* Decorative bg icon */}
-                            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none" aria-hidden>
-                              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '64px' }}>
-                                psychology
-                              </span>
-                            </div>
-
-                            <div className="relative z-10">
+                            <div>
                               {message.parts.map((part, i) => {
                                 if (part.type === 'text') {
                                   return (
@@ -1047,16 +1022,11 @@ export default function ChatPage() {
                                   return (
                                     <div key={`${message.id}-reason-${i}`} className="mb-2">
                                       <details className="group">
-                                        <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium select-none text-on-surface-variant/70">
-                                          <span
-                                            className="material-symbols-outlined text-sm transition-transform group-open:rotate-90 text-on-surface-variant/70"
-                                            style={{ fontVariationSettings: '"FILL" 1', fontSize: '16px' }}
-                                          >
-                                            chevron_right
-                                          </span>
+                                        <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium select-none" style={{ color: 'var(--ink-3)' }}>
+                                          <ChevronRight size={14} color="var(--ink-3)" strokeWidth={1.75} className="transition-transform group-open:rotate-90" />
                                           Thought process
                                         </summary>
-                                        <div className="mt-2 ml-6 text-xs leading-relaxed whitespace-pre-wrap rounded-2xl p-3 bg-surface-container/50 text-on-surface-variant/80">
+                                        <div className="mt-2 ml-5 text-xs leading-relaxed whitespace-pre-wrap rounded-2xl p-3" style={{ background: 'var(--surface-sunk)', color: 'var(--ink-2)' }}>
                                           {(part as any).text}
                                         </div>
                                       </details>
@@ -1114,10 +1084,10 @@ export default function ChatPage() {
 
                                             if (vizOutput) {
                                               return (
-                                                <div className="mt-2 p-4 rounded-2xl bg-surface-container-high border border-outline-variant/15">
+                                                <div className="mt-2 p-4 rounded-2xl" style={{ background: 'var(--surface-sunk)', border: '1px solid var(--hairline)' }}>
                                                   <div className="flex items-center gap-2 mb-3">
-                                                    <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>hub</span>
-                                                    <p className="text-sm font-semibold text-on-surface">Garden Knowledge Graph</p>
+                                                    <Share2 size={17} color="var(--green-700)" strokeWidth={1.75} />
+                                                    <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Garden Knowledge Graph</p>
                                                   </div>
                                                   <div className="grid grid-cols-3 gap-3 mb-3">
                                                     <div className="text-center p-2 rounded-xl bg-surface-container">
@@ -1144,9 +1114,10 @@ export default function ChatPage() {
                                                   )}
                                                   <button
                                                     onClick={() => setGardenVizData(vizOutput)}
-                                                    className="w-full text-sm text-primary font-medium py-2 rounded-xl hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+                                                    className="tap"
+                                                    style={{ width: '100%', background: 'var(--green-tint)', border: 'none', borderRadius: 10, padding: '8px', fontFamily: 'var(--ui)', fontSize: 12.5, fontWeight: 600, color: 'var(--green-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }}
                                                   >
-                                                    <span className="material-symbols-outlined text-base">open_in_full</span>
+                                                    <Share2 size={14} color="var(--green-700)" strokeWidth={1.75} />
                                                     Open Interactive Graph
                                                   </button>
                                                 </div>
@@ -1163,10 +1134,9 @@ export default function ChatPage() {
                                                     className="w-full h-auto"
                                                     loading="lazy"
                                                   />
-                                                  <div className="px-4 py-2 bg-surface-container/50 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-xs text-primary" style={{ fontVariationSettings: '"FILL" 1' }}>image</span>
-                                                    <p className="text-[10px] text-on-surface-variant/60 truncate flex-1">{parsedOutput.prompt}</p>
-                                                    <a href={parsedOutput.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline">Open</a>
+                                                  <div className="px-4 py-2 flex items-center gap-2" style={{ background: 'var(--surface-sunk)' }}>
+                                                    <p className="text-[10px] truncate flex-1" style={{ color: 'var(--ink-3)' }}>{parsedOutput.prompt}</p>
+                                                    <a href={parsedOutput.url} target="_blank" rel="noopener noreferrer" className="text-[10px]" style={{ color: 'var(--green-700)', fontWeight: 600 }}>Open</a>
                                                   </div>
                                                 </div>
                                               )
@@ -1175,11 +1145,13 @@ export default function ChatPage() {
                                             // Wiki article created
                                             if (parsedOutput?.status === 'ok' && parsedOutput?.title && tp.type?.includes('wiki')) {
                                               return (
-                                                <div className="mt-2 p-3 rounded-2xl bg-primary/5 border border-primary/15 flex items-center gap-3">
-                                                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px', fontVariationSettings: '"FILL" 1' }}>auto_stories</span>
+                                                <div className="mt-2 p-3 rounded-2xl flex items-center gap-3" style={{ background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)' }}>
+                                                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <Leaf size={19} color="#06281a" strokeWidth={1.75} />
+                                                  </div>
                                                   <div>
-                                                    <p className="text-sm font-semibold text-on-surface">{parsedOutput.title}</p>
-                                                    <p className="text-xs text-on-surface-variant">Wiki article created</p>
+                                                    <p className="ui" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green-deep)' }}>{parsedOutput.title}</p>
+                                                    <p className="body-text" style={{ fontSize: 11.5, color: 'var(--green-700)' }}>Article compiled in Library</p>
                                                   </div>
                                                 </div>
                                               )
@@ -1207,53 +1179,78 @@ export default function ChatPage() {
                           </MessageContent>
                         </Message>
 
-                        {/* Timestamp + conditional rating (garden-enriched only) */}
-                        <div className="flex items-center gap-3 pl-2">
-                          <span
-                            className="material-symbols-outlined text-on-surface-variant/40"
-                            style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}
+                        {/* Web source chips */}
+                        {sourceParts.length > 0 && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                            {sourceParts.slice(0, 4).map((part, i) => {
+                              const p = part as { url: string; title?: string }
+                              const isGarden = p.url?.startsWith('/') || p.title?.toLowerCase().includes('seed')
+                              return (
+                                <a
+                                  key={`${message.id}-chip-${i}`}
+                                  href={isGarden ? '/garden' : p.url}
+                                  target={isGarden ? undefined : '_blank'}
+                                  rel="noopener noreferrer"
+                                  className="tap"
+                                  style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 11, padding: '7px 10px', textDecoration: 'none' }}
+                                >
+                                  {isGarden
+                                    ? <Leaf size={14} color="var(--green-700)" strokeWidth={1.75} />
+                                    : <Globe size={14} color="var(--ink-3)" strokeWidth={1.75} />
+                                  }
+                                  <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-2)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {p.title || p.url}
+                                  </span>
+                                </a>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* Plant this insight → full-width CTA */}
+                        {message.parts.some(p => p.type === 'text') && (
+                          <button
+                            onClick={async () => {
+                              const allText = message.parts
+                                .filter(p => p.type === 'text')
+                                .map(p => (p as any).text || '')
+                                .join('\n')
+                              if (!allText.trim()) return
+                              const token = localStorage.getItem('greenplot_token')
+                              try {
+                                const res = await fetch('/api/seeds', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                  },
+                                  body: JSON.stringify({ content: allText.slice(0, 4000), source: 'chat_message' }),
+                                })
+                                if (res.ok) toast.success('Planted in Garden 🌱')
+                                else toast.error('Failed to plant')
+                              } catch { toast.error('Failed to plant') }
+                            }}
+                            className="tap"
+                            style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 13, padding: '10px 14px', cursor: 'pointer', width: '100%' }}
                           >
-                            psychology
-                          </span>
-                          <span className="text-[10px] text-on-surface-variant/60">{timeStr}</span>
+                            <span style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Plus size={16} color="#fff" strokeWidth={2} />
+                            </span>
+                            <span style={{ textAlign: 'left' }}>
+                              <span className="ui" style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--green-deep)' }}>Plant this insight</span>
+                              <span className="body-text" style={{ display: 'block', fontSize: 11, color: 'var(--green-700)', opacity: 0.8 }}>Save to your garden as a new seed</span>
+                            </span>
+                            <ChevronRight size={17} color="var(--green-700)" strokeWidth={1.75} style={{ marginLeft: 'auto' }} />
+                          </button>
+                        )}
+
+                        {/* Timestamp + rating row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, paddingLeft: 2 }}>
+                          <span className="body-text" style={{ fontSize: 10, color: 'var(--ink-3)' }}>{timeStr}</span>
                           {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
                             <ThumbsRating messageId={message.id} />
                           )}
-                          {/* Plant this insight → Garden */}
-                          {message.parts.some(p => p.type === 'text') && (
-                            <button
-                              onClick={async () => {
-                                const allText = message.parts
-                                  .filter(p => p.type === 'text')
-                                  .map(p => (p as any).text || '')
-                                  .join('\n')
-                                if (!allText.trim()) return
-                                const token = localStorage.getItem('greenplot_token')
-                                try {
-                                  const res = await fetch('/api/seeds', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                    },
-                                    body: JSON.stringify({
-                                      content: allText.slice(0, 4000),
-                                      source: 'chat_message',
-                                    }),
-                                  })
-                                  if (res.ok) toast.success('Planted in Garden 🌱')
-                                  else toast.error('Failed to plant')
-                                } catch { toast.error('Failed to plant') }
-                              }}
-                              className="tap"
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 9999, padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 700, color: 'var(--green-700)' }}
-                              title="Plant this insight"
-                            >
-                              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="6" stroke="var(--green-700)" strokeWidth="1.5"/><path d="M6.5 4V9M4 6.5H9" stroke="var(--green-700)" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                              Plant this insight
-                            </button>
-                          )}
-                          {/* Save as PRD — spec mode, latest assistant message */}
+                          {/* Save as PRD — spec mode */}
                           {selectedMode?.id === 'spec' && isLastAssistant && message.parts.some(p => p.type === 'text') && (
                             <button
                               onClick={() => {
@@ -1263,62 +1260,45 @@ export default function ChatPage() {
                                   .join('\n')
                                 handleSaveAsPRD(allText)
                               }}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors"
-                              title="Save this spec to your PRD library"
+                              className="tap"
+                              style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', border: 'none', borderRadius: 9999, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--ui)', fontSize: 10.5, fontWeight: 700, color: 'var(--green-700)' }}
                             >
-                              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>draft</span>
                               Save as PRD
                             </button>
                           )}
                         </div>
-
                         {/* Create Image button — only on reflection responses */}
                         {(() => {
-                          // Find the preceding user message
                           const prevUserMsg = msgIdx > 0 ? messages[msgIdx - 1] : null
                           const userText = prevUserMsg?.role === 'user'
-                            ? prevUserMsg.parts
-                                .filter((p) => p.type === 'text')
-                                .map((p) => (p as any).text || '')
-                                .join('')
+                            ? prevUserMsg.parts.filter((p) => p.type === 'text').map((p) => (p as any).text || '').join('')
                             : ''
-                          const isLastAssistant = msgIdx === messages.length - 1
+                          const isLastAss = msgIdx === messages.length - 1
                           const img = generatedImages[message.id]
-
-                          if (!isLastAssistant || !userText || !isReflection(userText)) return null
-
+                          if (!isLastAss || !userText || !isReflection(userText)) return null
                           return (
-                            <div className="mt-2 pl-2 space-y-3">
+                            <div style={{ marginTop: 8 }}>
                               {!img && (
                                 <CreateImageButton
                                   reflectionText={userText}
                                   authToken={authToken}
                                   onImageGenerated={(url, prompt) => {
-                                    setGeneratedImages((prev) => ({
-                                      ...prev,
-                                      [message.id]: { url, prompt },
-                                    }))
+                                    setGeneratedImages((prev) => ({ ...prev, [message.id]: { url, prompt } }))
                                   }}
                                 />
                               )}
                               {img && (
-                                <div className="rounded-2xl overflow-hidden border border-outline-variant/10 max-w-sm">
-                                  <img
-                                    src={img.url}
-                                    alt="Visualization of your idea"
-                                    className="w-full h-auto"
-                                    loading="lazy"
-                                  />
-                                  <div className="px-4 py-2 bg-surface-container/50">
-                                    <p className="text-[10px] text-on-surface-variant/50 truncate">
-                                      {img.prompt}
-                                    </p>
+                                <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--hairline)', maxWidth: 320 }}>
+                                  <img src={img.url} alt="Visualization" style={{ width: '100%', height: 'auto', display: 'block' }} loading="lazy" />
+                                  <div style={{ padding: '8px 14px', background: 'var(--surface-sunk)' }}>
+                                    <p style={{ fontSize: 10, color: 'var(--ink-3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.prompt}</p>
                                   </div>
                                 </div>
                               )}
                             </div>
                           )
                         })()}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1357,10 +1337,10 @@ export default function ChatPage() {
 
             {/* URL detection + Link capture indicator */}
             {detectedUrls.length > 0 && !gardenEnriching && (
-              <div className="flex justify-center my-3">
-                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15">
-                  <span className="material-symbols-outlined text-primary" style={{ fontSize: '14px', fontVariationSettings: '"FILL" 1' }}>link</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 99, padding: '7px 14px' }}>
+                  <Globe size={13} color="var(--green-700)" strokeWidth={1.75} />
+                  <span className="ui" style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green-700)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                     {detectedUrls.length === 1 ? 'Link detected — will add to Sources' : `${detectedUrls.length} links detected`}
                   </span>
                 </div>
@@ -1369,13 +1349,11 @@ export default function ChatPage() {
 
             {/* Garden enrichment indicator */}
             {gardenEnriching && (
-              <div className="flex justify-center my-4">
-                <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-tertiary-container/10 border border-tertiary-container/20">
-                  <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '16px' }}>
-                    park
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-tertiary">
-                    🌱 Enriching from your garden…
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
+                <div className="animate-pulse" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 99, padding: '8px 16px' }}>
+                  <Leaf size={15} color="var(--green-700)" strokeWidth={1.75} />
+                  <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--green-700)', letterSpacing: '0.04em' }}>
+                    Enriching from your garden…
                   </span>
                 </div>
               </div>
@@ -1383,13 +1361,11 @@ export default function ChatPage() {
 
             {/* Streaming indicator */}
             {isStreaming && !gardenEnriching && (
-              <div className="flex justify-center my-4">
-                <div className="flex items-center gap-3 px-6 py-3 rounded-full animate-pulse w-fit bg-secondary/10 border border-secondary/20">
-                  <span className="material-symbols-outlined text-secondary" style={{ fontSize: '16px' }}>
-                    local_florist
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-secondary">
-                    🔍 Searching your garden…
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
+                <div className="animate-pulse" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '8px 16px' }}>
+                  <Leaf size={15} color="var(--ink-3)" strokeWidth={1.75} />
+                  <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-2)', letterSpacing: '0.04em' }}>
+                    Searching your garden…
                   </span>
                 </div>
               </div>
@@ -1397,9 +1373,9 @@ export default function ChatPage() {
 
             {/* Garden sources — compact badge after assistant messages */}
             {!isStreaming && lastGardenSeeds.length > 0 && (
-              <div className="flex items-center gap-2 px-2 mb-3 animate-in fade-in">
-                <span className="material-symbols-outlined text-primary/40" style={{ fontSize: '12px', fontVariationSettings: '"FILL" 1' }}>park</span>
-                <span className="text-[10px] text-on-surface-variant/40">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px', marginBottom: 12 }} className="animate-in fade-in">
+                <Leaf size={11} color="var(--green-700)" strokeWidth={1.75} style={{ opacity: 0.5 }} />
+                <span className="body-text" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
                   Enriched by: {lastGardenSeeds.map(s => s.title).join(', ')}
                 </span>
               </div>
@@ -1423,9 +1399,12 @@ export default function ChatPage() {
 
             {/* Error state */}
             {status === 'error' && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-error/10 text-error">
-                <span className="material-symbols-outlined text-sm">error</span>
-                Something went wrong. Try again.
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: 'rgba(212,80,62,0.10)', width: 'fit-content' }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="7" stroke="rgba(212,80,62,0.9)" strokeWidth="1.5"/>
+                  <path d="M8 5v3.5M8 11v.5" stroke="rgba(212,80,62,0.9)" strokeWidth="1.75" strokeLinecap="round"/>
+                </svg>
+                <span className="ui" style={{ fontSize: 12.5, fontWeight: 600, color: 'rgb(180,60,40)' }}>Something went wrong. Try again.</span>
               </div>
             )}
               </>
@@ -1448,9 +1427,11 @@ export default function ChatPage() {
           </div>
         )}
         {voiceState === 'processing' && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-secondary/10 text-secondary text-xs font-semibold px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
-            <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-            Transcribing…
+          <div className="animate-in fade-in slide-in-from-bottom-2" style={{ position: 'absolute', top: -48, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '8px 16px', whiteSpace: 'nowrap' }}>
+            <svg className="animate-spin" width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="var(--green-700)" strokeWidth="1.5" strokeDasharray="20" strokeDashoffset="10" strokeLinecap="round"/>
+            </svg>
+            <span className="ui" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>Transcribing…</span>
           </div>
         )}
         {/* Thinking-partner mode chips */}
