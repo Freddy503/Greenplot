@@ -43,7 +43,7 @@ interface RawSeed {
 
 // ── Helpers ───────────────────────────────────────────
 
-const SPEC_TAGS = ['spec', 'prd', 'strategy-paper', 'agent-output']
+const SPEC_TAGS = ['spec', 'prd', 'strategy-paper']
 
 function normalizeTags(s: RawSeed): string[] {
   const raw = s.tags ?? s.seed_metadata?.tags ?? s.metadata?.tags ?? []
@@ -54,6 +54,9 @@ function normalizeTags(s: RawSeed): string[] {
 function isSpecSeed(s: RawSeed): boolean {
   const type = (s.seed_type || s.type || '').toLowerCase()
   if (type === 'spec') return true
+  const content = s.content || s.text || s.summary || ''
+  // Must have meaningful PRD content (not just a short agent output)
+  if (content.length < 500) return false
   return normalizeTags(s).some(t => SPEC_TAGS.includes(t))
 }
 
@@ -162,12 +165,15 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
 
 // ── Page ──────────────────────────────────────────────
 
+const PRD_PAGE_SIZE = 10
+
 export default function StudioPage() {
   const router = useRouter()
   const [prds, setPrds] = useState<PRDItem[]>([])
   const [ideas, setIdeas] = useState<RawSeed[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<PRDItem | null>(null)
+  const [showAllPrds, setShowAllPrds] = useState(false)
 
   const launchMode = useCallback((id: string) => router.push(`/chat?mode=${id}`), [router])
 
@@ -300,7 +306,7 @@ export default function StudioPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {prds.map((prd) => (
+            {(showAllPrds ? prds : prds.slice(0, PRD_PAGE_SIZE)).map((prd) => (
               <div key={prd.id} onClick={() => setSelected(prd)} className="v2-card tap" style={{ borderRadius: 16, padding: 14, display: 'flex', gap: 12, cursor: 'pointer' }}>
                 <span style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FileText size={19} color="var(--green-700)" strokeWidth={1.75} />
@@ -317,6 +323,11 @@ export default function StudioPage() {
                 </div>
               </div>
             ))}
+            {!showAllPrds && prds.length > PRD_PAGE_SIZE && (
+              <button onClick={() => setShowAllPrds(true)} className="tap" style={{ width: '100%', padding: '11px', background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 14, fontFamily: 'var(--ui)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                Show all {prds.length} specs
+              </button>
+            )}
           </div>
         )}
       </div>

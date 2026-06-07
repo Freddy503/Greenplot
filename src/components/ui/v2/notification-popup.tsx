@@ -1,59 +1,69 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell, ChevronRight, Leaf, Sun, Mail, Sprout } from 'lucide-react'
 
-interface PopupNotif {
-  icon: 'leaf' | 'sun' | 'mail' | 'sprout'
-  tone: 'green' | 'amber'
-  title: string
-  sub: string
-  time: string
-  unread: boolean
+interface RealNotif {
+  id?: string
+  title?: string
+  body?: string
+  created_at?: string
+  read?: boolean
+  type?: string
 }
-
-const PREVIEW_NOTIFS: PopupNotif[] = [
-  { icon: 'leaf', tone: 'green', title: 'Your seed bloomed', sub: 'Emergence in complex systems finished enriching — 4 new connections found.', time: '2m ago', unread: true },
-  { icon: 'sun', tone: 'amber', title: 'Morning Idea Spark', sub: "Today's pattern: attention as a renewable resource. Tap to read.", time: '7:00', unread: true },
-  { icon: 'sprout', tone: 'green', title: 'Garden enriched a seed', sub: 'The Second Brain method linked to 2 new sources.', time: '9:02', unread: true },
-]
 
 const TONE_STYLES = {
   green: { bg: 'var(--green-tint)', fg: 'var(--green-700)' },
   amber: { bg: 'rgba(201,138,27,0.12)', fg: 'var(--amber)' },
 }
 
-const ICONS = {
-  leaf: Leaf,
-  sun: Sun,
-  mail: Mail,
-  sprout: Sprout,
+function iconForType(type = ''): { Icon: typeof Leaf; tone: 'green' | 'amber' } {
+  if (type.includes('spark') || type.includes('morning')) return { Icon: Sun, tone: 'amber' }
+  if (type.includes('briefing') || type.includes('digest')) return { Icon: Mail, tone: 'amber' }
+  if (type.includes('seed') || type.includes('enrich')) return { Icon: Sprout, tone: 'green' }
+  return { Icon: Leaf, tone: 'green' }
 }
 
-function NotifRowCompact({ n, onClick }: { n: PopupNotif; onClick: () => void }) {
-  const tone = TONE_STYLES[n.tone]
-  const IconCmp = ICONS[n.icon]
+function timeAgo(iso?: string): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `${Math.max(mins, 0)}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+function NotifRow({ n, onClick }: { n: RealNotif; onClick: () => void }) {
+  const { Icon, tone } = iconForType(n.type || n.title || '')
+  const style = TONE_STYLES[tone]
+  const unread = !n.read
   return (
     <button
       onClick={onClick}
       className="tap"
       style={{
         width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none',
-        background: n.unread ? 'rgba(34,197,94,0.055)' : 'transparent',
+        background: unread ? 'rgba(34,197,94,0.055)' : 'transparent',
         display: 'flex', gap: 12, alignItems: 'flex-start',
         padding: '11px 14px',
         borderBottom: '1px solid var(--hairline)',
       }}
     >
-      <span style={{ width: 34, height: 34, borderRadius: 11, flexShrink: 0, background: tone.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <IconCmp size={17} color={tone.fg} strokeWidth={1.75} />
+      <span style={{ width: 34, height: 34, borderRadius: 11, flexShrink: 0, background: style.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={17} color={style.fg} strokeWidth={1.75} />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="ui" style={{ fontSize: 13, fontWeight: n.unread ? 700 : 600, color: 'var(--ink)', lineHeight: 1.3 }}>{n.title}</div>
-        <div className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.45, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{n.sub}</div>
-        <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 5 }}>{n.time}</div>
+        <div className="ui" style={{ fontSize: 13, fontWeight: unread ? 700 : 600, color: 'var(--ink)', lineHeight: 1.3 }}>
+          {n.title || 'Notification'}
+        </div>
+        <div className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.45, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>
+          {n.body || ''}
+        </div>
+        <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 5 }}>{timeAgo(n.created_at)}</div>
       </div>
-      {n.unread && <span style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--green)', flexShrink: 0, marginTop: 5 }} />}
+      {unread && <span style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--green)', flexShrink: 0, marginTop: 5 }} />}
     </button>
   )
 }
@@ -63,8 +73,23 @@ interface NotificationPopupProps {
   unreadCount?: number
 }
 
-export default function NotificationPopup({ onClose, unreadCount = 4 }: NotificationPopupProps) {
+export default function NotificationPopup({ onClose, unreadCount = 0 }: NotificationPopupProps) {
   const router = useRouter()
+  const [notifs, setNotifs] = useState<RealNotif[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') : null
+    fetch('/api/push/notifications/all', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.notifications) setNotifs(data.notifications.slice(0, 20))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
@@ -108,15 +133,21 @@ export default function NotificationPopup({ onClose, unreadCount = 4 }: Notifica
           </button>
         </div>
 
-        {/* Rows */}
-        <div style={{ borderTop: '1px solid var(--hairline)' }}>
-          {PREVIEW_NOTIFS.map((n, i) => (
-            <NotifRowCompact
-              key={i}
-              n={n}
-              onClick={() => { onClose(); router.push('/notifications') }}
-            />
-          ))}
+        {/* Rows — scrollable */}
+        <div style={{ borderTop: '1px solid var(--hairline)', maxHeight: 320, overflowY: 'auto' }}>
+          {loading ? (
+            <div style={{ padding: '20px 14px', textAlign: 'center' }}>
+              <div style={{ width: 24, height: 24, borderRadius: 99, border: '2px solid var(--green-tint)', borderTopColor: 'var(--green)', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+            </div>
+          ) : notifs.length === 0 ? (
+            <p className="body-text" style={{ padding: '20px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+              No notifications yet — check back after your morning spark!
+            </p>
+          ) : (
+            notifs.map((n, i) => (
+              <NotifRow key={n.id || i} n={n} onClick={() => { onClose(); router.push('/notifications') }} />
+            ))
+          )}
         </div>
 
         {/* See all button */}

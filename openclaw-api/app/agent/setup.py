@@ -340,9 +340,13 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
     registry.register(ToolSpec(
         name="write_spec",
         description=(
-            "Save a completed Product Requirements Document (PRD) to the user's Studio and Library. "
-            "Call this ONCE after synthesising all 11 answers in spec mode. "
-            "Provide the full structured PRD markdown in `content`."
+            "Save a Product Requirements Document (PRD) to the user's Studio and Library. "
+            "Call this whenever the user asks to 'create a PRD', 'write a spec', 'document this feature', "
+            "or after completing the 11-question gstack spec flow. "
+            "Use the full gstack markdown structure: # Title — PRD, ## Problem Alignment, ## Solution Summary, "
+            "## Scope & Capabilities, ## Delivery Risks & Open Questions. "
+            "Each section must have 3-5 sentences of substantive prose. "
+            "Provide the complete structured PRD markdown in `content`."
         ),
         input_schema={
             "type": "object",

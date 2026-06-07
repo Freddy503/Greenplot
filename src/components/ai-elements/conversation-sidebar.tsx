@@ -65,6 +65,7 @@ export function ConversationSidebar({
   const panelRef = useRef<HTMLDivElement>(null)
   const [initial, setInitial] = useState('F')
   const [displayName, setDisplayName] = useState('You')
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     const raw = localStorage.getItem('greenplot_nickname') || localStorage.getItem('greenplot_name') || ''
@@ -82,7 +83,10 @@ export function ConversationSidebar({
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  const groups = groupConversations(conversations)
+  const filtered = query
+    ? conversations.filter(c => c.title?.toLowerCase().includes(query.toLowerCase()))
+    : conversations
+  const groups = groupConversations(filtered)
   const groupKeys = ['Today', 'Yesterday', 'Previous 7 days', 'Older']
 
   return (
@@ -138,7 +142,19 @@ export function ConversationSidebar({
               style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 9, borderRadius: 13, padding: '9px 12px' }}
             >
               <Search size={16} color="rgba(255,255,255,0.6)" strokeWidth={1.75} />
-              <span className="body-text" style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>Search conversations</span>
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search conversations"
+                className="body-text"
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: 'rgba(255,255,255,0.85)', '::placeholder': { color: 'rgba(255,255,255,0.45)' } } as React.CSSProperties}
+              />
+              {query && (
+                <button onClick={() => setQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M12 2L2 12" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                </button>
+              )}
             </div>
           </div>
         </div>

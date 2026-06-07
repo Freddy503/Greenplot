@@ -130,7 +130,6 @@ export default function GardenPage() {
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [graphOpen, setGraphOpen] = useState(false)
-  const [linkCount, setLinkCount] = useState(0)
 
   const fetchSeeds = useCallback((silent = false) => {
     const token = localStorage.getItem('greenplot_token')
@@ -145,17 +144,11 @@ export default function GardenPage() {
       .then(data => {
         const raw = data.seeds || data || []
         const parsed = Array.isArray(raw) ? raw.map(parseSeed) : []
-        parsed.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+        // Do NOT sort here — let the `sorted` computed array own all ordering
         setSeeds(parsed)
       })
       .catch(() => {})
       .finally(() => { if (!silent) setLoading(false) })
-
-    // Fetch link count for stats
-    fetch('/api/links?limit=1', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setLinkCount(d.total || d.links?.length || 0))
-      .catch(() => {})
   }, [router])
 
   // Initial load
@@ -175,7 +168,12 @@ export default function GardenPage() {
 
   const handleSeedDeleted = (id: string) => setSeeds(prev => prev.filter(s => s.id !== id))
 
-  const sprouting = seeds.filter(s => getStatusInfo(s.status || '').label === 'Sprouting').length
+  // Stat chips: Seeds count + unique non-generic domains
+  const _GENERIC_DOMAINS = new Set(['', 'general', 'none', 'untagged', 'idea', 'note', 'misc'])
+  const domainCount = new Set(
+    seeds.map(s => (s.domain || '').toLowerCase().trim()).filter(d => !_GENERIC_DOMAINS.has(d))
+  ).size
+
   const focusSeed = seeds[0]
 
   const sorted = [...seeds].sort((a, b) => {
@@ -199,8 +197,7 @@ export default function GardenPage() {
         <div style={{ display: 'flex', gap: 9, marginTop: 18 }}>
           {[
             { n: seeds.length, l: 'Seeds' },
-            { n: linkCount, l: 'Links' },
-            { n: sprouting, l: 'Sprouting' },
+            { n: domainCount, l: 'Domains' },
           ].map(({ n, l }) => (
             <div key={l} className="glass-dark" style={{ flex: 1, borderRadius: 15, padding: '11px 12px' }}>
               <div className="serif" style={{ fontSize: 24, color: '#fff', lineHeight: 1 }}>{n}</div>
@@ -231,7 +228,7 @@ export default function GardenPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', color: 'var(--ink-2)', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '7px 13px', fontSize: 12, fontFamily: 'var(--ui)', fontWeight: 500, cursor: 'pointer' }}
           >
             <Filter size={14} color="var(--ink-2)" strokeWidth={1.75} />
-            Sort
+            {sortDir === 'desc' ? '↓ Newest' : '↑ Oldest'}
           </button>
         </div>
 

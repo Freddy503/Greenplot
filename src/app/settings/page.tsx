@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import {
   Bell, Sun, Mail, Download, LogOut, ChevronRight, Copy, Plus, X,
   Plug, Calendar, Trash2, MessageSquarePlus, Send, Loader2, Leaf,
+  Moon, BookOpen, BarChart2,
 } from 'lucide-react'
 import {
   Dialog,
@@ -29,8 +30,11 @@ import SectionHeader from '@/components/ui/v2/section-header'
 const BACKEND = '/api'
 
 const PIPELINE_JOBS = [
-  { id: 'morning_spark',     label: 'Morning Spark',    Icon: Sun,  description: 'Weather + one deep pattern from your research interests' },
-  { id: 'daily_briefing',    label: 'Daily Briefing',   Icon: Mail, description: 'Enterprise AI news + academic papers for your focus areas' },
+  { id: 'morning_spark',        label: 'Morning Spark',              Icon: Sun,       description: 'Weather + deep pattern from your interests (08:30 CET)',   configurable: true },
+  { id: 'daily_briefing',       label: 'Daily Briefing',             Icon: Mail,      description: 'Enterprise AI news + academic papers (09:30 CET)',         configurable: true },
+  { id: 'afternoon_reflection', label: 'Evening Reflection',         Icon: Moon,      description: 'Contrarian view + actionable move for tomorrow (16:00 CET)', configurable: true },
+  { id: 'academic_digest',      label: 'Academic & Research Digest', Icon: BookOpen,  description: 'ArXiv papers matched to your interests (07:00 CET)',        configurable: true },
+  { id: 'weekly_digest',        label: 'Weekly Garden Digest',       Icon: BarChart2, description: 'Sunday overview of your growing knowledge garden (10:00 CET)', configurable: false },
 ]
 
 interface JobConfig {
@@ -164,6 +168,15 @@ export default function SettingsPage() {
       await fetch('/api/schedule', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ [jobId]: { enabled } }) })
       toast.success(enabled ? 'Pipeline enabled' : 'Pipeline disabled')
     } catch { toast.error('Failed to update') }
+  }
+
+  const handleScheduleHour = async (jobId: string, hour: number) => {
+    const updated = { ...scheduleConfig, [jobId]: { ...scheduleConfig[jobId], hour } }
+    setScheduleConfig(updated)
+    try {
+      await fetch('/api/schedule', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ [jobId]: { hour } }) })
+      toast.success(`Time updated to ${String(hour).padStart(2,'0')}:00 CET`)
+    } catch { toast.error('Failed to update time') }
   }
 
   const handleLogout = () => {
@@ -351,13 +364,31 @@ export default function SettingsPage() {
           {PIPELINE_JOBS.map((job, idx) => {
             const cfg = scheduleConfig[job.id]
             const enabled = cfg?.enabled ?? true
+            const hour = cfg?.hour ?? undefined
             return (
               <SettingsRow
                 key={job.id}
                 Icon={job.Icon}
                 title={job.label}
                 sub={job.description}
-                right={<Toggle on={enabled} onChange={v => handleScheduleToggle(job.id, v)} />}
+                right={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {job.configurable && (
+                      <select
+                        value={hour ?? ''}
+                        onChange={e => handleScheduleHour(job.id, Number(e.target.value))}
+                        style={{ background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 8, padding: '4px 8px', fontFamily: 'var(--ui)', fontSize: 12, color: 'var(--ink-2)', cursor: 'pointer' }}
+                        title="Hour (CET)"
+                      >
+                        <option value="" disabled>Time</option>
+                        {Array.from({ length: 18 }, (_, i) => i + 5).map(h => (
+                          <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>
+                        ))}
+                      </select>
+                    )}
+                    <Toggle on={enabled} onChange={v => handleScheduleToggle(job.id, v)} />
+                  </div>
+                }
                 last={idx === PIPELINE_JOBS.length - 1}
               />
             )
