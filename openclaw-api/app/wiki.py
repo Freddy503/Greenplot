@@ -349,6 +349,78 @@ async def list_articles(
     return {"articles": articles}
 
 
+@router.get("/debug")
+async def wiki_debug(request: Request, current_user = Depends(get_current_user)):
+    """Diagnostic: why is the Library empty? Runs the same counting logic as the
+    wiki-compile cron (no LLM calls) so we can see seed counts, detected domains,
+    gaps, and Weaviate health in a single request."""
+    from collections import Counter
+    from app.database import get_db
+    from app.models import Seed as SeedModel
+
+    user = current_user
+    tenant_id = str(user.tenant_id)
+
+    weaviate_ok = True
+    existing_articles = []
+    weaviate_seeds = 0
+    try:
+        existing_articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+        wv_seeds = weaviate_client.get_seeds_by_tenant(tenant_id=tenant_id, limit=500)
+        weaviate_seeds = len(wv_seeds or [])
+    except Exception as e:
+        weaviate_ok = False
+        logger.exception(f"wiki_debug: Weaviate error: {e}")
+        wv_seeds = []
+
+    # Build the same domain view as the cron, using Postgres as the source of truth
+    _NOISE = {"none", "untagged", "agent-insight", "general", ""}
+    db = next(get_db())
+    try:
+        pg_seeds = db.query(SeedModel).filter(
+            SeedModel.tenant_id == user.tenant_id
+        ).order_by(SeedModel.created_at.desc()).limit(500).all()
+    finally:
+        db.close()
+
+    seeds = []
+    for s in pg_seeds:
+        meta = s.seed_metadata or {}
+        tags_raw = meta.get("tags", "")
+        tags = ", ".join(tags_raw) if isinstance(tags_raw, list) else (tags_raw or "")
+        domain = (meta.get("domain", "") or "").strip().lower()
+        if not domain or domain in _NOISE:
+            tag_list = [t.strip().lower() for t in tags.split(",") if t.strip() and len(t.strip()) > 2]
+            tag_list = [t for t in tag_list if t not in _NOISE]
+            domain = tag_list[0] if tag_list else ""
+        seeds.append({"id": str(s.id), "domain": domain, "tags": tags})
+
+    _SKIP = {'', 'none', 'untagged', 'general', 'agent-insight'}
+    domain_counts = Counter(
+        (s.get('domain', '') or '').strip().lower() for s in seeds
+        if (s.get('domain', '') or '').strip().lower() not in _SKIP
+    )
+    wiki_domains = set((a.get('category', '') or '').lower() for a in existing_articles)
+    wiki_titles_lower = set((a.get('title', '') or '').lower() for a in existing_articles)
+    gaps = []
+    for d, c in domain_counts.most_common():
+        if not d or d in _SKIP:
+            continue
+        already_covered = d in wiki_domains or any(d in wt for wt in wiki_titles_lower)
+        if not already_covered and c >= 1:
+            gaps.append({"domain": d, "count": c})
+
+    return {
+        "weaviate_ok": weaviate_ok,
+        "seed_count_postgres": len(seeds),
+        "seed_count_weaviate": weaviate_seeds,
+        "domains_detected": dict(domain_counts),
+        "gaps": gaps,
+        "existing_articles": [{"title": a.get("title", ""), "category": a.get("category", "")} for a in existing_articles],
+        "existing_article_count": len(existing_articles),
+    }
+
+
 
 @router.get("/health")
 async def wiki_health(request: Request, current_user = Depends(get_current_user)):
