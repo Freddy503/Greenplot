@@ -87,7 +87,7 @@ def _load_wiki_system_prompt() -> str:
 IMPORTANT: Do NOT include a Timeline section — that will be appended automatically after synthesis."""
 
 WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
-WIKI_MODEL = "minimax/minimax-m2.7"
+WIKI_MODEL = "google/gemini-2.5-flash-preview"
 
 async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
     """Download BFL image and save to local persistent storage. Returns absolute URL."""
@@ -136,7 +136,7 @@ async def _auto_generate_image(article_id: str, title: str, category: str = "", 
     except Exception as e:
         logger.warning(f"Auto image generation failed for {title}: {e}")
 
-WIKI_FALLBACK_MODEL = "minimax/minimax-m2.7"  # Fallback if primary is rate-limited
+WIKI_FALLBACK_MODEL = "google/gemini-2.0-flash-001"  # Fallback if primary is rate-limited
 WIKI_MAX_TOKENS = 4000
 WIKI_TEMPERATURE = 0.5
 
@@ -708,8 +708,10 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
 
     harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
 
+    force_recompile = False  # Set True to recompile domains that already have articles
     if x_api_key == harvest_key:
-        # Cron / admin path — look up Freddy's account
+        # Cron / admin path — look up Freddy's account; always force recompile
+        force_recompile = True
         try:
             db = next(get_db())
             user = db.query(User).filter(User.email == "contact@example.com").first()
@@ -817,7 +819,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     for domain, group in domain_groups.items():
         if len(group) < 2:
             continue
-        if domain in existing_domains:
+        if not force_recompile and domain in existing_domains:
             continue
 
         # Build content from links
@@ -962,6 +964,8 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             seed_groups[domain] = []
         seed_groups[domain].append(seed)
 
+    # Sort by seed count descending, cap at top 8 domains to keep compile time reasonable
+    seed_groups = dict(sorted(seed_groups.items(), key=lambda x: len(x[1]), reverse=True)[:8])
     logger.warning(f"auto_compile: seed_groups={list(seed_groups.keys())} sizes={[len(v) for v in seed_groups.values()]}")
 
     # Find seed groups not yet covered by wiki
@@ -984,14 +988,15 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         if not uncovered_seeds:
             continue
 
-        # Check if we already have an article for this domain
-        domain_exists = any(
-            a.get("category", "").lower() == domain.lower() or 
-            domain.lower() in a.get("title", "").lower()
-            for a in articles
-        )
-        if domain_exists:
-            continue
+        # Check if we already have an article for this domain (skip if force_recompile)
+        if not force_recompile:
+            domain_exists = any(
+                a.get("category", "").lower() == domain.lower() or
+                domain.lower() in a.get("title", "").lower()
+                for a in articles
+            )
+            if domain_exists:
+                continue
 
         # Build content from seeds
         contents = []
