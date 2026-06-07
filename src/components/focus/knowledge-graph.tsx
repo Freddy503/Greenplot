@@ -46,6 +46,7 @@ interface KnowledgeGraphProps {
 export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [links, setLinks] = useState<GraphLink[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +54,9 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
   const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map())
   const [highlightedLinks, setHighlightedLinks] = useState<Set<string>>(new Set())
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null)
+  // Pan + zoom state
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
+  const panRef = useRef<{ active: boolean; startX: number; startY: number; originX: number; originY: number }>({ active: false, startX: 0, startY: 0, originX: 0, originY: 0 })
 
   // Fetch graph data
   useEffect(() => {
@@ -215,11 +219,37 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
         </div>
       </div>
 
-      {/* Graph canvas */}
+      {/* Graph canvas — outer: captures pan/zoom events; inner: transformed layer */}
       <div
         ref={containerRef}
-        style={{ position: 'absolute', inset: 0 }}
+        style={{ position: 'absolute', inset: 0, overflow: 'hidden', cursor: transform.scale > 1 ? 'grab' : 'default' }}
+        onWheel={(e) => {
+          e.preventDefault()
+          const delta = e.deltaY > 0 ? 0.9 : 1.1
+          setTransform(t => ({ ...t, scale: Math.max(0.3, Math.min(4, t.scale * delta)) }))
+        }}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest('[data-node]')) return
+          panRef.current = { active: true, startX: e.clientX, startY: e.clientY, originX: transform.x, originY: transform.y }
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+        }}
+        onPointerMove={(e) => {
+          if (!panRef.current.active) return
+          const dx = e.clientX - panRef.current.startX
+          const dy = e.clientY - panRef.current.startY
+          setTransform(t => ({ ...t, x: panRef.current.originX + dx, y: panRef.current.originY + dy }))
+        }}
+        onPointerUp={() => { panRef.current.active = false }}
       >
+        {/* Transformed canvas — holds both SVG edges and HTML nodes */}
+        <div
+          ref={canvasRef}
+          style={{
+            position: 'absolute', inset: 0,
+            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+            transformOrigin: '50% 50%',
+          }}
+        >
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
             <div style={{ textAlign: 'center' }}>
@@ -232,7 +262,7 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             {/* SVG edges */}
             <svg
               ref={svgRef}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}
             >
               {links.map((link, i) => {
                 const s = typeof link.source === 'object' ? link.source.id : link.source
@@ -262,6 +292,7 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
               return (
                 <div
                   key={node.id}
+                  data-node="true"
                   onClick={() => handleNodeClick(node)}
                   style={{
                     position: 'absolute',
@@ -310,6 +341,7 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             })}
           </>
         )}
+        </div>{/* end transformed canvas */}
       </div>
 
       {/* Selected node detail card */}

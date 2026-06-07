@@ -210,16 +210,18 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
         except Exception as e:
             logger.warning(f"Enrichment queue failed for seed '{title}': {e}")
 
-        # Trigger wiki compile for the seed's domain (best-effort, background)
+        # Trigger wiki compile for the seed's tags (best-effort, background)
+        # auto_compile_for_domain is defined in this same module — no import needed
         try:
             import asyncio as _asyncio
-            from app.wiki import auto_compile_for_domain as _compile
-            _domain = (tags[0] if tags else None) or "General"
-            _asyncio.create_task(_compile(
-                domain=_domain,
-                tenant_id=str(user.tenant_id),
-                user_id=str(user.id),
-            ))
+            _NOISE = {"general", "idea", "note", "misc", "todo", "untitled", "untagged", "none", "prd", "spec", "agent-output"}
+            _domains = [t.lower().strip() for t in tags if t.strip().lower() not in _NOISE][:3]
+            for _d in _domains:
+                _asyncio.create_task(auto_compile_for_domain(
+                    domain=_d,
+                    tenant_id=str(user.tenant_id),
+                    user_id=str(user.id),
+                ))
         except Exception as _ce:
             logger.debug(f"Wiki compile trigger skipped: {_ce}")
 
