@@ -753,14 +753,16 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
 
     # 1b. Get seeds — prefer Weaviate, fall back to Postgres (source of truth)
     all_seeds = weaviate_client.get_seeds_by_tenant(tenant_id, limit=200)
-    logger.info(f"auto_compile: weaviate seeds={len(all_seeds)}")
-    if not all_seeds:
-        # Weaviate may be empty or unsynced — read directly from Postgres
+    weaviate_has_domains = any(s.get("domain") for s in all_seeds)
+    logger.info(f"auto_compile: weaviate seeds={len(all_seeds)} has_domains={weaviate_has_domains}")
+    if not all_seeds or not weaviate_has_domains:
+        # Weaviate may be empty or seeds lack domain data — read directly from Postgres
         try:
             from app.database import get_db
             from app.models import Seed
             db = next(get_db())
-            pg_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).order_by(Seed.created_at.desc()).limit(200).all()
+            # Fetch up to 2000 seeds so domain-tagged seeds (which may be older) are included
+            pg_seeds = db.query(Seed).filter(Seed.tenant_id == tenant_id).order_by(Seed.created_at.desc()).limit(2000).all()
             db.close()
             all_seeds = []
             for s in pg_seeds:
@@ -936,7 +938,8 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             results.append({"id": article_id, "title": title, "links": len(source_link_ids), "seeds": len(source_seed_ids)})
             # Auto-generate hero image in background (fire & forget)
             asyncio.ensure_future(_auto_generate_image(article_id, title, category=category, domain=domain, tenant_id=tenant_id))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"auto_compile: failed to save link-cluster article '{title}': {e}")
             continue
 
     # ── Also compile from seed clusters (seeds without links) ──
@@ -1039,6 +1042,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         summary = " ".join(summary_lines)[:300]
 
         try:
+            logger.info(f"auto_compile: saving seed-cluster article '{title}' (domain={domain}, seeds={len(source_seed_ids)})")
             article_id = weaviate_client.add_wiki_article(
                 tenant_id=tenant_id,
                 user_id=user_id,
@@ -1056,7 +1060,8 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
 
             # Auto-generate hero image in background (fire & forget)
             asyncio.ensure_future(_auto_generate_image(article_id, title, category=category, domain=domain, tenant_id=tenant_id))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"auto_compile: failed to save seed-cluster article '{title}': {e}")
             continue
 
     return {"ok": True, "compiled": compiled, "articles": results}
