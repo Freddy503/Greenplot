@@ -754,7 +754,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
     # 1b. Get seeds — prefer Weaviate, fall back to Postgres (source of truth)
     all_seeds = weaviate_client.get_seeds_by_tenant(tenant_id, limit=200)
     weaviate_has_domains = any(s.get("domain") for s in all_seeds)
-    logger.info(f"auto_compile: weaviate seeds={len(all_seeds)} has_domains={weaviate_has_domains}")
+    logger.warning(f"auto_compile: weaviate seeds={len(all_seeds)} has_domains={weaviate_has_domains}")
     if not all_seeds or not weaviate_has_domains:
         # Weaviate may be empty or seeds lack domain data — read directly from Postgres
         try:
@@ -778,7 +778,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
                     "tags": tags,
                     "summary": meta.get("summary", "") or "",
                 })
-            logger.info(f"auto_compile: postgres fallback seeds={len(all_seeds)}")
+            logger.warning(f"auto_compile: postgres fallback seeds={len(all_seeds)}")
         except Exception as e:
             logger.warning(f"Postgres seed fallback failed: {e}")
 
@@ -962,7 +962,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             seed_groups[domain] = []
         seed_groups[domain].append(seed)
 
-    logger.info(f"auto_compile: seed_groups={list(seed_groups.keys())} sizes={[len(v) for v in seed_groups.values()]}")
+    logger.warning(f"auto_compile: seed_groups={list(seed_groups.keys())} sizes={[len(v) for v in seed_groups.values()]}")
 
     # Find seed groups not yet covered by wiki
     covered_seed_ids = set()
@@ -1064,7 +1064,19 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
             logger.exception(f"auto_compile: failed to save seed-cluster article '{title}': {e}")
             continue
 
-    return {"ok": True, "compiled": compiled, "articles": results}
+    return {
+        "ok": True,
+        "compiled": compiled,
+        "articles": results,
+        "_debug": {
+            "weaviate_seeds": len(all_seeds),
+            "weaviate_had_domains": weaviate_has_domains,
+            "seed_groups": {k: len(v) for k, v in seed_groups.items()},
+            "existing_articles": len(articles),
+            "enriched_links": len(enriched),
+            "uncovered_links": len(uncovered),
+        },
+    }
 
 
 
