@@ -184,6 +184,7 @@ export default function LinksPage() {
 
  const [links, setLinks] = useState<LinkItem[]>([])
  const [loading, setLoading] = useState(true)
+ const [fetchError, setFetchError] = useState<string | null>(null)
  const [addOpen, setAddOpen] = useState(false)
  const [bulkText, setBulkText] = useState('')
  const [bulkImporting, setBulkImporting] = useState(false)
@@ -216,10 +217,16 @@ export default function LinksPage() {
   if (newCount > 0) localStorage.setItem('greenplot_new_sources', newCount.toString())
   localStorage.setItem('greenplot_last_sources_visit', Date.now().toString())
   localStorage.setItem('greenplot_new_sources', '0')
- } catch {
+ } catch (err) {
   if (!silent) {
   const stored = localStorage.getItem('greenplot_links')
-  if (stored) { try { setLinks(JSON.parse(stored)) } catch {} }
+  if (stored) {
+    try { setLinks(JSON.parse(stored)) } catch {}
+  } else {
+    const msg = err instanceof Error ? err.message : 'Could not load links'
+    setFetchError(msg)
+    toast.error('Could not load your sources — check your connection')
+  }
   }
  } finally {
   if (!silent) setLoading(false)
@@ -522,23 +529,30 @@ export default function LinksPage() {
   <Empty>
   <EmptyHeader>
   <EmptyMedia variant="default">
-  <span className="material-symbols-outlined text-5xl text-on-surface-variant">link</span>
+  <span className="material-symbols-outlined text-5xl text-on-surface-variant">{fetchError ? 'wifi_off' : 'link'}</span>
   </EmptyMedia>
-  <EmptyTitle>{filter === 'starred' ? 'No starred links' : 'No links yet'}</EmptyTitle>
+  <EmptyTitle>{fetchError ? 'Could not load sources' : filter === 'starred' ? 'No starred links' : 'No links yet'}</EmptyTitle>
   <EmptyDescription>
-  {filter === 'starred'
-   ? 'Star your favorite links to find them quickly.'
-   : 'Drop URLs here to start building your link collection.'}
+  {fetchError
+   ? fetchError
+   : filter === 'starred'
+    ? 'Star your favorite links to find them quickly.'
+    : 'Drop URLs here to start building your link collection.'}
   </EmptyDescription>
   </EmptyHeader>
-  {filter !== 'starred' && (
   <EmptyContent>
+  {fetchError ? (
+  <Button variant="outline" className="rounded-full" onClick={() => { setFetchError(null); fetchLinks() }}>
+   <span className="material-symbols-outlined text-lg mr-1">refresh</span>
+   Retry
+  </Button>
+  ) : filter !== 'starred' ? (
   <Button variant="outline" className="rounded-full" onClick={() => setAddOpen(true)}>
    <span className="material-symbols-outlined text-lg mr-1">add_link</span>
    Add First Link
   </Button>
+  ) : null}
   </EmptyContent>
-  )}
   </Empty>
  ) : (
   <div className="space-y-2">

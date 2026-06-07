@@ -81,7 +81,7 @@ import {
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
-import { Plus, ChevronRight, Leaf, Globe, Share2, FileText } from 'lucide-react'
+import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -401,8 +401,22 @@ export default function ChatPage() {
 
     const params = new URLSearchParams(window.location.search)
     const modeId = params.get('mode')
+    const promptParam = params.get('prompt')
     const mode = getMode(modeId)
     if (mode) setSelectedMode(mode)
+
+    // Pre-fill from ?prompt= (e.g. "Grow into an article", "Enrich" buttons)
+    if (promptParam) {
+      setTimeout(() => {
+        const ta = promptRef.current
+        if (ta) {
+          ta.value = promptParam
+          ta.dispatchEvent(new Event('input', { bubbles: true }))
+          ta.focus()
+        }
+      }, 200)
+      params.delete('prompt')
+    }
 
     // Pre-fill from a seed handed off by the seed detail sheet
     const prefillRaw = localStorage.getItem('greenplot_spec_prefill')
@@ -424,8 +438,8 @@ export default function ChatPage() {
       } catch {}
     }
 
-    // Strip ?mode= so a refresh doesn't re-trigger, preserving any other params
-    if (modeId) {
+    // Strip ?mode= and ?prompt= so a refresh doesn't re-trigger
+    if (modeId || promptParam) {
       params.delete('mode')
       const qs = params.toString()
       window.history.replaceState({}, '', '/chat' + (qs ? `?${qs}` : ''))
@@ -839,8 +853,12 @@ export default function ChatPage() {
       {/* Compact dark header for chat — not a full tall hero */}
       <div style={{ background: 'var(--forest-1)', position: 'sticky', top: 0, zIndex: 40, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px' }}>
+          {/* Hamburger — opens conversation sidebar */}
+          <button onClick={() => setSidebarOpen(true)} className="glass-dark tap" style={{ width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlignLeft size={17} color="rgba(180,240,205,0.85)" strokeWidth={1.75} />
+          </button>
           {/* Brand mark */}
-          <button onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+          <button style={{ background: 'none', border: 'none', cursor: 'default', display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #22c55e, #15803d)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2C7 2 3 5 3 8.5C3 10.43 4.84 12 7 12C9.16 12 11 10.43 11 8.5C11 5 7 2 7 2Z" fill="#fff" opacity="0.9"/><path d="M7 2L7 12" stroke="#fff" strokeWidth="0.8" opacity="0.4"/></svg>
             </div>

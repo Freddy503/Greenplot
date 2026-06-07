@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Leaf, Share2, Filter, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -132,9 +132,10 @@ export default function GardenPage() {
   const [graphOpen, setGraphOpen] = useState(false)
   const [linkCount, setLinkCount] = useState(0)
 
-  useEffect(() => {
+  const fetchSeeds = useCallback((silent = false) => {
     const token = localStorage.getItem('greenplot_token')
     if (!token) { router.push('/login'); return }
+    if (!silent) setLoading(true)
 
     fetch('/api/seeds?limit=200', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
@@ -148,7 +149,7 @@ export default function GardenPage() {
         setSeeds(parsed)
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!silent) setLoading(false) })
 
     // Fetch link count for stats
     fetch('/api/links?limit=1', { headers: { Authorization: `Bearer ${token}` } })
@@ -156,6 +157,21 @@ export default function GardenPage() {
       .then(d => setLinkCount(d.total || d.links?.length || 0))
       .catch(() => {})
   }, [router])
+
+  // Initial load
+  useEffect(() => { fetchSeeds() }, [fetchSeeds])
+
+  // Re-fetch when user returns to the tab (catches seeds created in chat)
+  useEffect(() => {
+    const onVisible = () => { if (!document.hidden) fetchSeeds(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    // Also poll every 60s so the count stays fresh
+    const iv = setInterval(() => fetchSeeds(true), 60_000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(iv)
+    }
+  }, [fetchSeeds])
 
   const handleSeedDeleted = (id: string) => setSeeds(prev => prev.filter(s => s.id !== id))
 

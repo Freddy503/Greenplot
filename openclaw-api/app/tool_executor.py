@@ -129,12 +129,25 @@ async def search_seeds(args: dict, user: User, db: Session) -> str:
         return json.dumps({"status": "error", "message": str(e)})
 
 
+_GENERIC_TITLES = {
+    'untitled', 'seed', 'note', 'idea', 'thought', 'insight',
+    'observation', 'summary', 'draft', 'test', 'new seed',
+}
+
 async def create_seed(args: dict, user: User, db: Session) -> str:
     """Create a new seed in the user's Second Brain."""
     title = args["title"]
     content = args["content"]
     tags = args.get("tags", [])
     try:
+        # Quality gate: reject empty, too-short, or generic seeds
+        if not title or len(title.strip()) < 5:
+            return json.dumps({"status": "error", "message": "Seed title too short — add a meaningful title (5+ characters)."})
+        if not content or len(content.strip()) < 40:
+            return json.dumps({"status": "error", "message": "Seed content too brief — add more detail (40+ characters)."})
+        if title.lower().strip() in _GENERIC_TITLES:
+            return json.dumps({"status": "error", "message": f"Title '{title}' is too generic — be more specific."})
+
         # Dedup: return existing seed if title already exists for this user
         existing = db.query(Seed).filter(
             Seed.user_id == user.id,
@@ -196,6 +209,19 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
             enqueue_enrichment(str(thought.id), str(user.tenant_id))
         except Exception as e:
             logger.warning(f"Enrichment queue failed for seed '{title}': {e}")
+
+        # Trigger wiki compile for the seed's domain (best-effort, background)
+        try:
+            import asyncio as _asyncio
+            from app.wiki import auto_compile_for_domain as _compile
+            _domain = (tags[0] if tags else None) or "General"
+            _asyncio.create_task(_compile(
+                domain=_domain,
+                tenant_id=str(user.tenant_id),
+                user_id=str(user.id),
+            ))
+        except Exception as _ce:
+            logger.debug(f"Wiki compile trigger skipped: {_ce}")
 
         return json.dumps({
             "status": "ok",
