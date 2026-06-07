@@ -264,13 +264,12 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
             <span className="ui" style={{ fontSize: 11, fontWeight: 700, color: 'var(--green-deep)' }}>In graph</span>
           </button>
           <button
-            onClick={handleWebSearch}
-            disabled={loadingSearch}
+            onClick={() => router.push(`/chat?prompt=${encodeURIComponent(`Enrich my seed "${seed.title}" — search the web for the latest information, then update it with richer tags, domain context, and key insights.`)}`)}
             className="tap"
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'var(--surface-sunk)', border: 'none', borderRadius: 13, padding: '11px 8px', cursor: 'pointer', opacity: loadingSearch ? 0.6 : 1 }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'var(--surface-sunk)', border: 'none', borderRadius: 13, padding: '11px 8px', cursor: 'pointer' }}
           >
             <Sparkles size={18} color="var(--ink-2)" strokeWidth={1.75} />
-            <span className="ui" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)' }}>{loadingSearch ? '…' : 'Enrich'}</span>
+            <span className="ui" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)' }}>Enrich</span>
           </button>
           <button
             onClick={() => exportSeedMd(seed)}

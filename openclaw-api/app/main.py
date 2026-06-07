@@ -2558,7 +2558,7 @@ def _load_notifs() -> list:
 def _save_notifs(notifs: list):
     os.makedirs(os.path.dirname(_NOTIFS_FILE), exist_ok=True)
     with open(_NOTIFS_FILE, "w") as f:
-        json.dump(notifs[-50:], f, indent=2)
+        json.dump(notifs[-200:], f, indent=2)
 
 def _load_subs() -> list:
     try:
@@ -2692,8 +2692,8 @@ def get_push_notifications(
     """Get push notifications for PWA. ?all=true returns full history (read + unread)."""
     notifs = _load_notifs()
     if all:
-        # Return all notifications, newest first, capped at 50
-        return {"notifications": list(reversed(notifs[-50:])), "total": len(notifs)}
+        # Return all notifications, newest first, capped at 200
+        return {"notifications": list(reversed(notifs[-200:])), "total": len(notifs)}
     unread = [n for n in notifs if not n.get("read")]
     return {"notifications": unread, "total": len(notifs)}
 
@@ -3281,28 +3281,33 @@ def _job_morning_spark():
 def _job_daily_briefing():
     """
     Daily Briefing — 09:30 CET.
-    Generates multi-section briefing: Enterprise AI News + Academic Papers.
+    Generates multi-section briefing per user using their own interests.
     """
     db = next(get_db())
     try:
-        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
-        if not default_user:
+        users = db.query(User).filter(User.email != None, User.email != '').all()
+        if not users:
             logger.warning("No users found for daily briefing")
             return
 
-        briefing = asyncio.run(briefings.build_daily_briefing(
-            user_id=str(default_user.id),
-            db=db
-        ))
-        _sto<RESEND_API_KEY>(briefing)
-        if settings.RESEND_API_KEY and default_user.email:
+        logger.info(f"📰 Generating daily briefing for {len(users)} user(s)")
+        for user in users:
             try:
-                email_sender.send_briefing_email(default_user.email, briefing)
-            except Exception as email_err:
-                logger.error(f"Email delivery failed for daily briefing: {email_err}")
-        logger.info("✅ Daily Briefing generated")
+                briefing = asyncio.run(briefings.build_daily_briefing(
+                    user_id=str(user.id),
+                    db=db
+                ))
+                _sto<RESEND_API_KEY>(briefing)
+                if settings.RESEND_API_KEY and user.email:
+                    try:
+                        email_sender.send_briefing_email(user.email, briefing)
+                    except Exception as email_err:
+                        logger.error(f"Email delivery failed for {user.email}: {email_err}")
+                logger.info(f"✅ Daily Briefing generated for {user.email}")
+            except Exception as ue:
+                logger.error(f"❌ Daily Briefing failed for user {user.id}: {ue}", exc_info=True)
     except Exception as e:
-        logger.error(f"❌ Daily Briefing failed: {e}")
+        logger.error(f"❌ Daily Briefing job failed: {e}")
     finally:
         db.close()
 
@@ -3782,7 +3787,7 @@ def _start_scheduler():
     # Wiki compilation — every 6 hours
     scheduler.add_job(
         _job_wiki_compile,
-        CronTrigger(hour="*/6", minute=5, timezone=_CET),
+        CronTrigger(hour="*/3", minute=5, timezone=_CET),
         id="wiki_compile",
         replace_existing=True,
     )

@@ -333,6 +333,18 @@ def enrich_thought_v2(thought_id: str, tenant_id: str, db):
     all_tags = list(set(tags + topics))
     all_tags, domain = _normalize_against_wiki(all_tags, domain, tenant_str)
 
+    # Step 4b: Quality gate — reject slop before storage
+    _GENERIC = {
+        'untitled', 'seed', 'note', 'idea', 'thought', 'insight',
+        'observation', 'summary', 'draft', 'test', 'untitled seed',
+    }
+    if not title or len(title.strip()) < 5 or title.lower().strip() in _GENERIC:
+        print(f"[enricher_v2] Quality gate: rejecting seed with generic/short title '{title}'")
+        return None
+    if not seed_content or len(seed_content.strip()) < 40:
+        print(f"[enricher_v2] Quality gate: rejecting seed with insufficient content (title='{title}')")
+        return None
+
     # Step 5: Store in Postgres
     # Dedup: if a seed with the same normalized title already exists for this user, skip creation
     try:

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('Authorization') || ''
+  const token = req.headers.get('authorization') || ''
 
   try {
     const res = await fetch(`${BACKEND}/api/v1/seeds/deduplicate`, {
