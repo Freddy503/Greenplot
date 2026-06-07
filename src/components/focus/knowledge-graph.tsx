@@ -1,22 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Search, X } from 'lucide-react'
 import * as d3 from 'd3'
 
 // ── Types ─────────────────────────────────────────────
 
-interface GraphNode {
+interface GraphNode extends d3.SimulationNodeDatum {
   id: string
   label: string
   type: 'seed' | 'plant' | 'source'
   domain?: string
-  x?: number
-  y?: number
-  vx?: number
-  vy?: number
-  fx?: number | null
-  fy?: number | null
 }
 
 interface GraphLink {
@@ -43,20 +37,27 @@ interface KnowledgeGraphProps {
   onClose: () => void
 }
 
+function nodeColor(type: string) {
+  if (type === 'plant') return '#7ef0a8'
+  if (type === 'source') return 'transparent'
+  return '#22c55e'
+}
+function nodeStroke(type: string) {
+  if (type === 'source') return '#2dd4bf'
+  return 'none'
+}
+function nodeRadius(type: string) {
+  return type === 'plant' ? 11 : 8
+}
+
 export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLDivElement>(null)
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [links, setLinks] = useState<GraphLink[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<GraphNode | null>(null)
-  const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map())
-  const [highlightedLinks, setHighlightedLinks] = useState<Set<string>>(new Set())
-  const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null)
-  // Pan + zoom state
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
-  const panRef = useRef<{ active: boolean; startX: number; startY: number; originX: number; originY: number }>({ active: false, startX: 0, startY: 0, originX: 0, originY: 0 })
+  const [selectedConnections, setSelectedConnections] = useState(0)
 
   // Fetch graph data
   useEffect(() => {
@@ -81,7 +82,7 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
           setLinks(graphLinks)
         } else {
           // Fallback: load from /api/seeds and build connections from shared domains
-          fetch('/api/seeds?limit=60', { headers: headers as HeadersInit })
+          fetch('/api/seeds?limit=60', { headers })
             .then(r => r.json())
             .then(d => {
               const seeds: RawSeed[] = d.seeds || d || []
@@ -91,7 +92,6 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
                 type: 'seed',
                 domain: s.domain || (s.seed_metadata as { domain?: string })?.domain || '',
               }))
-              // Build links from shared domains
               const graphLinks: GraphLink[] = []
               const seen = new Set<string>()
               for (let i = 0; i < graphNodes.length; i++) {
@@ -116,15 +116,24 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
       .finally(() => setLoading(false))
   }, [])
 
-  // Run d3 force simulation
+  // ── D3 render: SVG + native zoom/drag (no React state per frame) ──
   useEffect(() => {
-    if (!nodes.length || !containerRef.current) return
+    if (!svgRef.current || !containerRef.current || nodes.length === 0) return
 
-    const container = containerRef.current
-    const W = container.clientWidth || 360
-    const H = container.clientHeight || 500
+    const W = containerRef.current.clientWidth || 360
+    const H = containerRef.current.clientHeight || 600
 
-    simulationRef.current?.stop()
+    const svg = d3.select(svgRef.current)
+    svg.selectAll('*').remove()
+    svg.attr('viewBox', `0 0 ${W} ${H}`)
+
+    const g = svg.append('g')
+
+    // Native d3 zoom drives the <g> transform attribute directly — zero React re-renders.
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.3, 4])
+      .on('zoom', (event) => g.attr('transform', event.transform))
+    svg.call(zoom)
 
     const sim = d3.forceSimulation<GraphNode>(nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(80).strength(0.4))
@@ -133,47 +142,68 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
       .force('collision', d3.forceCollide(32))
       .alphaDecay(0.025)
 
-    sim.on('tick', () => {
-      const positions = new Map<string, { x: number; y: number }>()
-      nodes.forEach(n => {
-        positions.set(n.id, {
-          x: Math.max(24, Math.min(W - 24, n.x ?? W / 2)),
-          y: Math.max(24, Math.min(H - 24, n.y ?? H / 2)),
+    const linkSel = g.append('g').selectAll('line').data(links).join('line')
+      .attr('stroke', 'rgba(255,255,255,0.08)')
+      .attr('stroke-width', 0.75)
+
+    const idOf = (e: string | GraphNode) => (typeof e === 'object' ? e.id : e)
+
+    const applyHighlight = (id: string | null) => {
+      linkSel
+        .attr('stroke', d => (id && (idOf(d.source) === id || idOf(d.target) === id)) ? 'rgba(126,240,168,0.55)' : 'rgba(255,255,255,0.08)')
+        .attr('stroke-width', d => (id && (idOf(d.source) === id || idOf(d.target) === id)) ? 1.5 : 0.75)
+    }
+
+    const nodeSel = g.append('g').selectAll<SVGGElement, GraphNode>('g').data(nodes).join('g')
+      .style('cursor', 'pointer')
+      .call(d3.drag<SVGGElement, GraphNode>()
+        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y })
+        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y })
+        .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null })
+      )
+      .on('click', (_e, d) => {
+        setSelected(prev => {
+          const next = prev?.id === d.id ? null : d
+          const id = next ? d.id : null
+          applyHighlight(id)
+          if (next) {
+            const count = links.filter(l => idOf(l.source) === d.id || idOf(l.target) === d.id).length
+            setSelectedConnections(count)
+          }
+          return next
         })
       })
-      setNodePositions(new Map(positions))
+
+    nodeSel.append('circle')
+      .attr('r', d => nodeRadius(d.type) + (d.type === 'source' ? 0 : 4))
+      .attr('fill', d => nodeColor(d.type))
+      .attr('opacity', d => d.type === 'source' ? 0 : 0.18)
+    nodeSel.append('circle')
+      .attr('r', d => nodeRadius(d.type))
+      .attr('fill', d => nodeColor(d.type))
+      .attr('stroke', d => nodeStroke(d.type))
+      .attr('stroke-width', d => nodeStroke(d.type) !== 'none' ? 1.5 : 0)
+    nodeSel.append('text')
+      .text(d => d.label.length > 18 ? d.label.slice(0, 18) + '…' : d.label)
+      .attr('x', 0)
+      .attr('y', d => nodeRadius(d.type) + 13)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '9.5px')
+      .attr('font-weight', '600')
+      .attr('font-family', 'var(--ui)')
+      .attr('fill', 'rgba(255,255,255,0.6)')
+
+    sim.on('tick', () => {
+      linkSel
+        .attr('x1', d => (d.source as GraphNode).x ?? 0)
+        .attr('y1', d => (d.source as GraphNode).y ?? 0)
+        .attr('x2', d => (d.target as GraphNode).x ?? 0)
+        .attr('y2', d => (d.target as GraphNode).y ?? 0)
+      nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
     })
 
-    simulationRef.current = sim
     return () => { sim.stop() }
   }, [nodes, links])
-
-  // Highlight edges connected to selected node
-  useEffect(() => {
-    if (!selected) { setHighlightedLinks(new Set()); return }
-    const connected = new Set<string>()
-    links.forEach(l => {
-      const s = typeof l.source === 'object' ? l.source.id : l.source
-      const t = typeof l.target === 'object' ? l.target.id : l.target
-      if (s === selected.id || t === selected.id) connected.add(`${s}|${t}`)
-    })
-    setHighlightedLinks(connected)
-  }, [selected, links])
-
-  const handleNodeClick = useCallback((node: GraphNode) => {
-    setSelected(prev => prev?.id === node.id ? null : node)
-  }, [])
-
-  const nodeColor = (type: string) => {
-    if (type === 'plant') return '#7ef0a8'
-    if (type === 'source') return 'transparent'
-    return '#22c55e'
-  }
-
-  const nodeStroke = (type: string) => {
-    if (type === 'source') return '#2dd4bf'
-    return 'none'
-  }
 
   return (
     <div
@@ -219,37 +249,8 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
         </div>
       </div>
 
-      {/* Graph canvas — outer: captures pan/zoom events; inner: transformed layer */}
-      <div
-        ref={containerRef}
-        style={{ position: 'absolute', inset: 0, overflow: 'hidden', cursor: transform.scale > 1 ? 'grab' : 'default' }}
-        onWheel={(e) => {
-          e.preventDefault()
-          const delta = e.deltaY > 0 ? 0.9 : 1.1
-          setTransform(t => ({ ...t, scale: Math.max(0.3, Math.min(4, t.scale * delta)) }))
-        }}
-        onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest('[data-node]')) return
-          panRef.current = { active: true, startX: e.clientX, startY: e.clientY, originX: transform.x, originY: transform.y }
-          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-        }}
-        onPointerMove={(e) => {
-          if (!panRef.current.active) return
-          const dx = e.clientX - panRef.current.startX
-          const dy = e.clientY - panRef.current.startY
-          setTransform(t => ({ ...t, x: panRef.current.originX + dx, y: panRef.current.originY + dy }))
-        }}
-        onPointerUp={() => { panRef.current.active = false }}
-      >
-        {/* Transformed canvas — holds both SVG edges and HTML nodes */}
-        <div
-          ref={canvasRef}
-          style={{
-            position: 'absolute', inset: 0,
-            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-            transformOrigin: '50% 50%',
-          }}
-        >
+      {/* Graph canvas — SVG with native d3 zoom/pan/drag */}
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
             <div style={{ textAlign: 'center' }}>
@@ -258,99 +259,14 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             </div>
           </div>
         ) : (
-          <>
-            {/* SVG edges */}
-            <svg
-              ref={svgRef}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}
-            >
-              {links.map((link, i) => {
-                const s = typeof link.source === 'object' ? link.source.id : link.source
-                const t = typeof link.target === 'object' ? link.target.id : link.target
-                const sp = nodePositions.get(s)
-                const tp = nodePositions.get(t)
-                if (!sp || !tp) return null
-                const key = `${s}|${t}`
-                const highlighted = highlightedLinks.has(key)
-                return (
-                  <line
-                    key={i}
-                    x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
-                    stroke={highlighted ? 'rgba(126,240,168,0.55)' : 'rgba(255,255,255,0.08)'}
-                    strokeWidth={highlighted ? 1.5 : 0.75}
-                  />
-                )
-              })}
-            </svg>
-
-            {/* Nodes */}
-            {nodes.map(node => {
-              const pos = nodePositions.get(node.id)
-              if (!pos) return null
-              const isSelected = selected?.id === node.id
-              const label = node.label.length > 18 ? node.label.slice(0, 18) + '…' : node.label
-              return (
-                <div
-                  key={node.id}
-                  data-node="true"
-                  onClick={() => handleNodeClick(node)}
-                  style={{
-                    position: 'absolute',
-                    left: pos.x,
-                    top: pos.y,
-                    transform: 'translate(-50%, -50%)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    zIndex: isSelected ? 3 : 1,
-                  }}
-                >
-                  {/* Breathe ring on selected */}
-                  {isSelected && (
-                    <div style={{
-                      position: 'absolute',
-                      width: 44, height: 44,
-                      borderRadius: 99,
-                      border: '1.5px solid rgba(34,197,94,0.4)',
-                      animation: 'breathe 2s ease-in-out infinite',
-                    }} />
-                  )}
-                  <div style={{
-                    width: isSelected ? 22 : 16,
-                    height: isSelected ? 22 : 16,
-                    borderRadius: 99,
-                    background: nodeColor(node.type),
-                    border: `${nodeStroke(node.type) !== 'none' ? '1.5px solid #2dd4bf' : 'none'}`,
-                    transition: 'all 0.2s ease',
-                    boxShadow: isSelected ? '0 0 12px rgba(34,197,94,0.5)' : 'none',
-                  }} />
-                  <span style={{
-                    marginTop: 4,
-                    fontFamily: 'var(--ui)',
-                    fontSize: 9.5,
-                    fontWeight: 600,
-                    color: isSelected ? '#7ef0a8' : 'rgba(255,255,255,0.6)',
-                    whiteSpace: 'nowrap',
-                    maxWidth: 80,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}>{label}</span>
-                </div>
-              )
-            })}
-          </>
+          <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
         )}
-        </div>{/* end transformed canvas */}
       </div>
 
       {/* Selected node detail card */}
       {selected && (
         <div style={{ position: 'absolute', bottom: 'calc(env(safe-area-inset-bottom, 20px) + 24px)', left: 16, right: 16, zIndex: 10 }}>
-          <div
-            className="glass-dark"
-            style={{ borderRadius: 22, padding: '16px 18px' }}
-          >
+          <div className="glass-dark" style={{ borderRadius: 22, padding: '16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -371,19 +287,14 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
               </button>
             </div>
 
-            {/* Connections count */}
             <div style={{ marginBottom: 14 }}>
               <span className="ui" style={{ fontSize: 11, color: 'rgba(180,240,205,0.6)' }}>
-                {highlightedLinks.size} connection{highlightedLinks.size !== 1 ? 's' : ''}
+                {selectedConnections} connection{selectedConnections !== 1 ? 's' : ''}
               </span>
             </div>
 
-            {/* Open button */}
             <button
-              onClick={() => {
-                onClose()
-                window.location.href = `/garden`
-              }}
+              onClick={() => { onClose(); window.location.href = `/garden` }}
               style={{
                 width: '100%', padding: '11px', borderRadius: 13,
                 background: '#22c55e', border: 'none', cursor: 'pointer',

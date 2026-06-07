@@ -154,14 +154,17 @@ export default function GardenPage() {
   // Initial load
   useEffect(() => { fetchSeeds() }, [fetchSeeds])
 
-  // Re-fetch when user returns to the tab (catches seeds created in chat)
+  // Re-fetch when user returns to the tab/window (catches seeds created in chat)
   useEffect(() => {
     const onVisible = () => { if (!document.hidden) fetchSeeds(true) }
+    const onFocus = () => fetchSeeds(true)
     document.addEventListener('visibilitychange', onVisible)
-    // Also poll every 60s so the count stays fresh
-    const iv = setInterval(() => fetchSeeds(true), 60_000)
+    window.addEventListener('focus', onFocus)
+    // Also poll every 20s so the count stays fresh even without a focus change
+    const iv = setInterval(() => fetchSeeds(true), 20_000)
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onFocus)
       clearInterval(iv)
     }
   }, [fetchSeeds])

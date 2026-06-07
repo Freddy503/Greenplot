@@ -3,6 +3,7 @@ Tool execution handlers for the chat endpoint.
 Each tool is async and returns a JSON-serializable result.
 """
 import json
+import logging
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
@@ -10,6 +11,15 @@ from app.models import User, Seed, Thought
 from app.config import settings
 from app.weaviate_client import weaviate_client
 from datetime import datetime
+
+# Module-level logger (previously referenced as `logger`/`log` without being defined,
+# which raised NameError in error paths and hid the real failures).
+logger = logging.getLogger(__name__)
+log = logger
+
+# Strong references to fire-and-forget background tasks so the event loop's
+# weak references don't let the GC drop them mid-flight (e.g. wiki auto-compile).
+_BG_TASKS: set = set()
 
 
 def _rrf_merge(
@@ -210,18 +220,23 @@ async def create_seed(args: dict, user: User, db: Session) -> str:
         except Exception as e:
             logger.warning(f"Enrichment queue failed for seed '{title}': {e}")
 
-        # Trigger wiki compile for the seed's tags (best-effort, background)
-        # auto_compile_for_domain is defined in this same module — no import needed
+        # Trigger wiki compile for the seed's tags (best-effort, background).
+        # auto_compile_for_domain is defined in this same module — no import needed.
+        # We keep a strong reference in _BG_TASKS so the GC can't drop the task
+        # mid-flight (the previous fire-and-forget create_task was being collected).
         try:
             import asyncio as _asyncio
             _NOISE = {"general", "idea", "note", "misc", "todo", "untitled", "untagged", "none", "prd", "spec", "agent-output"}
             _domains = [t.lower().strip() for t in tags if t.strip().lower() not in _NOISE][:3]
             for _d in _domains:
-                _asyncio.create_task(auto_compile_for_domain(
+                _t = _asyncio.create_task(auto_compile_for_domain(
                     domain=_d,
                     tenant_id=str(user.tenant_id),
                     user_id=str(user.id),
+                    skip_image=True,  # inline path: skip slow image gen for responsiveness
                 ))
+                _BG_TASKS.add(_t)
+                _t.add_done_callback(_BG_TASKS.discard)
         except Exception as _ce:
             logger.debug(f"Wiki compile trigger skipped: {_ce}")
 
@@ -1557,8 +1572,13 @@ def _create_insight_seed(title, content, tags, tenant_id):
 TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
 
 
-async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str):
-    """Auto-compile a wiki article using full LLM synthesis + BFL image pipeline"""
+async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str, skip_image: bool = False):
+    """Auto-compile a wiki article using full LLM synthesis + BFL image pipeline.
+
+    skip_image: when True, skip the (slow) hero-image generation — used by the
+    inline create_seed trigger so the Library populates fast; the cron path
+    still generates images.
+    """
     from app.wiki import synthesize_with_llm, WIKI_SYSTEM_PROMPT, build_wiki_user_prompt
     from app.ingest import generate_concept_image
     import asyncio, re, urllib.request
@@ -1697,10 +1717,13 @@ Reply with just the title, no quotes, no explanation."""
                 status="published",
             )
         
-        # Generate BFL hero image
+        # Generate BFL hero image (skipped on the inline create_seed path)
         try:
-            await asyncio.sleep(1)  # Small delay
-            image_url = await generate_concept_image(title, [domain])
+            if not skip_image:
+                await asyncio.sleep(1)  # Small delay
+                image_url = await generate_concept_image(title, [domain])
+            else:
+                image_url = None
             if image_url:
                 # Download and save locally
                 safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title)[:35]
@@ -1723,9 +1746,13 @@ Reply with just the title, no quotes, no explanation."""
         except Exception as e:
             pass  # Image gen is optional
         
-        return {"article_id": article_id, "title": title, "seeds": len(domain_seeds), 
-                "links": len(domain_links), "image_generated": True}
+        return {"article_id": article_id, "title": title, "seeds": len(domain_seeds),
+                "links": len(domain_links), "image_generated": not skip_image}
     except Exception as e:
+        # Previously this swallowed the error and returned None with no log line —
+        # the single biggest reason wiki failures were invisible across rounds.
+        log.exception(f"auto_compile_for_domain failed for domain '{domain}' "
+                      f"(tenant={tenant_id}): {e}")
         return None
 
 

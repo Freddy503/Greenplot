@@ -3689,8 +3689,15 @@ def _job_wiki_compile():
                     d in wiki_domains
                     or any(d in wt for wt in wiki_titles_lower)
                 )
-                if not already_covered and c >= 2:  # lowered from 3 to 2
+                if not already_covered and c >= 1:  # lowered from 2 to 1 — never starve the Library
                     gaps.append({'domain': d, 'count': c})
+
+            # General catch-all: if no concrete-domain gaps were found but the
+            # tenant has seeds, compile one "General" article so the Library is
+            # never empty. auto_compile_for_domain's Postgres fallback matches
+            # by tag, so a generic bucket still pulls real seeds in.
+            if not gaps and seeds and "general" not in wiki_domains:
+                gaps.append({'domain': 'general', 'count': len(seeds)})
 
             logger.info(f"📚 Wiki cron: {len(seeds)} seeds, {len(domain_counts)} domains, {len(gaps)} gaps to compile")
             compiled = 0
@@ -3701,7 +3708,7 @@ def _job_wiki_compile():
                         compiled += 1
                     await asyncio.sleep(2)
                 except Exception as e:
-                    logger.warning(f"📚 Wiki cron: compile failed for domain '{gap['domain']}': {e}")
+                    logger.exception(f"📚 Wiki cron: compile failed for domain '{gap['domain']}': {e}")
             backlinks = await regenerate_all_backlinks(tenant_id)
             logger.info(f"📚 Wiki compile: {compiled} new articles, {backlinks} backlinks updated")
             try:
