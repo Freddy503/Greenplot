@@ -234,7 +234,7 @@ function Navbar({ heroVisible }: { heroVisible: boolean }) {
 
 // ── Prompt Box ────────────────────────────────────────────────────────────
 const THOUGHTS = [
-  'Pressure-test my pricing idea…',
+  'Pressure-test my product idea…',
   'Brainstorm angles on attention restoration…',
   'Strategize a go-to-market for my app…',
   'Ground my next build in real research…',
@@ -431,8 +431,8 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
 // ── Two Pillars ───────────────────────────────────────────────────────────
 function MemoryTimelineMockup() {
   const items = [
-    { when: 'Today', t: 'Usage-based pricing — the value angle', heat: 1 },
-    { when: '3 weeks ago', t: 'Why seats punish your best users', heat: 0.7 },
+    { when: 'Today', t: 'The right abstraction for this feature', heat: 1 },
+    { when: '3 weeks ago', t: 'When to build vs. buy — decision framework', heat: 0.7 },
     { when: '5 months ago', t: 'Pricing models, from first principles', heat: 0.42 },
     { when: 'Last year', t: 'Notes from a founder dinner', heat: 0.28 },
   ]
@@ -1268,7 +1268,7 @@ function Waitlist() {
           Be first to grow<br />your garden.
         </h2>
         <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', lineHeight: 1.75, fontFamily: 'var(--font-body)', fontWeight: 300, maxWidth: 440, margin: '0 auto 2.5rem' }}>
-          Join the waitlist. Get early access, exclusive updates, and a free onboarding session when we launch.
+          Join the waitlist and be the first to grow your garden.
         </p>
         {status === 'done' ? (
           <div className="liquid-glass" style={{ borderRadius: '1rem', padding: '1.75rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
