@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Leaf, Bell, Bot, BookOpen, Calendar, Mic,
-  Share2, Server, PlusCircle, Zap, TrendingUp, ArrowUp,
+  Share2, Server, PlusCircle, Zap, TrendingUp, ArrowUp, ArrowRight,
   Search, Mail, FileText, Layers, CheckCircle2,
-  Shield, Activity, Menu, X,
+  Shield, Activity, Menu, X, Star, Globe,
 } from 'lucide-react'
 
-// ── Design tokens (light, for mockup internals) ───────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────
 const T = {
   bg: '#fafaf8', surface: '#ffffff',
   green: '#22c55e', darkGreen: '#14532d', teal: '#14b8a6',
@@ -94,6 +94,11 @@ const GLOBAL_CSS = `
     .flywheel-arrow { display: none !important; }
     .flywheel-steps { flex-direction: column !important; align-items: stretch !important; }
     .flywheel-card { min-width: unset !important; }
+    .pillar-row { grid-template-columns: 1fr !important; gap: 1.75rem !important; }
+    .pillar-row > div { order: unset !important; }
+    .link-flow { flex-direction: column !important; align-items: stretch !important; }
+    .link-flow > div { max-width: none !important; }
+    .link-arrow { transform: rotate(90deg) !important; justify-content: center !important; padding: 0.25rem 0 !important; }
   }
 `
 
@@ -119,15 +124,16 @@ type IconName =
   | 'eco' | 'notifications' | 'smart_toy' | 'search'
   | 'auto_stories' | 'layers' | 'calendar_month' | 'mic'
   | 'hub' | 'dns' | 'add_circle' | 'auto_awesome'
-  | 'trending_up' | 'arrow_upward' | 'mail' | 'file_text'
-  | 'check' | 'shield' | 'activity'
+  | 'trending_up' | 'arrow_upward' | 'arrow_right' | 'mail' | 'file_text'
+  | 'check' | 'shield' | 'activity' | 'sparkles' | 'globe'
 
 const ICON_MAP: Record<IconName, React.ElementType> = {
   eco: Leaf, notifications: Bell, smart_toy: Bot, search: Search,
   auto_stories: BookOpen, layers: Layers, calendar_month: Calendar, mic: Mic,
   hub: Share2, dns: Server, add_circle: PlusCircle, auto_awesome: Zap,
-  trending_up: TrendingUp, arrow_upward: ArrowUp, mail: Mail,
-  file_text: FileText, check: CheckCircle2, shield: Shield, activity: Activity,
+  trending_up: TrendingUp, arrow_upward: ArrowUp, arrow_right: ArrowRight,
+  mail: Mail, file_text: FileText, check: CheckCircle2, shield: Shield,
+  activity: Activity, sparkles: Star, globe: Globe,
 }
 
 function Icon({ name, size = 24, color = T.green, style = {}, strokeWidth = 1.75 }: {
@@ -206,7 +212,7 @@ function Navbar({ heroVisible }: { heroVisible: boolean }) {
         {menuOpen && (
           <div style={{
             padding: '1rem 0 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem',
-            borderTop: '1px solid rgba(255,255,255,0.1)', background: '#000',
+            borderTop: '1px solid rgba(255,255,255,0.1)', background: '#0f1b16',
           }}>
             {[{ label: 'Features', href: '#features' }, { label: 'How it works', href: '#how-it-works' }].map(l => (
               <a key={l.label} href={l.href} onClick={() => setMenuOpen(false)}
@@ -228,10 +234,10 @@ function Navbar({ heroVisible }: { heroVisible: boolean }) {
 
 // ── Prompt Box ────────────────────────────────────────────────────────────
 const THOUGHTS = [
-  'The concept of emergence in complex systems…',
-  'Second Brain methodology by Tiago Forte…',
-  'Why dopamine affects creativity at night…',
-  'Latest research on attention restoration theory…',
+  'Pressure-test my pricing idea…',
+  'Brainstorm angles on attention restoration…',
+  'Strategize a go-to-market for my app…',
+  'Ground my next build in real research…',
 ]
 
 function PromptBox() {
@@ -265,7 +271,7 @@ function PromptBox() {
       <span style={{ flex: 1, fontSize: 15, color: text ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)', minHeight: 22, fontFamily: 'var(--font-body)' }}>
         {text}
         <span style={{ animation: 'cursor-blink 1s step-end infinite', color: T.green }}>|</span>
-        {!text && <span style={{ color: 'rgba(255,255,255,0.35)' }}>Nurture a new idea…</span>}
+        {!text && <span style={{ color: 'rgba(255,255,255,0.35)' }}>Ask your thinking partner…</span>}
       </span>
       <button style={{
         background: T.green, border: 'none', borderRadius: 999, width: 34, height: 34,
@@ -273,6 +279,82 @@ function PromptBox() {
       }}>
         <Icon name="arrow_upward" size={16} color="#fff" />
       </button>
+    </div>
+  )
+}
+
+// ── Hero Waitlist (inline) ────────────────────────────────────────────────
+function HeroWaitlist() {
+  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('Please enter a valid email address.')
+
+  const submit = async () => {
+    if (!email.includes('@') || email.length < 5) { setStatus('error'); return }
+    setStatus('loading')
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      if (res.ok) {
+        setStatus('done')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setErrorMsg((data as { error?: string }).error || 'Something went wrong. Please try again.')
+        setStatus('error')
+      }
+    } catch {
+      setErrorMsg('Something went wrong. Please try again.')
+      setStatus('error')
+    }
+  }
+
+  if (status === 'done') return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+      <div className="liquid-glass" style={{ borderRadius: '1rem', padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <Icon name="check" size={20} color={T.green} />
+        <span style={{ fontSize: 15, color: '#fff', fontFamily: 'var(--font-ui)', fontWeight: 500 }}>You&apos;re on the list!</span>
+      </div>
+      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-body)', fontWeight: 300 }}>
+        We&apos;ll be in touch when your garden is ready to grow.
+      </p>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', width: '100%', maxWidth: 520 }}>
+      <div style={{ display: 'flex', gap: '0.6rem', width: '100%', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <input
+          type="email"
+          value={email}
+          onChange={e => { setEmail(e.target.value); setStatus('idle') }}
+          onKeyDown={e => e.key === 'Enter' && submit()}
+          placeholder="your@email.com"
+          style={{
+            flex: 1, minWidth: 200, padding: '14px 20px', borderRadius: 999,
+            background: 'rgba(255,255,255,0.08)',
+            border: `1px solid ${status === 'error' ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.18)'}`,
+            color: '#fff', fontSize: 15, fontFamily: 'var(--font-body)', fontWeight: 400,
+            outline: 'none', transition: 'border 0.2s', backdropFilter: 'blur(8px)',
+          }}
+          onFocus={e => (e.target.style.borderColor = 'rgba(34,197,94,0.6)')}
+          onBlur={e => (e.target.style.borderColor = status === 'error' ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.18)')}
+        />
+        <button className="liquid-glass" onClick={submit} disabled={status === 'loading'}
+          style={{
+            borderRadius: 999, padding: '14px 28px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+            color: '#fff', fontFamily: 'var(--font-ui)', background: 'rgba(34,197,94,0.25)',
+            border: 'none', whiteSpace: 'nowrap', transition: 'transform 0.18s',
+            opacity: status === 'loading' ? 0.7 : 1,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
+          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+        >{status === 'loading' ? 'Joining…' : 'Join the waitlist'}</button>
+      </div>
+      {status === 'error' && <p style={{ fontSize: 12, color: 'rgba(239,68,68,0.8)', fontFamily: 'var(--font-body)' }}>{errorMsg}</p>}
+      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontFamily: 'var(--font-body)', fontWeight: 300 }}>No spam. Unsubscribe anytime.</p>
     </div>
   )
 }
@@ -318,33 +400,18 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
           fontFamily: 'var(--font-display)', fontSize: 'clamp(42px,8vw,82px)', fontWeight: 400,
           color: '#fff', lineHeight: 1.0, letterSpacing: '-0.03em', maxWidth: 900, marginBottom: '2rem',
         }}>
-          Build your garden<br />
-          <em style={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.5)' }}>with your ideas.</em>
+          Grow your ideas into<br />
+          <em style={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.5)' }}>things worth building.</em>
         </h1>
         <p className="fade-rise-2" style={{
           fontFamily: 'var(--font-body)', fontSize: 'clamp(16px,2vw,19px)',
-          color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, maxWidth: 560, marginBottom: '2.75rem', fontWeight: 400,
+          color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, maxWidth: 600, marginBottom: '2.75rem', fontWeight: 400,
         }}>
-          Your living laboratory — where curiosity compounds, knowledge decays into clarity,
-          and your best thinking is always within reach.
+          A living garden for your ideas — where every seed of thought grows into knowledge that
+          never fades, a partner helps you think it through, and the gap from idea to build finally closes.
         </p>
-        <div className="fade-rise-3" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '3.5rem' }}>
-          <a href="#waitlist" className="liquid-glass" style={{
-            borderRadius: 999, padding: '16px 36px', fontSize: 16, fontWeight: 600,
-            color: '#fff', fontFamily: 'var(--font-ui)', transition: 'transform 0.18s ease',
-            background: 'rgba(34,197,94,0.22)', textDecoration: 'none', display: 'inline-block',
-          }}
-            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
-            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-          >Start your garden — free</a>
-          <a href="#how-it-works" className="liquid-glass" style={{
-            borderRadius: 999, padding: '16px 32px', fontSize: 16, fontWeight: 500,
-            color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-ui)', transition: 'transform 0.18s ease',
-            textDecoration: 'none', display: 'inline-block',
-          }}
-            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
-            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-          >See how it works</a>
+        <div className="fade-rise-3" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '3.5rem' }}>
+          <HeroWaitlist />
         </div>
         <div className="fade-rise-3" style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 1rem' }}>
           <PromptBox />
@@ -361,7 +428,304 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
   )
 }
 
-// ── Mockup components (light internal UI = mini app screenshots) ───────────
+// ── Two Pillars ───────────────────────────────────────────────────────────
+function MemoryTimelineMockup() {
+  const items = [
+    { when: 'Today', t: 'Usage-based pricing — the value angle', heat: 1 },
+    { when: '3 weeks ago', t: 'Why seats punish your best users', heat: 0.7 },
+    { when: '5 months ago', t: 'Pricing models, from first principles', heat: 0.42 },
+    { when: 'Last year', t: 'Notes from a founder dinner', heat: 0.28 },
+  ]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', position: 'relative' }}>
+      <div style={{
+        position: 'absolute', left: 6, top: 8, bottom: 8, width: 1.5,
+        background: 'linear-gradient(to bottom,rgba(34,197,94,0.5),rgba(34,197,94,0.08))',
+      }} />
+      {items.map((it, i) => (
+        <div key={it.t} style={{ display: 'flex', gap: '0.9rem', alignItems: 'flex-start', padding: '0.6rem 0' }}>
+          <div style={{
+            width: 13, height: 13, borderRadius: '50%', flexShrink: 0, marginTop: 3, zIndex: 1,
+            background: '#0f1b16', border: '2px solid ' + T.green,
+            opacity: 0.35 + it.heat * 0.65,
+            boxShadow: i === 0 ? '0 0 0 4px rgba(34,197,94,0.15)' : 'none',
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: `rgba(255,255,255,${0.45 + it.heat * 0.5})`, fontFamily: 'var(--font-body)', lineHeight: 1.4 }}>{it.t}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-ui)', letterSpacing: '0.04em', marginTop: 2 }}>{it.when}</div>
+          </div>
+          {i === 0 && <span style={{ fontSize: 9, fontWeight: 700, color: T.green, background: 'rgba(34,197,94,0.18)', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap', marginTop: 2, fontFamily: 'var(--font-ui)' }}>TOP OF MIND</span>}
+        </div>
+      ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: '0.6rem', paddingLeft: 2 }}>
+        <Icon name="check" size={12} color={T.green} />
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'var(--font-body)' }}>Recent thinking rises. Nothing is ever lost.</span>
+      </div>
+    </div>
+  )
+}
+
+const LENSES = [
+  { id: 'brainstorm', icon: 'auto_awesome' as IconName, label: 'Brainstorm', line: 'Three angles worth pulling on — two already live in your garden.' },
+  { id: 'pressure', icon: 'shield' as IconName, label: 'Pressure-test', line: 'Where it breaks: price anchoring, churn risk, a thin moat. Let us harden each.' },
+  { id: 'strategize', icon: 'trending_up' as IconName, label: 'Strategize', line: 'A sequence: validate, narrow your ICP, then win one channel before widening.' },
+]
+
+function ThinkingPartnerMockup() {
+  const [active, setActive] = useState('pressure')
+  const lens = LENSES.find(l => l.id === active)!
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+        {LENSES.map(l => {
+          const on = l.id === active
+          return (
+            <button key={l.id} onClick={() => setActive(l.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
+              fontFamily: 'var(--font-ui)', fontSize: 12, fontWeight: 600, transition: 'all 0.2s',
+              border: `1px solid ${on ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.14)'}`,
+              background: on ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
+              color: on ? '#fff' : 'rgba(255,255,255,0.55)',
+            }}>
+              <Icon name={l.icon} size={13} color={on ? T.green : 'rgba(255,255,255,0.4)'} />
+              {l.label}
+            </button>
+          )
+        })}
+      </div>
+      <div key={active} style={{
+        padding: '1rem 1.1rem', borderRadius: '1rem',
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', animation: 'fadeUp 0.35s ease',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.6rem' }}>
+          <div style={{ width: 26, height: 26, borderRadius: '0.5rem', background: 'rgba(34,197,94,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={lens.icon} size={14} color={T.green} />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-ui)' }}>{lens.label}</span>
+        </div>
+        <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.78)', lineHeight: 1.65, fontFamily: 'var(--font-body)' }}>{lens.line}</p>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2 }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.green, animation: 'node-pulse 1s ease infinite' }} />
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-body)' }}>A partner that pushes back — grounded in what you know.</span>
+      </div>
+    </div>
+  )
+}
+
+function Pillar({ label, title, body, visual, reverse }: {
+  label: string; title: React.ReactNode; body: string; visual: React.ReactNode; reverse?: boolean
+}) {
+  const [ref, inView] = useInView()
+  return (
+    <div ref={ref} className="pillar-row" style={{
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3.5rem', alignItems: 'center',
+      opacity: inView ? 1 : 0, transform: inView ? 'translateY(0)' : 'translateY(28px)', transition: 'all 0.7s ease',
+    }}>
+      <div style={{ order: reverse ? 2 : 1 }}>
+        <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 14px', marginBottom: '1.25rem' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
+        </div>
+        <h3 style={{
+          fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,3.5vw,46px)', fontWeight: 400,
+          fontStyle: 'italic', color: '#fff', lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: '1.25rem',
+        }}>{title}</h3>
+        <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.55)', lineHeight: 1.8, fontFamily: 'var(--font-body)', fontWeight: 300, maxWidth: 440 }}>{body}</p>
+      </div>
+      <div style={{ order: reverse ? 1 : 2 }}>
+        <div className="liquid-glass" style={{ borderRadius: '1.5rem', padding: '1.75rem' }}>{visual}</div>
+      </div>
+    </div>
+  )
+}
+
+function TwoPillars() {
+  return (
+    <section style={{ padding: '6rem 2rem', background: '#0f1b16', position: 'relative' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '5.5rem' }}>
+        <Pillar
+          label="Never lose a thought"
+          title={<>A garden that<br />never forgets.</>}
+          body="Most of what you learn slips away. Greenplot plants it instead — every idea a seed, enriched and connected as it grows. Your newest interests bloom at the surface, while years of cultivated thinking stay a question away."
+          visual={<MemoryTimelineMockup />}
+        />
+        <Pillar
+          reverse
+          label="Think it through"
+          title={<>A partner that<br />tends your thinking.</>}
+          body="Not a search box — a gardener for your ideas. Open one up, stress its weak points, and shape the path forward. Every answer is rooted in the knowledge you've grown, not the open web."
+          visual={<ThinkingPartnerMockup />}
+        />
+      </div>
+    </section>
+  )
+}
+
+// ── Missing Link ──────────────────────────────────────────────────────────
+function MissingLink() {
+  const [ref, inView] = useInView()
+  const [pulse, setPulse] = useState(0)
+  useEffect(() => { const t = setInterval(() => setPulse(p => (p + 1) % 2), 1600); return () => clearInterval(t) }, [])
+  return (
+    <section style={{ padding: '7rem 2rem', background: '#0c1611', position: 'relative', overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+        width: 760, height: 760, borderRadius: '50%',
+        background: 'radial-gradient(circle,rgba(34,197,94,0.08) 0%,transparent 68%)', pointerEvents: 'none',
+      }} />
+      <div ref={ref} style={{
+        maxWidth: 880, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1,
+        opacity: inView ? 1 : 0, transform: inView ? 'translateY(0)' : 'translateY(28px)', transition: 'all 0.7s ease',
+      }}>
+        <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 16px', marginBottom: '1.5rem' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>The missing link</span>
+        </div>
+        <h2 style={{
+          fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,5vw,58px)', fontWeight: 400,
+          fontStyle: 'italic', color: '#fff', lineHeight: 0.98, letterSpacing: '-0.02em', marginBottom: '1.25rem',
+        }}>
+          Between thinking<br />and building.
+        </h2>
+        <p style={{
+          fontSize: 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.8, fontFamily: 'var(--font-body)',
+          fontWeight: 300, maxWidth: 560, margin: '0 auto 3.5rem',
+        }}>
+          Your coding agents are only as good as the context you hand them. Greenplot hands them
+          your garden — the research and knowledge you&apos;ve grown — so Claude Code and Codex build
+          on something real, not a guess.
+        </p>
+        <div className="link-flow" style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'center', gap: '1rem' }}>
+          <div className="liquid-glass" style={{
+            flex: 1, maxWidth: 230, borderRadius: '1.25rem', padding: '1.5rem 1.25rem',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem',
+          }}>
+            <Icon name="eco" size={26} color={T.green} />
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-ui)' }}>Your knowledge garden</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'var(--font-body)', fontWeight: 300, lineHeight: 1.5 }}>Research, seeds &amp; decisions you actually trust</div>
+          </div>
+          <div className="link-arrow" style={{ display: 'flex', alignItems: 'center' }}>
+            <Icon name="arrow_right" size={22} color={pulse ? T.green : 'rgba(34,197,94,0.4)'} style={{ transition: 'color 0.4s' }} />
+          </div>
+          <div className="liquid-glass-strong" style={{
+            flex: 1, maxWidth: 230, borderRadius: '1.25rem', padding: '1.5rem 1.25rem',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem',
+            background: 'rgba(34,197,94,0.12)', boxShadow: '0 0 0 1px rgba(34,197,94,0.35)',
+          }}>
+            <Logo light size={16} />
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-body)', fontWeight: 300, lineHeight: 1.5, marginTop: 2 }}>Grounds your build in what&apos;s real</div>
+          </div>
+          <div className="link-arrow" style={{ display: 'flex', alignItems: 'center' }}>
+            <Icon name="arrow_right" size={22} color={pulse ? 'rgba(34,197,94,0.4)' : T.green} style={{ transition: 'color 0.4s' }} />
+          </div>
+          <div className="liquid-glass" style={{
+            flex: 1, maxWidth: 230, borderRadius: '1.25rem', padding: '1.5rem 1.25rem',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.7rem',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-ui)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Build with</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', width: '100%' }}>
+              {['Claude Code', 'Codex'].map(tool => (
+                <div key={tool} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  padding: '8px 12px', borderRadius: '0.65rem', background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}>
+                  <Icon name="dns" size={13} color="rgba(255,255,255,0.7)" />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', fontFamily: 'var(--font-ui)' }}>{tool}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: '1.5rem', fontFamily: 'var(--font-body)', fontWeight: 300 }}>
+          Grounded context in, real builds out.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+// ── Feature Mockups ───────────────────────────────────────────────────────
+function MockupThinkingPartner() {
+  const modes = [
+    { id: 'brainstorm', icon: 'auto_awesome' as IconName, label: 'Brainstorm' },
+    { id: 'pressure', icon: 'shield' as IconName, label: 'Pressure-test' },
+    { id: 'strategize', icon: 'trending_up' as IconName, label: 'Strategize' },
+    { id: 'spec', icon: 'file_text' as IconName, label: 'Spec' },
+  ]
+  const replies: Record<string, string> = {
+    brainstorm: 'Three angles worth pulling on — two already live in your garden.',
+    pressure: 'Here\'s where it breaks: price anchoring, churn risk, a thin moat. Let\'s harden each.',
+    strategize: 'A sequence: validate, narrow your ICP, then win one channel before widening.',
+    spec: 'I\'ve shaped it into a build-ready brief — problem, goals, requirements, open questions.',
+  }
+  const [active, setActive] = useState('pressure')
+  useEffect(() => {
+    const order = ['brainstorm', 'pressure', 'strategize', 'spec']
+    const t = setInterval(() => setActive(a => order[(order.indexOf(a) + 1) % order.length]), 1800)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+        {modes.map(m => {
+          const on = m.id === active
+          return (
+            <div key={m.id} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 999,
+              fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-ui)', transition: 'all 0.25s',
+              border: `1px solid ${on ? T.green : T.border}`,
+              background: on ? T.container : 'transparent', color: on ? T.darkGreen : T.text2,
+            }}>
+              <Icon name={m.icon} size={12} color={on ? T.green : T.text2} />{m.label}
+            </div>
+          )
+        })}
+      </div>
+      <div key={active} style={{ display: 'flex', justifyContent: 'flex-start', animation: 'fadeUp 0.35s ease' }}>
+        <div style={{
+          maxWidth: '92%', padding: '0.7rem 0.95rem', borderRadius: '1rem 1rem 1rem 0.2rem',
+          background: T.container, color: T.darkGreen, fontSize: 12.5, lineHeight: 1.6,
+        }}>{replies[active]}</div>
+      </div>
+      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.green, animation: 'node-pulse 1s ease infinite' }} />
+        <span style={{ fontSize: 11, color: T.text2 }}>Grounded in your garden — not the open web</span>
+      </div>
+    </div>
+  )
+}
+
+function MockupSpec() {
+  const rows = ['Problem & context', 'Goals and non-goals', 'Requirements', 'Open questions']
+  const [shown, setShown] = useState(0)
+  useEffect(() => { const t = setInterval(() => setShown(s => (s + 1) % (rows.length + 2)), 650); return () => clearInterval(t) }, [])
+  return (
+    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: T.container, borderRadius: '0.6rem', padding: '0.55rem 0.8rem' }}>
+        <Icon name="eco" size={13} color={T.green} />
+        <span style={{ fontSize: 12, color: T.darkGreen, fontWeight: 500 }}>&quot;Turn this thread into a build-ready brief&quot;</span>
+      </div>
+      <div style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: '0.75rem', padding: '0.9rem', background: T.surface }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <Icon name="file_text" size={14} color={T.green} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.darkGreen }}>Build-ready brief</span>
+          <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: T.green, background: T.container, borderRadius: 999, padding: '2px 9px', letterSpacing: '0.05em' }}>READY</span>
+        </div>
+        {rows.map((r, i) => (
+          <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', opacity: shown > i ? 1 : 0.3, transition: 'opacity 0.3s' }}>
+            <Icon name="check" size={13} color={shown > i ? T.green : T.border} />
+            <span style={{ fontSize: 12, color: T.text2 }}>{r}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="dns" size={13} color={T.green} />
+        <span style={{ fontSize: 11, color: T.text2 }}>Ready to hand to your build tools</span>
+      </div>
+    </div>
+  )
+}
+
 function MockupIdeaGarden() {
   const seeds = ['Emergence theory', 'Second Brain', 'Flow states', 'Stoic philosophy', 'Attention restoration']
   const [active, setActive] = useState(0)
@@ -535,26 +899,33 @@ function MockupVoice() {
 
 function MockupAcademic() {
   return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: T.container, borderRadius: '0.5rem', padding: '0.6rem 0.75rem' }}>
-        <Icon name="search" size={13} color={T.green} />
-        <span style={{ fontSize: 12, color: T.darkGreen, fontWeight: 500 }}>&quot;attention restoration theory 2024&quot;</span>
+    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <Icon name="search" size={13} color={T.green} />
+          <span style={{ fontSize: 11, color: T.darkGreen, fontWeight: 600 }}>Research Digest</span>
+        </div>
+        <span style={{ fontSize: 9, color: T.text2, fontWeight: 600, letterSpacing: '0.05em' }}>every morning</span>
       </div>
       {[
-        { title: 'Kahneman et al. — Attention & Effort', journal: 'Nature Neurosci.', match: 97 },
-        { title: 'Ophir et al. — Cognitive Control', journal: 'PNAS 2024', match: 91 },
+        { title: 'Multi-Layer Memory for AI Agents', seed: 'AI Agents' },
+        { title: 'Retrieval over Knowledge Graphs', seed: 'Knowledge Graphs' },
       ].map(p => (
-        <div key={p.title} style={{ border: `1px solid ${T.border}`, borderRadius: '0.6rem', padding: '0.65rem 0.8rem', background: T.surface }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: T.darkGreen, marginBottom: 2 }}>{p.title}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: T.text2 }}>{p.journal}</span>
-            <span style={{ fontSize: 10, background: T.container, color: T.green, borderRadius: 999, padding: '1px 7px', fontWeight: 700 }}>{p.match}% match</span>
+        <div key={p.title} style={{ border: `1px solid ${T.border}`, borderRadius: '0.6rem', padding: '0.6rem 0.75rem', background: T.surface }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.darkGreen, marginBottom: 3, lineHeight: 1.3 }}>{p.title}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: 9, color: T.text2, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Icon name="file_text" size={9} color={T.text2} />New paper · PDF attached
+            </span>
+            <span style={{ fontSize: 9, background: T.container, color: T.green, borderRadius: 999, padding: '1px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>↳ {p.seed}</span>
           </div>
         </div>
       ))}
-      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', border: `1px solid ${T.green}`, borderRadius: '0.6rem', padding: '0.6rem 0.8rem', background: '#f0fdf4' }}>
-        <Icon name="mail" size={13} color={T.green} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span style={{ fontSize: 11, color: T.darkGreen, lineHeight: 1.5 }}>Weekly digest sent — 3 papers matched your garden seeds</span>
+      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', border: `1px solid ${T.green}`, borderRadius: '0.6rem', padding: '0.6rem 0.75rem', background: '#f0fdf4' }}>
+        <Icon name="auto_awesome" size={13} color={T.green} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span style={{ fontSize: 11, color: T.darkGreen, lineHeight: 1.5 }}>
+          <strong>Actionable move</strong> + solution-design seed planted in your Garden
+        </span>
       </div>
     </div>
   )
@@ -562,7 +933,7 @@ function MockupAcademic() {
 
 function MockupBriefings() {
   const cards = [
-    { title: 'Morning Spark', body: "Your note on stoicism connects to a new study on cognitive reappraisal…", time: '8:00 AM' },
+    { title: 'Morning Spark', body: 'Your note on stoicism connects to a new study on cognitive reappraisal…', time: '8:00 AM' },
     { title: 'Deep Dive Reminder', body: 'You haven\'t revisited "Flow states" in 14 days — ready to grow it?', time: '2:00 PM' },
   ]
   return (
@@ -655,16 +1026,42 @@ function MockupMCP() {
 
 // ── Features data ─────────────────────────────────────────────────────────
 const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc: string; mockup: React.ReactNode }[] = [
-  { icon: 'eco', name: 'Idea Garden', tag: 'Capture', color: T.green, desc: 'Capture fleeting thoughts as seeds. Every idea gets enriched with research and connected to your existing knowledge.', mockup: <MockupIdeaGarden /> },
-  { icon: 'notifications', name: 'Smart Briefings', tag: 'Reflect', color: T.teal, desc: 'Receive curated, personalised idea sparks, briefings and reflection reminders to help you be creative and build knowledge.', mockup: <MockupBriefings /> },
-  { icon: 'smart_toy', name: 'AI Agent', tag: 'Chat', color: T.green, desc: 'Ask Greenplot anything. It searches your garden first, then the web — combining your personal knowledge with live information.', mockup: <MockupAIAgent /> },
-  { icon: 'search', name: 'Academic Research', tag: 'Research', color: T.teal, desc: 'Deep academic research with personalised emails and attached papers bridges the gap between what you think is possible and what\'s actually possible.', mockup: <MockupAcademic /> },
-  { icon: 'auto_stories', name: 'Wiki', tag: 'Compile', color: T.green, desc: 'Your seeds compile into living wiki articles — encyclopedic summaries of everything you\'ve captured and learned.', mockup: <MockupWiki /> },
-  { icon: 'layers', name: 'Share Knowledge', tag: 'Share', color: T.teal, desc: 'Share your garden or wiki as Markdown, PDF, or send directly to your favourite messenger app. You control what you share.', mockup: <MockupShare /> },
-  { icon: 'calendar_month', name: 'Calendar', tag: 'Organise', color: T.teal, desc: 'Chat to schedule. "Block two hours for deep work tomorrow" — done. Greenplot talks directly to Google Calendar.', mockup: <MockupCalendar /> },
-  { icon: 'mic', name: 'Voice Capture', tag: 'Record', color: T.green, desc: 'Record a voice memo on the go. Greenplot transcribes, enriches, and plants it in your garden automatically.', mockup: <MockupVoice /> },
-  { icon: 'hub', name: 'Knowledge Graph', tag: 'Connect', color: T.teal, desc: 'See your ideas as an interactive network. Discover unexpected connections between everything you\'ve ever captured.', mockup: <MockupKnowledgeGraph /> },
-  { icon: 'dns', name: 'MCP Server', tag: 'Build', color: T.green, desc: 'Expose your Garden to your favourite Agentic Coding tool and build your ideas directly into your workflow.', mockup: <MockupMCP /> },
+  { icon: 'smart_toy', name: 'Thinking Partner', tag: 'Think', color: T.green,
+    desc: 'A strategist, not a search box. Brainstorm to open an idea up, pressure-test its weak points, or strategize the path forward — every mode reasoning from the knowledge you already hold.',
+    mockup: <MockupThinkingPartner /> },
+  { icon: 'file_text', name: 'Spec it Out', tag: 'Build', color: T.teal,
+    desc: 'When the thinking is done, Greenplot shapes the thread into a clean, build-ready brief — problem, goals, requirements and open questions — ready to hand straight to your coding agent.',
+    mockup: <MockupSpec /> },
+  { icon: 'eco', name: 'Idea Garden', tag: 'Capture', color: T.green,
+    desc: 'Capture fleeting thoughts as seeds. Every idea gets enriched with research and connected to your existing knowledge.',
+    mockup: <MockupIdeaGarden /> },
+  { icon: 'notifications', name: 'Smart Briefings', tag: 'Reflect', color: T.teal,
+    desc: 'Receive curated, personalised idea sparks, briefings and reflection reminders to help you be creative and build knowledge.',
+    mockup: <MockupBriefings /> },
+  { icon: 'smart_toy', name: 'AI Agent', tag: 'Chat', color: T.green,
+    desc: 'Ask Greenplot anything. It searches your garden first, then the web — combining your personal knowledge with live information.',
+    mockup: <MockupAIAgent /> },
+  { icon: 'search', name: 'Research Digest', tag: 'Research', color: T.teal,
+    desc: 'Every morning, fresh arXiv papers are matched to your Garden seeds and Wiki, then distilled into an actionable move and a solution-design seed — with the source PDFs attached.',
+    mockup: <MockupAcademic /> },
+  { icon: 'auto_stories', name: 'Wiki', tag: 'Compile', color: T.green,
+    desc: 'Your seeds compile into living wiki articles — encyclopedic summaries of everything you\'ve captured and learned.',
+    mockup: <MockupWiki /> },
+  { icon: 'layers', name: 'Share Knowledge', tag: 'Share', color: T.teal,
+    desc: 'Share your garden or wiki as Markdown, PDF, or send directly to your favourite messenger app. You control what you share.',
+    mockup: <MockupShare /> },
+  { icon: 'calendar_month', name: 'Calendar', tag: 'Organise', color: T.teal,
+    desc: 'Chat to schedule. "Block two hours for deep work tomorrow" — done. Greenplot talks directly to Google Calendar.',
+    mockup: <MockupCalendar /> },
+  { icon: 'mic', name: 'Voice Capture', tag: 'Record', color: T.green,
+    desc: 'Record a voice memo on the go. Greenplot transcribes, enriches, and plants it in your garden automatically.',
+    mockup: <MockupVoice /> },
+  { icon: 'hub', name: 'Knowledge Graph', tag: 'Connect', color: T.teal,
+    desc: 'See your ideas as an interactive network. Discover unexpected connections between everything you\'ve ever captured.',
+    mockup: <MockupKnowledgeGraph /> },
+  { icon: 'dns', name: 'MCP Server', tag: 'Build', color: T.green,
+    desc: 'Expose your Garden to your favourite Agentic Coding tool and build your ideas directly into your workflow.',
+    mockup: <MockupMCP /> },
 ]
 
 // ── Features Showcase ─────────────────────────────────────────────────────
@@ -673,8 +1070,8 @@ function FeaturesShowcase() {
   const [headerRef, headerInView] = useInView()
   const feat = FEATURES[active]
   return (
-    <section id="features" style={{ padding: '6rem 2rem', background: '#000', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom,#000,transparent)', pointerEvents: 'none', zIndex: 1 }} />
+    <section id="features" style={{ padding: '6rem 2rem', background: '#0f1b16', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom,#0f1b16,transparent)', pointerEvents: 'none', zIndex: 1 }} />
       <div style={{ maxWidth: 1200, margin: '0 auto', position: 'relative', zIndex: 2 }}>
         <div ref={headerRef} style={{ textAlign: 'center', marginBottom: '3rem', opacity: headerInView ? 1 : 0, transform: headerInView ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
           <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 16px', marginBottom: '1.25rem' }}>
@@ -733,25 +1130,28 @@ function FeaturesShowcase() {
 
 // ── Flywheel ──────────────────────────────────────────────────────────────
 const STEPS = [
-  { icon: 'add_circle' as IconName, color: T.green, label: 'Capture', desc: 'Send a voice memo, paste a link, or type a thought. Takes 5 seconds.' },
-  { icon: 'auto_awesome' as IconName, color: T.teal, label: 'Enrich', desc: 'Greenplot researches your idea, adds context, extracts entities, and connects it to related seeds.' },
-  { icon: 'trending_up' as IconName, color: T.darkGreen, label: 'Grow', desc: 'Every question gets smarter. Your garden becomes a personal knowledge engine that compounds over time.' },
+  { icon: 'auto_awesome' as IconName, color: T.green, label: 'Idea',
+    desc: 'It starts as a seed. Brainstorm, pressure-test and strategize with a partner that thinks alongside you — never a blank page.' },
+  { icon: 'auto_stories' as IconName, color: T.teal, label: 'Knowledge',
+    desc: 'Every exchange takes root in your garden — captured, enriched and connected into knowledge that never fades.' },
+  { icon: 'dns' as IconName, color: T.darkGreen, label: 'Build',
+    desc: 'Harvest your garden: hand that grounded knowledge to Claude Code or Codex and build on real research, not guesswork.' },
 ]
 
 function Flywheel() {
   const [active, setActive] = useState(0)
   const [headerRef, headerInView] = useInView()
   const [bodyRef, bodyInView] = useInView()
-  useEffect(() => { const t = setInterval(() => setActive(a => (a + 1) % 3), 2200); return () => clearInterval(t) }, [])
+  useEffect(() => { const t = setInterval(() => setActive(a => (a + 1) % 3), 4200); return () => clearInterval(t) }, [])
   return (
-    <section id="how-it-works" style={{ padding: '6rem 2rem', background: '#000' }}>
+    <section id="how-it-works" style={{ padding: '6rem 2rem', background: '#0f1b16' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div ref={headerRef} style={{ textAlign: 'center', marginBottom: '3.5rem', opacity: headerInView ? 1 : 0, transform: headerInView ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
           <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 16px', marginBottom: '1.25rem' }}>
             <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.85)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>How it works</span>
           </div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,52px)', fontWeight: 400, fontStyle: 'italic', color: '#fff', letterSpacing: '-0.02em', lineHeight: 0.95 }}>
-            The flywheel that makes you<br />smarter over time
+            The loop from seed<br />to knowledge to build
           </h2>
         </div>
         <div ref={bodyRef} style={{ opacity: bodyInView ? 1 : 0, transform: bodyInView ? 'translateY(0)' : 'translateY(24px)', transition: 'all 0.7s ease' }}>
@@ -816,12 +1216,12 @@ function Flywheel() {
 function Testimonial() {
   const [ref, inView] = useInView()
   return (
-    <section style={{ padding: '6rem 2rem', background: '#000' }}>
+    <section style={{ padding: '6rem 2rem', background: '#0f1b16' }}>
       <div ref={ref} style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center', opacity: inView ? 1 : 0, transform: inView ? 'translateY(0)' : 'translateY(24px)', transition: 'all 0.7s ease' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, color: T.green, lineHeight: 0.6, marginBottom: '1.5rem', fontStyle: 'italic' }}>&ldquo;</div>
         <blockquote style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(20px,3vw,30px)', fontWeight: 400, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, letterSpacing: '-0.01em', fontStyle: 'italic', border: 'none', margin: 0, padding: 0 }}>
-          I used to lose my best ideas in many different apps, countless bookmarks and unstructured notes.
-          Now they all live in one garden.
+          The hard part was never the idea. It was carrying it from a spark, into real knowledge,
+          and finally into something built. Greenplot is the bridge across that gap.
         </blockquote>
       </div>
     </section>
@@ -858,7 +1258,7 @@ function Waitlist() {
   }
 
   return (
-    <section id="waitlist" style={{ padding: '7rem 2rem', background: '#000', position: 'relative', overflow: 'hidden' }}>
+    <section id="waitlist" style={{ padding: '7rem 2rem', background: '#0f1b16', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle,rgba(34,197,94,0.07) 0%,transparent 70%)', pointerEvents: 'none' }} />
       <div ref={ref} style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1, opacity: inView ? 1 : 0, transform: inView ? 'translateY(0)' : 'translateY(24px)', transition: 'all 0.7s ease' }}>
         <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 16px', marginBottom: '1.5rem' }}>
@@ -875,7 +1275,7 @@ function Waitlist() {
             <Icon name="check" size={28} color={T.green} />
             <p style={{ fontSize: 16, fontWeight: 600, color: '#fff', fontFamily: 'var(--font-ui)', margin: 0 }}>You&apos;re on the list!</p>
             <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', fontFamily: 'var(--font-body)', fontWeight: 300, margin: 0 }}>
-              Check your inbox — we sent a confirmation. We&apos;ll be in touch when your garden is ready to grow.
+              We&apos;ll be in touch when your garden is ready to grow.
             </p>
           </div>
         ) : (
@@ -919,15 +1319,15 @@ function Waitlist() {
 function CTA() {
   const [ref, inView] = useInView()
   return (
-    <section style={{ padding: '6rem 2rem', background: '#000' }}>
+    <section style={{ padding: '6rem 2rem', background: '#0f1b16' }}>
       <div ref={ref} style={{ maxWidth: 660, margin: '0 auto', textAlign: 'center', opacity: inView ? 1 : 0, transform: inView ? 'translateY(0)' : 'translateY(24px)', transition: 'all 0.7s ease' }}>
         <div className="liquid-glass" style={{ borderRadius: '2rem', padding: '4rem 2.5rem' }}>
           <Icon name="eco" size={42} color={T.green} style={{ marginBottom: '1.5rem' }} />
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,48px)', fontWeight: 400, fontStyle: 'italic', color: '#fff', lineHeight: 0.95, letterSpacing: '-0.02em', marginBottom: '1.25rem' }}>
-            Plant your first idea today.
+            Meet your thinking partner.
           </h2>
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.55)', marginBottom: '2.25rem', lineHeight: 1.7, fontFamily: 'var(--font-body)', fontWeight: 300 }}>
-            Free to start. Your knowledge, your garden, your control.
+            From first seed to real build — grounded in a knowledge garden that&apos;s all your own.
           </p>
           <a href="#waitlist" className="liquid-glass-strong" style={{
             borderRadius: 999, padding: '16px 36px', fontSize: 16, fontWeight: 600,
@@ -936,7 +1336,7 @@ function CTA() {
           }}
             onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
             onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-          >Get early access — free</a>
+          >Get started — it&apos;s free</a>
         </div>
       </div>
     </section>
@@ -946,11 +1346,11 @@ function CTA() {
 // ── Footer ────────────────────────────────────────────────────────────────
 function Footer() {
   return (
-    <footer style={{ background: '#000', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '1.75rem 2rem' }}>
+    <footer style={{ background: '#0c1611', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '1.75rem 2rem' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <Logo light size={18} />
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          {['Privacy', 'Terms'].map(l => (
+          {['Privacy', 'Terms', 'GitHub'].map(l => (
             <a key={l} href="#" style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontSize: 13, fontWeight: 400, fontFamily: 'var(--font-body)', transition: 'color 0.2s' }}
               onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.35)')}
@@ -967,7 +1367,6 @@ function Footer() {
 export default function LandingPage() {
   const [heroVisible, setHeroVisible] = useState(true)
 
-  // Override globals.css overflow:hidden + set dark body background
   useEffect(() => {
     const html = document.documentElement
     const body = document.body
@@ -983,7 +1382,7 @@ export default function LandingPage() {
     html.style.height = 'auto'
     body.style.overflow = 'auto'
     body.style.height = 'auto'
-    body.style.background = '#000'
+    body.style.background = '#0f1b16'
     body.style.color = '#fff'
     return () => {
       html.style.overflow = prev.htmlOverflow
@@ -1001,8 +1400,10 @@ export default function LandingPage() {
       <Navbar heroVisible={heroVisible} />
       <main>
         <Hero onVisibilityChange={setHeroVisible} />
-        <FeaturesShowcase />
+        <TwoPillars />
+        <MissingLink />
         <Flywheel />
+        <FeaturesShowcase />
         <Testimonial />
         <Waitlist />
         <CTA />
