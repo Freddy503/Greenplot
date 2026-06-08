@@ -432,7 +432,7 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
 function MemoryTimelineMockup() {
   const items = [
     { when: 'Today', t: 'The right abstraction for this feature', heat: 1 },
-    { when: '3 weeks ago', t: 'When to build vs. buy — decision framework', heat: 0.7 },
+    { when: '3 weeks ago', t: 'The app I actually want to build next', heat: 0.7 },
     { when: '5 months ago', t: 'Pricing models, from first principles', heat: 0.42 },
     { when: 'Last year', t: 'Notes from a founder dinner', heat: 0.28 },
   ]
