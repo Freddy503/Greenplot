@@ -13,6 +13,7 @@ import Pill from '@/components/ui/v2/pill'
 import SectionHeader from '@/components/ui/v2/section-header'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
 import KnowledgeGraph from '@/components/focus/knowledge-graph'
+import { readCache, writeCache } from '@/lib/swr-cache'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -130,11 +131,23 @@ export default function GardenPage() {
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [graphOpen, setGraphOpen] = useState(false)
+  const [totalSeeds, setTotalSeeds] = useState<number | null>(null)
 
   const fetchSeeds = useCallback((silent = false) => {
     const token = localStorage.getItem('greenplot_token')
     if (!token) { router.push('/login'); return }
-    if (!silent) setLoading(true)
+
+    // Stale-while-revalidate: paint cached seeds instantly, refresh in background
+    if (!silent) {
+      const cached = readCache<{ seeds: unknown[]; total?: number }>('seeds')
+      if (cached?.seeds?.length) {
+        setSeeds((cached.seeds as Parameters<typeof parseSeed>[0][]).map(parseSeed))
+        if (typeof cached.total === 'number') setTotalSeeds(cached.total)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+    }
 
     fetch('/api/seeds?limit=200', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
@@ -146,6 +159,8 @@ export default function GardenPage() {
         const parsed = Array.isArray(raw) ? raw.map(parseSeed) : []
         // Do NOT sort here — let the `sorted` computed array own all ordering
         setSeeds(parsed)
+        if (typeof data.total === 'number') setTotalSeeds(data.total)
+        if (parsed.length) writeCache('seeds', { seeds: raw, total: data.total })
       })
       .catch(() => {})
       .finally(() => { if (!silent) setLoading(false) })
@@ -191,7 +206,7 @@ export default function GardenPage() {
 
       {/* Dark forest hero — tall variant with stat chips */}
       <Hero
-        eyebrow={seeds.length > 0 ? `${seeds.length} SEEDS GROWING` : 'YOUR GARDEN'}
+        eyebrow={(totalSeeds ?? seeds.length) > 0 ? `${totalSeeds ?? seeds.length} SEEDS GROWING` : 'YOUR GARDEN'}
         title="Knowledge"
         accent="Garden"
         tall
@@ -199,7 +214,7 @@ export default function GardenPage() {
       >
         <div style={{ display: 'flex', gap: 9, marginTop: 18 }}>
           {[
-            { n: seeds.length, l: 'Seeds' },
+            { n: totalSeeds ?? seeds.length, l: 'Seeds' },
             { n: domainCount, l: 'Domains' },
           ].map(({ n, l }) => (
             <div key={l} className="glass-dark" style={{ flex: 1, borderRadius: 15, padding: '11px 12px' }}>

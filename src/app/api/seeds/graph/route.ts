@@ -152,42 +152,53 @@ function meaningfulWords(text: string): Set<string> {
   )
 }
 
-function buildFallbackGraph(seeds: SeedNode[]): GraphEdge[] {
-  const links: GraphEdge[] = []
-  const linkSet = new Set<string>()
+// Per-node degree cap: without it, shared-domain cliques turn the graph into
+// one undifferentiated blob. Each seed gets at most MAX_DEGREE fallback edges,
+// preferring the strongest (most shared words) connections.
+const MAX_DEGREE = 3
 
-  // Domain connections
+function buildFallbackGraph(seeds: SeedNode[]): GraphEdge[] {
+  // Score all candidate pairs first, then greedily keep the strongest
+  // edges that respect the per-node degree cap.
+  const candidates: GraphEdge[] = []
+  const wordCache = new Map<string, Set<string>>()
+  const wordsFor = (s: SeedNode) => {
+    let w = wordCache.get(s.id)
+    if (!w) { w = meaningfulWords(`${s.title} ${(s.text || '').slice(0, 400)}`); wordCache.set(s.id, w) }
+    return w
+  }
+
   for (let i = 0; i < seeds.length; i++) {
     const tagsA = (seeds[i].domain || '').toLowerCase().split(',').map(t => t.trim()).filter(w => w.length > 2)
+    const wordsA = wordsFor(seeds[i])
     for (let j = i + 1; j < seeds.length; j++) {
       const tagsB = (seeds[j].domain || '').toLowerCase().split(',').map(t => t.trim()).filter(w => w.length > 2)
-      const shared = tagsA.filter(t => tagsB.includes(t))
-      if (shared.length > 0) {
-        const key = [seeds[i].id, seeds[j].id].sort().join('-')
-        if (!linkSet.has(key)) {
-          linkSet.add(key)
-          links.push({ source: seeds[i].id, target: seeds[j].id, strength: Math.min(shared.length / 3, 0.7), linkType: 'related' })
-        }
+      const sharedTags = tagsA.filter(t => tagsB.includes(t)).length
+      const wordsB = wordsFor(seeds[j])
+      let sharedWords = 0
+      for (const w of wordsA) if (wordsB.has(w)) sharedWords++
+
+      // Require real signal: 3+ shared meaningful words, or a shared domain
+      // reinforced by at least 1 shared word (domain alone is too weak)
+      if (sharedWords >= 3) {
+        candidates.push({ source: seeds[i].id, target: seeds[j].id, strength: Math.min(sharedWords / 8, 0.6), linkType: 'similar' })
+      } else if (sharedTags > 0 && sharedWords >= 1) {
+        candidates.push({ source: seeds[i].id, target: seeds[j].id, strength: Math.min(0.25 + sharedTags * 0.1 + sharedWords * 0.05, 0.5), linkType: 'related' })
       }
     }
   }
 
-  // Content word overlap (title + first 400 chars of text)
-  for (let i = 0; i < seeds.length; i++) {
-    const contentA = `${seeds[i].title} ${(seeds[i].text || '').slice(0, 400)}`
-    const wordsA = meaningfulWords(contentA)
-    for (let j = i + 1; j < seeds.length; j++) {
-      const contentB = `${seeds[j].title} ${(seeds[j].text || '').slice(0, 400)}`
-      const wordsB = meaningfulWords(contentB)
-      const shared = [...wordsA].filter(w => wordsB.has(w))
-      if (shared.length >= 2) {
-        const key = [seeds[i].id, seeds[j].id].sort().join('-')
-        if (!linkSet.has(key)) {
-          linkSet.add(key)
-          links.push({ source: seeds[i].id, target: seeds[j].id, strength: Math.min(shared.length / 8, 0.5), linkType: 'similar' })
-        }
-      }
-    }
+  candidates.sort((a, b) => b.strength - a.strength)
+
+  const degree = new Map<string, number>()
+  const links: GraphEdge[] = []
+  for (const edge of candidates) {
+    const dA = degree.get(edge.source) || 0
+    const dB = degree.get(edge.target) || 0
+    if (dA >= MAX_DEGREE || dB >= MAX_DEGREE) continue
+    degree.set(edge.source, dA + 1)
+    degree.set(edge.target, dB + 1)
+    links.push(edge)
   }
 
   // NO sequential fallback — empty graph is better than fake connections

@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
 import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List } from 'lucide-react'
 import Segmented from '@/components/ui/v2/segmented'
+import { readCache, writeCache } from '@/lib/swr-cache'
 
 import Hero from '@/components/layout/hero'
 import Header from '@/components/layout/header'
@@ -30,10 +31,19 @@ interface PRDItem {
 }
 
 interface SeedMeta {
-  tags?: string[]
+  tags?: string[] | string
+  seed_type?: string
   diagram_url?: string
   build_status?: string
   build_pr_url?: string
+  pdf_url?: string
+  paper_url?: string
+}
+
+function isPaperSeed(s: RawSeed): boolean {
+  const meta = s.seed_metadata || s.metadata || {}
+  if ((s.seed_type || meta.seed_type) === 'paper') return true
+  return normalizeTags(s).some(t => t === 'paper' || t === 'research-paper')
 }
 
 interface RawSeed {
@@ -367,18 +377,33 @@ export default function StudioPage() {
     const local = loadLocalPRDs()
     setPrds(local)
 
+    const applySeeds = (seeds: RawSeed[]) => {
+      const specSeeds = seeds.filter(isSpecSeed).map(seedToPRD)
+      const seen = new Set(local.map(p => p.id))
+      setPrds([...local, ...specSeeds.filter(p => !seen.has(p.id))])
+      // Papers from the Research Digest lead the "Ideas ready to develop" list —
+      // they arrive pre-connected to the garden and are the strongest spec material
+      const nonSpec = seeds.filter(s => !isSpecSeed(s) && (s.content || s.text || s.summary))
+      setIdeas([...nonSpec.filter(isPaperSeed), ...nonSpec.filter(s => !isPaperSeed(s))].slice(0, 4))
+    }
+
+    // Stale-while-revalidate: paint cached seeds instantly, refresh in background
+    const cached = readCache<{ seeds?: RawSeed[] }>('seeds')
+    if (cached?.seeds?.length) {
+      applySeeds(cached.seeds)
+      setLoading(false)
+    }
+
     const token = localStorage.getItem('greenplot_token')
     fetch('/api/seeds?limit=200', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => {
         if (r.status === 401) { localStorage.removeItem('greenplot_token'); window.location.href = '/login'; return { seeds: [] } }
         return r.json()
       })
-      .then((data: { seeds?: RawSeed[] }) => {
+      .then((data: { seeds?: RawSeed[]; total?: number }) => {
         const seeds = data.seeds || []
-        const specSeeds = seeds.filter(isSpecSeed).map(seedToPRD)
-        const seen = new Set(local.map(p => p.id))
-        setPrds([...local, ...specSeeds.filter(p => !seen.has(p.id))])
-        setIdeas(seeds.filter(s => !isSpecSeed(s) && (s.content || s.text || s.summary)).slice(0, 4))
+        applySeeds(seeds)
+        if (seeds.length) writeCache('seeds', { seeds, total: data.total })
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -452,21 +477,36 @@ export default function StudioPage() {
           <>
             <SectionHeader action="See all" onAction={() => router.push('/garden')}>Ideas ready to develop</SectionHeader>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {ideas.map((seed) => (
-                <div key={seed.id || seed.notion_id} className="v2-card" style={{ borderRadius: 15, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Leaf size={18} color="var(--green-700)" strokeWidth={1.75} />
-                  <span className="ui" style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {seed.title || 'Untitled'}
-                  </span>
-                  <button
-                    onClick={() => developSeed(seed)}
-                    className="tap ui"
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 99, padding: '7px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    <Pencil size={13} color="var(--green-700)" strokeWidth={2} /> Spec it
-                  </button>
-                </div>
-              ))}
+              {ideas.map((seed) => {
+                const paper = isPaperSeed(seed)
+                const meta = seed.seed_metadata || seed.metadata || {}
+                const pdfUrl = meta.pdf_url || ''
+                return (
+                  <div key={seed.id || seed.notion_id} className="v2-card" style={{ borderRadius: 15, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    {paper ? <BookOpen size={18} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} /> : <Leaf size={18} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span className="ui" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {seed.title || 'Untitled'}
+                      </span>
+                      {paper && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 3 }}>
+                          <span className="ui" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 9999, padding: '1.5px 7px' }}>PAPER</span>
+                          {pdfUrl && (
+                            <a href={pdfUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="ui" style={{ fontSize: 10, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>PDF ↗</a>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => developSeed(seed)}
+                      className="tap ui"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 99, padding: '7px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      <Pencil size={13} color="var(--green-700)" strokeWidth={2} /> Spec it
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </>
         )}

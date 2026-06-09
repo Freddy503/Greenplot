@@ -397,7 +397,12 @@ function SourcesList({ links, onPlant }: { links: LinkItem[]; onPlant: (id: stri
         {links.map((link) => {
           const isNew = !link.garden_seed_id
           return (
-            <div key={link.id} className="v2-card tap" style={{ borderRadius: 15, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+            <div
+              key={link.id}
+              className="v2-card tap"
+              onClick={() => { if (link.url) window.open(link.url, '_blank', 'noopener,noreferrer') }}
+              style={{ borderRadius: 15, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+            >
               <span style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, background: 'var(--surface-sunk)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                 <Globe size={18} color="var(--ink-3)" strokeWidth={1.75} />
                 {isNew && (
