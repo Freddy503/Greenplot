@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # Harvest / internal API key — must be set via environment variable
     HARVEST_API_KEY: Optional[str] = None
 
+    # Comma-separated list of emails allowed to call /api/v1/admin/* endpoints
+    ADMIN_EMAILS: str = "contact@example.com"
+
     # Sentry error monitoring
     SENTRY_DSN: Optional[str] = None
 

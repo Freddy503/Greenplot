@@ -1660,11 +1660,15 @@ Do NOT use "Key Insights", "Overview" or generic phrases. Be specific and sharp.
 Reply with just the title, no quotes, no explanation."""
     from app.briefings import _call_llm
     generated_title = _call_llm(title_prompt, max_tokens=30)
-    # Clean up: strip quotes, newlines, fallback to domain name
+    # Clean up: strip quotes, newlines; fall back to the strongest seed title
+    # before resorting to the (often too-generic) domain name
     import re as _re
     generated_title = _re.sub(r'["\'\n]', '', generated_title or '').strip()
     if not generated_title or len(generated_title) < 5 or len(generated_title) > 80:
-        generated_title = domain.replace('-', ' ').replace('_', ' ').title()
+        if title_hint and 5 <= len(title_hint.strip()) <= 80:
+            generated_title = title_hint.strip()
+        else:
+            generated_title = domain.replace('-', ' ').replace('_', ' ').title()
     title = generated_title
 
     user_prompt = build_wiki_user_prompt(title, domain, links_content, seeds_content)
@@ -2464,6 +2468,7 @@ async def write_spec(args: dict, user: User, db: Session) -> str:
 
         # Compile wiki article immediately
         article_id = None
+        library_error = None
         try:
             from app.wiki import compile_single_spec
             article_id = await compile_single_spec(
@@ -2474,14 +2479,29 @@ async def write_spec(args: dict, user: User, db: Session) -> str:
                 user_id=str(user.id),
                 tenant_id=str(user.tenant_id),
             )
+            if not article_id:
+                library_error = "compile returned no article"
         except Exception as e:
+            library_error = str(e)
             _log.warning(f"Spec wiki compile failed for '{title}': {e}")
+
+        if library_error:
+            return json.dumps({
+                "status": "partial",
+                "seed_id": str(seed.id),
+                "article_id": None,
+                "title": title,
+                "library_status": "failed",
+                "library_error": library_error[:200],
+                "message": f"PRD '{title}' saved to Studio, but the Library article could not be compiled ({library_error[:120]}). Retry via the Library compile button.",
+            })
 
         return json.dumps({
             "status": "ok",
             "seed_id": str(seed.id),
             "article_id": article_id,
             "title": title,
+            "library_status": "ok",
             "message": f"PRD '{title}' saved to Studio and Library.",
         })
     except Exception as e:
@@ -2489,3 +2509,150 @@ async def write_spec(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["write_spec"] = write_spec
+
+
+# ── ingest_paper: research paper → seed → developable project ─────────────────
+
+_ARXIV_ID_RE = None
+
+
+def _parse_arxiv_id(arxiv_id: str, url: str) -> str:
+    """Extract a bare arXiv id (e.g. '2406.01234') from an id or URL."""
+    global _ARXIV_ID_RE
+    import re as _re
+    if _ARXIV_ID_RE is None:
+        _ARXIV_ID_RE = _re.compile(r'(\d{4}\.\d{4,5})(v\d+)?')
+    for candidate in (arxiv_id, url):
+        if candidate:
+            m = _ARXIV_ID_RE.search(candidate)
+            if m:
+                return m.group(1)
+    return ""
+
+
+async def ingest_paper(args: dict, user: User, db: Session) -> str:
+    """Ingest a research paper (arXiv id or URL) as a 'paper' seed the user can develop into a project."""
+    import httpx
+
+    arxiv_id = (args.get("arxiv_id") or "").strip()
+    url = (args.get("url") or "").strip()
+    if not arxiv_id and not url:
+        return json.dumps({"status": "error", "message": "Provide an arxiv_id or url."})
+
+    title, abstract, authors, year, link = "", "", [], "", url
+
+    bare_id = _parse_arxiv_id(arxiv_id, url)
+    try:
+        if bare_id:
+            # arXiv Atom API
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://export.arxiv.org/api/query",
+                    params={"id_list": bare_id, "max_results": 1},
+                )
+            resp.raise_for_status()
+            import xml.etree.ElementTree as ET
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            root = ET.fromstring(resp.text)
+            entry = root.find("atom:entry", ns)
+            if entry is None:
+                return json.dumps({"status": "error", "message": f"arXiv paper {bare_id} not found."})
+            title = (entry.findtext("atom:title", "", ns) or "").replace("\n", " ").strip()
+            abstract = (entry.findtext("atom:summary", "", ns) or "").replace("\n", " ").strip()
+            authors = [a.findtext("atom:name", "", ns) for a in entry.findall("atom:author", ns)][:8]
+            published = entry.findtext("atom:published", "", ns) or ""
+            year = published[:4]
+            link = f"https://arxiv.org/abs/{bare_id}"
+        else:
+            # Generic URL — fetch contents via Exa
+            exa_key = settings.EXA_API_KEY
+            if not exa_key:
+                return json.dumps({"status": "error", "message": "Not an arXiv link and Exa is not configured — cannot fetch paper contents."})
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.post(
+                    "https://api.exa.ai/contents",
+                    headers={"x-api-key": exa_key, "Content-Type": "application/json"},
+                    json={"urls": [url], "text": {"maxCharacters": 3000}, "summary": True},
+                )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+            if not results:
+                return json.dumps({"status": "error", "message": f"Could not fetch contents for {url}."})
+            r = results[0]
+            title = (r.get("title") or url).strip()
+            abstract = (r.get("summary") or (r.get("text") or "")[:1500]).strip()
+            year = (r.get("publishedDate") or "")[:4]
+    except Exception as e:
+        return json.dumps({"status": "error", "message": f"Paper fetch failed: {e}"})
+
+    if not title:
+        return json.dumps({"status": "error", "message": "Could not extract a title from the paper."})
+
+    # Dedup by title
+    existing = db.query(Seed).filter(
+        Seed.user_id == user.id,
+        sa_func.lower(sa_func.trim(Seed.title)) == title.lower().strip()
+    ).first()
+    if existing:
+        return json.dumps({
+            "status": "ok",
+            "seed_id": str(existing.id),
+            "title": title,
+            "message": f"Paper '{title}' is already in the garden.",
+        })
+
+    citation = f"{', '.join(authors)} ({year})" if authors else (year or "")
+    content = (
+        f"**Source:** {link}\n"
+        + (f"**Authors:** {', '.join(authors)}\n" if authors else "")
+        + (f"**Year:** {year}\n" if year else "")
+        + f"\n## Abstract\n{abstract}\n"
+    )
+    seed = Seed(
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        title=title,
+        content=content,
+        seed_type="paper",
+        seed_metadata={
+            "tags": ["paper", "research"],
+            "source": "ingest_paper",
+            "seed_type": "paper",
+            "paper_url": link,
+            "citation": citation,
+        },
+        created_at=datetime.utcnow(),
+    )
+    db.add(seed)
+    db.commit()
+    db.refresh(seed)
+
+    # Index in Weaviate (best-effort)
+    try:
+        from app.enricher_v2 import embed_text
+        embedding = embed_text(f"{title}\n{abstract[:800]}")
+        weaviate_client.add_seed(
+            tenant_id=str(user.tenant_id),
+            user_id=str(user.id),
+            thought_id=None,
+            title=title,
+            content=content,
+            embedding=embedding,
+            metadata={"tags": ["paper", "research"], "seed_type": "paper"},
+            image_url=None,
+            created_at=seed.created_at.isoformat(),
+        )
+    except Exception as e:
+        logger.warning(f"Weaviate indexing failed for paper '{title}': {e}")
+
+    return json.dumps({
+        "status": "ok",
+        "seed_id": str(seed.id),
+        "title": title,
+        "url": link,
+        "citation": citation,
+        "message": f"Paper '{title}' planted in the garden. Suggest develop_idea to turn it into a buildable project spec.",
+    })
+
+
+TOOL_HANDLERS["ingest_paper"] = ingest_paper

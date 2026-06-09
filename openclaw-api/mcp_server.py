@@ -126,6 +126,82 @@ async def list_recent_seeds(limit: int = 10) -> str:
         return "\n".join(lines)
 
 
+def _is_spec(seed: dict) -> bool:
+    meta = seed.get("metadata") or {}
+    tags = meta.get("tags") or []
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",")]
+    return meta.get("seed_type") == "spec" or "spec" in tags or "prd" in tags
+
+
+async def list_specs(limit: int = 20) -> str:
+    """List PRD/spec seeds with their build status."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"{API_URL}/api/v1/seeds",
+            params={"limit": 100},
+            headers=_headers(),
+        )
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        seeds = [s for s in resp.json().get("seeds", []) if _is_spec(s)][:limit]
+        if not seeds:
+            return "No specs/PRDs found in the Studio."
+        lines = []
+        for s in seeds:
+            meta = s.get("metadata") or {}
+            status = meta.get("build_status", "draft")
+            pr = meta.get("build_pr_url", "")
+            lines.append(
+                f"- **{s.get('title', 'Untitled')}** (id={s.get('id')}) — status: {status}"
+                + (f" — PR: {pr}" if pr else "")
+            )
+        return "\n".join(lines)
+
+
+async def get_spec(seed_id: str) -> str:
+    """Fetch the full PRD content for a spec seed."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"{API_URL}/api/v1/seeds/{seed_id}",
+            headers=_headers(),
+        )
+        if resp.status_code == 404:
+            return f"No spec found with id {seed_id}. Use list_specs to see available specs."
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        s = resp.json()
+        meta = s.get("metadata") or {}
+        header = (
+            f"# {s.get('title', 'Untitled')}\n"
+            f"Build status: {meta.get('build_status', 'draft')}"
+            + (f" | PR: {meta.get('build_pr_url')}" if meta.get("build_pr_url") else "")
+            + (f" | Diagram: {meta.get('diagram_url')}" if meta.get("diagram_url") else "")
+        )
+        return f"{header}\n\n{s.get('content', '')}"
+
+
+async def report_build_progress(seed_id: str, status: str, pr_url: str = "", note: str = "") -> str:
+    """Update a spec's build lifecycle status (draft → ready → building → shipped)."""
+    payload = {"status": status}
+    if pr_url:
+        payload["pr_url"] = pr_url
+    if note:
+        payload["note"] = note
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.patch(
+            f"{API_URL}/api/v1/seeds/{seed_id}/build-status",
+            headers=_headers(),
+            json=payload,
+        )
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        return f"Spec {data.get('seed_id')} marked '{data.get('build_status')}'." + (
+            f" PR: {data.get('pr_url')}" if data.get("pr_url") else ""
+        )
+
+
 # ── MCP stdio transport ───────────────────────────────────────────────────────
 
 TOOLS_SCHEMA = [
@@ -174,6 +250,41 @@ TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "name": "list_specs",
+        "description": "List PRDs/specs in the Greenplot Studio with their build status (draft/ready/building/shipped). Use this to find a spec to implement.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max specs to return (default 20)", "default": 20},
+            },
+        },
+    },
+    {
+        "name": "get_spec",
+        "description": "Fetch the full PRD markdown for a spec seed, including build status, PR link, and architecture diagram URL. Use before implementing a spec.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "seed_id": {"type": "string", "description": "Spec seed id (from list_specs)"},
+            },
+            "required": ["seed_id"],
+        },
+    },
+    {
+        "name": "report_build_progress",
+        "description": "Report implementation progress on a spec back to Greenplot. Set status to 'building' when starting and 'shipped' with pr_url when the PR is open/merged.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "seed_id": {"type": "string", "description": "Spec seed id"},
+                "status": {"type": "string", "enum": ["draft", "ready", "building", "shipped"], "description": "New build status"},
+                "pr_url": {"type": "string", "description": "Pull request URL (for 'shipped')"},
+                "note": {"type": "string", "description": "Short progress note"},
+            },
+            "required": ["seed_id", "status"],
+        },
+    },
 ]
 
 
@@ -212,6 +323,15 @@ async def handle_message(msg: dict) -> dict | None:
                 result = await capture_thought(args["content"], args.get("source", "mcp"))
             elif tool_name == "list_recent_seeds":
                 result = await list_recent_seeds(args.get("limit", 10))
+            elif tool_name == "list_specs":
+                result = await list_specs(args.get("limit", 20))
+            elif tool_name == "get_spec":
+                result = await get_spec(args["seed_id"])
+            elif tool_name == "report_build_progress":
+                result = await report_build_progress(
+                    args["seed_id"], args["status"],
+                    args.get("pr_url", ""), args.get("note", ""),
+                )
             else:
                 result = f"Unknown tool: {tool_name}"
         except Exception as e:
