@@ -344,7 +344,10 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
             "Call this whenever the user asks to 'create a PRD', 'write a spec', 'document this feature', "
             "or after completing the 11-question gstack spec flow. "
             "Use the full gstack markdown structure: # Title — PRD, ## Problem Alignment, ## Solution Summary, "
-            "## Scope & Capabilities, ## Delivery Risks & Open Questions. "
+            "## System Architecture, ## Scope & Capabilities, ## Delivery Risks & Open Questions. "
+            "The System Architecture section must name the concrete components (services, data stores, "
+            "external APIs, frontend surfaces), the data flows between them, and the chosen stack — "
+            "it doubles as the brief for the auto-generated architecture diagram. "
             "Each section must have 3-5 sentences of substantive prose. "
             "Provide the complete structured PRD markdown in `content`."
         ),
@@ -369,6 +372,32 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         },
         permission=PermissionLevel.WRITE,
         handler=TOOL_HANDLERS.get("write_spec"),
+    ))
+
+    registry.register(ToolSpec(
+        name="ingest_paper",
+        description=(
+            "Ingest a research paper into the garden as a 'paper' seed. "
+            "Accepts an arXiv id (e.g. '2406.01234') or any paper URL. "
+            "Fetches title, authors, and abstract automatically. "
+            "Use when the user shares a paper or asks to save one — afterwards, "
+            "offer develop_idea to turn the paper into a buildable project spec."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "arxiv_id": {
+                    "type": "string",
+                    "description": "arXiv identifier, e.g. '2406.01234' (with or without version suffix).",
+                },
+                "url": {
+                    "type": "string",
+                    "description": "Paper URL (arXiv abs/pdf link or publisher page).",
+                },
+            },
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("ingest_paper"),
     ))
 
     # ── Sub-Agent System ───────────────────────────────────────────

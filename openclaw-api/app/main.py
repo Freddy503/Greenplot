@@ -44,7 +44,6 @@ import asyncio
 
 # --- Web Push (VAPID) ---
 VAPID_PRIVATE_KEY = None
-print("DEBUG: VAPID loading starting...", flush=True)
 VAPID_CLAIMS = {"sub": "mailto:contact@example.com"}
 
 # Priority: 1) VAPID_PRIVATE_KEY_BASE64 env var (cleanest for Docker/CI)
@@ -56,12 +55,9 @@ _vapid_key_path = os.environ.get(
     os.path.join(os.path.dirname(os.path.dirname(__file__)), ".vapid_private.pem")
 )
 try:
-    print(f"DEBUG: _vapid_key_b64 = {_vapid_key_b64[:50] if _vapid_key_b64 else 'EMPTY'}", flush=True)
     if _vapid_key_b64:
         import base64
-        print(f"DEBUG: Decoding base64...", flush=True)
         VAPID_PRIVATE_KEY = base64.b64decode(_vapid_key_b64.strip()).decode('utf-8')
-        print(f"DEBUG: Decoded key starts with: {VAPID_PRIVATE_KEY[:30]}", flush=True)
         logger.info("✅ VAPID private key loaded from VAPID_PRIVATE_KEY_BASE64 env var")
     elif os.path.exists(_vapid_key_path):
         with open(_vapid_key_path, "r") as f:
@@ -70,7 +66,6 @@ try:
     else:
         logger.warning("⚠️ VAPID private key not found — set VAPID_PRIVATE_KEY_BASE64 env var or place .vapid_private.pem alongside the app")
 except Exception as e:
-    print(f"DEBUG: Exception in VAPID loading: {e}", flush=True)
     logger.error(f"❌ Failed to load VAPID key: {e}", exc_info=True)
 
 def extract_text(msg: dict) -> str:
@@ -1012,13 +1007,8 @@ class ImageGenerateResponse(BaseModel):
     url: str
     prompt: str
 
-@app.post("/api/v1/images/generate", response_model=ImageGenerateResponse)
-async def generate_image(
-    req: ImageGenerateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate an image via BFL FLUX.2 [pro] — async submit → poll → return URL."""
+async def <BFL_API_KEY>(prompt: str, width: int = 1024, height: int = 1024) -> str:
+    """Generate an image via BFL FLUX — async submit → poll → return URL. Raises HTTPException on failure."""
     if not BFL_API_KEY:
         raise HTTPException(status_code=503, detail="Image generation not configured (missing BFL_API_KEY)")
 
@@ -1036,9 +1026,9 @@ async def generate_image(
             f"{BFL_BASE_URL}/v1/flux-pro-1.1",
             headers=headers,
             json={
-                "prompt": req.prompt,
-                "width": req.width,
-                "height": req.height,
+                "prompt": prompt,
+                "width": width,
+                "height": height,
             },
         )
 
@@ -1080,26 +1070,7 @@ async def generate_image(
             if status == "Ready":
                 sample = result.get("result", {}).get("sample")
                 if sample:
-                    # Track usage
-                    today = date.today()
-                    usage = db.query(Usage).filter(
-                        Usage.tenant_id == current_user.tenant_id,
-                        Usage.date >= today
-                    ).first()
-                    if not usage:
-                        usage = Usage(
-                            tenant_id=current_user.tenant_id,
-                            user_id=current_user.id,
-                            date=today,
-                            images_generated=1,
-                        )
-                        db.add(usage)
-                    else:
-                        usage.images_generated = (usage.images_generated or 0) + 1
-                    db.commit()
-
-                    return ImageGenerateResponse(url=sample, prompt=req.prompt)
-
+                    return sample
                 raise HTTPException(status_code=502, detail="BFL returned Ready but no sample URL")
 
             if status == "Error":
@@ -1107,6 +1078,177 @@ async def generate_image(
                 raise HTTPException(status_code=502, detail=f"BFL generation failed: {error_msg}")
 
         raise HTTPException(status_code=504, detail="Image generation timed out (30s)")
+
+
+def _track_image_usage(db: Session, current_user: User):
+    today = date.today()
+    usage = db.query(Usage).filter(
+        Usage.tenant_id == current_user.tenant_id,
+        Usage.date >= today
+    ).first()
+    if not usage:
+        usage = Usage(
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            date=today,
+            images_generated=1,
+        )
+        db.add(usage)
+    else:
+        usage.images_generated = (usage.images_generated or 0) + 1
+    db.commit()
+
+
+@app.post("/api/v1/images/generate", response_model=ImageGenerateResponse)
+async def generate_image(
+    req: ImageGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate an image via BFL FLUX.2 [pro] — async submit → poll → return URL."""
+    url = await <BFL_API_KEY>(req.prompt, req.width, req.height)
+    _track_image_usage(db, current_user)
+    return ImageGenerateResponse(url=url, prompt=req.prompt)
+
+
+# --- Spec Architecture Diagrams (BFL/FLUX) ---
+
+ARCHITECTURE_DIAGRAM_STYLE = (
+    "Clean technical system architecture diagram, flat vector style, white background, "
+    "labeled boxes connected by directional arrows, clear component grouping, "
+    "muted green and slate color palette, readable sans-serif labels, "
+    "no photorealism, no decorative elements, presentation quality"
+)
+
+
+class SpecDiagramResponse(BaseModel):
+    url: str
+    seed_id: str
+    article_updated: bool
+
+
+def _extract_architecture_section(content: str) -> str:
+    """Pull the '## System Architecture' section out of a PRD, if present."""
+    import re as _re
+    match = _re.search(
+        r'^##\s*(?:System\s+)?Architecture\b(.*?)(?=^##\s|\Z)',
+        content, _re.MULTILINE | _re.DOTALL | _re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+@app.post("/api/v1/specs/{seed_id}/diagram", response_model=SpecDiagramResponse)
+async def generate_spec_diagram(
+    seed_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate a BFL Flux system-architecture diagram for a spec seed.
+
+    Uses the PRD's '## System Architecture' section as the diagram brief
+    (falls back to title + summary), stores the image on the seed and on
+    the compiled Library article when one exists.
+    """
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+
+    seed = db.query(Seed).filter(
+        Seed.id == seed_uuid,
+        Seed.tenant_id == current_user.tenant_id,
+    ).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Spec not found")
+
+    content = seed.content or ""
+    arch_section = _extract_architecture_section(content)
+    brief = arch_section or f"{seed.title}. {content[:600]}"
+    prompt = (
+        f"{ARCHITECTURE_DIAGRAM_STYLE}. "
+        f"Diagram the following system: {brief[:1200]}"
+    )
+
+    url = await <BFL_API_KEY>(prompt, width=1408, height=1024)
+    _track_image_usage(db, current_user)
+
+    # Persist on the seed
+    seed.image_url = url
+    meta = dict(seed.seed_metadata or {})
+    meta["diagram_url"] = url
+    meta["diagram_generated_at"] = datetime.utcnow().isoformat()
+    seed.seed_metadata = meta
+    db.commit()
+
+    # Best-effort: attach to the compiled Library article (Weaviate)
+    article_updated = False
+    try:
+        articles = weaviate_client.get_wiki_articles(
+            tenant_id=str(current_user.tenant_id), limit=200
+        )
+        for art in articles:
+            if str(seed.id) in (art.get("sourceSeedIds") or []):
+                article_id = art.get("id")
+                if article_id and weaviate_client.update_wiki_article(article_id, imageUrl=url):
+                    article_updated = True
+                break
+    except Exception as e:
+        logger.warning(f"Spec diagram: could not update Library article image: {e}")
+
+    return SpecDiagramResponse(url=url, seed_id=str(seed.id), article_updated=article_updated)
+
+
+# --- Spec build lifecycle (draft → ready → building → shipped) ---
+
+class BuildStatusRequest(BaseModel):
+    status: str = Field(..., pattern="^(draft|ready|building|shipped)$")
+    pr_url: Optional[str] = Field(default=None, max_length=500)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class BuildStatusResponse(BaseModel):
+    seed_id: str
+    build_status: str
+    pr_url: Optional[str] = None
+
+
+@app.patch("/api/v1/seeds/{seed_id}/build-status", response_model=BuildStatusResponse)
+def update_build_status(
+    seed_id: str,
+    req: BuildStatusRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a spec seed's build lifecycle status.
+
+    Called from the Studio UI and by coding agents via the MCP
+    report_build_progress tool, closing the loop from PRD to shipped PR.
+    """
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+
+    seed = db.query(Seed).filter(
+        Seed.id == seed_uuid,
+        Seed.tenant_id == current_user.tenant_id,
+    ).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Spec not found")
+
+    meta = dict(seed.seed_metadata or {})
+    meta["build_status"] = req.status
+    meta["build_updated_at"] = datetime.utcnow().isoformat()
+    if req.pr_url:
+        meta["build_pr_url"] = req.pr_url
+    if req.note:
+        history = meta.get("build_notes", [])
+        history.append({"at": meta["build_updated_at"], "status": req.status, "note": req.note})
+        meta["build_notes"] = history[-20:]
+    seed.seed_metadata = meta
+    db.commit()
+
+    return BuildStatusResponse(seed_id=str(seed.id), build_status=req.status, pr_url=meta.get("build_pr_url"))
 
 # --- Usage ---
 
@@ -1444,8 +1586,10 @@ def admin_health():
     }
 
 @app.get("/api/v1/admin/tenants", response_model=TenantsListResponse)
-def admin_list_tenants(db: Session = Depends(get_db)):
-    # For MVP, simple list; later add admin role check
+def admin_list_tenants(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+    if (current_user.email or "").lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
     tenants = db.query(User).with_entities(User.id, User.email, User.created_at, User.subscription_status).all()
     info = [TenantsListResponse.TenantInfo(id=t.id, email=t.email, created_at=t.created_at, subscription_status=t.subscription_status) for t in tenants]
     return TenantsListResponse(tenants=info, total=len(info))
