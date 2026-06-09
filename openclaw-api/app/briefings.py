@@ -710,27 +710,44 @@ def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set =
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return 0
+    from datetime import date as _date
+    digest_date = _date.today().isoformat()
     for paper in papers:
         url = paper.get("url", "")
         title = (paper.get("title", "") or "").strip()
+        # 'content' is the LLM-synthesized digest description that connects the
+        # paper to the user's garden — keep it as the seed body so the link to
+        # existing seeds/wiki stays visible in the app.
         content = (paper.get("content", "") or paper.get("snippet", "")).strip()
         if not title or len(content) < 50:
             continue
         # Deduplicate: skip if a seed with this source_url already exists
         if url in seen_paper_urls:
             continue
+        pdf_url = url.replace("/abs/", "/pdf/") if "arxiv.org/abs/" in url else ""
+        body = (
+            f"**Source:** {url}\n"
+            + (f"**PDF:** {pdf_url}\n" if pdf_url else "")
+            + f"**From your Research Digest** — {digest_date}\n\n"
+            + content[:2800]
+        )
         seed = Seed(
             id=_uuid.uuid4(),
             tenant_id=user.tenant_id,
             user_id=user_id,
             title=title[:200],
-            content=content[:3000],
+            content=body,
+            seed_type="paper",
             created_by="agent_research",
             created_via="academic_digest",
             seed_metadata={
-                "tags": ["research-paper", "arxiv"],
+                "tags": ["paper", "research-paper", "arxiv"],
+                "seed_type": "paper",
                 "domain": "Research",
                 "source_url": url,
+                "paper_url": url,
+                "pdf_url": pdf_url,
+                "digest_date": digest_date,
                 "energy": "HIGH",
             },
         )

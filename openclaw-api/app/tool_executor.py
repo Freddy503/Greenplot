@@ -2656,3 +2656,141 @@ async def ingest_paper(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["ingest_paper"] = ingest_paper
+
+
+# ── update_seed / create_article / update_article ─────────────────────────────
+# Long-running PRD mapping needs the agent to evolve existing seeds and
+# Library articles instead of creating new ones each turn.
+
+async def update_seed(args: dict, user: User, db: Session) -> str:
+    """Update an existing seed's title/content/tags. append=True adds to content."""
+    seed_id = (args.get("seed_id") or "").strip()
+    if not seed_id:
+        return json.dumps({"status": "error", "message": "seed_id is required"})
+    try:
+        seed = db.query(Seed).filter(
+            Seed.id == UUID(seed_id),
+            Seed.tenant_id == user.tenant_id,
+        ).first()
+    except ValueError:
+        return json.dumps({"status": "error", "message": f"Invalid seed_id: {seed_id}"})
+    if not seed:
+        return json.dumps({"status": "error", "message": f"Seed {seed_id} not found"})
+
+    new_title = (args.get("title") or "").strip()
+    new_content = (args.get("content") or "").strip()
+    append = bool(args.get("append", False))
+    tags = args.get("tags")
+
+    if new_title:
+        seed.title = new_title[:200]
+    if new_content:
+        seed.content = f"{seed.content or ''}\n\n{new_content}" if append else new_content
+    if tags is not None:
+        meta = dict(seed.seed_metadata or {})
+        meta["tags"] = tags
+        seed.seed_metadata = meta
+    db.commit()
+    db.refresh(seed)
+
+    # Re-index in Weaviate (best-effort)
+    try:
+        from app.enricher_v2 import embed_text
+        embedding = embed_text(f"{seed.title}\n{(seed.content or '')[:500]}")
+        weaviate_client.add_seed(
+            tenant_id=str(user.tenant_id),
+            user_id=str(user.id),
+            thought_id=None,
+            title=seed.title,
+            content=seed.content or "",
+            embedding=embedding,
+            metadata=seed.seed_metadata or {},
+            image_url=seed.image_url,
+            created_at=seed.created_at.isoformat() if seed.created_at else None,
+        )
+    except Exception as e:
+        logger.warning(f"Weaviate re-index failed for seed {seed.id}: {e}")
+
+    return json.dumps({
+        "status": "ok",
+        "seed_id": str(seed.id),
+        "title": seed.title,
+        "message": f"Seed '{seed.title}' updated" + (" (content appended)" if append and new_content else ""),
+    })
+
+
+TOOL_HANDLERS["update_seed"] = update_seed
+
+
+async def create_article(args: dict, user: User, db: Session) -> str:
+    """Create a Library wiki article directly (without compiling from seeds)."""
+    title = (args.get("title") or "").strip()
+    content = (args.get("content") or "").strip()
+    category = (args.get("category") or "Note").strip()
+    summary = (args.get("summary") or "").strip()
+    if not title or not content:
+        return json.dumps({"status": "error", "message": "title and content are required"})
+    if not summary:
+        for line in content.split("\n"):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                summary = stripped[:300]
+                break
+    try:
+        article_id = weaviate_client.add_wiki_article(
+            tenant_id=str(user.tenant_id),
+            user_id=str(user.id),
+            title=title,
+            category=category,
+            summary=summary or content[:300],
+            content=content,
+            status="published",
+        )
+        return json.dumps({
+            "status": "ok",
+            "article_id": article_id,
+            "title": title,
+            "message": f"Article '{title}' created in the Library.",
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": f"Article creation failed: {e}"})
+
+
+TOOL_HANDLERS["create_article"] = create_article
+
+
+async def update_article(args: dict, user: User, db: Session) -> str:
+    """Update an existing Library article's title/content/summary by article_id."""
+    article_id = (args.get("article_id") or "").strip()
+    if not article_id:
+        return json.dumps({"status": "error", "message": "article_id is required"})
+
+    updates = {}
+    if args.get("title"):
+        updates["title"] = str(args["title"]).strip()[:200]
+    if args.get("content"):
+        updates["content"] = str(args["content"])
+    if args.get("summary"):
+        updates["summary"] = str(args["summary"]).strip()[:300]
+    if not updates:
+        return json.dumps({"status": "error", "message": "Provide at least one of title/content/summary"})
+    updates["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+    # Ownership check: article must belong to this tenant
+    try:
+        articles = weaviate_client.get_wiki_articles(tenant_id=str(user.tenant_id), limit=200)
+        if not any(a.get("id") == article_id for a in articles):
+            return json.dumps({"status": "error", "message": f"Article {article_id} not found in your Library"})
+    except Exception as e:
+        return json.dumps({"status": "error", "message": f"Could not verify article: {e}"})
+
+    if weaviate_client.update_wiki_article(article_id, **updates):
+        return json.dumps({
+            "status": "ok",
+            "article_id": article_id,
+            "message": "Article updated" + (f" — '{updates.get('title')}'" if updates.get("title") else ""),
+        })
+    return json.dumps({"status": "error", "message": "Article update failed"})
+
+
+TOOL_HANDLERS["update_article"] = update_article
