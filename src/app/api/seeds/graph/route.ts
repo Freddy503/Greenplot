@@ -31,11 +31,12 @@ interface GraphEdge {
 
 // ── Signal 1: PostgreSQL SeedLinks (backlinks) ──────────────────────────
 
-async function fetchDatabaseLinks(seedIds: string[]): Promise<GraphEdge[]> {
+async function fetchDatabaseLinks(seedIds: string[], authHeader: string | null): Promise<GraphEdge[]> {
+  if (!authHeader) return []
   try {
-    const res = await fetch(`${API_URL}/api/seeds/links`, {
+    const res = await fetch(`${API_URL}/api/v1/seeds/links`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
       body: JSON.stringify({ seed_ids: seedIds }),
       signal: AbortSignal.timeout(5000),
     })
@@ -221,7 +222,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Try database backlinks first (strongest signal)
     const seedIds = seeds.map(s => s.id)
-    const dbLinks = await fetchDatabaseLinks(seedIds)
+    const dbLinks = await fetchDatabaseLinks(seedIds, req.headers.get('authorization'))
     addLinks(dbLinks, 'database')
 
     // 2. Try Weaviate vector similarity

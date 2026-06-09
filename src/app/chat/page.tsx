@@ -1164,8 +1164,9 @@ export default function ChatPage() {
                                               )
                                             }
 
-                                            // write_spec — PRD saved to Studio & Library
-                                            if (tp.type === 'write_spec' && parsedOutput?.status === 'ok') {
+                                            // write_spec — PRD saved to Studio & Library (partial = Library compile failed)
+                                            if (tp.type === 'write_spec' && (parsedOutput?.status === 'ok' || parsedOutput?.status === 'partial')) {
+                                              const libraryFailed = parsedOutput.status === 'partial'
                                               return (
                                                 <div className="mt-2 p-3 rounded-2xl flex items-center gap-3" style={{ background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)' }}>
                                                   <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1173,7 +1174,9 @@ export default function ChatPage() {
                                                   </div>
                                                   <div style={{ flex: 1, minWidth: 0 }}>
                                                     <p className="ui" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green-deep)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{parsedOutput.title}</p>
-                                                    <p className="body-text" style={{ fontSize: 11.5, color: 'var(--green-700)' }}>PRD saved to Studio & Library</p>
+                                                    <p className="body-text" style={{ fontSize: 11.5, color: libraryFailed ? 'var(--ink-3)' : 'var(--green-700)' }}>
+                                                      {libraryFailed ? 'PRD saved to Studio — Library compile failed, retry from Library' : 'PRD saved to Studio & Library'}
+                                                    </p>
                                                   </div>
                                                   <a href="/studio" className="tap" style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none', padding: '4px 10px', background: 'rgba(34,197,94,0.15)', borderRadius: 9 }}>
                                                     Open →
