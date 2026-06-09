@@ -1198,6 +1198,34 @@ async def generate_spec_diagram(
     return SpecDiagramResponse(url=url, seed_id=str(seed.id), article_updated=article_updated)
 
 
+# --- Research paper ingestion (arXiv / paper URL → paper seed) ---
+
+class PaperIngestRequest(BaseModel):
+    arxiv_id: Optional[str] = Field(default=None, max_length=100)
+    url: Optional[str] = Field(default=None, max_length=500)
+
+
+@app.post("/api/v1/papers/ingest")
+async def ingest_paper_endpoint(
+    req: PaperIngestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Ingest a research paper (e.g. from the Academic Digest) as a 'paper' seed.
+
+    Same logic as the ingest_paper chat tool, exposed for the Library UI.
+    """
+    if not req.arxiv_id and not req.url:
+        raise HTTPException(status_code=422, detail="Provide an arxiv_id or url")
+    from app.tool_executor import ingest_paper
+    result = json.loads(await ingest_paper(
+        {"arxiv_id": req.arxiv_id or "", "url": req.url or ""}, current_user, db
+    ))
+    if result.get("status") == "error":
+        raise HTTPException(status_code=422, detail=result.get("message", "Paper ingestion failed"))
+    return result
+
+
 # --- Spec build lifecycle (draft → ready → building → shipped) ---
 
 class BuildStatusRequest(BaseModel):
