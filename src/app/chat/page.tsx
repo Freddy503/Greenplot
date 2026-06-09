@@ -895,7 +895,7 @@ export default function ChatPage() {
       {/* ── Messages ─────────────────────────────────────── */}
       <main className="flex-1 min-h-0 overflow-hidden" style={{ paddingTop: 0 }}>
         <Conversation className="h-full">
-          <ConversationContent>
+          <ConversationContent className="max-w-2xl mx-auto w-full">
             {messages.length === 0 ? (
               <ConversationEmptyState>
                 <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full">

@@ -186,7 +186,7 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
   return (
     <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Minimal header */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
+      <div style={{ position: 'fixed', top: 0, left: 'var(--sidenav-w, 0px)', right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', height: 56 }}>
           <button onClick={onBack} className="tap" style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green-700)', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             <ArrowLeft size={18} strokeWidth={2} color="var(--green-700)" /> Studio
@@ -206,7 +206,7 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
         </div>
       </div>
 
-      <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)', paddingBottom: 100, padding: '0 18px' }}>
+      <div className="desk-narrow" style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)', paddingBottom: 100, padding: '0 18px' }}>
         <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Pill tone="soft" size="xs">SPEC</Pill>
@@ -314,11 +314,11 @@ export default function StudioPage() {
         subtitle="Brainstorm, pressure-test, and spec ideas into PRDs you can hand to Claude Code."
       />
 
-      <div style={{ position: 'relative', zIndex: 3, marginTop: -22, padding: '0 18px', paddingBottom: 120 }}>
+      <div className="desk-wrap" style={{ position: 'relative', zIndex: 3, marginTop: -22, padding: '0 18px', paddingBottom: 120 }}>
         <SectionHeader>Thinking partner</SectionHeader>
 
-        {/* 2×2 mode grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 11 }}>
+        {/* 2×2 mode grid (1×4 on desktop) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-4)', gap: 11 }}>
           {THINKING_MODES.map((mode) => {
             const ModeIcon = MODE_ICONS[mode.id] || Sparkles
             return (
@@ -394,7 +394,7 @@ export default function StudioPage() {
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
             {(showAllPrds ? prds : prds.slice(0, PRD_PAGE_SIZE)).map((prd) => (
               <div key={prd.id} onClick={() => setSelected(prd)} className="v2-card tap" style={{ borderRadius: 16, padding: 14, display: 'flex', gap: 12, cursor: 'pointer' }}>
                 <span style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -582,3 +582,37 @@ html, body {
     max-width: none !important;
   }
 }
+
+/* ── Desktop shell (web version, ≥1024px) ─────────────────────────────────
+   The mobile-first PWA stays untouched below lg. At lg+ a fixed SideNav
+   (248px) replaces Header/BottomNav; pages opt in to wider layouts via
+   the CSS variables and utility classes below. */
+:root {
+  --sidenav-w: 0px;
+  --desk-cols-2: 1fr;          /* single column on mobile */
+  --desk-cols-4: 1fr 1fr;      /* 2×2 grids on mobile */
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --desk-cols-2: repeat(2, minmax(0, 1fr));
+    --desk-cols-4: repeat(4, minmax(0, 1fr));
+  }
+
+  body.with-sidenav {
+    --sidenav-w: 248px;
+    padding-left: var(--sidenav-w);
+  }
+
+  .desk-wrap {
+    max-width: 1020px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .desk-narrow {
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
