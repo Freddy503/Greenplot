@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
-import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2 } from 'lucide-react'
+import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2 } from 'lucide-react'
 
 import Hero from '@/components/layout/hero'
 import Header from '@/components/layout/header'
@@ -23,6 +23,16 @@ interface PRDItem {
   createdAt: string
   source?: string
   local?: boolean
+  diagramUrl?: string
+  buildStatus?: string
+  prUrl?: string
+}
+
+interface SeedMeta {
+  tags?: string[]
+  diagram_url?: string
+  build_status?: string
+  build_pr_url?: string
 }
 
 interface RawSeed {
@@ -35,10 +45,17 @@ interface RawSeed {
   seed_type?: string
   type?: string
   tags?: string | string[]
-  seed_metadata?: { tags?: string[] }
-  metadata?: { tags?: string[] }
+  seed_metadata?: SeedMeta
+  metadata?: SeedMeta
   created_at?: string
   created?: string
+}
+
+const BUILD_STATUS_LABELS: Record<string, string> = {
+  draft: 'DRAFT',
+  ready: 'READY',
+  building: 'BUILDING',
+  shipped: 'SHIPPED',
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -62,10 +79,12 @@ function isSpecSeed(s: RawSeed): boolean {
 
 function seedToPRD(s: RawSeed): PRDItem {
   const content = s.content || s.text || s.summary || ''
+  const meta = s.seed_metadata || s.metadata || {}
   return {
     id: s.id || s.notion_id || `seed_${Math.random().toString(36).slice(2)}`,
     title: s.title || content.split('\n')[0]?.replace(/^#+\s*/, '').slice(0, 80) || 'Untitled spec',
     content, createdAt: s.created_at || s.created || new Date().toISOString(), source: 'garden',
+    diagramUrl: meta.diagram_url, buildStatus: meta.build_status, prUrl: meta.build_pr_url,
   }
 }
 
@@ -98,6 +117,48 @@ const MODE_ICONS: Record<string, React.ComponentType<any>> = {
 // ── PRD Detail ────────────────────────────────────────
 
 function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => void; onDeleted: (id: string) => void }) {
+  const [diagramUrl, setDiagramUrl] = useState(prd.diagramUrl)
+  const [generating, setGenerating] = useState(false)
+  const [buildStatus, setBuildStatus] = useState(prd.buildStatus || 'draft')
+
+  const generateDiagram = async () => {
+    if (generating) return
+    setGenerating(true)
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/specs/${prd.id}/diagram`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      const data = await res.json()
+      if (res.ok && data.url) {
+        setDiagramUrl(data.url)
+        toast.success('Architecture diagram generated')
+      } else {
+        toast.error(data.detail || data.error || 'Diagram generation failed')
+      }
+    } catch {
+      toast.error('Diagram generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const cycleBuildStatus = async () => {
+    const order = ['draft', 'ready', 'building', 'shipped']
+    const next = order[(order.indexOf(buildStatus) + 1) % order.length]
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/specs/${prd.id}/build-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status: next }),
+      })
+      if (res.ok) { setBuildStatus(next); toast.success(`Marked ${next}`) }
+      else toast.error('Could not update status')
+    } catch { toast.error('Could not update status') }
+  }
+
   const copyForAgent = () => {
     const framed = `# ${prd.title}\n\n${prd.content}\n\n---\nUse this PRD as the spec for the task I'm about to describe. Implement it faithfully, asking before making scope decisions not covered above.`
     navigator.clipboard.writeText(framed)
@@ -147,11 +208,39 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
 
       <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)', paddingBottom: 100, padding: '0 18px' }}>
         <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)' }}>
-          <Pill tone="soft" size="xs">SPEC</Pill>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Pill tone="soft" size="xs">SPEC</Pill>
+            {!prd.local && (
+              <button onClick={cycleBuildStatus} className="tap ui" style={{ background: buildStatus === 'shipped' ? 'var(--green)' : 'var(--surface-sunk)', color: buildStatus === 'shipped' ? '#fff' : 'var(--ink-2)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '3px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>
+                {BUILD_STATUS_LABELS[buildStatus] || 'DRAFT'}
+              </button>
+            )}
+            {prd.prUrl && (
+              <a href={prd.prUrl} target="_blank" rel="noopener noreferrer" className="ui" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--green-700)' }}>View PR →</a>
+            )}
+          </div>
           <h1 className="serif" style={{ fontSize: 32, lineHeight: 1.1, color: 'var(--ink)', marginTop: 12, marginBottom: 8, letterSpacing: '-0.02em' }}>{prd.title}</h1>
           <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 24 }}>
             {prd.local ? 'Saved from Spec mode' : 'From your garden'} · {timeAgo(prd.createdAt)}
           </p>
+          {!prd.local && (
+            diagramUrl ? (
+              <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hairline)', marginBottom: 16 }}>
+                <img src={diagramUrl} alt="System architecture diagram" style={{ width: '100%', height: 'auto', display: 'block' }} loading="lazy" />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface-sunk)' }}>
+                  <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>System architecture · BFL Flux</span>
+                  <button onClick={generateDiagram} disabled={generating} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>
+                    {generating ? 'Regenerating…' : 'Regenerate'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={generateDiagram} disabled={generating} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center', background: 'var(--green-tint)', color: 'var(--green-700)', border: '1px dashed var(--green-tint-2)', borderRadius: 16, padding: '13px 16px', fontFamily: 'var(--ui)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
+                {generating ? <Loader2 size={15} strokeWidth={2} className="animate-spin" /> : <Network size={15} strokeWidth={2} />}
+                {generating ? 'Generating architecture diagram (~30s)…' : 'Generate architecture diagram'}
+              </button>
+            )
+          )}
           <div className="glass" style={{ borderRadius: 20, padding: '20px 24px' }}>
             <div className="prose prose-sm max-w-none" style={{ fontFamily: 'var(--body)', fontSize: 15, lineHeight: 1.65, color: 'var(--ink)' }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{prd.content}</ReactMarkdown>
@@ -318,6 +407,12 @@ export default function StudioPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                     <Pill tone="soft" size="xs">SPEC</Pill>
+                    {prd.buildStatus && prd.buildStatus !== 'draft' && (
+                      <span className="ui" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: prd.buildStatus === 'shipped' ? '#fff' : 'var(--green-700)', background: prd.buildStatus === 'shipped' ? 'var(--green)' : 'var(--green-tint)', borderRadius: 9999, padding: '2px 8px' }}>
+                        {BUILD_STATUS_LABELS[prd.buildStatus]}
+                      </span>
+                    )}
+                    {prd.diagramUrl && <Network size={12} color="var(--ink-3)" strokeWidth={1.75} />}
                     <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{timeAgo(prd.createdAt)}</span>
                   </div>
                 </div>

@@ -251,7 +251,8 @@ export async function POST(req: Request) {
                   }
 
                   // write_spec result — emit a sentinel so chat page can render the PRD card
-                  if (event.name === 'write_spec' && parsed?.status === 'ok') {
+                  // ('partial' = seed saved but Library compile failed; still render the card)
+                  if (event.name === 'write_spec' && (parsed?.status === 'ok' || parsed?.status === 'partial')) {
                     writer.write({
                       type: 'source-url',
                       sourceId: `__spec__:${parsed.seed_id || 'unknown'}`,
