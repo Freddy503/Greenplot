@@ -81,7 +81,7 @@ import {
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
-import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft } from 'lucide-react'
+import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft, Sprout } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -895,10 +895,10 @@ export default function ChatPage() {
       {/* ── Messages ─────────────────────────────────────── */}
       <main className="flex-1 min-h-0 overflow-hidden" style={{ paddingTop: 0 }}>
         <Conversation className="h-full">
-          <ConversationContent className="max-w-2xl mx-auto w-full">
+          <ConversationContent className="max-w-2xl lg:max-w-3xl mx-auto w-full">
             {messages.length === 0 ? (
               <ConversationEmptyState>
-                <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full">
+                <div className="flex flex-col items-center gap-6 max-w-2xl lg:max-w-3xl mx-auto w-full">
                   {/* Brand icon */}
                   <div style={{ position: 'relative' }}>
                     <div style={{ position: 'absolute', inset: 0, borderRadius: 99, filter: 'blur(20px)', opacity: 0.3, background: 'var(--green)', transform: 'scale(1.8)' }} />
@@ -1200,6 +1200,43 @@ export default function ChatPage() {
                                               )
                                             }
 
+                                            // Connections focus card — related seeds as structured chips, not a text blob
+                                            if ((tp.type === 'search_seeds' || tp.type === 'search_seeds_filtered') && parsedOutput?.status === 'ok' && Array.isArray(parsedOutput.results) && parsedOutput.results.length > 0) {
+                                              const connections = parsedOutput.results.slice(0, 6) as Array<{ title: string; summary?: string; content?: string; domain?: string; tags?: string }>
+                                              return (
+                                                <div className="mt-2 p-3 rounded-2xl" style={{ background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)' }}>
+                                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                                    <span style={{ width: 28, height: 28, borderRadius: 9, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                      <Sprout size={15} color="#06281a" strokeWidth={2} />
+                                                    </span>
+                                                    <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--green-deep)' }}>
+                                                      {connections.length} connection{connections.length === 1 ? '' : 's'} in your garden
+                                                    </span>
+                                                    <a href="/garden" className="ui" style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>Garden →</a>
+                                                  </div>
+                                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                    {connections.map((c, ci) => (
+                                                      <div key={ci} style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 11, padding: '8px 11px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                                          <span className="ui" style={{ flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
+                                                          {c.domain && (
+                                                            <span className="ui" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 9999, padding: '2px 7px', flexShrink: 0 }}>
+                                                              {String(c.domain).toUpperCase().slice(0, 18)}
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                        {(c.summary || c.content) && (
+                                                          <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-2)', lineHeight: 1.5, marginTop: 3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                                            {c.summary || c.content}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )
+                                            }
+
                                             if (tp.output != null || tp.errorText != null) {
                                               return (
                                                 <ToolOutput
@@ -1478,7 +1515,7 @@ export default function ChatPage() {
           </div>
         )}
         {/* Thinking-partner mode chips */}
-        <div className="max-w-2xl mx-auto mb-2">
+        <div className="max-w-2xl lg:max-w-3xl mx-auto mb-2">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
             {THINKING_MODES.map((m) => {
               const active = selectedMode?.id === m.id
@@ -1503,7 +1540,7 @@ export default function ChatPage() {
             })}
           </div>
         </div>
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl lg:max-w-3xl mx-auto">
           <PromptBox
             ref={promptRef}
             name="message"

@@ -184,14 +184,23 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
   const handleWebSearch = async () => {
     setLoadingSearch(true)
     try {
+      const token = localStorage.getItem('greenplot_token')
       const res = await fetch('/api/seeds/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: seed.title, limit: 3 }),
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ query: seed.title, limit: 6 }),
       })
       const data = await res.json()
-      if (data.seeds) setSearchResults(data.seeds.map((s: { title: string }) => s.title))
-    } catch {}
+      const self = seed.title.toLowerCase().trim()
+      const titles = (data.seeds || [])
+        .map((s: { title: string }) => s.title)
+        .filter((t: string) => t && t.toLowerCase().trim() !== self)
+        .slice(0, 5)
+      setSearchResults(titles)
+      if (titles.length === 0) toast.info('No related seeds found yet — plant more in this area')
+    } catch {
+      toast.error('Could not search related seeds')
+    }
     setLoadingSearch(false)
   }
 
