@@ -400,6 +400,71 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("ingest_paper"),
     ))
 
+    registry.register(ToolSpec(
+        name="update_seed",
+        description=(
+            "Update an existing seed's title, content, or tags. Use append=true to add to the "
+            "existing content instead of replacing it — ideal for long-running work that builds "
+            "up a seed (e.g. mapping out a complex PRD) across multiple turns. "
+            "Find the seed_id via search_seeds first."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "seed_id": {"type": "string", "description": "UUID of the seed to update."},
+                "title": {"type": "string", "description": "New title (optional)."},
+                "content": {"type": "string", "description": "New or additional content (optional)."},
+                "append": {"type": "boolean", "description": "true: append content to the existing text. false (default): replace it."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Replace the seed's tags (optional)."},
+            },
+            "required": ["seed_id"],
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("update_seed"),
+    ))
+
+    registry.register(ToolSpec(
+        name="create_article",
+        description=(
+            "Create a Library wiki article directly with the given markdown content. "
+            "Use when the user asks to write up, document, or publish something to their Library "
+            "without going through spec mode."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Article title."},
+                "content": {"type": "string", "description": "Full article content in markdown."},
+                "category": {"type": "string", "description": "Category label (default 'Note')."},
+                "summary": {"type": "string", "description": "1-2 sentence summary (auto-derived if omitted)."},
+            },
+            "required": ["title", "content"],
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("create_article"),
+    ))
+
+    registry.register(ToolSpec(
+        name="update_article",
+        description=(
+            "Update an existing Library article's title, content, or summary. "
+            "Use query_wiki/search to find the article first; pass its article_id. "
+            "Ideal for iterating on a living document across a long session."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "article_id": {"type": "string", "description": "Weaviate id of the article."},
+                "title": {"type": "string", "description": "New title (optional)."},
+                "content": {"type": "string", "description": "Replacement markdown content (optional)."},
+                "summary": {"type": "string", "description": "New summary (optional)."},
+            },
+            "required": ["article_id"],
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("update_article"),
+    ))
+
     # ── Sub-Agent System ───────────────────────────────────────────
     from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
 

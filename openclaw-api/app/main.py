@@ -396,7 +396,13 @@ def list_seeds(
             seed.energy = metadata.get("energy", "") or ""
             seed.summary = metadata.get("summary", "") or ""
 
-        return SeedSearchResponse(seeds=seeds, query=None, total=len(seeds))
+        # True total (not capped by limit) so the Garden stat chips are accurate
+        total = db.query(func.count(Seed.id)).filter(
+            Seed.tenant_id == current_user.tenant_id,
+            (Seed.archived == False) | (Seed.archived == None)
+        ).scalar() or len(seeds)
+
+        return SeedSearchResponse(seeds=seeds, query=None, total=total)
 
 class SeedSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
