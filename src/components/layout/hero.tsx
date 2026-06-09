@@ -94,9 +94,9 @@ export default function Hero({
       className="hero-forest"
       style={{ borderRadius: '0 0 30px 30px', paddingTop: 'max(52px, calc(env(safe-area-inset-top, 0px) + 18px))', paddingBottom: tall ? 30 : 26, position: 'relative', zIndex: 2 }}
     >
-      <div style={{ position: 'relative', zIndex: 2, padding: '0 22px' }}>
-        {/* Chrome row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tall ? 22 : 18 }}>
+      <div className="desk-wrap" style={{ position: 'relative', zIndex: 2, padding: '0 22px' }}>
+        {/* Chrome row — SideNav covers brand/search/bell on desktop */}
+        <div className="flex lg:hidden items-center justify-between" style={{ marginBottom: tall ? 22 : 18 }}>
           <Brand />
           <div style={{ display: 'flex', gap: 9 }}>
             <HeroIconBtn onClick={() => router.push('/chat')}>

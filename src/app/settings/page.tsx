@@ -275,7 +275,7 @@ export default function SettingsPage() {
         showBell={false}
       />
 
-      <div style={{ position: 'relative', zIndex: 3, marginTop: -22, padding: '0 18px', paddingBottom: 120 }}>
+      <div className="desk-narrow" style={{ position: 'relative', zIndex: 3, marginTop: -22, padding: '0 18px', paddingBottom: 120 }}>
 
         {/* Profile card */}
         <div className="glass" style={{ borderRadius: 22, padding: '18px 18px', marginBottom: 22 }}>

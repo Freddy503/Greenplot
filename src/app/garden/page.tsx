@@ -211,7 +211,7 @@ export default function GardenPage() {
       </Hero>
 
       {/* Workspace */}
-      <div style={{ position: 'relative', zIndex: 3, marginTop: -18, padding: '0 18px', paddingBottom: 120 }}>
+      <div className="desk-wrap" style={{ position: 'relative', zIndex: 3, marginTop: -18, padding: '0 18px', paddingBottom: 120 }}>
         {/* View toggle + sort */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
           <Segmented
@@ -269,7 +269,7 @@ export default function GardenPage() {
         <SectionHeader action="View graph" onAction={() => setGraphOpen(true)}>Recent seeds</SectionHeader>
 
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
             {[1,2,3,4].map(i => (
               <div key={i} style={{ height: 72, borderRadius: 16, background: 'var(--surface-sunk)', animation: 'pulse 1.5s ease-in-out infinite' }} />
             ))}
@@ -281,7 +281,7 @@ export default function GardenPage() {
             <p className="body-text" style={{ fontSize: 13, marginTop: 8 }}>Plant your first idea in Chat</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
             {sorted.map((seed, i) => (
               <SeedRow
                 key={seed.id}

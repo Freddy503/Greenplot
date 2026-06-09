@@ -120,7 +120,7 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
       </DetailHero>
 
       {/* Article body */}
-      <div style={{ position: 'relative', zIndex: 3, padding: '24px 20px 140px' }}>
+      <div className="desk-narrow" style={{ position: 'relative', zIndex: 3, padding: '24px 20px 140px' }}>
         {/* Lead paragraph — serif */}
         {firstParagraph && (
           <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, color: 'var(--ink)', letterSpacing: '-0.01em', marginBottom: 20 }}>
@@ -271,7 +271,7 @@ function PlantsList({ articles, onSelect, onCompile }: { articles: Article[]; on
       </div>
 
       {/* Rest of articles */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 11 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9, marginTop: 11 }}>
         {rest.map((article) => (
           <div key={article.id} onClick={() => onSelect(article)} className="v2-card tap" style={{ borderRadius: 16, padding: 14, display: 'flex', gap: 13, cursor: 'pointer' }}>
             <span style={{ width: 46, height: 46, borderRadius: 13, flexShrink: 0, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -322,7 +322,7 @@ function SourcesList({ links, onPlant }: { links: LinkItem[]; onPlant: (id: stri
   return (
     <>
       <SectionHeader action="Add link">{unreadCount > 0 ? `${unreadCount} new to read` : 'Saved links'}</SectionHeader>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
         {links.map((link) => {
           const isNew = !link.garden_seed_id
           return (
@@ -505,7 +505,7 @@ export default function LibraryPage() {
       </Hero>
 
       {/* Workspace */}
-      <div style={{ position: 'relative', zIndex: 3, marginTop: -22, padding: '0 18px', paddingBottom: 120 }}>
+      <div className="desk-wrap" style={{ position: 'relative', zIndex: 3, marginTop: -22, padding: '0 18px', paddingBottom: 120 }}>
         {/* Ask your garden */}
         <button
           onClick={() => router.push('/chat')}

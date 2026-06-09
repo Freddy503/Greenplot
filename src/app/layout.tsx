@@ -5,6 +5,7 @@ import { Instrument_Serif, Barlow, Sora } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { OverlayProvider } from "./overlay-context";
+import SideNav from "@/components/layout/side-nav";
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-display",
@@ -73,7 +74,7 @@ export default function RootLayout({
       <body
         className="min-h-screen bg-[#fafaf8] text-[#111211]"
       >
-        <TooltipProvider><OverlayProvider>{children}</OverlayProvider></TooltipProvider>
+        <TooltipProvider><OverlayProvider><SideNav />{children}</OverlayProvider></TooltipProvider>
         <Toaster theme="dark" position="top-center" richColors closeButton />
       </body>
     </html>
