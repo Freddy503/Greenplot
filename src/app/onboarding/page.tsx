@@ -72,7 +72,7 @@ const CRON_PREVIEW: Record<OnboardingProfile['digestFrequency'], Array<{ icon: s
 }
 
 const TOTAL_STEPS = 5
-const STEP_LABELS = ['Welcome', 'Roots', 'Interests', 'Nurture', 'Intelligence']
+const STEP_LABELS = ['Welcome', 'Roots', 'Interests', 'Nurture', 'The Loop']
 
 // ── Ambient Background ────────────────────────────────
 
@@ -235,7 +235,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           Welcome to{'\n'}Greenplot
         </h1>
         <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
-          Your personal AI agent for creative thinking. Information as living matter, nurtured to help you grow.
+          Your AI thinking partner. Capture ideas and research, grow them into specs, and ship them with coding agents.
         </p>
       </div>
 
@@ -508,13 +508,13 @@ function StepNurtureFocus({
   )
 }
 
-// ── STEP 4: How It Works ──────────────────────────────
+// ── STEP 4: The Loop (idea → shipped) ─────────────────
 
-const BENTO_CARDS = [
-  { icon: 'auto_awesome', title: 'Synthesis', body: 'Your raw thoughts are seeds. We provide the water and light needed for them to thrive through synthesis.' },
-  { icon: 'language', title: 'Web Enrichment', body: 'Importing outside nutrients. LLM models and high-fidelity research expand your knowledge beyond the garden walls.' },
-  { icon: 'favorite', title: 'Heartbeat', body: 'The daily Garden Pulse. Morning Spark prompts and Daily Briefings keep your evolving thoughts alive.' },
-  { icon: 'hub', title: 'Search & Graph', body: 'Powered by Vector Search and Knowledge Graphs. Semantic similarity across your entire knowledge base.' },
+const LOOP_STEPS = [
+  { icon: 'eco', title: 'Plant', place: 'Chat & Library', body: 'Capture thoughts in chat, save links, and plant research papers straight from your daily digest. Everything is enriched automatically.' },
+  { icon: 'auto_awesome', title: 'Grow', place: 'Garden & Wiki', body: 'Seeds connect into a knowledge graph and compile into living wiki articles. Briefings keep ideas warm.' },
+  { icon: 'science', title: 'Design', place: 'Studio', body: 'Develop an idea into a full PRD — forcing questions, system architecture, and a generated architecture diagram.' },
+  { icon: 'rocket_launch', title: 'Build', place: 'Build pipeline', body: 'Hand specs to coding agents like Claude Code. Track them from Design to Doing to Built, PR linked when shipped.' },
 ]
 
 function StepHowItWorks({
@@ -532,10 +532,10 @@ function StepHowItWorks({
     <StepShell step={4}>
       <div className="text-left mb-8 w-full">
         <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
-          The Living Intelligence
+          From idea to shipped.
         </h2>
         <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
-          Experience how your digital greenhouse breathes, learns, and connects.
+          Greenplot is one loop: plant ideas, grow them into knowledge, design them into specs, and build them with agents.
         </p>
       </div>
 
@@ -561,19 +561,26 @@ function StepHowItWorks({
         </div>
       )}
 
-      {/* Bento grid */}
-      <div className="grid grid-cols-2 gap-3 w-full mb-6">
-        {BENTO_CARDS.map((card) => (
-          <div key={card.title} className="flex flex-col gap-2.5 p-5 rounded-2xl bg-surface-container border border-outline-variant/10 relative overflow-hidden">
+      {/* The loop — numbered journey */}
+      <div className="w-full mb-6 space-y-3">
+        {LOOP_STEPS.map((step, i) => (
+          <div key={step.title} className="flex items-start gap-4 p-4 rounded-2xl bg-surface-container border border-outline-variant/10 relative overflow-hidden">
             <div className="absolute w-16 h-16 rounded-full -top-4 -right-4 bg-primary opacity-[0.06]" />
-            <span
-              className="material-symbols-outlined text-primary"
-              style={{ fontSize: 28, fontVariationSettings: '"FILL" 1' }}
-            >
-              {card.icon}
-            </span>
-            <p className="text-sm font-bold leading-tight text-on-surface">{card.title}</p>
-            <p className="text-xs leading-relaxed font-medium text-on-surface-variant">{card.body}</p>
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span
+                className="material-symbols-outlined text-primary"
+                style={{ fontSize: 22, fontVariationSettings: '"FILL" 1' }}
+              >
+                {step.icon}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <p className="text-sm font-bold leading-tight text-on-surface">{i + 1}. {step.title}</p>
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-primary/60">{step.place}</span>
+              </div>
+              <p className="text-xs leading-relaxed font-medium text-on-surface-variant mt-1">{step.body}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -581,7 +588,7 @@ function StepHowItWorks({
       {/* Sync banner */}
       <div className="w-full rounded-full px-5 py-3 mb-6 text-center bg-primary/8 border border-primary/15">
         <p className="text-xs font-medium text-on-surface-variant">
-          Seeds auto-sync to memory — no manual saving required.
+          Works on your phone and desktop — seeds auto-sync, no manual saving.
         </p>
       </div>
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Leaf, Link2, BookOpen, Sparkles, ChevronRight, Plus, Globe, ArrowLeft, Download, Share2, ArrowUp } from 'lucide-react'
+import { Leaf, Link2, BookOpen, Sparkles, ChevronRight, Plus, Globe, ArrowLeft, Download, Share2, ArrowUp, GraduationCap, Loader2 } from 'lucide-react'
 import DetailHero, { DetailHeroBtn } from '@/components/ui/v2/detail-hero'
 import { toast } from 'sonner'
 
@@ -306,21 +306,92 @@ function PlantsList({ articles, onSelect, onCompile }: { articles: Article[]; on
 
 // ── Sources tab ───────────────────────────────────────
 
+// Ingest a research paper (arXiv link/id from the Academic Digest) as a paper seed
+function PaperIngestCard() {
+  const router = useRouter()
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const plant = async () => {
+    const input = value.trim()
+    if (!input || busy) return
+    setBusy(true)
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const isUrl = input.startsWith('http')
+      const res = await fetch('/api/papers/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(isUrl ? { url: input } : { arxiv_id: input }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setValue('')
+        toast.success(`"${data.title}" planted in your garden`, {
+          action: { label: 'View', onClick: () => router.push('/garden') },
+        })
+      } else {
+        toast.error(data.detail || data.error || 'Could not ingest paper')
+      }
+    } catch {
+      toast.error('Could not ingest paper')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="glass" style={{ borderRadius: 18, padding: '14px 15px', marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 10 }}>
+        <span style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <GraduationCap size={18} color="var(--green-700)" strokeWidth={1.75} />
+        </span>
+        <div>
+          <div className="ui" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>Plant a research paper</div>
+          <div className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)' }}>Paste an arXiv link or ID from your Research Digest</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') plant() }}
+          placeholder="arxiv.org/abs/2406.01234 or 2406.01234"
+          style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 12, padding: '9px 12px', fontFamily: 'var(--body)', fontSize: 12.5, color: 'var(--ink)', background: 'var(--surface)', outline: 'none' }}
+        />
+        <button
+          onClick={plant}
+          disabled={busy || !value.trim()}
+          className="tap"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 12, padding: '9px 14px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: busy || !value.trim() ? 0.6 : 1, flexShrink: 0 }}
+        >
+          {busy ? <Loader2 size={14} strokeWidth={2} className="animate-spin" /> : <Plus size={14} strokeWidth={2.25} />}
+          {busy ? 'Planting…' : 'Plant'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SourcesList({ links, onPlant }: { links: LinkItem[]; onPlant: (id: string) => void }) {
   const unreadCount = links.filter(l => !l.garden_seed_id).length
 
   if (!links.length) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--ink-3)' }}>
-        <Link2 size={40} strokeWidth={1} color="var(--ink-3)" style={{ margin: '0 auto 12px' }} />
-        <p className="ui" style={{ fontSize: 13, fontWeight: 600 }}>No sources yet</p>
-        <p className="body-text" style={{ fontSize: 12, marginTop: 4 }}>Share a link to any page and it'll appear here</p>
-      </div>
+      <>
+        <PaperIngestCard />
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--ink-3)' }}>
+          <Link2 size={40} strokeWidth={1} color="var(--ink-3)" style={{ margin: '0 auto 12px' }} />
+          <p className="ui" style={{ fontSize: 13, fontWeight: 600 }}>No sources yet</p>
+          <p className="body-text" style={{ fontSize: 12, marginTop: 4 }}>Share a link to any page and it'll appear here</p>
+        </div>
+      </>
     )
   }
 
   return (
     <>
+      <PaperIngestCard />
       <SectionHeader action="Add link">{unreadCount > 0 ? `${unreadCount} new to read` : 'Saved links'}</SectionHeader>
       <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
         {links.map((link) => {

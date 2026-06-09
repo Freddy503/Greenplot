@@ -1030,7 +1030,10 @@ const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc
     desc: 'A strategist, not a search box. Brainstorm to open an idea up, pressure-test its weak points, or strategize the path forward — every mode reasoning from the knowledge you already hold.',
     mockup: <MockupThinkingPartner /> },
   { icon: 'file_text', name: 'Spec it Out', tag: 'Build', color: T.teal,
-    desc: 'When the thinking is done, Greenplot shapes the thread into a clean, build-ready brief — problem, goals, requirements and open questions — ready to hand straight to your coding agent.',
+    desc: 'When the thinking is done, Greenplot shapes the thread into a full PRD — problem, scope, system architecture with a generated diagram — ready to hand straight to your coding agent.',
+    mockup: <MockupSpec /> },
+  { icon: 'layers', name: 'Build Pipeline', tag: 'Ship', color: T.green,
+    desc: 'Drag your PRDs from Design to Doing to Built. Coding agents report progress back automatically — every spec tracked from first draft to merged PR.',
     mockup: <MockupSpec /> },
   { icon: 'eco', name: 'Idea Garden', tag: 'Capture', color: T.green,
     desc: 'Capture fleeting thoughts as seeds. Every idea gets enriched with research and connected to your existing knowledge.',
@@ -1042,7 +1045,7 @@ const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc
     desc: 'Ask Greenplot anything. It searches your garden first, then the web — combining your personal knowledge with live information.',
     mockup: <MockupAIAgent /> },
   { icon: 'search', name: 'Research Digest', tag: 'Research', color: T.teal,
-    desc: 'Every morning, fresh arXiv papers are matched to your Garden seeds and Wiki, then distilled into an actionable move and a solution-design seed — with the source PDFs attached.',
+    desc: 'Every morning, fresh arXiv papers are matched to your Garden seeds and Wiki — with source PDFs attached. Paste any paper link to plant it, then develop it into a buildable project.',
     mockup: <MockupAcademic /> },
   { icon: 'auto_stories', name: 'Wiki', tag: 'Compile', color: T.green,
     desc: 'Your seeds compile into living wiki articles — encyclopedic summaries of everything you\'ve captured and learned.',
@@ -1060,7 +1063,7 @@ const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc
     desc: 'See your ideas as an interactive network. Discover unexpected connections between everything you\'ve ever captured.',
     mockup: <MockupKnowledgeGraph /> },
   { icon: 'dns', name: 'MCP Server', tag: 'Build', color: T.green,
-    desc: 'Expose your Garden to your favourite Agentic Coding tool and build your ideas directly into your workflow.',
+    desc: 'Your coding agent pulls specs straight from your Studio, builds them with your garden as context, and reports the PR back. The loop closes itself.',
     mockup: <MockupMCP /> },
 ]
 
@@ -1135,7 +1138,7 @@ const STEPS = [
   { icon: 'auto_stories' as IconName, color: T.teal, label: 'Knowledge',
     desc: 'Every exchange takes root in your garden — captured, enriched and connected into knowledge that never fades.' },
   { icon: 'dns' as IconName, color: T.darkGreen, label: 'Build',
-    desc: 'Harvest your garden: hand that grounded knowledge to Claude Code or Codex and build on real research, not guesswork.' },
+    desc: 'Harvest your garden: specs flow to Claude Code or Codex through MCP, move from Design to Doing to Built, and come back as merged PRs.' },
 ]
 
 function Flywheel() {

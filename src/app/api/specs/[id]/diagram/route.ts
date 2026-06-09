@@ -17,6 +17,12 @@ export async function POST(
       signal: AbortSignal.timeout(45000),
     })
 
+    if (res.status === 404) {
+      // Distinguish "endpoint missing" (backend not yet redeployed) from "spec not found"
+      const body = await res.text()
+      const detail = body.includes('Spec not found') ? 'Spec not found' : 'Diagram service not available yet — backend update pending'
+      return NextResponse.json({ error: detail }, { status: 404 })
+    }
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {

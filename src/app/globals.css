@@ -590,18 +590,27 @@ html, body {
 :root {
   --sidenav-w: 0px;
   --desk-cols-2: 1fr;          /* single column on mobile */
+  --desk-cols-3: 1fr;          /* board columns stack on mobile */
   --desk-cols-4: 1fr 1fr;      /* 2×2 grids on mobile */
+  --hero-radius: 0 0 30px 30px;
+  --hero-margin: 0px;
+  --hero-pad-top: max(52px, calc(env(safe-area-inset-top, 0px) + 18px));
 }
 
 @media (min-width: 1024px) {
   :root {
     --desk-cols-2: repeat(2, minmax(0, 1fr));
+    --desk-cols-3: repeat(3, minmax(0, 1fr));
     --desk-cols-4: repeat(4, minmax(0, 1fr));
   }
 
   body.with-sidenav {
     --sidenav-w: 248px;
     padding-left: var(--sidenav-w);
+    /* Hero becomes an inset card, not a full-bleed phone banner */
+    --hero-radius: 26px;
+    --hero-margin: 20px 28px 0;
+    --hero-pad-top: 30px;
   }
 
   .desk-wrap {
@@ -614,5 +623,22 @@ html, body {
     max-width: 760px;
     margin-left: auto;
     margin-right: auto;
+  }
+
+  /* Quiet, precise hover states — desktop only */
+  body.with-sidenav .v2-card,
+  body.with-sidenav .glass {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  body.with-sidenav .v2-card:hover,
+  body.with-sidenav .glass.tap:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px -10px rgba(22, 21, 15, 0.18);
+  }
+  .snav-item {
+    transition: background 0.15s ease;
+  }
+  .snav-item:hover {
+    background: rgba(126, 240, 168, 0.07);
   }
 }

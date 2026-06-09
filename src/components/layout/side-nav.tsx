@@ -88,11 +88,10 @@ export default function SideNav() {
           return (
             <Link key={key} href={href} style={{ textDecoration: 'none' }}>
               <div
-                className="tap"
+                className={active ? 'tap' : 'tap snav-item'}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', borderRadius: 12,
-                  background: active ? 'rgba(126,240,168,0.13)' : 'transparent',
-                  transition: 'background 0.15s ease',
+                  background: active ? 'rgba(126,240,168,0.13)' : undefined,
                 }}
               >
                 <Icon size={18} strokeWidth={active ? 2 : 1.75} color={active ? '#7ef0a8' : 'rgba(233,250,239,0.6)'} />

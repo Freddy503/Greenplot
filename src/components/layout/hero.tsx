@@ -92,7 +92,7 @@ export default function Hero({
   return (
     <div
       className="hero-forest"
-      style={{ borderRadius: '0 0 30px 30px', paddingTop: 'max(52px, calc(env(safe-area-inset-top, 0px) + 18px))', paddingBottom: tall ? 30 : 26, position: 'relative', zIndex: 2 }}
+      style={{ borderRadius: 'var(--hero-radius)', margin: 'var(--hero-margin)', paddingTop: 'var(--hero-pad-top)', paddingBottom: tall ? 30 : 26, position: 'relative', zIndex: 2 }}
     >
       <div className="desk-wrap" style={{ position: 'relative', zIndex: 2, padding: '0 22px' }}>
         {/* Chrome row — SideNav covers brand/search/bell on desktop */}
