@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
-import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2 } from 'lucide-react'
+import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List } from 'lucide-react'
+import Segmented from '@/components/ui/v2/segmented'
 
 import Hero from '@/components/layout/hero'
 import Header from '@/components/layout/header'
@@ -56,6 +57,70 @@ const BUILD_STATUS_LABELS: Record<string, string> = {
   ready: 'READY',
   building: 'BUILDING',
   shipped: 'SHIPPED',
+}
+
+// Build pipeline stages — Design (draft/ready) → Doing (building) → Built (shipped)
+const BUILD_STAGES = [
+  { key: 'draft',    label: 'Design',  blurb: 'Spec being shaped' },
+  { key: 'ready',    label: 'Ready',   blurb: 'Agent can pick this up' },
+  { key: 'building', label: 'Doing',   blurb: 'Implementation underway' },
+  { key: 'shipped',  label: 'Built',   blurb: 'Shipped — PR merged' },
+]
+
+const BOARD_COLUMNS = [
+  { key: 'design', label: 'Design', statuses: ['draft', 'ready'], dropStatus: 'draft', accent: 'var(--ink-3)' },
+  { key: 'doing',  label: 'Doing',  statuses: ['building'],       dropStatus: 'building', accent: 'var(--amber)' },
+  { key: 'built',  label: 'Built',  statuses: ['shipped'],        dropStatus: 'shipped', accent: 'var(--green-600)' },
+]
+
+// ── Build pipeline timeline (PRD detail) ─────────────
+
+function BuildTimeline({ status, prUrl, onSelect }: { status: string; prUrl?: string; onSelect: (s: string) => void }) {
+  const idx = Math.max(BUILD_STAGES.findIndex(s => s.key === status), 0)
+  return (
+    <div className="glass" style={{ borderRadius: 18, padding: '14px 18px 12px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <span className="caps" style={{ fontSize: 9.5, color: 'var(--ink-3)' }}>BUILD PIPELINE</span>
+        {prUrl && (
+          <a href={prUrl} target="_blank" rel="noopener noreferrer" className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>View PR →</a>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {BUILD_STAGES.map((s, i) => {
+          const done = i < idx
+          const current = i === idx
+          return (
+            <Fragment key={s.key}>
+              {i > 0 && (
+                <div style={{ flex: 1, height: 2, borderRadius: 99, background: i <= idx ? 'var(--green)' : 'var(--border-2)', marginTop: 11 }} />
+              )}
+              <button
+                onClick={() => onSelect(s.key)}
+                className="tap"
+                title={s.blurb}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 64, flexShrink: 0 }}
+              >
+                <span style={{
+                  width: 22, height: 22, borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: done || current ? 'var(--green)' : 'var(--surface-sunk)',
+                  border: current ? '2px solid var(--green-deep)' : '2px solid transparent',
+                  boxShadow: current ? '0 0 0 4px var(--green-tint-2)' : 'none',
+                  transition: 'all 0.2s ease',
+                }}>
+                  {done ? <Check size={12} color="#06281a" strokeWidth={3} /> : (
+                    <span style={{ width: 7, height: 7, borderRadius: 99, background: current ? '#06281a' : 'var(--ink-3)' }} />
+                  )}
+                </span>
+                <span className="ui" style={{ fontSize: 10.5, fontWeight: current ? 700 : 500, color: current ? 'var(--green-deep)' : done ? 'var(--ink-2)' : 'var(--ink-3)' }}>
+                  {s.label}
+                </span>
+              </button>
+            </Fragment>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -116,7 +181,7 @@ const MODE_ICONS: Record<string, React.ComponentType<any>> = {
 
 // ── PRD Detail ────────────────────────────────────────
 
-function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => void; onDeleted: (id: string) => void }) {
+function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; onBack: () => void; onDeleted: (id: string) => void; onStatusChanged?: (id: string, status: string) => void }) {
   const [diagramUrl, setDiagramUrl] = useState(prd.diagramUrl)
   const [generating, setGenerating] = useState(false)
   const [buildStatus, setBuildStatus] = useState(prd.buildStatus || 'draft')
@@ -144,9 +209,10 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
     }
   }
 
-  const cycleBuildStatus = async () => {
-    const order = ['draft', 'ready', 'building', 'shipped']
-    const next = order[(order.indexOf(buildStatus) + 1) % order.length]
+  const setStage = async (next: string) => {
+    if (next === buildStatus) return
+    const prev = buildStatus
+    setBuildStatus(next)
     try {
       const token = localStorage.getItem('greenplot_token')
       const res = await fetch(`/api/specs/${prd.id}/build-status`, {
@@ -154,9 +220,17 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ status: next }),
       })
-      if (res.ok) { setBuildStatus(next); toast.success(`Marked ${next}`) }
-      else toast.error('Could not update status')
-    } catch { toast.error('Could not update status') }
+      if (res.ok) {
+        toast.success(`Moved to ${BUILD_STAGES.find(s => s.key === next)?.label || next}`)
+        onStatusChanged?.(prd.id, next)
+      } else {
+        setBuildStatus(prev)
+        toast.error('Could not update — backend update pending')
+      }
+    } catch {
+      setBuildStatus(prev)
+      toast.error('Could not update status')
+    }
   }
 
   const copyForAgent = () => {
@@ -208,21 +282,14 @@ function PRDDetail({ prd, onBack, onDeleted }: { prd: PRDItem; onBack: () => voi
 
       <div className="desk-narrow" style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)', paddingBottom: 100, padding: '0 18px' }}>
         <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Pill tone="soft" size="xs">SPEC</Pill>
-            {!prd.local && (
-              <button onClick={cycleBuildStatus} className="tap ui" style={{ background: buildStatus === 'shipped' ? 'var(--green)' : 'var(--surface-sunk)', color: buildStatus === 'shipped' ? '#fff' : 'var(--ink-2)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '3px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>
-                {BUILD_STATUS_LABELS[buildStatus] || 'DRAFT'}
-              </button>
-            )}
-            {prd.prUrl && (
-              <a href={prd.prUrl} target="_blank" rel="noopener noreferrer" className="ui" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--green-700)' }}>View PR →</a>
-            )}
-          </div>
+          <Pill tone="soft" size="xs">SPEC</Pill>
           <h1 className="serif" style={{ fontSize: 32, lineHeight: 1.1, color: 'var(--ink)', marginTop: 12, marginBottom: 8, letterSpacing: '-0.02em' }}>{prd.title}</h1>
-          <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 24 }}>
+          <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 20 }}>
             {prd.local ? 'Saved from Spec mode' : 'From your garden'} · {timeAgo(prd.createdAt)}
           </p>
+          {!prd.local && (
+            <BuildTimeline status={buildStatus} prUrl={prd.prUrl} onSelect={setStage} />
+          )}
           {!prd.local && (
             diagramUrl ? (
               <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hairline)', marginBottom: 16 }}>
@@ -263,6 +330,26 @@ export default function StudioPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<PRDItem | null>(null)
   const [showAllPrds, setShowAllPrds] = useState(false)
+  const [prdView, setPrdView] = useState<'board' | 'list'>('board')
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+
+  const updatePrdStatus = useCallback(async (id: string, status: string) => {
+    let prev: string | undefined
+    setPrds(p => p.map(x => { if (x.id === id) { prev = x.buildStatus; return { ...x, buildStatus: status } } return x }))
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/specs/${id}/build-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`Moved to ${BUILD_STAGES.find(s => s.key === status)?.label || status}`)
+    } catch {
+      setPrds(p => p.map(x => x.id === id ? { ...x, buildStatus: prev } : x))
+      toast.error('Could not update — backend update pending')
+    }
+  }, [])
 
   const launchMode = useCallback((id: string) => router.push(`/chat?mode=${id}`), [router])
 
@@ -300,7 +387,14 @@ export default function StudioPage() {
   const handleDeleted = (id: string) => { setPrds(prev => prev.filter(p => p.id !== id)); setSelected(null) }
 
   if (selected) {
-    return <PRDDetail prd={selected} onBack={() => setSelected(null)} onDeleted={handleDeleted} />
+    return (
+      <PRDDetail
+        prd={selected}
+        onBack={() => setSelected(null)}
+        onDeleted={handleDeleted}
+        onStatusChanged={(id, status) => setPrds(prev => prev.map(p => p.id === id ? { ...p, buildStatus: status } : p))}
+      />
+    )
   }
 
   return (
@@ -377,12 +471,25 @@ export default function StudioPage() {
           </>
         )}
 
-        {/* PRDs & Specs */}
-        <SectionHeader action="New spec" onAction={() => router.push('/chat?mode=spec')}>PRDs &amp; specs</SectionHeader>
+        {/* Build pipeline — PRDs from Design to Doing to Built */}
+        <SectionHeader action="New spec" onAction={() => router.push('/chat?mode=spec')}>Build pipeline</SectionHeader>
+
+        {!loading && prds.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <Segmented
+              value={prdView}
+              onChange={(k) => setPrdView(k as 'board' | 'list')}
+              items={[
+                { key: 'board', label: 'Board', Icon: LayoutGrid },
+                { key: 'list', label: 'List', Icon: List },
+              ]}
+            />
+          </div>
+        )}
 
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {[1,2].map(i => <div key={i} style={{ height: 80, borderRadius: 16, background: 'var(--surface-sunk)', animation: 'pulse 1.5s ease-in-out infinite' }} />)}
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-3)', gap: 12 }}>
+            {[1,2,3].map(i => <div key={i} style={{ height: 140, borderRadius: 18, background: 'var(--surface-sunk)', animation: 'pulse 1.5s ease-in-out infinite' }} />)}
           </div>
         ) : prds.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-3)' }}>
@@ -392,6 +499,72 @@ export default function StudioPage() {
             <button onClick={() => router.push('/chat?mode=spec')} className="tap" style={{ marginTop: 14, background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 9999, padding: '10px 20px', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Start speccing
             </button>
+          </div>
+        ) : prdView === 'board' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-3)', gap: 12, alignItems: 'start' }}>
+            {BOARD_COLUMNS.map((col) => {
+              const cards = prds.filter(p => col.statuses.includes(p.buildStatus || 'draft'))
+              const isOver = dragOverCol === col.key
+              return (
+                <div
+                  key={col.key}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverCol(col.key) }}
+                  onDragLeave={() => setDragOverCol(c => (c === col.key ? null : c))}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDragOverCol(null)
+                    const id = e.dataTransfer.getData('text/prd-id')
+                    const prd = id ? prds.find(p => p.id === id) : undefined
+                    if (prd && !prd.local && !col.statuses.includes(prd.buildStatus || 'draft')) {
+                      updatePrdStatus(id, col.dropStatus)
+                    }
+                  }}
+                  style={{
+                    borderRadius: 18, padding: 10, minHeight: 150,
+                    background: isOver ? 'var(--green-tint)' : 'var(--surface-2)',
+                    border: isOver ? '1.5px dashed var(--green)' : '1.5px solid var(--hairline)',
+                    transition: 'background 0.15s ease, border 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 6px 10px' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 99, background: col.accent }} />
+                    <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>{col.label}</span>
+                    <span className="ui" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)', marginLeft: 'auto' }}>{cards.length}</span>
+                  </div>
+                  {cards.length === 0 ? (
+                    <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', padding: '22px 8px' }}>
+                      {col.key === 'design' ? 'Spec an idea to start' : 'Drag a spec here'}
+                    </p>
+                  ) : cards.map((prd) => (
+                    <div
+                      key={prd.id}
+                      draggable={!prd.local}
+                      onDragStart={(e) => e.dataTransfer.setData('text/prd-id', prd.id)}
+                      onClick={() => setSelected(prd)}
+                      className="v2-card tap"
+                      style={{ borderRadius: 14, padding: '11px 12px', cursor: prd.local ? 'pointer' : 'grab', marginBottom: 8 }}
+                    >
+                      <div className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.35 }}>{prd.title}</div>
+                      <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-2)', lineHeight: 1.5, marginTop: 3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {prd.content.replace(/^#+\s.*/gm, '').slice(0, 100)}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8 }}>
+                        {prd.local ? (
+                          <span className="ui" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 9999, padding: '2px 7px' }}>LOCAL DRAFT</span>
+                        ) : prd.buildStatus === 'ready' && (
+                          <span className="ui" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 9999, padding: '2px 7px' }}>READY</span>
+                        )}
+                        {prd.diagramUrl && <Network size={11} color="var(--ink-3)" strokeWidth={1.75} />}
+                        {prd.prUrl && (
+                          <a href={prd.prUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="ui" style={{ fontSize: 10, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>PR →</a>
+                        )}
+                        <span className="body-text" style={{ fontSize: 10, color: 'var(--ink-3)', marginLeft: 'auto' }}>{timeAgo(prd.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
