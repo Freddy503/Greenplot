@@ -1489,6 +1489,37 @@ async def patch_article(article_id: str, request: Request, current_user = Depend
     return {"ok": True, "article_id": article_id, "title": updates.get("title")}
 
 
+@router.post("/articles")
+async def create_article_endpoint(request: Request, current_user = Depends(get_current_user)):
+    """Create a Library article directly (used by the MCP create_article tool)."""
+    body = await request.json()
+    title = (body.get("title") or "").strip()
+    content = (body.get("content") or "").strip()
+    category = (body.get("category") or "Note").strip()
+    if not title or not content:
+        raise HTTPException(status_code=422, detail="title and content are required")
+    summary = (body.get("summary") or "").strip()
+    if not summary:
+        for line in content.split("\n"):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                summary = stripped[:300]
+                break
+    try:
+        article_id = weaviate_client.add_wiki_article(
+            tenant_id=str(current_user.tenant_id),
+            user_id=str(current_user.id),
+            title=title,
+            category=category,
+            summary=summary or content[:300],
+            content=content,
+            status="published",
+        )
+        return {"ok": True, "article_id": article_id, "title": title}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Article creation failed: {e}")
+
+
 def _detect_category(domain: str, links: list) -> str:
     """Simple heuristic category detection."""
     d = domain.lower()

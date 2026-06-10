@@ -49,6 +49,13 @@ no database access required.
 | `list_specs` | List Studio PRDs with build status (draft/ready/building/shipped) |
 | `get_spec` | Fetch full PRD markdown + architecture diagram URL for implementation |
 | `report_build_progress` | Update a spec's lifecycle; pass `pr_url` when shipped |
+| `update_seed` | Edit a seed's title/content; `append: true` builds up notes/PRDs across turns |
+| `create_article` | Publish a markdown write-up straight into the Library |
+| `update_article` | Iterate on an existing Library article |
+| `ingest_paper` | Plant a research paper by arXiv id or URL |
+
+Roadmap to full MCP support (Streamable HTTP transport, per-user API keys,
+`greenplot://` resources, prompts): see `docs/specs/mcp-server-v2.md`.
 
 ## Recommended agent workflow
 
