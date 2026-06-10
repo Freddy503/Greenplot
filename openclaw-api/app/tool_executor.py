@@ -2904,6 +2904,19 @@ async def write_product(args: dict, user: User, db: Session) -> str:
     existing = [s for s in db.query(Seed).filter(
         Seed.tenant_id == user.tenant_id, Seed.seed_type == "product"
     ).all()]
+
+    # Duplicate guard: products describing the same thing under variant names
+    # consumed the entire cap on the first live run. Compare word overlap.
+    def _words(t):
+        return {w for w in t.lower().replace("&", " ").replace("—", " ").split() if len(w) > 2}
+    new_words = _words(title)
+    for s in existing:
+        ew = _words(s.title or "")
+        if ew and new_words and len(ew & new_words) / max(1, min(len(ew), len(new_words))) >= 0.6:
+            return json.dumps({"status": "error",
+                               "message": f"This looks like a duplicate of existing product '{s.title}'. "
+                                          "Update that product instead (or have the user archive it first) — never create variants of the same product."})
+
     if len(existing) >= 3:
         return json.dumps({"status": "error", "message": "Product cap reached (3). Archive or merge a backlog product first — focus is the point."})
     has_main = any((s.seed_metadata or {}).get("rank") == "main" for s in existing)
