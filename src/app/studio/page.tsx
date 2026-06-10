@@ -732,11 +732,24 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
               <button onClick={downloadMd} className="tap" title="Download markdown" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
                 <Download size={16} strokeWidth={1.75} color="var(--ink-2)" />
               </button>
-              {prd.local && (
-                <button onClick={deleteLocal} className="tap" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
-                  <Trash2 size={16} strokeWidth={1.75} color="var(--red)" />
-                </button>
-              )}
+              <button
+                onClick={async () => {
+                  if (prd.local) { deleteLocal(); return }
+                  if (!window.confirm(`Delete "${title}"? This removes the PRD seed permanently.`)) return
+                  try {
+                    const token = localStorage.getItem('greenplot_token')
+                    const res = await fetch(`/api/seeds/${prd.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                    if (!res.ok) throw new Error()
+                    toast.success('PRD deleted')
+                    onDeleted(prd.id)
+                  } catch { toast.error('Could not delete') }
+                }}
+                className="tap"
+                title="Delete PRD"
+                style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}
+              >
+                <Trash2 size={16} strokeWidth={1.75} color="var(--red)" />
+              </button>
             </>
           )}
         </div>
@@ -888,6 +901,34 @@ export default function StudioPage() {
       setPrds(prev => prev.map(x => x.id === prd.id ? { ...x, productId: mainProduct.id, pillarId: pillarId ?? x.pillarId, attachment: 'confirmed' } : x))
       toast.success('Attached')
     } catch { toast.error('Could not attach — backend update pending') }
+  }
+
+  const promoteProduct = async (productId: string) => {
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ rank: 'main' }),
+      })
+      if (!res.ok) throw new Error()
+      setProducts(prev => prev.map(p => ({ ...p, metadata: { ...p.metadata, rank: p.id === productId ? 'main' : 'backlog' } })))
+      toast.success('Promoted to MAIN — the Studio is now anchored to it')
+    } catch { toast.error('Could not promote — backend update pending') }
+  }
+
+  const deleteProduct = async (productId: string, title: string) => {
+    if (!window.confirm(`Delete product "${title}"? Attached PRDs keep existing, they just lose their anchor.`)) return
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/seeds/${productId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error()
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      toast.success(`Product "${title}" deleted`)
+    } catch { toast.error('Could not delete') }
   }
 
   const createDesignVision = async () => {
@@ -1184,11 +1225,19 @@ export default function StudioPage() {
             </div>
           ) : (
             <div>
-              {/* MAIN product card — the problem leads, always */}
-              <div className="glass" style={{ borderRadius: 20, padding: '18px 20px', marginBottom: 14 }}>
+              {/* MAIN product card — the problem leads, always. Drop a backlog product here to promote it. */}
+              <div
+                className="glass"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); const pid = e.dataTransfer.getData('text/product-id'); if (pid && pid !== mainProduct.id) promoteProduct(pid) }}
+                style={{ borderRadius: 20, padding: '18px 20px', marginBottom: 14 }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span className="ui" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', background: 'var(--green-deep)', borderRadius: 9999, padding: '2.5px 8px' }}>MAIN</span>
-                  <span className="ui" style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{mainProduct.title}</span>
+                  <a href={`/garden?seed=${encodeURIComponent(mainProduct.id)}`} className="ui tap" style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', textDecoration: 'none' }}>{mainProduct.title}</a>
+                  <button onClick={() => deleteProduct(mainProduct.id, mainProduct.title)} className="tap" title="Delete product" style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                    <Trash2 size={14} color="var(--ink-3)" strokeWidth={1.75} />
+                  </button>
                 </div>
                 <p className="serif" style={{ fontSize: 17, lineHeight: 1.45, color: 'var(--ink)', marginBottom: 8 }}>
                   {mainProduct.metadata?.problem_statement || 'No problem statement yet.'}
@@ -1269,10 +1318,23 @@ export default function StudioPage() {
               {products.filter(p => p.id !== mainProduct.id).length > 0 && (
                 <div style={{ marginTop: 18 }}>
                   <span className="caps" style={{ display: 'block', fontSize: 9.5, color: 'var(--ink-3)', marginBottom: 8 }}>BACKLOG</span>
+                  <p className="body-text" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 6 }}>Drag onto the MAIN card to promote</p>
                   {products.filter(p => p.id !== mainProduct.id).map(p => (
-                    <div key={p.id} className="v2-card" style={{ borderRadius: 13, padding: '10px 12px', marginBottom: 6, opacity: 0.75 }}>
-                      <span className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>{p.title}</span>
-                      <p className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.metadata?.problem_statement}</p>
+                    <div
+                      key={p.id}
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData('text/product-id', p.id)}
+                      className="v2-card tap"
+                      style={{ borderRadius: 13, padding: '10px 12px', marginBottom: 6, opacity: 0.85, cursor: 'grab', display: 'flex', alignItems: 'center', gap: 9 }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <a href={`/garden?seed=${encodeURIComponent(p.id)}`} className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', textDecoration: 'none' }}>{p.title}</a>
+                        <p className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.metadata?.problem_statement}</p>
+                      </div>
+                      <button onClick={() => promoteProduct(p.id)} className="tap ui" style={{ background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '4px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Make main</button>
+                      <button onClick={() => deleteProduct(p.id, p.title)} className="tap" title="Delete product" style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', flexShrink: 0 }}>
+                        <Trash2 size={13} color="var(--ink-3)" strokeWidth={1.75} />
+                      </button>
                     </div>
                   ))}
                 </div>
