@@ -2881,3 +2881,68 @@ async def update_article(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["update_article"] = update_article
+
+
+# ── write_product: the convergence root (spec: product-atlas.md) ──────────────
+# Problem-first is ENFORCED: creation only happens through the chat
+# interrogation calling this tool — there is deliberately no REST shortcut.
+
+async def write_product(args: dict, user: User, db: Session) -> str:
+    """Create a Product (max 3/tenant, exactly one MAIN, problem statement required)."""
+    title = (args.get("title") or "").strip()
+    problem = (args.get("problem_statement") or "").strip()
+    pillars = args.get("pillars") or []
+    success = (args.get("success_definition") or "").strip()
+
+    if not title:
+        return json.dumps({"status": "error", "message": "title is required"})
+    if len(problem) < 40:
+        return json.dumps({"status": "error", "message": "problem_statement too thin — a product must state, in plain english, who hurts and how (40+ chars). Keep interrogating."})
+    if not (1 <= len(pillars) <= 5) or not all(isinstance(p, dict) and p.get("name") for p in pillars):
+        return json.dumps({"status": "error", "message": "Provide 1-5 pillars, each {name, problem_facet}."})
+
+    existing = [s for s in db.query(Seed).filter(
+        Seed.tenant_id == user.tenant_id, Seed.seed_type == "product"
+    ).all()]
+    if len(existing) >= 3:
+        return json.dumps({"status": "error", "message": "Product cap reached (3). Archive or merge a backlog product first — focus is the point."})
+    has_main = any((s.seed_metadata or {}).get("rank") == "main" for s in existing)
+    rank = "backlog" if has_main else "main"
+
+    pillar_list = [{"id": i, "name": str(p["name"])[:80], "problem_facet": str(p.get("problem_facet", ""))[:200]}
+                   for i, p in enumerate(pillars)]
+    content = (
+        f"# {title}\n\n## The Problem\n{problem[:600]}\n\n## Pillars\n"
+        + "\n".join(f"- **{p['name']}** — {p['problem_facet']}" for p in pillar_list)
+        + (f"\n\n## Success\n{success[:500]}" if success else "")
+    )
+    seed = Seed(
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        title=title[:170],
+        content=content,
+        seed_type="product",
+        seed_metadata={
+            "seed_type": "product",
+            "tags": ["product"],
+            "problem_statement": problem[:600],
+            "pillars": pillar_list,
+            "rank": rank,
+            "success_definition": success[:500],
+            "story_so_far": f"Defined: {problem[:180]}",
+            "story_events": [],
+        },
+        created_at=datetime.utcnow(),
+    )
+    db.add(seed)
+    db.commit()
+    db.refresh(seed)
+    return json.dumps({
+        "status": "ok", "product_id": str(seed.id), "title": title, "rank": rank,
+        "message": f"Product '{title}' created as {rank.upper()}. "
+                   + ("It now anchors the Studio — every PRD should serve its problem." if rank == "main"
+                      else "Parked in the backlog — promote it from the Product view when it earns focus."),
+    })
+
+
+TOOL_HANDLERS["write_product"] = write_product

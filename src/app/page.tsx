@@ -408,8 +408,8 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
           color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, maxWidth: 600, marginBottom: '2.75rem', fontWeight: 400,
         }}>
           A living garden for your ideas — research flows in and is read in full, draft PRDs
-          surface on autopilot, you shape the vision with a thinking partner, and coding agents
-          build it. The gap from idea to shipped finally closes.
+          surface on autopilot, and coding agents build them. One plain-english Product view
+          holds it all together: what you're building, why, and what's still missing.
         </p>
         <div className="fade-rise-3" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '3.5rem' }}>
           <HeroWaitlist />
@@ -1048,6 +1048,9 @@ const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc
   { icon: 'search', name: 'Research Digest', tag: 'Research', color: T.teal,
     desc: 'Every morning, fresh arXiv papers are matched to your Garden — then parsed in full: methods, results and limitations are indexed, not just abstracts. Your specs cite what papers actually say.',
     mockup: <MockupAcademic /> },
+  { icon: 'smart_toy', name: 'Product View', tag: 'Focus', color: T.darkGreen,
+    desc: 'One screen answers "what am I building and why?" — your problem statement on top, every PRD grouped under the part of the problem it serves, gaps visible. Constantly updated as work ships. Never lose the plot.',
+    mockup: <MockupSpec /> },
   { icon: 'auto_awesome', name: 'Autopilot PRDs', tag: 'Autopilot', color: T.green,
     desc: 'When a relevant paper lands, a draft PRD appears in your Studio by itself — grounded in the paper’s full text and your existing seeds. You shape the vision with the thinking partner; the system does the drafting.',
     mockup: <MockupSpec /> },

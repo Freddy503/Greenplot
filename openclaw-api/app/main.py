@@ -1877,6 +1877,74 @@ async def create_design_vision(
             "message": "Design vision generation started — it lands in the Library in ~2 minutes."}
 
 
+# --- Product View: the convergence root (docs/specs/product-atlas.md) ---
+
+@app.get("/api/v1/products")
+def list_products(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.query(Seed).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        Seed.seed_type == "product",
+    ).order_by(Seed.created_at.asc()).all()
+    return {"products": [{
+        "id": str(s.id),
+        "title": s.title,
+        "metadata": s.seed_metadata or {},
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+    } for s in rows]}
+
+
+class AttachRequest(BaseModel):
+    product_id: str
+    pillar_id: Optional[int] = None
+
+
+@app.post("/api/v1/seeds/{seed_id}/attach")
+def attach_seed_to_product(
+    seed_id: str,
+    req: AttachRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Confirm (or set) a PRD's attachment to a product/pillar — always human-initiated."""
+    try:
+        seed = db.query(Seed).filter(Seed.id == uuid.UUID(seed_id), Seed.tenant_id == current_user.tenant_id).first()
+        product = db.query(Seed).filter(Seed.id == uuid.UUID(req.product_id), Seed.tenant_id == current_user.tenant_id, Seed.seed_type == "product").first()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid id")
+    if not seed or not product:
+        raise HTTPException(status_code=404, detail="Seed or product not found")
+    m = dict(seed.seed_metadata or {})
+    m["product_id"] = str(product.id)
+    if req.pillar_id is not None:
+        m["pillar_id"] = req.pillar_id
+    m["attachment"] = "confirmed"
+    seed.seed_metadata = m
+    db.commit()
+    return {"ok": True, "seed_id": str(seed.id), "product_id": str(product.id), "pillar_id": m.get("pillar_id")}
+
+
+def _append_product_story(db: Session, tenant_id, prd_seed: Seed, status: str):
+    """Templated story-so-far update on build events — zero LLM calls (spec rule 7)."""
+    pid = (prd_seed.seed_metadata or {}).get("product_id")
+    if not pid:
+        return
+    try:
+        product = db.query(Seed).filter(Seed.id == uuid.UUID(pid), Seed.tenant_id == tenant_id).first()
+        if not product:
+            return
+        m = dict(product.seed_metadata or {})
+        label = {"ready": "is ready to build", "building": "is in build", "shipped": "shipped"}.get(status, status)
+        line = f"{prd_seed.title.replace(' — PRD', '')} {label} ({date.today().strftime('%b %d')})"
+        events = (m.get("story_events") or [])[-9:] + [line]
+        m["story_events"] = events
+        base = (m.get("story_so_far") or "").split(" · Latest: ")[0]
+        m["story_so_far"] = f"{base} · Latest: {line}"
+        product.seed_metadata = m
+        db.commit()
+    except Exception as e:
+        logger.warning(f"[product] story update failed: {e}")
+
+
 # --- Spec build lifecycle (draft → ready → building → shipped) ---
 
 class BuildStatusRequest(BaseModel):
@@ -1926,6 +1994,9 @@ def update_build_status(
         meta["build_notes"] = history[-20:]
     seed.seed_metadata = meta
     db.commit()
+
+    # Living "story so far" on the owning product (templated, no LLM)
+    _append_product_story(db, current_user.tenant_id, seed, req.status)
 
     return BuildStatusResponse(seed_id=str(seed.id), build_status=req.status, pr_url=meta.get("build_pr_url"))
 
