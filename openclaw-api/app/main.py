@@ -507,13 +507,16 @@ def get_seed(seed_id: str, current_user: User = Depends(get_current_user), db: S
     seed.last_interacted_at = datetime.utcnow()
     db.commit()
     
-    # Extract metadata fields for richer response
+    # Extract metadata fields for richer response.
+    # Normalize tags to str — paper/enriched seeds store them as a list, and a
+    # list here 500s the response model (broke the draft-PRD status poll).
     metadata = seed.seed_metadata or {}
-    seed.tags = metadata.get("tags", "")
-    seed.domain = metadata.get("domain", "")
-    seed.energy = metadata.get("energy", "")
-    seed.summary = metadata.get("summary", "")
-    
+    raw_tags = metadata.get("tags", "")
+    seed.tags = ", ".join(raw_tags) if isinstance(raw_tags, list) else (raw_tags or "")
+    seed.domain = metadata.get("domain", "") or ""
+    seed.energy = metadata.get("energy", "") or ""
+    seed.summary = metadata.get("summary", "") or ""
+
     return seed
 
 
