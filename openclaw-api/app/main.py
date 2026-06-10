@@ -1195,6 +1195,71 @@ def _extract_architecture_section(content: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+MERMAID_DIAGRAM_PROMPT = """You generate software architecture diagrams as Mermaid flowchart code.
+
+Rules:
+- Output ONLY Mermaid code, no fences, no commentary. Start with: flowchart TB
+- Three subgraphs in order: CLIENTS["Clients & Interfaces"], APP["Application & Services"], DATA["Data & Infrastructure"]. External third-party services go in a fourth subgraph EXT["External Services"].
+- 6-12 nodes total. Node labels: short, specific names in double quotes, e.g. NX["Next.js Frontend"]. Use real component names from the brief.
+- Edges with labels for data flows: A -->|"REST"| B. Every edge must be meaningful.
+- No styling directives except: classDef ext stroke-dasharray: 5 5; applied to external nodes via class.
+- Valid Mermaid only: alphanumeric node ids, all labels quoted."""
+
+
+class MermaidDiagramResponse(BaseModel):
+    mermaid: str
+    seed_id: str
+
+
+@app.post("/api/v1/specs/{seed_id}/diagram-code", response_model=MermaidDiagramResponse)
+async def generate_spec_diagram_code(
+    seed_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate the architecture diagram as Mermaid code (deterministic render).
+
+    Replaces BFL raster diagrams for PRDs: diffusion models cannot spell or
+    keep structure coherent — text-model-generated Mermaid can. ~5s, one
+    small LLM call; the frontend renders it client-side.
+    """
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+    seed = db.query(Seed).filter(
+        Seed.id == seed_uuid,
+        Seed.tenant_id == current_user.tenant_id,
+    ).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Spec not found")
+
+    content = seed.content or ""
+    arch_section = _extract_architecture_section(content)
+    brief = arch_section or f"{seed.title}. {content[:1200]}"
+
+    from app.briefings import _call_llm
+    code = _call_llm(
+        f"ARCHITECTURE BRIEF:\n{brief[:4000]}\n\nGenerate the Mermaid diagram now.",
+        system=MERMAID_DIAGRAM_PROMPT,
+        max_tokens=2500,
+        model=settings.CHAT_MODEL,
+    )
+    # Strip accidental fences and validate the shape
+    code = (code or "").strip()
+    code = code.removeprefix("```mermaid").removeprefix("```").removesuffix("```").strip()
+    if not code.startswith(("flowchart", "graph")):
+        raise HTTPException(status_code=502, detail="Diagram generation failed — try again")
+
+    meta = dict(seed.seed_metadata or {})
+    meta["diagram_mermaid"] = code
+    meta["diagram_generated_at"] = datetime.utcnow().isoformat()
+    seed.seed_metadata = meta
+    db.commit()
+
+    return MermaidDiagramResponse(mermaid=code, seed_id=str(seed.id))
+
+
 @app.post("/api/v1/specs/{seed_id}/diagram", response_model=SpecDiagramResponse)
 async def generate_spec_diagram(
     seed_id: str,
