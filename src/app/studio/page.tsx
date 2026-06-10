@@ -56,14 +56,12 @@ interface Product {
 }
 
 const PRODUCT_INTERROGATION = `I want to define the product I'm building — the root every PRD serves.
-Run a PROBLEM interrogation, one question at a time, waiting for my answer:
-1. WHO exactly hurts, and in what moment?
-2. What evidence of demand exists — what do they do today because this is unsolved?
-3. What does the problem cost them (time, money, risk)?
-4. Why is now the moment?
-Push back on vague answers — a product without a sharp problem must not be created.
-Then propose 3-5 pillars (facets of the PROBLEM, not feature buckets) and a plain-english
-problem statement, confirm them with me, and call write_product.`
+
+FIRST ACTION: call build_ledger with kind "problem" — my garden, papers and existing PRDs may already answer parts of this (who_hurts / demand_evidence / cost_of_problem / why_now).
+
+Then run an ADAPTIVE problem interrogation: confirm what the ledger already knows in one block, and ask AT MOST 5 questions, one at a time, only for the genuine unknowns — one drill-down max per vague answer. Push back hard on vagueness: a product without a sharp problem must not be created.
+
+When the slots are filled, propose 3-5 pillars (facets of the PROBLEM, not feature buckets) and a plain-english problem statement, confirm them with me, then call write_product.`
 
 interface SeedMeta {
   tags?: string[] | string

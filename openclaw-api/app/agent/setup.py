@@ -511,6 +511,27 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("write_product"),
     ))
 
+    registry.register(ToolSpec(
+        name="build_ledger",
+        description=(
+            "FIRST ACTION in any Studio interrogation or persona session. Sweeps what is "
+            "already known (garden seeds, source paper sections, the MAIN product, the repo) "
+            "and grades each question-slot: known (confirm, never ask), weak (one drill-down), "
+            "unknown (earned a question). Returns prior session state when resuming. "
+            "kinds: spec | vision | problem | brainstorm | pressure | devil."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["spec", "vision", "problem", "brainstorm", "pressure", "devil"]},
+                "seed_id": {"type": "string", "description": "The subject seed (PRD/idea/paper), when known."},
+            },
+            "required": ["kind"],
+        },
+        permission=PermissionLevel.READ,
+        handler=TOOL_HANDLERS.get("build_ledger"),
+    ))
+
     # ── Sub-Agent System ───────────────────────────────────────────
     from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
 
