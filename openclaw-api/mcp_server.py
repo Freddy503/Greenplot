@@ -202,6 +202,73 @@ async def report_build_progress(seed_id: str, status: str, pr_url: str = "", not
         )
 
 
+async def update_seed(seed_id: str, title: str = "", content: str = "", append: bool = False) -> str:
+    """Update a seed's title/content. append=True adds to existing content."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        body = {}
+        if title:
+            body["title"] = title
+        if content:
+            if append:
+                # PATCH replaces content, so fetch + concat for append semantics
+                cur = await client.get(f"{API_URL}/api/v1/seeds/{seed_id}", headers=_headers())
+                if not cur.is_success:
+                    return f"Error {cur.status_code}: could not load seed for append"
+                existing = (cur.json().get("content") or "").rstrip()
+                body["content"] = f"{existing}\n\n{content}" if existing else content
+            else:
+                body["content"] = content
+        if not body:
+            return "Nothing to update — provide title and/or content."
+        resp = await client.patch(f"{API_URL}/api/v1/seeds/{seed_id}", headers=_headers(), json=body)
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        return f"Seed '{data.get('title', seed_id)}' updated" + (" (content appended)." if append and content else ".")
+
+
+async def create_article(title: str, content: str, category: str = "Note") -> str:
+    """Create a Library wiki article directly."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{API_URL}/api/v1/wiki/articles",
+            headers=_headers(),
+            json={"title": title, "content": content, "category": category},
+        )
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        return f"Article '{title}' created in the Library (id={data.get('article_id')})."
+
+
+async def update_article(article_id: str, title: str = "", content: str = "", summary: str = "") -> str:
+    """Update an existing Library article."""
+    body = {k: v for k, v in (("title", title), ("content", content), ("summary", summary)) if v}
+    if not body:
+        return "Nothing to update — provide title, content, and/or summary."
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.patch(f"{API_URL}/api/v1/wiki/{article_id}", headers=_headers(), json=body)
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        return f"Article {article_id} updated."
+
+
+async def ingest_paper(arxiv_id: str = "", url: str = "") -> str:
+    """Plant a research paper (arXiv id or URL) as a paper seed."""
+    if not arxiv_id and not url:
+        return "Provide an arxiv_id or url."
+    async with httpx.AsyncClient(timeout=35) as client:
+        resp = await client.post(
+            f"{API_URL}/api/v1/papers/ingest",
+            headers=_headers(),
+            json={"arxiv_id": arxiv_id or None, "url": url or None},
+        )
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        return f"Paper '{data.get('title')}' planted (seed_id={data.get('seed_id')}). {data.get('message', '')}"
+
+
 # ── MCP stdio transport ───────────────────────────────────────────────────────
 
 TOOLS_SCHEMA = [
@@ -285,6 +352,58 @@ TOOLS_SCHEMA = [
             "required": ["seed_id", "status"],
         },
     },
+    {
+        "name": "update_seed",
+        "description": "Update an existing seed's title or content. Use append=true to add to the content instead of replacing — ideal for building up a PRD or notes across a long session.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "seed_id": {"type": "string", "description": "Seed id (from query_seeds/list_specs)"},
+                "title": {"type": "string", "description": "New title (optional)"},
+                "content": {"type": "string", "description": "New or additional content (optional)"},
+                "append": {"type": "boolean", "description": "true: append to existing content; false (default): replace"},
+            },
+            "required": ["seed_id"],
+        },
+    },
+    {
+        "name": "create_article",
+        "description": "Create a Library wiki article with markdown content — for publishing write-ups, decisions, or documentation into Greenplot.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Article title"},
+                "content": {"type": "string", "description": "Full markdown content"},
+                "category": {"type": "string", "description": "Category label (default 'Note')"},
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "update_article",
+        "description": "Update an existing Library article's title, content, or summary by article id (find it via query_wiki).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "article_id": {"type": "string", "description": "Article id"},
+                "title": {"type": "string", "description": "New title (optional)"},
+                "content": {"type": "string", "description": "Replacement markdown content (optional)"},
+                "summary": {"type": "string", "description": "New summary (optional)"},
+            },
+            "required": ["article_id"],
+        },
+    },
+    {
+        "name": "ingest_paper",
+        "description": "Plant a research paper into the Greenplot garden by arXiv id (e.g. '2406.01234') or paper URL. Fetches title/authors/abstract automatically.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "arxiv_id": {"type": "string", "description": "arXiv identifier"},
+                "url": {"type": "string", "description": "Paper URL (arXiv abs/pdf or publisher page)"},
+            },
+        },
+    },
 ]
 
 
@@ -332,6 +451,20 @@ async def handle_message(msg: dict) -> dict | None:
                     args["seed_id"], args["status"],
                     args.get("pr_url", ""), args.get("note", ""),
                 )
+            elif tool_name == "update_seed":
+                result = await update_seed(
+                    args["seed_id"], args.get("title", ""),
+                    args.get("content", ""), bool(args.get("append", False)),
+                )
+            elif tool_name == "create_article":
+                result = await create_article(args["title"], args["content"], args.get("category", "Note"))
+            elif tool_name == "update_article":
+                result = await update_article(
+                    args["article_id"], args.get("title", ""),
+                    args.get("content", ""), args.get("summary", ""),
+                )
+            elif tool_name == "ingest_paper":
+                result = await ingest_paper(args.get("arxiv_id", ""), args.get("url", ""))
             else:
                 result = f"Unknown tool: {tool_name}"
         except Exception as e:
