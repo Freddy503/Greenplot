@@ -280,6 +280,17 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
 
         _set_status("parsed" if indexed else "failed", chunk_count=indexed, parse_source=kind)
         logger.info(f"[paper_pipeline] {seed.title[:50]}: {indexed} chunks indexed ({kind})")
+
+        # Autopilot: digest papers that parsed successfully may earn a draft PRD
+        # (relevance-gated + daily-capped inside auto_prd_for_paper).
+        if indexed and seed.created_via == "academic_digest":
+            try:
+                from app.auto_prd import auto_prd_for_paper
+                auto_result = auto_prd_for_paper(seed_id, tenant_id, db)
+                logger.info(f"[auto_prd] {seed.title[:40]}: {auto_result.get('status')} ({auto_result.get('reason', auto_result.get('title', ''))})")
+            except Exception as e:
+                logger.warning(f"[auto_prd] failed for {seed_id}: {e}")
+
         return {"status": "ok", "seed_id": seed_id, "chunks": indexed, "source": kind}
 
     except Exception as e:
