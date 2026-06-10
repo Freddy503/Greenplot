@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Leaf, Link2, BookOpen, Sparkles, ChevronRight, Plus, Globe, ArrowLeft, Download, Share2, ArrowUp, GraduationCap, Loader2 } from 'lucide-react'
+import { Leaf, Link2, BookOpen, Sparkles, ChevronRight, Plus, Globe, ArrowLeft, Download, Share2, ArrowUp, GraduationCap, Loader2, Pencil, Printer } from 'lucide-react'
+import { readCache } from '@/lib/swr-cache'
 import DetailHero, { DetailHeroBtn } from '@/components/ui/v2/detail-hero'
 import { toast } from 'sonner'
 
@@ -28,6 +29,42 @@ interface Article {
   updated_at?: string
   seed_count?: number
   source_count?: number
+  sourceSeedIds?: string[]
+  sourceLinkIds?: string[]
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapArticles(raw: any[]): Article[] {
+  return qualityGate(raw.map((a) => ({
+    id: a.id || a.notion_id || '',
+    title: a.title || 'Untitled',
+    content: a.content || '',
+    summary: a.summary || a.metadata?.summary || '',
+    category: a.category || a.tags?.[0] || 'Article',
+    tags: a.tags || [],
+    created_at: a.created_at || a.created || '',
+    updated_at: a.updated_at || a.created_at || '',
+    seed_count: a.seed_count,
+    source_count: a.source_count,
+    sourceSeedIds: a.sourceSeedIds || [],
+    sourceLinkIds: a.sourceLinkIds || [],
+  })))
+}
+
+// Quality gate: the auto-compiler produces stubs and near-duplicates — only
+// substantive articles belong in the Library. Dedupe by title, keep the longest.
+function qualityGate(articles: Article[]): Article[] {
+  const byTitle = new Map<string, Article>()
+  for (const a of articles) {
+    if ((a.content || '').length < 600) continue
+    const key = (a.title || '').toLowerCase().trim()
+    if (!key) continue
+    const existing = byTitle.get(key)
+    if (!existing || (a.content || '').length > (existing.content || '').length) {
+      byTitle.set(key, a)
+    }
+  }
+  return [...byTitle.values()]
 }
 
 interface LinkItem {
@@ -62,31 +99,77 @@ function extractDomain(url: string): string {
 
 // ── Article Detail ─────────────────────────────────────
 
-function ArticleDetail({ article, onBack }: { article: Article; onBack: () => void }) {
+function ArticleDetail({ article, links, onBack, onEdited }: { article: Article; links: LinkItem[]; onBack: () => void; onEdited?: (id: string, patch: Partial<Article>) => void }) {
   const router = useRouter()
   const [bookmarked, setBookmarked] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(article.title)
+  const [content, setContent] = useState(article.content)
+  const [editTitle, setEditTitle] = useState(article.title)
+  const [editContent, setEditContent] = useState(article.content)
+  const [saving, setSaving] = useState(false)
+
+  // Resolve the sources this article was compiled from + its related seeds
+  const sourceLinks = (article.sourceLinkIds || [])
+    .map(id => links.find(l => l.id === id))
+    .filter(Boolean) as LinkItem[]
+  const seedCacheRaw = typeof window !== 'undefined' ? readCache<{ seeds?: { id?: string; title?: string }[] }>('seeds') : null
+  const relatedSeeds = (article.sourceSeedIds || [])
+    .map(id => (seedCacheRaw?.seeds || []).find(s => s.id === id))
+    .filter((s): s is { id: string; title: string } => !!s?.id && !!s?.title)
 
   const handleDownload = () => {
-    const blob = new Blob([`# ${article.title}\n\n${article.content}`], { type: 'text/markdown' })
+    const blob = new Blob([`# ${title}\n\n${content}`], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = `${article.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`
+    a.href = url; a.download = `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`
     a.click(); URL.revokeObjectURL(url)
+  }
+
+  const saveEdits = async () => {
+    const newTitle = editTitle.trim()
+    const newContent = editContent.trim()
+    if (!newTitle || !newContent || saving) return
+    setSaving(true)
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/wiki/${article.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ title: newTitle, content: newContent }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || data.error || 'Save failed')
+      }
+      setTitle(newTitle)
+      setContent(newContent)
+      onEdited?.(article.id, { title: newTitle, content: newContent })
+      setEditing(false)
+      toast.success('Article saved')
+    } catch (e) {
+      toast.error((e as Error).message || 'Could not save — backend update pending')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const eyebrow = [article.category || 'Article', 'Living article'].join(' · ')
 
   // Extract section headers and a first insight from markdown
-  const contentLines = (article.content || article.summary || '').split('\n')
+  const contentLines = (content || article.summary || '').split('\n')
   const firstParagraph = contentLines.find(l => l.trim() && !l.startsWith('#')) || ''
   const sections = contentLines.filter(l => l.startsWith('## ') || l.startsWith('# ')).slice(0, 4)
 
   return (
-    <div style={{ position: 'relative', background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
+    <div className="print-root" style={{ position: 'relative', background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
+      {/* Print-only title (the dark hero is hidden in print) */}
+      <h1 className="hidden print:block serif" style={{ fontSize: 28, padding: '0 20px', marginTop: 16 }}>{title}</h1>
+      <div className="print:hidden">
       <DetailHero
         tall
         eyebrow={eyebrow}
-        title={article.title}
+        title={title}
         onClose={onBack}
         right={
           <DetailHeroBtn
@@ -118,11 +201,52 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
         {/* Decorative leaf watermark */}
         <Leaf size={120} color="rgba(126,240,168,0.12)" style={{ position: 'absolute', right: -14, top: -4, zIndex: -1 }} />
       </DetailHero>
+      </div>
 
       {/* Article body */}
       <div className="desk-narrow" style={{ position: 'relative', zIndex: 3, padding: '24px 20px 140px' }}>
+        {/* Action bar — edit / export */}
+        <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+          {editing ? (
+            <>
+              <button onClick={() => { setEditing(false); setEditTitle(title); setEditContent(content) }} className="tap ui" style={{ background: 'none', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '7px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={saveEdits} disabled={saving} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'Saving…' : 'Save article'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditing(true)} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '7px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                <Pencil size={13} strokeWidth={1.75} /> Edit
+              </button>
+              <button onClick={() => window.print()} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '7px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                <Printer size={13} strokeWidth={1.75} /> Export PDF
+              </button>
+            </>
+          )}
+        </div>
+
+        {editing && (
+          <>
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="serif"
+              style={{ width: '100%', fontSize: 26, lineHeight: 1.15, color: 'var(--ink)', marginBottom: 12, background: 'var(--surface-sunk)', border: '1px solid var(--border-2)', borderRadius: 12, padding: '8px 14px', outline: 'none' }}
+            />
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              spellCheck={false}
+              style={{ width: '100%', minHeight: '60vh', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, lineHeight: 1.7, color: 'var(--ink)', background: 'var(--surface-sunk)', border: '1px solid var(--border-2)', borderRadius: 16, padding: '16px 18px', outline: 'none', resize: 'vertical' }}
+            />
+          </>
+        )}
+
         {/* Lead paragraph — serif */}
-        {firstParagraph && (
+        {!editing && firstParagraph && (
           <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, color: 'var(--ink)', letterSpacing: '-0.01em', marginBottom: 20 }}>
             {firstParagraph}
           </p>
@@ -131,7 +255,7 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
         {/* Full article content */}
         <div
           className="prose prose-sm max-w-none"
-          style={{ fontFamily: 'var(--body)', fontSize: 14.5, lineHeight: 1.75, color: 'var(--ink-2)' }}
+          style={{ fontFamily: 'var(--body)', fontSize: 14.5, lineHeight: 1.75, color: 'var(--ink-2)', display: editing ? 'none' : undefined }}
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -156,9 +280,35 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
               ),
             }}
           >
-            {article.content || article.summary || ''}
+            {content || article.summary || ''}
           </ReactMarkdown>
         </div>
+
+        {/* Sources & related seeds — what this article was compiled from */}
+        {!editing && (sourceLinks.length > 0 || relatedSeeds.length > 0) && (
+          <div style={{ marginTop: 28 }}>
+            <div className="caps" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 10, letterSpacing: '0.08em' }}>Compiled from</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {sourceLinks.map((l) => (
+                <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" className="v2-card tap" style={{ display: 'flex', alignItems: 'center', gap: 10, borderRadius: 13, padding: '10px 13px', textDecoration: 'none' }}>
+                  <Globe size={15} color="var(--ink-3)" strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="ui" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.title || l.url}</span>
+                    <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{extractDomain(l.url)}</span>
+                  </span>
+                  <ArrowUp size={13} color="var(--green-700)" strokeWidth={2} style={{ transform: 'rotate(45deg)', flexShrink: 0 }} />
+                </a>
+              ))}
+              {relatedSeeds.map((s) => (
+                <a key={s.id} href={`/garden?seed=${encodeURIComponent(s.id)}`} className="v2-card tap" style={{ display: 'flex', alignItems: 'center', gap: 10, borderRadius: 13, padding: '10px 13px', textDecoration: 'none' }}>
+                  <Leaf size={15} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                  <span className="ui" style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title}</span>
+                  <ChevronRight size={14} color="var(--ink-3)" strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Tags as seed chips */}
         {article.tags && article.tags.length > 0 && (
@@ -181,7 +331,7 @@ function ArticleDetail({ article, onBack }: { article: Article; onBack: () => vo
       </div>
 
       {/* Sticky "Ask about this article" bar */}
-      <div style={{ position: 'sticky', left: 0, right: 0, bottom: 0, padding: '10px 16px 18px', zIndex: 6, background: 'linear-gradient(to top, var(--bg) 60%, transparent)' }}>
+      <div className="print:hidden" style={{ position: 'sticky', left: 0, right: 0, bottom: 0, padding: '10px 16px 18px', zIndex: 6, background: 'linear-gradient(to top, var(--bg) 60%, transparent)' }}>
         <button
           onClick={() => router.push(`/chat?prompt=${encodeURIComponent(`Tell me more about the article: ${article.title}`)}`)}
           className="glass tap"
@@ -461,18 +611,7 @@ export default function LibraryPage() {
       fetch('/api/links?limit=100', { headers }).then(r => r.ok ? r.json() : { links: [] }),
     ]).then(([wikiData, linksData]) => {
       const rawArticles = wikiData.articles || []
-      setArticles(rawArticles.map((a: any) => ({
-        id: a.id || a.notion_id || '',
-        title: a.title || 'Untitled',
-        content: a.content || '',
-        summary: a.summary || a.metadata?.summary || '',
-        category: a.category || a.tags?.[0] || 'Article',
-        tags: a.tags || [],
-        created_at: a.created_at || a.created || '',
-        updated_at: a.updated_at || a.created_at || '',
-        seed_count: a.seed_count,
-        source_count: a.source_count,
-      })))
+      setArticles(mapArticles(rawArticles))
 
       const rawLinks = linksData.links || linksData || []
       setLinks(rawLinks.map((l: any) => ({
@@ -514,18 +653,7 @@ export default function LibraryPage() {
           .then(r => r.ok ? r.json() : { articles: [] })
           .then(wikiData => {
             const rawArticles = wikiData.articles || []
-            setArticles(rawArticles.map((a: any) => ({
-              id: a.id || a.notion_id || '',
-              title: a.title || 'Untitled',
-              content: a.content || '',
-              summary: a.summary || a.metadata?.summary || '',
-              category: a.category || a.tags?.[0] || 'Article',
-              tags: a.tags || [],
-              created_at: a.created_at || a.created || '',
-              updated_at: a.updated_at || a.created_at || '',
-              seed_count: a.seed_count,
-              source_count: a.source_count,
-            })))
+            setArticles(mapArticles(rawArticles))
             if (rawArticles.length > 0) localStorage.setItem('greenplot_wiki', JSON.stringify(rawArticles))
           }).catch(() => {})
       } else {
@@ -552,7 +680,17 @@ export default function LibraryPage() {
   }
 
   if (selectedArticle) {
-    return <ArticleDetail article={selectedArticle} onBack={() => setSelectedArticle(null)} />
+    return (
+      <ArticleDetail
+        article={selectedArticle}
+        links={links}
+        onBack={() => setSelectedArticle(null)}
+        onEdited={(id, patch) => {
+          setArticles(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
+          setSelectedArticle(prev => (prev && prev.id === id ? { ...prev, ...patch } : prev))
+        }}
+      />
+    )
   }
 
   return (

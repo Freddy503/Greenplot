@@ -110,6 +110,15 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
   const tags = seed?.tags ? seed.tags.split(',').map(t => t.trim()).filter(Boolean) : []
   const domain = seed?.domain || ''
 
+  // Reset per-seed state when a different seed opens — otherwise the previous
+  // seed's "find similar" results bleed into the next one
+  useEffect(() => {
+    setSearchResults([])
+    setLoadingSearch(false)
+    setConfirmDelete(false)
+    setShowActions(false)
+  }, [seed?.id, open])
+
   useEffect(() => {
     if (!open || !seed) return
     setLoadingLinks(true)

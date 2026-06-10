@@ -294,7 +294,7 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             </div>
 
             <button
-              onClick={() => { onClose(); window.location.href = `/garden` }}
+              onClick={() => { onClose(); window.location.href = `/garden?seed=${encodeURIComponent(selected.id)}` }}
               style={{
                 width: '100%', padding: '11px', borderRadius: 13,
                 background: '#22c55e', border: 'none', cursor: 'pointer',

@@ -136,6 +136,14 @@
   padding: 0;
 }
 
+/* The unlayered `*` reset above beats Tailwind's layered utilities in the
+   cascade, silently killing every `mx-auto` (chat composer alignment bug).
+   Re-declare it unlayered so centering works. */
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 body {
   background-color: var(--background);
   color: var(--on-surface);
@@ -640,5 +648,25 @@ html, body {
   }
   .snav-item:hover {
     background: rgba(126, 240, 168, 0.07);
+  }
+}
+
+/* ── PDF export (window.print) ────────────────────────────────────────────
+   Detail views set .print-root on their scroll container. Without these
+   overrides the inline height:100dvh/overflow clips the printout to page 1. */
+@media print {
+  body, body.with-sidenav {
+    padding-left: 0 !important;
+  }
+  .print-root {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .print-root .glass {
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    border: none !important;
+    padding: 0 !important;
   }
 }
