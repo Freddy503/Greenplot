@@ -2946,3 +2946,19 @@ async def write_product(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["write_product"] = write_product
+
+
+# ── build_ledger: adaptive interrogations (spec: adaptive-agents.md) ──────────
+
+async def build_ledger(args: dict, user: User, db: Session) -> str:
+    """Grade what's already known before asking the user anything."""
+    from app.agent_ledger import build_ledger as _build
+    kind = (args.get("kind") or "spec").strip()
+    seed_id = (args.get("seed_id") or "").strip() or None
+    try:
+        return json.dumps(_build(kind, seed_id, user, db))
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)[:200]})
+
+
+TOOL_HANDLERS["build_ledger"] = build_ledger
