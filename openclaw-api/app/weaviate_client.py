@@ -109,6 +109,27 @@ class WeaviateClient:
             }
             self.client.schema.create_class(wiki_class)
 
+        # Create PaperChunk class — full-text research paper chunks
+        # (spec: docs/specs/paper-parsing-pipeline.md)
+        if "PaperChunk" not in existing:
+            paper_chunk_class = {
+                "class": "PaperChunk",
+                "description": "Section-aware chunks of parsed research papers, linked to a paper seed",
+                "properties": [
+                    {"name": "tenant_id", "dataType": ["text"]},
+                    {"name": "user_id", "dataType": ["text"]},
+                    {"name": "seed_id", "dataType": ["text"]},
+                    {"name": "paper_title", "dataType": ["text"]},
+                    {"name": "section", "dataType": ["text"]},
+                    {"name": "chunk_index", "dataType": ["int"]},
+                    {"name": "text", "dataType": ["text"]},
+                    {"name": "citation", "dataType": ["text"]},
+                    {"name": "created_at", "dataType": ["date"]},
+                ],
+                "vectorizer": "none",
+            }
+            self.client.schema.create_class(paper_chunk_class)
+
         # Create GreenPlotNode class (unified node type)
         if "GreenPlotNode" not in existing:
             node_class = {
@@ -559,6 +580,69 @@ class WeaviateClient:
             return result.get("data", {}).get("Get", {}).get("WikiArticle", []) or []
         except Exception:
             return []
+
+    # ── PaperChunk CRUD (research paper full text) ──────────────────
+
+    def add_paper_chunk(self, tenant_id: str, user_id: str, seed_id: str,
+                        paper_title: str, section: str, chunk_index: int,
+                        text: str, citation: str, embedding: list) -> str:
+        from datetime import datetime as dt
+        obj = {
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "seed_id": seed_id,
+            "paper_title": paper_title,
+            "section": section,
+            "chunk_index": chunk_index,
+            "text": text,
+            "citation": citation,
+            "created_at": dt.utcnow().isoformat() + "Z",
+        }
+        return self.client.data_object.create(
+            class_name="PaperChunk", data_object=obj, vector=embedding
+        )
+
+    def search_paper_chunks(self, tenant_id: str, embedding: list,
+                            seed_id: str = None, limit: int = 5) -> list[dict]:
+        """Semantic search over parsed paper chunks, optionally scoped to one paper."""
+        try:
+            operands = [{"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id}]
+            if seed_id:
+                operands.append({"path": ["seed_id"], "operator": "Equal", "valueText": seed_id})
+            where = operands[0] if len(operands) == 1 else {"operator": "And", "operands": operands}
+            result = (
+                self.client.query.get("PaperChunk", [
+                    "seed_id", "paper_title", "section", "chunk_index", "text", "citation"
+                ])
+                .with_near_vector({"vector": embedding})
+                .with_where(where)
+                .with_additional(["certainty"])
+                .with_limit(limit)
+                .do()
+            )
+            hits = result.get("data", {}).get("Get", {}).get("PaperChunk", []) or []
+            return [{
+                "seed_id": h.get("seed_id", ""),
+                "paper_title": h.get("paper_title", ""),
+                "section": h.get("section", ""),
+                "chunk_index": h.get("chunk_index", 0),
+                "text": h.get("text", ""),
+                "citation": h.get("citation", ""),
+                "certainty": float((h.get("_additional") or {}).get("certainty") or 0),
+            } for h in hits]
+        except Exception:
+            return []
+
+    def delete_paper_chunks(self, seed_id: str) -> bool:
+        """Delete all chunks belonging to a paper seed (re-parse / GDPR / seed delete)."""
+        try:
+            self.client.batch.delete_objects(
+                class_name="PaperChunk",
+                where={"path": ["seed_id"], "operator": "Equal", "valueText": seed_id},
+            )
+            return True
+        except Exception:
+            return False
 
     def near_object_seeds(self, tenant_id: str, object_id: str, limit: int = 3) -> list[dict]:
         """Nearest semantic neighbors of an existing seed object (no re-embedding).

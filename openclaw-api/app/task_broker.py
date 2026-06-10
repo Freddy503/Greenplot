@@ -25,6 +25,28 @@ def get_redis() -> redis.Redis:
     return _client
 
 
+def enqueue_paper_parse(seed_id: str, tenant_id: str, priority: int = 5) -> str:
+    """Push a research-paper parse job (full text → PaperChunk index) onto the queue.
+
+    Lower priority than enrichment — papers are big and shouldn't starve
+    fresh thought enrichment.
+    """
+    r = get_redis()
+    task_id = str(uuid.uuid4())
+    job = {
+        "task_id": task_id,
+        "type": "paper_parse",
+        "seed_id": seed_id,
+        "tenant_id": tenant_id,
+        "enqueued_at": datetime.utcnow().isoformat() + "Z",
+        "status": "queued",
+        "priority": priority,
+    }
+    r.hset(STATUS_KEY, task_id, json.dumps(job))
+    r.zadd(QUEUE_KEY, {json.dumps(job): priority})
+    return task_id
+
+
 def enqueue_enrichment(thought_id: str, tenant_id: str, priority: int = 0) -> str:
     """
     Push an enrichment job onto the Redis queue.

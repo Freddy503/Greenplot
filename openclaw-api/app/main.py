@@ -529,6 +529,11 @@ def delete_seed(seed_id: str, current_user: User = Depends(get_current_user), db
         weaviate_client.delete_seed(weaviate_ref)
     except Exception:
         pass  # Postgres deletion always wins; Weaviate is best-effort
+    # Paper seeds: purge full-text chunks too (GDPR + spec requirement)
+    try:
+        weaviate_client.delete_paper_chunks(seed_id)
+    except Exception:
+        pass
     return {"ok": True}
 
 
@@ -1423,6 +1428,77 @@ def patch_seed(
         logger.warning(f"Weaviate re-index failed for edited seed {seed.id}: {e}")
 
     return {"status": "ok", "seed_id": str(seed.id), "title": seed.title}
+
+
+# --- Research paper full-text pipeline (spec: docs/specs/paper-parsing-pipeline.md) ---
+
+class PaperSearchRequest(BaseModel):
+    query: str = Field(..., min_length=2, max_length=500)
+    seed_id: Optional[str] = None
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+@app.post("/api/v1/papers/search")
+async def search_papers_endpoint(
+    req: PaperSearchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Semantic search over parsed paper chunks (REST face of search_paper_content)."""
+    from app.tool_executor import search_paper_content
+    result = json.loads(await search_paper_content(
+        {"query": req.query, "seed_id": req.seed_id or "", "limit": req.limit},
+        current_user, db,
+    ))
+    return result
+
+
+@app.post("/api/v1/papers/{seed_id}/parse")
+def parse_paper_endpoint(
+    seed_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Queue (re-)parsing of one paper seed's full text."""
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+    seed = db.query(Seed).filter(
+        Seed.id == seed_uuid,
+        Seed.tenant_id == current_user.tenant_id,
+    ).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Paper seed not found")
+
+    from app.paper_pipeline import enqueue_or_run_parse
+    task_id = enqueue_or_run_parse(seed_id, str(current_user.tenant_id), db=None)
+    if task_id:
+        return {"status": "queued", "task_id": task_id, "seed_id": seed_id}
+    # Queue unavailable — run inline as a fallback (slower request, still works)
+    from app.paper_pipeline import parse_paper_for_seed
+    return parse_paper_for_seed(seed_id, str(current_user.tenant_id), db)
+
+
+@app.post("/api/v1/papers/parse-all")
+def parse_all_papers_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Backfill: queue full-text parsing for all of the user's unparsed paper seeds."""
+    seeds = db.query(Seed).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        Seed.seed_type == "paper",
+    ).all()
+    from app.paper_pipeline import enqueue_or_run_parse
+    queued = 0
+    for s in seeds:
+        meta = s.seed_metadata or {}
+        if meta.get("parse_status") == "parsed":
+            continue
+        if enqueue_or_run_parse(str(s.id), str(current_user.tenant_id)):
+            queued += 1
+    return {"status": "ok", "queued": queued, "total_papers": len(seeds)}
 
 
 # --- Spec build lifecycle (draft → ready → building → shipped) ---

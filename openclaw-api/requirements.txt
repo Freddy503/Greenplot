@@ -23,3 +23,4 @@ pytz>=2023.0
 resend>=2.0.0
 sentry-sdk[fastapi]>=2.0.0
 tenacity>=8.2.0
+pymupdf

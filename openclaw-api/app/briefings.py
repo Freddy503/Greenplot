@@ -712,6 +712,7 @@ def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set =
         return 0
     from datetime import date as _date
     digest_date = _date.today().isoformat()
+    new_seed_ids: list = []
     for paper in papers:
         url = paper.get("url", "")
         title = (paper.get("title", "") or "").strip()
@@ -753,9 +754,18 @@ def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set =
         )
         db.add(seed)
         saved += 1
+        seen_paper_urls.add(url)
+        new_seed_ids.append(str(seed.id))
     if saved:
         db.commit()
         logger.info(f"[academic_digest] Auto-saved {saved} papers as Garden seeds for user {user_id}")
+        # Queue full-text parsing (PaperChunk index) for each new paper
+        try:
+            from app.paper_pipeline import enqueue_or_run_parse
+            for sid in new_seed_ids:
+                enqueue_or_run_parse(sid, str(user.tenant_id))
+        except Exception as e:
+            logger.warning(f"[academic_digest] paper parse enqueue failed: {e}")
     return saved
 
 

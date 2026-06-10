@@ -52,7 +52,8 @@ no database access required.
 | `update_seed` | Edit a seed's title/content; `append: true` builds up notes/PRDs across turns |
 | `create_article` | Publish a markdown write-up straight into the Library |
 | `update_article` | Iterate on an existing Library article |
-| `ingest_paper` | Plant a research paper by arXiv id or URL |
+| `ingest_paper` | Plant a research paper by arXiv id or URL (full text auto-indexed) |
+| `search_paper_content` | Search the full text of parsed papers — methods, results, limitations |
 
 Roadmap to full MCP support (Streamable HTTP transport, per-user API keys,
 `greenplot://` resources, prompts): see `docs/specs/mcp-server-v2.md`.

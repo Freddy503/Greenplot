@@ -1,6 +1,6 @@
 # Research Paper Parsing Pipeline — PRD
 
-**Status:** ready · **Owner:** Freddy · **Target:** Phase 1 in 1 week
+**Status:** built (v1 shipped — see `app/paper_pipeline.py`) · **Owner:** Freddy
 
 ## Problem Alignment
 
