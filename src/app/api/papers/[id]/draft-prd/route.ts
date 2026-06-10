@@ -8,10 +8,12 @@ export async function POST(
 ) {
   const { id } = await params
   const token = req.headers.get('authorization') || ''
+  const replace = req.nextUrl.searchParams.get('replace')
+  const qs = replace ? `?replace=${encodeURIComponent(replace)}` : ''
 
   try {
     // One full PRD generation call — allow up to 60s
-    const res = await fetch(`${BACKEND}/api/v1/papers/${id}/draft-prd`, {
+    const res = await fetch(`${BACKEND}/api/v1/papers/${id}/draft-prd${qs}`, {
       method: 'POST',
       headers: { ...(token ? { Authorization: token } : {}) },
       signal: AbortSignal.timeout(60000),
