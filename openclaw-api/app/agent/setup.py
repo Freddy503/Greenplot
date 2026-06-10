@@ -424,6 +424,27 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
     ))
 
     registry.register(ToolSpec(
+        name="search_paper_content",
+        description=(
+            "Search the FULL TEXT of the user's parsed research papers (methods, results, "
+            "limitations — not just abstracts). Use whenever a paper seed is relevant to the "
+            "conversation, and ALWAYS before grounding a spec or PRD in a paper. "
+            "Optionally scope to one paper with seed_id."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to find in the papers (e.g. 'evaluation methodology', 'latency results')."},
+                "seed_id": {"type": "string", "description": "Limit search to one paper seed (optional)."},
+                "limit": {"type": "integer", "description": "Max chunks to return (default 5, max 10)."},
+            },
+            "required": ["query"],
+        },
+        permission=PermissionLevel.READ,
+        handler=TOOL_HANDLERS.get("search_paper_content"),
+    ))
+
+    registry.register(ToolSpec(
         name="create_article",
         description=(
             "Create a Library wiki article directly with the given markdown content. "

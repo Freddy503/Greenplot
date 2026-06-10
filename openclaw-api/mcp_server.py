@@ -269,6 +269,28 @@ async def ingest_paper(arxiv_id: str = "", url: str = "") -> str:
         return f"Paper '{data.get('title')}' planted (seed_id={data.get('seed_id')}). {data.get('message', '')}"
 
 
+async def search_paper_content(query: str, seed_id: str = "", limit: int = 5) -> str:
+    """Search the full text of parsed research papers."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        body = {"query": query, "limit": limit}
+        if seed_id:
+            body["seed_id"] = seed_id
+        resp = await client.post(f"{API_URL}/api/v1/papers/search", headers=_headers(), json=body)
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        results = data.get("results", [])
+        if not results:
+            return data.get("message", "No parsed paper content matched.")
+        lines = []
+        for r in results:
+            lines.append(
+                f"**{r.get('paper', '')}** — {r.get('section', '')} (relevance {r.get('relevance', 0)})\n"
+                f"{(r.get('text') or '')[:800]}\n— {r.get('citation', '')}"
+            )
+        return "\n\n".join(lines)
+
+
 # ── MCP stdio transport ───────────────────────────────────────────────────────
 
 TOOLS_SCHEMA = [
@@ -395,13 +417,26 @@ TOOLS_SCHEMA = [
     },
     {
         "name": "ingest_paper",
-        "description": "Plant a research paper into the Greenplot garden by arXiv id (e.g. '2406.01234') or paper URL. Fetches title/authors/abstract automatically.",
+        "description": "Plant a research paper into the Greenplot garden by arXiv id (e.g. '2406.01234') or paper URL. Fetches title/authors/abstract automatically and queues full-text indexing.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "arxiv_id": {"type": "string", "description": "arXiv identifier"},
                 "url": {"type": "string", "description": "Paper URL (arXiv abs/pdf or publisher page)"},
             },
+        },
+    },
+    {
+        "name": "search_paper_content",
+        "description": "Search the FULL TEXT of parsed research papers (methods, results, limitations — not just abstracts). Use before grounding a spec or implementation in a paper.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to find (e.g. 'evaluation methodology')"},
+                "seed_id": {"type": "string", "description": "Limit to one paper seed (optional)"},
+                "limit": {"type": "integer", "description": "Max chunks (default 5)"},
+            },
+            "required": ["query"],
         },
     },
 ]
@@ -465,6 +500,10 @@ async def handle_message(msg: dict) -> dict | None:
                 )
             elif tool_name == "ingest_paper":
                 result = await ingest_paper(args.get("arxiv_id", ""), args.get("url", ""))
+            elif tool_name == "search_paper_content":
+                result = await search_paper_content(
+                    args["query"], args.get("seed_id", ""), int(args.get("limit", 5)),
+                )
             else:
                 result = f"Unknown tool: {tool_name}"
         except Exception as e:

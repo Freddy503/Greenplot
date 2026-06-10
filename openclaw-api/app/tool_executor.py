@@ -2645,13 +2645,20 @@ async def ingest_paper(args: dict, user: User, db: Session) -> str:
     except Exception as e:
         logger.warning(f"Weaviate indexing failed for paper '{title}': {e}")
 
+    # Queue full-text parsing so retrieval can use the method/results, not just the abstract
+    try:
+        from app.paper_pipeline import enqueue_or_run_parse
+        enqueue_or_run_parse(str(seed.id), str(user.tenant_id))
+    except Exception as e:
+        logger.warning(f"Paper parse enqueue failed for '{title}': {e}")
+
     return json.dumps({
         "status": "ok",
         "seed_id": str(seed.id),
         "title": title,
         "url": link,
         "citation": citation,
-        "message": f"Paper '{title}' planted in the garden. Suggest develop_idea to turn it into a buildable project spec.",
+        "message": f"Paper '{title}' planted in the garden — full text is being indexed. Suggest develop_idea to turn it into a buildable project spec.",
     })
 
 
@@ -2720,6 +2727,46 @@ async def update_seed(args: dict, user: User, db: Session) -> str:
 
 
 TOOL_HANDLERS["update_seed"] = update_seed
+
+
+async def search_paper_content(args: dict, user: User, db: Session) -> str:
+    """Semantic search over parsed full-text research paper chunks."""
+    query = (args.get("query") or "").strip()
+    seed_id = (args.get("seed_id") or "").strip() or None
+    limit = min(int(args.get("limit", 5)), 10)
+    if not query:
+        return json.dumps({"status": "error", "message": "query is required"})
+    try:
+        from app.enricher_v2 import embed_text
+        embedding = embed_text(query)
+        chunks = weaviate_client.search_paper_chunks(
+            tenant_id=str(user.tenant_id),
+            embedding=embedding,
+            seed_id=seed_id,
+            limit=limit,
+        )
+        if not chunks:
+            return json.dumps({
+                "status": "empty",
+                "message": "No parsed paper content matched. The paper may not be indexed yet — "
+                           "check its parse status or trigger 'Index full text' in Studio.",
+            })
+        return json.dumps({
+            "status": "ok",
+            "results": [{
+                "paper": c["paper_title"],
+                "section": c["section"],
+                "text": c["text"][:1200],
+                "citation": c["citation"],
+                "seed_id": c["seed_id"],
+                "relevance": round(c["certainty"], 3),
+            } for c in chunks],
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+TOOL_HANDLERS["search_paper_content"] = search_paper_content
 
 
 async def create_article(args: dict, user: User, db: Session) -> str:

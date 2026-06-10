@@ -43,10 +43,29 @@ signal.signal(signal.SIGINT, _shutdown)
 
 
 def process_job(job: dict, db: Session):
-    """Run enrichment for a single thought."""
-    thought_id = job["thought_id"]
-    tenant_id = job["tenant_id"]
+    """Dispatch a queue job: thought enrichment (default) or paper parsing."""
     task_id = job["task_id"]
+    tenant_id = job["tenant_id"]
+
+    # Research-paper full-text parsing (spec: docs/specs/paper-parsing-pipeline.md)
+    if job.get("type") == "paper_parse":
+        seed_id = job["seed_id"]
+        log.info(f"Processing paper_parse {task_id[:8]}... seed={seed_id[:8]}...")
+        try:
+            from app.paper_pipeline import parse_paper_for_seed
+            result = parse_paper_for_seed(seed_id, tenant_id, db)
+            if result.get("status") == "ok":
+                update_task_status(task_id, "completed", result=result)
+                log.info(f"✅ Paper parsed: {result.get('chunks')} chunks ({result.get('source')})")
+            else:
+                update_task_status(task_id, "error", error=result.get("message", "parse failed"))
+                log.error(f"❌ Paper parse failed: {result.get('message')}")
+        except Exception as e:
+            update_task_status(task_id, "error", error=str(e))
+            log.error(f"❌ Paper parse crashed: {e}")
+        return
+
+    thought_id = job["thought_id"]
 
     log.info(f"Processing task {task_id[:8]}... thought={thought_id[:8]}...")
 
