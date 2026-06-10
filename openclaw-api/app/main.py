@@ -120,22 +120,26 @@ with engine.connect() as conn:
     # Backfill paper metadata on research-paper seeds saved before the digest
     # started writing pdf_url/paper_url/seed_type — makes existing digest
     # papers viewable (embedded PDF) in Studio's "Ideas ready to develop".
+    # seed_metadata is a json (not jsonb) column, so cast for ? and ||.
     try:
         conn.execute(text("""
             UPDATE seeds SET
                 seed_type = 'paper',
-                seed_metadata = seed_metadata
+                seed_metadata = (seed_metadata::jsonb
                     || jsonb_build_object(
                         'seed_type', 'paper',
                         'paper_url', seed_metadata->>'source_url',
                         'pdf_url', replace(seed_metadata->>'source_url', '/abs/', '/pdf/')
-                    )
-            WHERE seed_metadata->'tags' ? 'research-paper'
+                    ))::json
+            WHERE (seed_metadata->'tags')::jsonb ? 'research-paper'
               AND seed_metadata->>'source_url' LIKE '%arxiv.org/abs/%'
-              AND (seed_metadata->>'pdf_url' IS NULL OR seed_metadata->>'pdf_url' = '')
+              AND COALESCE(seed_metadata->>'pdf_url', '') = ''
         """))
         conn.commit()
     except Exception as _bf_err:
+        # Roll back so the aborted transaction doesn't poison the rest of the
+        # startup migrations on this connection (InFailedSqlTransaction)
+        conn.rollback()
         logger.warning(f"Paper metadata backfill skipped: {_bf_err}")
 
     # Seed visit tracking columns
