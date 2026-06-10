@@ -486,6 +486,31 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
         handler=TOOL_HANDLERS.get("update_article"),
     ))
 
+    registry.register(ToolSpec(
+        name="write_product",
+        description=(
+            "Create a Product — the root object every PRD serves (max 3, one MAIN). "
+            "ONLY call after a problem interrogation: WHO hurts, what evidence of demand exists, "
+            "what the problem costs them, why now. The problem_statement must be plain english "
+            "and survive that interrogation — reject vague visions. Pillars are the 3-5 facets "
+            "of the problem, not feature buckets."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Product name."},
+                "problem_statement": {"type": "string", "description": "Plain-english: who hurts and how (40-600 chars)."},
+                "pillars": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"}, "problem_facet": {"type": "string"}}},
+                    "description": "3-5 facets of the problem."},
+                "success_definition": {"type": "string", "description": "What 'solved' looks like, measurable."},
+            },
+            "required": ["title", "problem_statement", "pillars"],
+        },
+        permission=PermissionLevel.WRITE,
+        handler=TOOL_HANDLERS.get("write_product"),
+    ))
+
     # ── Sub-Agent System ───────────────────────────────────────────
     from app.agent.subagents import SubagentRunner, create_subagent_tool_spec
 

@@ -511,6 +511,7 @@ function StepNurtureFocus({
 // ── STEP 4: The Loop (idea → shipped) ─────────────────
 
 const LOOP_STEPS = [
+  { icon: 'flag', title: 'Define', place: 'Product view', body: 'State what you\'re building in plain english — the problem, who hurts, why now. Everything that follows serves it, and it stays visible and current from day one.' },
   { icon: 'eco', title: 'Plant', place: 'Chat & Library', body: 'Capture thoughts in chat, save links, and plant research papers straight from your daily digest. Everything is enriched automatically.' },
   { icon: 'auto_awesome', title: 'Grow', place: 'Garden & Wiki', body: 'Seeds connect into a knowledge graph and compile into living wiki articles. Briefings keep ideas warm.' },
   { icon: 'science', title: 'Design', place: 'Studio', body: 'Develop an idea into a full PRD — forcing questions, system architecture, and a generated architecture diagram.' },
@@ -535,7 +536,7 @@ function StepHowItWorks({
           From idea to shipped.
         </h2>
         <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
-          Greenplot is one loop: plant ideas, grow them into knowledge, design them into specs, and build them with agents.
+          Greenplot is one loop: define what you're building, plant ideas, grow them into knowledge, design specs, and build with agents.
         </p>
       </div>
 

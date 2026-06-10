@@ -96,6 +96,10 @@ Use exactly this markdown structure:
 # <Concise Product Name> — PRD
 
 **Status:** draft · **Source:** auto-drafted from research
+**Serves:** <pillar name> — <which facet of the product's problem this addresses>
+(When PRODUCT CONTEXT is provided: pick the best-fitting pillar by exact name and EXTEND or
+reference the existing PRDs listed there instead of duplicating them. Omit this line when no
+product context is given.)
 
 ## Problem Alignment
 <3-5 sentences. The user-facing problem, who has it, why current solutions fall short. Connect to the user's seeds.>
@@ -273,6 +277,29 @@ def generate_prd_draft(seed: Seed, chunks: list[dict], related: list[dict],
         for r in related
     )
     repo_ctx = f"\n\nREPOSITORY CONTEXT (ground components in these real files):\n{repo_map[:16000]}" if repo_map else ""
+
+    # Convergence context (product-atlas.md): the MAIN product's problem,
+    # pillars, and existing PRDs — extend, don't duplicate
+    product_ctx = ""
+    main_product = None
+    try:
+        main_product = next((p for p in db.query(Seed).filter(
+            Seed.tenant_id == seed.tenant_id, Seed.seed_type == "product").all()
+            if (p.seed_metadata or {}).get("rank") == "main"), None)
+        if main_product:
+            pm = main_product.seed_metadata or {}
+            pillars = "\n".join(f"- {p['name']}: {p.get('problem_facet', '')}" for p in pm.get("pillars", []))
+            attached = [s.title for s in db.query(Seed).filter(Seed.tenant_id == seed.tenant_id).all()
+                        if isinstance(s.seed_metadata, dict) and s.seed_metadata.get("product_id") == str(main_product.id)][:12]
+            existing_prds = "\n".join(f"- {t}" for t in attached) or "- (none yet)"
+            product_ctx = f"""\n\nPRODUCT CONTEXT (the product this PRD must serve):
+PRODUCT: {main_product.title}
+PROBLEM: {pm.get('problem_statement', '')}
+PILLARS:\n{pillars}
+EXISTING PRDs (extend or reference these, never duplicate):\n{existing_prds}"""
+    except Exception:
+        pass
+
     prompt = f"""RESEARCH PAPER: {seed.title}
 
 PAPER EXCoperationalTS:
@@ -322,6 +349,34 @@ CURRENT DRAFT:
     title_line = next((l for l in content.split("\n") if l.startswith("# ")), "")
     title = title_line.lstrip("# ").replace("— PRD", "").strip() or f"{seed.title[:60]} — Product"
 
+    # Convergence metadata: proposed attachment + overlap check (human confirms,
+    # never the system — product-atlas.md)
+    coherence_meta = {}
+    if main_product:
+        coherence_meta["product_id"] = str(main_product.id)
+        coherence_meta["attachment"] = "proposed"
+        serves_line = next((l for l in content.split("\n") if l.strip().startswith("**Serves:**")), "")
+        if serves_line:
+            coherence_meta["serves"] = serves_line.replace("**Serves:**", "").strip()[:200]
+            for p in (main_product.seed_metadata or {}).get("pillars", []):
+                if p.get("name", "").lower() and p["name"].lower() in serves_line.lower():
+                    coherence_meta["pillar_id"] = p["id"]
+                    break
+    try:
+        hits = weaviate_client.search_seeds(
+            tenant_id=str(seed.tenant_id),
+            embedding=_embed(f"{title}\n{content[:400]}"), limit=4)
+        for h in hits:
+            ht = (h.get("title") or "").strip()
+            cert = float(h.get("certainty") or h.get("_additional", {}).get("certainty") or 0)
+            if ht and ht.lower() != title.lower() and cert > 0.9:
+                tags = h.get("tags") or ""
+                if "prd" in str(tags).lower() or "spec" in str(tags).lower():
+                    coherence_meta["overlaps"] = [{"title": ht, "suggestion": "Consider extending that PRD instead of shipping both."}]
+                    break
+    except Exception:
+        pass
+
     # In-place regeneration: upgrade an existing draft instead of duplicating it
     if replace_draft_id:
         try:
@@ -334,7 +389,8 @@ CURRENT DRAFT:
             m = dict(existing.seed_metadata or {})
             m.update({"quality": quality, "rubric_score": rubric_score,
                       "template": "PRD_TEMPLATE_V2" if use_v2 else "PRD_TEMPLATE_V1",
-                      "vision_status": m.get("vision_status", "pending")})
+                      "vision_status": m.get("vision_status", "pending"),
+                      **coherence_meta})
             existing.seed_metadata = m
             db.commit()
             logger.info(f"[auto_prd] Regenerated draft '{existing.title}' (quality={quality}, score={rubric_score})")
@@ -361,6 +417,7 @@ CURRENT DRAFT:
             "quality": quality,
             "rubric_score": rubric_score,
             "template": "PRD_TEMPLATE_V2" if use_v2 else "PRD_TEMPLATE_V1",
+            **coherence_meta,
         },
     )
     db.add(draft)
