@@ -56,7 +56,9 @@ function mapArticles(raw: any[]): Article[] {
 function qualityGate(articles: Article[]): Article[] {
   const byTitle = new Map<string, Article>()
   for (const a of articles) {
-    if ((a.content || '').length < 600) continue
+    // Design Vision docs are curated artifacts — never filter them
+    const isVision = (a.category || '').toLowerCase() === 'design vision'
+    if (!isVision && (a.content || '').length < 600) continue
     const key = (a.title || '').toLowerCase().trim()
     if (!key) continue
     const existing = byTitle.get(key)
@@ -594,6 +596,7 @@ export default function LibraryPage() {
   const [links, setLinks] = useState<LinkItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
+  const deepLinkDone = useState({ done: false })[0]
 
   useEffect(() => {
     // Read tab from URL
@@ -637,6 +640,17 @@ export default function LibraryPage() {
       }
     }).finally(() => setLoading(false))
   }, [router])
+
+  // Deep link: /library?article=<id> (e.g. from a PRD's Design Vision chip)
+  useEffect(() => {
+    if (deepLinkDone.done || articles.length === 0) return
+    const id = new URLSearchParams(window.location.search).get('article')
+    if (id) {
+      const a = articles.find(x => x.id === id)
+      if (a) { setSelectedArticle(a); deepLinkDone.done = true }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [articles])
 
   const handleCompile = async () => {
     const token = localStorage.getItem('greenplot_token')
