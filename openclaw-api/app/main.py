@@ -1501,6 +1501,39 @@ def parse_all_papers_endpoint(
     return {"status": "ok", "queued": queued, "total_papers": len(seeds)}
 
 
+# --- Auto-PRD: manual trigger for any paper (bypasses relevance gate) ---
+
+@app.post("/api/v1/papers/{seed_id}/draft-prd")
+async def draft_prd_for_paper(
+    seed_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate a draft PRD from a paper seed on demand (Studio 'Draft PRD' button).
+
+    Synchronous — one generation call, ~20-40s. The autopilot path runs the
+    same logic on the worker after digest papers finish parsing.
+    """
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+    seed = db.query(Seed).filter(
+        Seed.id == seed_uuid,
+        Seed.tenant_id == current_user.tenant_id,
+    ).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    from app.auto_prd import auto_prd_for_paper
+    result = auto_prd_for_paper(seed_id, str(current_user.tenant_id), db, force=True)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=502, detail=result.get("reason", "Draft generation failed"))
+    if result.get("status") == "skipped":
+        raise HTTPException(status_code=422, detail=f"Could not draft: {result.get('reason')} — is the paper parsed yet?")
+    return result
+
+
 # --- Spec build lifecycle (draft → ready → building → shipped) ---
 
 class BuildStatusRequest(BaseModel):
