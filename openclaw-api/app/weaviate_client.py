@@ -633,6 +633,30 @@ class WeaviateClient:
         except Exception:
             return []
 
+    def get_paper_chunks(self, seed_id: str, limit: int = 100) -> list[dict]:
+        """All chunks for one paper, no vector — used by tree retrieval."""
+        try:
+            where = {"path": ["seed_id"], "operator": "Equal", "valueText": seed_id}
+            result = (
+                self.client.query.get("PaperChunk", [
+                    "seed_id", "paper_title", "section", "chunk_index", "text", "citation"
+                ])
+                .with_where(where)
+                .with_limit(limit)
+                .do()
+            )
+            hits = result.get("data", {}).get("Get", {}).get("PaperChunk", []) or []
+            return [{
+                "seed_id": h.get("seed_id", ""),
+                "paper_title": h.get("paper_title", ""),
+                "section": h.get("section", ""),
+                "chunk_index": h.get("chunk_index", 0),
+                "text": h.get("text", ""),
+                "citation": h.get("citation", ""),
+            } for h in hits]
+        except Exception:
+            return []
+
     def delete_paper_chunks(self, seed_id: str) -> bool:
         """Delete all chunks belonging to a paper seed (re-parse / GDPR / seed delete)."""
         try:

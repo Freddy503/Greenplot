@@ -168,11 +168,33 @@ def _todays_auto_draft_count(db: Session, tenant_id) -> int:
 
 
 def _gather_context(seed: Seed, tenant_id: str) -> tuple[list[dict], list[dict]]:
-    """Top paper chunks (method/results weighted) + related garden seeds."""
-    title_emb = _embed(f"{seed.title}\nmethod results approach")
-    chunks = weaviate_client.search_paper_chunks(
-        tenant_id=tenant_id, embedding=title_emb, seed_id=str(seed.id), limit=8
-    )
+    """Paper grounding + related garden seeds.
+
+    Preferred path (tree-retrieval.md): navigate the paper's doc tree for the
+    sections a PRD actually needs — method, results, limitations, system
+    design — and use them whole. Vector top-8 remains the fallback.
+    """
+    chunks: list[dict] = []
+    tree = (seed.seed_metadata or {}).get("doc_tree")
+    if isinstance(tree, list) and len(tree) >= 3:
+        try:
+            from app.tree_retrieval import navigate_tree, fetch_sections
+            node_ids = navigate_tree(
+                tree, "the method/approach, key results with numbers, limitations, "
+                      "and system design or architecture — everything a PRD needs"
+            )
+            titles = [n["title"] for n in tree if n["id"] in node_ids]
+            sections = fetch_sections(tenant_id, str(seed.id), titles)
+            chunks = [{"section": s["section"], "text": s["text"][:4500]} for s in sections]
+        except Exception as e:
+            logger.warning(f"[auto_prd] tree grounding failed for {seed.id}: {e}")
+
+    if len(chunks) < 3:
+        title_emb = _embed(f"{seed.title}\nmethod results approach")
+        chunks = weaviate_client.search_paper_chunks(
+            tenant_id=tenant_id, embedding=title_emb, seed_id=str(seed.id), limit=8
+        )
+
     related = weaviate_client.search_seeds(
         tenant_id=tenant_id, embedding=_embed(seed.title), limit=6
     )

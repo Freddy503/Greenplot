@@ -2729,8 +2729,22 @@ async def update_seed(args: dict, user: User, db: Session) -> str:
 TOOL_HANDLERS["update_seed"] = update_seed
 
 
+def _doc_tree_for(seed_id: str, user: User, db: Session) -> list | None:
+    try:
+        seed = db.query(Seed).filter(Seed.id == UUID(seed_id), Seed.tenant_id == user.tenant_id).first()
+        tree = (seed.seed_metadata or {}).get("doc_tree") if seed else None
+        return tree if isinstance(tree, list) and len(tree) >= 3 else None
+    except Exception:
+        return None
+
+
 async def search_paper_content(args: dict, user: User, db: Session) -> str:
-    """Semantic search over parsed full-text research paper chunks."""
+    """Paper retrieval, two-stage hybrid (spec: tree-retrieval.md).
+
+    Stage 1: vectors answer WHICH paper (cross-corpus). Stage 2: when the
+    target paper has a doc tree, one reasoning call answers WHICH sections
+    and returns them whole — similarity != relevance for long documents.
+    """
     query = (args.get("query") or "").strip()
     seed_id = (args.get("seed_id") or "").strip() or None
     limit = min(int(args.get("limit", 5)), 10)
@@ -2751,8 +2765,34 @@ async def search_paper_content(args: dict, user: User, db: Session) -> str:
                 "message": "No parsed paper content matched. The paper may not be indexed yet — "
                            "check its parse status or trigger 'Index full text' in Studio.",
             })
+
+        # Stage 2 — tree navigation when one paper is clearly the target
+        target = seed_id or (chunks[0]["seed_id"] if chunks and all(c["seed_id"] == chunks[0]["seed_id"] for c in chunks[:3]) else None)
+        if target:
+            tree = _doc_tree_for(target, user, db)
+            if tree:
+                try:
+                    from app.tree_retrieval import navigate_tree, fetch_sections
+                    node_ids = navigate_tree(tree, query)
+                    titles = [n["title"] for n in tree if n["id"] in node_ids]
+                    sections = fetch_sections(str(user.tenant_id), target, titles)
+                    if sections:
+                        return json.dumps({
+                            "status": "ok",
+                            "retrieval": "tree",
+                            "results": [{
+                                "paper": s["paper_title"],
+                                "section": s["section"],
+                                "text": s["text"][:6000],
+                                "seed_id": target,
+                            } for s in sections],
+                        })
+                except Exception as e:
+                    logger.warning(f"Tree retrieval failed for {target}, falling back to vector: {e}")
+
         return json.dumps({
             "status": "ok",
+            "retrieval": "vector",
             "results": [{
                 "paper": c["paper_title"],
                 "section": c["section"],

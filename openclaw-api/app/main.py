@@ -1585,6 +1585,51 @@ def parse_all_papers_endpoint(
     return {"status": "ok", "queued": queued, "total_papers": len(seeds)}
 
 
+# --- Tree backfill: doc trees for already-parsed papers (tree-retrieval.md) ---
+
+def _run_tree_backfill_job(tenant_id: str):
+    from app.database import SessionLocal
+    from app.tree_retrieval import tree_from_chunks
+    job_db = SessionLocal()
+    try:
+        rows = job_db.query(Seed).filter(Seed.tenant_id == uuid.UUID(tenant_id)).all()
+        built = 0
+        for s in rows:
+            m = s.seed_metadata or {}
+            if not isinstance(m, dict) or m.get("parse_status") != "parsed" or m.get("doc_tree"):
+                continue
+            tree = tree_from_chunks(str(s.id))
+            if tree:
+                mm = dict(m)
+                mm["doc_tree"] = tree
+                mm["tree_built_at"] = datetime.utcnow().isoformat()
+                s.seed_metadata = mm
+                job_db.commit()
+                built += 1
+        logger.info(f"[tree_retrieval] backfill complete: {built} trees built")
+    except Exception as e:
+        logger.error(f"[tree_retrieval] backfill crashed: {e}")
+    finally:
+        job_db.close()
+
+
+@app.post("/api/v1/papers/tree-all", status_code=202)
+async def build_all_trees(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Build doc trees for parsed papers that lack one (from stored chunks)."""
+    pending = 0
+    for s in db.query(Seed).filter(Seed.tenant_id == current_user.tenant_id).all():
+        m = s.seed_metadata or {}
+        if isinstance(m, dict) and m.get("parse_status") == "parsed" and not m.get("doc_tree"):
+            pending += 1
+    background_tasks.add_task(_run_tree_backfill_job, str(current_user.tenant_id))
+    return {"status": "queued", "pending_trees": pending,
+            "message": f"Building doc trees for {pending} papers — watch the api logs for progress."}
+
+
 # --- Auto-PRD: manual trigger for any paper (bypasses relevance gate) ---
 
 def _run_draft_prd_job(seed_id: str, tenant_id: str, replace_draft_id: str = None):
