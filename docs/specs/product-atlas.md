@@ -1,4 +1,7 @@
-# Product Atlas — The Convergence Layer — PRD
+# Product View — The Convergence Layer — PRD
+
+> Naming: the lens is called **Product** in the UI (Board | List | Product) — the tab name *is*
+> the concept, no metaphor to explain. "Atlas" survives only as this spec's internal codename.
 
 **Status:** ready · **Owner:** Freddy · **Target:** ~1.5 weeks
 
