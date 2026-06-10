@@ -40,6 +40,8 @@ interface SeedMeta {
   paper_url?: string
   source_url?: string
   digest_date?: string
+  parse_status?: string
+  chunk_count?: number
 }
 
 // Older digest papers only stored source_url — derive the PDF link from the abs page
@@ -210,6 +212,33 @@ function IdeaDetail({ seed, onBack, onSpec }: { seed: RawSeed; onBack: () => voi
   const paperUrl = meta.paper_url || ''
   const content = seed.content || seed.text || seed.summary || ''
   const [pdfOpen, setPdfOpen] = useState(!!pdfUrl)
+  const [parseStatus, setParseStatus] = useState(meta.parse_status || '')
+  const [indexing, setIndexing] = useState(false)
+
+  const indexFullText = async () => {
+    if (indexing || !seed.id) return
+    setIndexing(true)
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/papers/${seed.id}/parse`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setParseStatus(data.status === 'ok' ? 'parsed' : 'parsing')
+        toast.success(data.status === 'ok'
+          ? `Full text indexed — ${data.chunks} chunks`
+          : 'Full-text indexing queued — ready in a minute')
+      } else {
+        toast.error(data.detail || data.error || 'Could not index paper')
+      }
+    } catch {
+      toast.error('Could not index paper')
+    } finally {
+      setIndexing(false)
+    }
+  }
 
   return (
     <div className="print-root" style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
@@ -232,10 +261,26 @@ function IdeaDetail({ seed, onBack, onSpec }: { seed: RawSeed; onBack: () => voi
 
       <div className="desk-narrow" style={{ paddingBottom: 100, padding: '0 18px' }}>
         <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Pill tone="soft" size="xs">{paper ? 'PAPER' : 'IDEA'}</Pill>
             {meta.digest_date && (
               <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>Research Digest · {meta.digest_date}</span>
+            )}
+            {paper && (
+              parseStatus === 'parsed' ? (
+                <span className="ui" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 9999, padding: '2px 8px' }}>
+                  FULL TEXT INDEXED{meta.chunk_count ? ` · ${meta.chunk_count} CHUNKS` : ''}
+                </span>
+              ) : parseStatus === 'parsing' ? (
+                <span className="ui" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--amber)', background: 'rgba(201,138,27,0.12)', borderRadius: 9999, padding: '2px 8px' }}>
+                  INDEXING…
+                </span>
+              ) : (
+                <button onClick={indexFullText} disabled={indexing} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-2)', background: 'var(--surface-sunk)', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '2px 8px', cursor: 'pointer' }}>
+                  {indexing ? <Loader2 size={9} className="animate-spin" /> : null}
+                  {parseStatus === 'failed' ? 'RETRY FULL-TEXT INDEX' : 'INDEX FULL TEXT'}
+                </button>
+              )
             )}
           </div>
           <h1 className="serif" style={{ fontSize: 28, lineHeight: 1.15, color: 'var(--ink)', marginTop: 12, marginBottom: 16, letterSpacing: '-0.02em' }}>
