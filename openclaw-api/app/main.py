@@ -1877,6 +1877,89 @@ async def create_design_vision(
             "message": "Design vision generation started — it lands in the Library in ~2 minutes."}
 
 
+# --- Improve a PRD in place: rubric critique-and-revise without a source paper ---
+
+def _run_improve_prd_job(seed_id: str, tenant_id: str):
+    from app.database import SessionLocal
+    job_db = SessionLocal()
+    try:
+        seed = job_db.query(Seed).filter(Seed.id == uuid.UUID(seed_id)).first()
+        if not seed or not (seed.content or "").strip():
+            return
+        from app.auto_prd import _critique_draft, PRD_TEMPLATE_V2
+        from app.briefings import _call_llm
+        content = seed.content
+        critique = _critique_draft(content)
+        quality, score = "ok", critique["score"]
+        if critique["failures"]:
+            failures_txt = "\n".join(f"- {f}" for f in critique["failures"])
+            revised = _call_llm(
+                f"""This PRD failed review. Fix EVERY failure below and return the complete revised
+PRD (keep its structure and everything that already works):
+
+FAILURES:
+{failures_txt}
+
+CURRENT PRD:
+{content[:18000]}""",
+                system=PRD_TEMPLATE_V2, max_tokens=8000, model=settings.CHAT_MODEL)
+            if revised and len(revised) > 600:
+                content = revised
+                recheck = _critique_draft(content)
+                score = recheck["score"]
+                if len(recheck["failures"]) >= 3:
+                    quality = "rough"
+            else:
+                quality = "rough"
+        seed.content = content
+        m = dict(seed.seed_metadata or {})
+        m.update({"quality": quality, "rubric_score": score,
+                  "improve_status": "done", "improved_at": datetime.utcnow().isoformat()})
+        seed.seed_metadata = m
+        job_db.commit()
+        logger.info(f"[improve_prd] '{seed.title[:40]}': score {score}/7, quality {quality}")
+    except Exception as e:
+        logger.error(f"[improve_prd] failed for {seed_id}: {e}")
+        try:
+            s = job_db.query(Seed).filter(Seed.id == uuid.UUID(seed_id)).first()
+            if s:
+                m = dict(s.seed_metadata or {})
+                m["improve_status"] = f"error: {str(e)[:120]}"
+                s.seed_metadata = m
+                job_db.commit()
+        except Exception:
+            job_db.rollback()
+    finally:
+        job_db.close()
+
+
+@app.post("/api/v1/specs/{seed_id}/improve", status_code=202)
+async def improve_prd(
+    seed_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Rubric critique-and-revise on the PRD's existing content (~1-2 min).
+
+    For PRDs without a source paper — manual specs get the same v2 quality
+    loop as auto-drafts. Poll the seed's metadata.improve_status.
+    """
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+    seed = db.query(Seed).filter(Seed.id == seed_uuid, Seed.tenant_id == current_user.tenant_id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Spec not found")
+    m = dict(seed.seed_metadata or {})
+    m["improve_status"] = "running"
+    seed.seed_metadata = m
+    db.commit()
+    background_tasks.add_task(_run_improve_prd_job, seed_id, str(current_user.tenant_id))
+    return {"status": "queued", "seed_id": seed_id}
+
+
 # --- Product View: the convergence root (docs/specs/product-atlas.md) ---
 
 @app.get("/api/v1/products")
