@@ -12,7 +12,7 @@ knowledge base and Studio specs. This closes the Idea-to-Build loop:
 1. Get a token:
 
 ```bash
-curl -s https://api.greenplot.ink/api/v1/auth/login \
+curl -s https://api.greenplot.ink/api/v1/login \
   -H 'Content-Type: application/json' \
   -d '{"email": "you@example.com", "password": "..."}'
 # → {"access_token": "eyJ..."}

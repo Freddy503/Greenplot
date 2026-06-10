@@ -19,7 +19,7 @@ Usage (stdio, for Claude Code ~/.claude/settings.json):
     }
   }
 
-Get your token: POST https://api.greenplot.ink/api/v1/auth/login
+Get your token: POST https://api.greenplot.ink/api/v1/login
   {"email": "...", "password": "..."} → {"access_token": "..."}
 """
 
