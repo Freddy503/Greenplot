@@ -117,9 +117,12 @@ PAPER ({seed.title}):
 
 10 = directly extends something they are building; 7 = clear product opportunity in their
 domains; 4 = interesting but tangential; 0 = unrelated. Reply with ONLY the integer."""
-    raw = _call_llm(prompt, max_tokens=8, model=settings.CHAT_MODEL)
+    # Budget must cover reasoning tokens on thinking models — 8 tokens would
+    # return empty content and silently kill the autopilot with score 0
+    raw = _call_llm(prompt, max_tokens=1200, model=settings.CHAT_MODEL)
     try:
-        return max(0, min(10, int("".join(c for c in raw if c.isdigit())[:2] or "0")))
+        digits = "".join(c for c in (raw or "").strip()[-4:] if c.isdigit())
+        return max(0, min(10, int(digits[-2:] or digits or "0")))
     except Exception:
         return 0
 
@@ -151,7 +154,8 @@ USER'S GARDEN SEEDS:
 
 Draft the PRD now."""
 
-    content = _call_llm(prompt, system=PRD_TEMPLATE_V1, max_tokens=2200, model=settings.CHAT_MODEL)
+    # Generous budget: thinking models spend tokens on reasoning before output
+    content = _call_llm(prompt, system=PRD_TEMPLATE_V1, max_tokens=6000, model=settings.CHAT_MODEL)
     if not content or len(content) < 600:
         return {"status": "error", "reason": "generation_failed"}
     missing = [s for s in PRD_SECTIONS_V1 if s not in content]

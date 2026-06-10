@@ -82,7 +82,13 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
         content = response.choices[0].message.content if response.choices else ""
         # Strip any chain-of-thought thinking blocks (some models emit these)
         import re
-        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        content = re.sub(r'<think>.*?</think>', '', (content or ''), flags=re.DOTALL).strip()
+        # Thinking models (e.g. Gemini 3.5 Flash) can burn the whole max_tokens
+        # budget on reasoning and return empty content with no error — treat
+        # that as a failure and fall back to a non-thinking model.
+        if not content and model != "minimax/minimax-m2.7":
+            logger.warning(f"LLM returned empty content (model={model}, likely reasoning-budget exhaustion) — retrying with fallback")
+            return _call_llm(prompt, system, max_tokens, model="minimax/minimax-m2.7")
         return content
     except Exception as e:
         logger.error(f"LLM call failed (model={model}): {e}")
