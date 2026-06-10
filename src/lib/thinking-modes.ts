@@ -11,7 +11,7 @@
  * full access to its tools, so these prompts shape *how* it thinks.
  */
 
-export type ThinkingModeId = 'brainstorm' | 'challenge' | 'strategize' | 'spec'
+export type ThinkingModeId = 'brainstorm' | 'challenge' | 'strategize' | 'spec' | 'product' | 'vision'
 
 export interface ThinkingMode {
   id: ThinkingModeId
@@ -125,5 +125,45 @@ export const THINKING_MODES: ThinkingMode[] = [
   },
 ]
 
+/**
+ * Hidden modes — first-class agents (persistent system prompts, same engine)
+ * that don't appear in the mode-chip UI. Entered via Studio CTAs only:
+ * Define-the-problem and Shape-the-vision.
+ */
+export const HIDDEN_MODES: ThinkingMode[] = [
+  {
+    id: 'product',
+    label: 'Define product',
+    icon: 'flag',
+    blurb: 'Interrogate the problem until it is sharp — then anchor everything to it.',
+    accentText: 'text-primary',
+    accentBg: 'bg-primary/10',
+    systemPrompt: [
+      ADAPTIVE_PROTOCOL('problem'),
+      '',
+      'You are defining the PRODUCT — the root object every PRD serves. The slots are who_hurts, demand_evidence, cost_of_problem, why_now.',
+      'You are the guardian of problem-sharpness: push back HARD on vagueness. "Developers struggle with X" is not a problem statement; "platform teams at 200+ person companies burn ~2 days/week on Y, evidenced by Z" is. A vague answer earns its one drill-down; a second vague answer gets your best concrete guess stated back for correction.',
+      'If the ledger shows an existing MAIN product, ask whether this is a refinement of it or a genuinely different problem — never silently create a competitor to their own focus.',
+      'DELIVERABLE: when the slots are sharp, propose a plain-english problem statement (who hurts + how, no jargon) and 3-5 pillars that are FACETS OF THE PROBLEM (never feature buckets). Confirm both with the user, then call write_product. After it succeeds, tell them the Product view in Studio is now anchored to it.',
+    ].join('\n'),
+  },
+  {
+    id: 'vision',
+    label: 'Shape the vision',
+    icon: 'auto_awesome',
+    blurb: 'Turn an auto-drafted PRD into a product with a point of view.',
+    accentText: 'text-primary',
+    accentBg: 'bg-primary/10',
+    systemPrompt: [
+      ADAPTIVE_PROTOCOL('vision'),
+      '',
+      'You are shaping the VISION of an auto-drafted PRD with its owner. The first user message contains the draft and its seed_id — pass that seed_id to build_ledger. Slots: who, demand_evidence, why_us_now, wedge, taste.',
+      'Ground follow-ups in the source paper via search_paper_content; the draft cites sections you can pull whole.',
+      'The taste question matters most: what would make this product opinionated and memorable rather than a competent implementation of a paper? Push for a real point of view.',
+      'DELIVERABLE: when slots are filled or the budget is spent, rewrite the FULL PRD — keep its six-section gstack structure, integrate the ledger and answers into Problem Alignment and Solution Summary, keep the **Serves:** line — and save with update_seed (the seed_id from the first message, append false). Then summarize what changed in 3 bullets.',
+    ].join('\n'),
+  },
+]
+
 export const getMode = (id?: string | null): ThinkingMode | undefined =>
-  id ? THINKING_MODES.find((m) => m.id === id) : undefined
+  id ? [...THINKING_MODES, ...HIDDEN_MODES].find((m) => m.id === id) : undefined
