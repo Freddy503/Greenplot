@@ -1,209 +1,134 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Search, X } from 'lucide-react'
-import * as d3 from 'd3'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import dynamic from 'next/dynamic'
+import { ArrowLeft, X } from 'lucide-react'
 
-// ── Types ─────────────────────────────────────────────
+// react-force-graph renders via Canvas/WebGL — client-only
+// (decision + UX rules: docs/specs/knowledge-graph-v2.md)
+const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false })
 
-interface GraphNode extends d3.SimulationNodeDatum {
+interface GraphNode {
   id: string
-  label: string
-  type: 'seed' | 'plant' | 'source'
-  domain?: string
+  title: string
+  group: string
+  size: number
+  seedType?: string
+  x?: number
+  y?: number
 }
 
 interface GraphLink {
   source: string | GraphNode
   target: string | GraphNode
+  type: 'explicit' | 'semantic'
+  strength?: number
+  linkType?: string
 }
-
-interface RawSeed {
-  id?: string
-  notion_id?: string
-  title?: string
-  content?: string
-  text?: string
-  domain?: string
-  seed_type?: string
-  type?: string
-  tags?: string | string[]
-  seed_metadata?: { tags?: string[]; domain?: string }
-}
-
-// ── Knowledge Graph Overlay ────────────────────────────
 
 interface KnowledgeGraphProps {
   onClose: () => void
 }
 
-function nodeColor(type: string) {
-  if (type === 'plant') return '#7ef0a8'
-  if (type === 'source') return 'transparent'
-  return '#22c55e'
-}
-function nodeStroke(type: string) {
-  if (type === 'source') return '#2dd4bf'
-  return 'none'
-}
-function nodeRadius(type: string) {
-  return type === 'plant' ? 11 : 8
+// Stable palette — group (domain) → color
+const PALETTE = ['#22c55e', '#2dd4bf', '#7ef0a8', '#fbbf24', '#a78bfa', '#f472b6', '#60a5fa', '#fb923c', '#34d399', '#e879f9']
+function groupColor(group: string): string {
+  let h = 0
+  for (let i = 0; i < group.length; i++) h = (h * 31 + group.charCodeAt(i)) >>> 0
+  return PALETTE[h % PALETTE.length]
 }
 
+const nodeId = (v: string | GraphNode) => (typeof v === 'string' ? v : v.id)
+
 export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [links, setLinks] = useState<GraphLink[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<GraphNode | null>(null)
-  const [selectedConnections, setSelectedConnections] = useState(0)
+  const [hoverNode, setHoverNode] = useState<GraphNode | null>(null)
+  const [dims, setDims] = useState({ w: 800, h: 600 })
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Fetch graph data
+  // 1st-degree neighborhood of the hovered node — everything else dims
+  const neighborhood = useMemo(() => {
+    if (!hoverNode) return null
+    const set = new Set<string>([hoverNode.id])
+    for (const l of links) {
+      const s = nodeId(l.source), t = nodeId(l.target)
+      if (s === hoverNode.id) set.add(t)
+      if (t === hoverNode.id) set.add(s)
+    }
+    return set
+  }, [hoverNode, links])
+
+  const degreeOf = useCallback((id: string) => links.reduce((n, l) => n + (nodeId(l.source) === id || nodeId(l.target) === id ? 1 : 0), 0), [links])
+
   useEffect(() => {
-    const token = localStorage.getItem('greenplot_token')
-    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
-
-    fetch('/api/seeds/graph', { headers })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.nodes && data?.edges) {
-          const graphNodes: GraphNode[] = data.nodes.map((n: RawSeed) => ({
-            id: n.id || n.notion_id || String(Math.random()),
-            label: n.title || 'Untitled',
-            type: (n.seed_type || n.type || 'seed') as 'seed' | 'plant' | 'source',
-            domain: n.domain || (n.seed_metadata as { domain?: string })?.domain || '',
-          }))
-          const graphLinks: GraphLink[] = (data.edges || []).map((e: { source: string; target: string }) => ({
-            source: e.source,
-            target: e.target,
-          }))
-          setNodes(graphNodes)
-          setLinks(graphLinks)
-        } else {
-          // Fallback: load from /api/seeds and build connections from shared domains
-          fetch('/api/seeds?limit=60', { headers })
-            .then(r => r.json())
-            .then(d => {
-              const seeds: RawSeed[] = d.seeds || d || []
-              const graphNodes: GraphNode[] = seeds.map(s => ({
-                id: s.id || s.notion_id || String(Math.random()),
-                label: (s.title || 'Untitled').slice(0, 40),
-                type: 'seed',
-                domain: s.domain || (s.seed_metadata as { domain?: string })?.domain || '',
-              }))
-              const graphLinks: GraphLink[] = []
-              const seen = new Set<string>()
-              for (let i = 0; i < graphNodes.length; i++) {
-                for (let j = i + 1; j < graphNodes.length; j++) {
-                  const a = graphNodes[i], b = graphNodes[j]
-                  if (a.domain && b.domain && a.domain.toLowerCase() === b.domain.toLowerCase()) {
-                    const key = [a.id, b.id].sort().join('|')
-                    if (!seen.has(key)) {
-                      seen.add(key)
-                      graphLinks.push({ source: a.id, target: b.id })
-                    }
-                  }
-                }
-              }
-              setNodes(graphNodes)
-              setLinks(graphLinks.slice(0, 80))
-            })
-            .catch(() => {})
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    const measure = () => {
+      const el = containerRef.current
+      if (el) setDims({ w: el.clientWidth, h: el.clientHeight })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
   }, [])
 
-  // ── D3 render: SVG + native zoom/drag (no React state per frame) ──
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current || nodes.length === 0) return
+    const token = localStorage.getItem('greenplot_token')
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined
 
-    const W = containerRef.current.clientWidth || 360
-    const H = containerRef.current.clientHeight || 600
-
-    const svg = d3.select(svgRef.current)
-    svg.selectAll('*').remove()
-    svg.attr('viewBox', `0 0 ${W} ${H}`)
-
-    const g = svg.append('g')
-
-    // Native d3 zoom drives the <g> transform attribute directly — zero React re-renders.
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.3, 4])
-      .on('zoom', (event) => g.attr('transform', event.transform))
-    svg.call(zoom)
-
-    const sim = d3.forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(80).strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-220))
-      .force('center', d3.forceCenter(W / 2, H / 2))
-      .force('collision', d3.forceCollide(32))
-      .alphaDecay(0.025)
-
-    const linkSel = g.append('g').selectAll('line').data(links).join('line')
-      .attr('stroke', 'rgba(255,255,255,0.08)')
-      .attr('stroke-width', 0.75)
-
-    const idOf = (e: string | GraphNode) => (typeof e === 'object' ? e.id : e)
-
-    const applyHighlight = (id: string | null) => {
-      linkSel
-        .attr('stroke', d => (id && (idOf(d.source) === id || idOf(d.target) === id)) ? 'rgba(126,240,168,0.55)' : 'rgba(255,255,255,0.08)')
-        .attr('stroke-width', d => (id && (idOf(d.source) === id || idOf(d.target) === id)) ? 1.5 : 0.75)
-    }
-
-    const nodeSel = g.append('g').selectAll<SVGGElement, GraphNode>('g').data(nodes).join('g')
-      .style('cursor', 'pointer')
-      .call(d3.drag<SVGGElement, GraphNode>()
-        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y })
-        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y })
-        .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null })
-      )
-      .on('click', (_e, d) => {
-        setSelected(prev => {
-          const next = prev?.id === d.id ? null : d
-          const id = next ? d.id : null
-          applyHighlight(id)
-          if (next) {
-            const count = links.filter(l => idOf(l.source) === d.id || idOf(l.target) === d.id).length
-            setSelectedConnections(count)
+    const load = async () => {
+      try {
+        // Dual-edge endpoint (explicit + semantic)
+        const res = await fetch('/api/graph', { headers })
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.nodes) && data.nodes.length > 0) {
+            setNodes(data.nodes)
+            setLinks(data.links || [])
+            return
           }
-          return next
+        }
+        // Fallback while the backend update is pending: old multi-signal route
+        const seedsRes = await fetch('/api/seeds?limit=200', { headers })
+        const seedsData = seedsRes.ok ? await seedsRes.json() : { seeds: [] }
+        const seeds = (seedsData.seeds || []).map((s: { id: string; title?: string; content?: string; domain?: string; seed_metadata?: { domain?: string } }) => ({
+          id: s.id, title: s.title || 'Untitled', text: (s.content || '').slice(0, 400),
+          domain: s.domain || s.seed_metadata?.domain || '',
+        }))
+        if (seeds.length === 0) return
+        const graphRes = await fetch('/api/seeds/graph', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(headers || {}) },
+          body: JSON.stringify({ seeds }),
         })
-      })
+        const graph = graphRes.ok ? await graphRes.json() : { links: [] }
+        const rawLinks = (graph.links || []) as { source: string; target: string; strength?: number; linkType?: string }[]
+        const deg = new Map<string, number>()
+        for (const l of rawLinks) {
+          deg.set(l.source, (deg.get(l.source) || 0) + 1)
+          deg.set(l.target, (deg.get(l.target) || 0) + 1)
+        }
+        setNodes(seeds.map((s: { id: string; title: string; domain: string }) => ({
+          id: s.id, title: s.title, group: s.domain || 'untagged',
+          size: Math.min(6 + 2 * (deg.get(s.id) || 0), 22),
+        })))
+        setLinks(rawLinks.map(l => ({
+          source: l.source, target: l.target,
+          type: (l.linkType && l.linkType !== 'similar' ? 'explicit' : 'semantic') as 'explicit' | 'semantic',
+          strength: l.strength, linkType: l.linkType,
+        })))
+      } catch {
+        // leave empty — empty-state UI handles it
+      } finally {
+        setLoading(false)
+      }
+    }
+    load().finally(() => setLoading(false))
+  }, [])
 
-    nodeSel.append('circle')
-      .attr('r', d => nodeRadius(d.type) + (d.type === 'source' ? 0 : 4))
-      .attr('fill', d => nodeColor(d.type))
-      .attr('opacity', d => d.type === 'source' ? 0 : 0.18)
-    nodeSel.append('circle')
-      .attr('r', d => nodeRadius(d.type))
-      .attr('fill', d => nodeColor(d.type))
-      .attr('stroke', d => nodeStroke(d.type))
-      .attr('stroke-width', d => nodeStroke(d.type) !== 'none' ? 1.5 : 0)
-    nodeSel.append('text')
-      .text(d => d.label.length > 18 ? d.label.slice(0, 18) + '…' : d.label)
-      .attr('x', 0)
-      .attr('y', d => nodeRadius(d.type) + 13)
-      .attr('text-anchor', 'middle')
-      .attr('font-size', '9.5px')
-      .attr('font-weight', '600')
-      .attr('font-family', 'var(--ui)')
-      .attr('fill', 'rgba(255,255,255,0.6)')
-
-    sim.on('tick', () => {
-      linkSel
-        .attr('x1', d => (d.source as GraphNode).x ?? 0)
-        .attr('y1', d => (d.source as GraphNode).y ?? 0)
-        .attr('x2', d => (d.target as GraphNode).x ?? 0)
-        .attr('y2', d => (d.target as GraphNode).y ?? 0)
-      nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
-    })
-
-    return () => { sim.stop() }
-  }, [nodes, links])
+  const groups = useMemo(() => [...new Set(nodes.map(n => n.group))].slice(0, 6), [nodes])
+  const graphData = useMemo(() => ({ nodes, links }), [nodes, links])
 
   return (
     <div
@@ -214,42 +139,41 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
       }}
     >
       {/* Top bar */}
-      <div style={{ paddingTop: 'max(52px, env(safe-area-inset-top, 0px))', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 }}>
+      <div style={{ paddingTop: 'max(52px, env(safe-area-inset-top, 0px))', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, pointerEvents: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px 12px', gap: 10 }}>
           <button
             onClick={onClose}
             className="glass-dark tap"
-            style={{ width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            style={{ width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, pointerEvents: 'auto' }}
           >
             <ArrowLeft size={18} color="rgba(255,255,255,0.9)" strokeWidth={1.75} />
           </button>
           <div style={{ flex: 1, textAlign: 'center' }}>
             <span className="caps" style={{ fontSize: 11, color: 'rgba(180,240,205,0.8)' }}>KNOWLEDGE GRAPH</span>
           </div>
-          <button
-            className="glass-dark tap"
-            style={{ width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          >
-            <Search size={17} color="rgba(255,255,255,0.9)" strokeWidth={1.75} />
-          </button>
+          <div style={{ width: 38, flexShrink: 0 }} />
         </div>
 
-        {/* Legend */}
-        <div style={{ display: 'flex', gap: 8, padding: '0 16px', justifyContent: 'center' }}>
-          {[
-            { color: '#22c55e', label: 'Seed', stroke: false },
-            { color: '#7ef0a8', label: 'Plant', stroke: false },
-            { color: 'transparent', label: 'Source', stroke: true, strokeColor: '#2dd4bf' },
-          ].map(({ color, label, stroke, strokeColor }) => (
-            <div key={label} className="glass-dark" style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 9999, padding: '4px 10px' }}>
-              <div style={{ width: 8, height: 8, borderRadius: 99, background: color, border: stroke ? `1.5px solid ${strokeColor}` : 'none' }} />
-              <span className="ui" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.75)' }}>{label}</span>
+        {/* Legend: edge types + top groups */}
+        <div style={{ display: 'flex', gap: 8, padding: '0 16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="glass-dark" style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 9999, padding: '4px 10px' }}>
+            <div style={{ width: 16, height: 2, background: 'rgba(126,240,168,0.9)' }} />
+            <span className="ui" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.75)' }}>Your links</span>
+          </div>
+          <div className="glass-dark" style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 9999, padding: '4px 10px' }}>
+            <div style={{ width: 16, height: 2, background: 'repeating-linear-gradient(90deg, rgba(45,212,191,0.8) 0 3px, transparent 3px 6px)' }} />
+            <span className="ui" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.75)' }}>AI similarity</span>
+          </div>
+          {groups.map(g => (
+            <div key={g} className="glass-dark" style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 9999, padding: '4px 10px' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 99, background: groupColor(g) }} />
+              <span className="ui" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.75)' }}>{g}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Graph canvas — SVG with native d3 zoom/pan/drag */}
+      {/* Graph canvas */}
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -258,38 +182,87 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
               <span className="ui" style={{ fontSize: 13, color: 'rgba(180,240,205,0.7)' }}>Growing your graph…</span>
             </div>
           </div>
+        ) : nodes.length > 0 ? (
+          <ForceGraph2D
+            width={dims.w}
+            height={dims.h}
+            graphData={graphData}
+            backgroundColor="rgba(0,0,0,0)"
+            nodeId="id"
+            nodeLabel={(n) => `${(n as GraphNode).title} · ${degreeOf((n as GraphNode).id)} connection${degreeOf((n as GraphNode).id) === 1 ? '' : 's'}`}
+            nodeCanvasObject={(node, ctx, globalScale) => {
+              const n = node as GraphNode
+              const dimmed = neighborhood ? !neighborhood.has(n.id) : false
+              const r = (n.size || 8) / 2 + 2
+              ctx.globalAlpha = dimmed ? 0.12 : 1
+              ctx.beginPath()
+              ctx.arc(n.x || 0, n.y || 0, r, 0, 2 * Math.PI)
+              ctx.fillStyle = groupColor(n.group || 'untagged')
+              ctx.fill()
+              if (n.seedType === 'paper' || n.seedType === 'spec') {
+                ctx.lineWidth = 1.5 / globalScale
+                ctx.strokeStyle = '#fff'
+                ctx.stroke()
+              }
+              // Labels appear once zoomed in (or for hubs)
+              if (globalScale > 1.4 || r > 8) {
+                ctx.font = `${Math.max(11 / globalScale, 2.5)}px Sora, sans-serif`
+                ctx.textAlign = 'center'
+                ctx.textBaseline = 'top'
+                ctx.fillStyle = dimmed ? 'rgba(233,250,239,0.15)' : 'rgba(233,250,239,0.85)'
+                ctx.fillText(n.title.length > 24 ? n.title.slice(0, 23) + '…' : n.title, n.x || 0, (n.y || 0) + r + 2)
+              }
+              ctx.globalAlpha = 1
+            }}
+            linkColor={(l) => {
+              const link = l as GraphLink
+              const dimmed = neighborhood
+                ? !(neighborhood.has(nodeId(link.source)) && neighborhood.has(nodeId(link.target)))
+                : false
+              if (dimmed) return 'rgba(255,255,255,0.04)'
+              return link.type === 'explicit' ? 'rgba(126,240,168,0.85)' : 'rgba(45,212,191,0.4)'
+            }}
+            linkWidth={(l) => ((l as GraphLink).type === 'explicit' ? 2 : 1)}
+            linkLineDash={(l) => ((l as GraphLink).type === 'semantic' ? [4, 3] : null)}
+            onNodeHover={(n) => setHoverNode((n as GraphNode) || null)}
+            onNodeClick={(n) => setSelected(n as GraphNode)}
+            onBackgroundClick={() => setSelected(null)}
+            cooldownTicks={120}
+            d3VelocityDecay={0.3}
+          />
         ) : (
-          <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ textAlign: 'center', padding: '0 40px' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🌱</div>
+              <p className="serif" style={{ fontSize: 22, color: '#fff', marginBottom: 8 }}>Garden is empty</p>
+              <p className="body-text" style={{ fontSize: 13, color: 'rgba(180,240,205,0.6)' }}>Plant your first idea in Chat</p>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Selected node detail card */}
       {selected && (
         <div style={{ position: 'absolute', bottom: 'calc(env(safe-area-inset-bottom, 20px) + 24px)', left: 16, right: 16, zIndex: 10 }}>
-          <div className="glass-dark" style={{ borderRadius: 22, padding: '16px 18px' }}>
+          <div className="glass-dark" style={{ borderRadius: 22, padding: '16px 18px', maxWidth: 480, margin: '0 auto' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <div style={{
-                    width: 8, height: 8, borderRadius: 99,
-                    background: nodeColor(selected.type),
-                    border: nodeStroke(selected.type) !== 'none' ? '1.5px solid #2dd4bf' : 'none',
-                  }} />
+                  <div style={{ width: 8, height: 8, borderRadius: 99, background: groupColor(selected.group || 'untagged') }} />
                   <span className="caps" style={{ fontSize: 9.5, color: 'rgba(180,240,205,0.7)' }}>
-                    {selected.type.toUpperCase()}
-                    {selected.domain ? ` · ${selected.domain}` : ''}
+                    {(selected.seedType || 'seed').toUpperCase()}{selected.group && selected.group !== 'untagged' ? ` · ${selected.group}` : ''}
                   </span>
                 </div>
-                <h3 className="serif" style={{ fontSize: 22, color: '#fff', lineHeight: 1.1, margin: 0 }}>{selected.label}</h3>
+                <h3 className="serif" style={{ fontSize: 22, color: '#fff', lineHeight: 1.1, margin: 0 }}>{selected.title}</h3>
               </div>
-              <button onClick={() => setSelected(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
                 <X size={16} color="rgba(255,255,255,0.5)" strokeWidth={1.75} />
               </button>
             </div>
 
             <div style={{ marginBottom: 14 }}>
               <span className="ui" style={{ fontSize: 11, color: 'rgba(180,240,205,0.6)' }}>
-                {selectedConnections} connection{selectedConnections !== 1 ? 's' : ''}
+                {degreeOf(selected.id)} connection{degreeOf(selected.id) !== 1 ? 's' : ''}
               </span>
             </div>
 
@@ -303,16 +276,6 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             >
               Open seed
             </button>
-          </div>
-        </div>
-      )}
-
-      {nodes.length === 0 && !loading && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', padding: '0 40px' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🌱</div>
-            <p className="serif" style={{ fontSize: 22, color: '#fff', marginBottom: 8 }}>Garden is empty</p>
-            <p className="body-text" style={{ fontSize: 13, color: 'rgba(180,240,205,0.6)' }}>Plant your first idea in Chat</p>
           </div>
         </div>
       )}
