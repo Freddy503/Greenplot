@@ -17,7 +17,7 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="md:hidden"
+      className="md:hidden print:hidden"
       style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 35,
         background: 'rgba(250,249,246,0.82)',

@@ -605,6 +605,17 @@ function StepHowItWorks({
       <p className="mt-4 text-xs text-center font-medium text-on-surface-variant/30">
         Initializing the Greenhouse
       </p>
+
+      <a
+        href="https://buymeacoffee.com/freddy503"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-6 flex items-center gap-2 px-4 py-2 rounded-full bg-[#FFDD00]/10 border border-[#FFDD00]/20 hover:border-[#FFDD00]/50 hover:bg-[#FFDD00]/15 transition-all active:scale-[0.98]"
+      >
+        <span className="text-base">☕</span>
+        <span className="text-xs font-bold text-on-surface">Buy Me a Coffee</span>
+        <span className="text-[10px] text-on-surface-variant">— support the build</span>
+      </a>
     </StepShell>
   )
 }

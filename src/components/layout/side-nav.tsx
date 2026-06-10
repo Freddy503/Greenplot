@@ -38,7 +38,7 @@ export default function SideNav() {
 
   return (
     <aside
-      className="hidden lg:flex"
+      className="hidden lg:flex print:hidden"
       style={{
         position: 'fixed', top: 0, left: 0, bottom: 0, width: 248, zIndex: 45,
         flexDirection: 'column',
