@@ -607,7 +607,7 @@ function StepHowItWorks({
       </p>
 
       <a
-        href="https://buymeacoffee.com/freddy503"
+        href="https://buymeacoffee.com/frederickk1"
         target="_blank"
         rel="noopener noreferrer"
         className="mt-6 flex items-center gap-2 px-4 py-2 rounded-full bg-[#FFDD00]/10 border border-[#FFDD00]/20 hover:border-[#FFDD00]/50 hover:bg-[#FFDD00]/15 transition-all active:scale-[0.98]"

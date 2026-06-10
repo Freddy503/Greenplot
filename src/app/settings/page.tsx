@@ -474,7 +474,7 @@ export default function SettingsPage() {
         {/* Support */}
         <SectionHeader>Support</SectionHeader>
         <a
-          href="https://buymeacoffee.com/freddy503"
+          href="https://buymeacoffee.com/frederickk1"
           target="_blank"
           rel="noopener noreferrer"
           className="v2-card tap"
