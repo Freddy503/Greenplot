@@ -111,6 +111,33 @@ with engine.connect() as conn:
         conn.execute(text("CREATE INDEX idx_calendar_tenant ON calendar_connections(tenant_id)"))
         conn.commit()
 
+    # seed_type column (idea/spec/paper/learning/log) — model has it, old tables may not
+    result_st = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='seed_type'"))
+    if not result_st.fetchone():
+        conn.execute(text("ALTER TABLE seeds ADD COLUMN seed_type VARCHAR(32) DEFAULT 'idea'"))
+        conn.commit()
+
+    # Backfill paper metadata on research-paper seeds saved before the digest
+    # started writing pdf_url/paper_url/seed_type — makes existing digest
+    # papers viewable (embedded PDF) in Studio's "Ideas ready to develop".
+    try:
+        conn.execute(text("""
+            UPDATE seeds SET
+                seed_type = 'paper',
+                seed_metadata = seed_metadata
+                    || jsonb_build_object(
+                        'seed_type', 'paper',
+                        'paper_url', seed_metadata->>'source_url',
+                        'pdf_url', replace(seed_metadata->>'source_url', '/abs/', '/pdf/')
+                    )
+            WHERE seed_metadata->'tags' ? 'research-paper'
+              AND seed_metadata->>'source_url' LIKE '%arxiv.org/abs/%'
+              AND (seed_metadata->>'pdf_url' IS NULL OR seed_metadata->>'pdf_url' = '')
+        """))
+        conn.commit()
+    except Exception as _bf_err:
+        logger.warning(f"Paper metadata backfill skipped: {_bf_err}")
+
     # Seed visit tracking columns
     result4 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='last_visited'"))
     if not result4.fetchone():
@@ -1119,11 +1146,24 @@ async def generate_image(
 
 # --- Spec Architecture Diagrams (BFL/FLUX) ---
 
+# System prompt for architecture diagrams: a fixed compositional template so
+# every generated diagram looks like it came from the same professional deck —
+# only the boxes' contents change with the spec.
 ARCHITECTURE_DIAGRAM_STYLE = (
-    "Clean technical system architecture diagram, flat vector style, white background, "
-    "labeled boxes connected by directional arrows, clear component grouping, "
-    "muted green and slate color palette, readable sans-serif labels, "
-    "no photorealism, no decorative elements, presentation quality"
+    "Professional software architecture diagram in clean flat vector style, as drawn by a "
+    "senior solutions architect for an executive deck. "
+    "FIXED COMPOSITION: pure white background; a thin dark title bar across the very top with the "
+    "system name in white sans-serif; below it exactly three horizontal layers separated by "
+    "generous whitespace — top layer 'Clients & Interfaces', middle layer 'Application & Services', "
+    "bottom layer 'Data & Infrastructure' — each layer labeled with a small uppercase grey caption "
+    "on the left. Components are rounded rectangles with 2px dark-slate outlines, white fill, a "
+    "single short bold label inside, and a small flat monochrome icon above the label. Data flows "
+    "are straight vertical or right-angle arrows with solid dark-slate heads and small italic labels. "
+    "External third-party services sit in a dashed-outline group on the right edge. "
+    "COLOR: white background, dark slate (#2f3b3a) lines and text, one single accent color "
+    "forest green (#15803d) used only for the 2-3 most important components and the title bar. "
+    "STRICTLY NO: photorealism, 3D, gradients, shadows, decorative illustrations, people, "
+    "screenshots, more than 12 boxes, or any text smaller than legible label size"
 )
 
 
