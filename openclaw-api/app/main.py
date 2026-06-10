@@ -1571,14 +1571,15 @@ def parse_all_papers_endpoint(
 
 # --- Auto-PRD: manual trigger for any paper (bypasses relevance gate) ---
 
-def _run_draft_prd_job(seed_id: str, tenant_id: str):
+def _run_draft_prd_job(seed_id: str, tenant_id: str, replace_draft_id: str = None):
     """Background draft generation with its own DB session (the request's
     session is closed by the time this runs)."""
     from app.database import SessionLocal
     from app.auto_prd import auto_prd_for_paper
     job_db = SessionLocal()
     try:
-        result = auto_prd_for_paper(seed_id, tenant_id, job_db, force=True)
+        result = auto_prd_for_paper(seed_id, tenant_id, job_db, force=True,
+                                    replace_draft_id=replace_draft_id)
         logger.info(f"[auto_prd] manual draft for {seed_id}: {result.get('status')} ({result.get('title', result.get('reason', ''))})")
     except Exception as e:
         logger.error(f"[auto_prd] manual draft failed for {seed_id}: {e}")
@@ -1601,6 +1602,7 @@ def _run_draft_prd_job(seed_id: str, tenant_id: str):
 async def draft_prd_for_paper(
     seed_id: str,
     background_tasks: BackgroundTasks,
+    replace: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1631,7 +1633,7 @@ async def draft_prd_for_paper(
     seed.seed_metadata = m
     db.commit()
 
-    background_tasks.add_task(_run_draft_prd_job, seed_id, str(current_user.tenant_id))
+    background_tasks.add_task(_run_draft_prd_job, seed_id, str(current_user.tenant_id), replace)
     return {"status": "queued", "seed_id": seed_id, "message": "Draft PRD generation started — it will appear in Studio drafts in about a minute."}
 
 

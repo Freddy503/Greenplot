@@ -71,6 +71,88 @@ Rules: quote or closely paraphrase at least 3 of the paper excerpts (mention sec
 reference at least 2 of the user's seeds by title; be specific and technical; no filler;
 total length 500-800 words."""
 
+# ── Template v2: engineering-grade drafts (spec: prd-generator-v2.md) ─────────
+
+PRD_SECTIONS_V2 = [
+    "## Problem Alignment",
+    "## Solution Summary",
+    "## System Architecture",
+    "## Data Model",
+    "## API Surface",
+    "## Scope & Capabilities",
+    "## Acceptance Evals",
+    "## Delivery Risks & Open Questions",
+    "## Milestones",
+    "## Agent State File",
+]
+
+PRD_TEMPLATE_V2 = """You are Greenplot's product architect. Draft a complete, ENGINEERING-GRADE PRD
+for a buildable product inspired by a research paper, grounded ONLY in the provided paper excerpts,
+the user's garden seeds, and (when given) the repository context. This document will be handed
+directly to a coding agent — it is a context contract, not an essay.
+
+Use exactly this markdown structure:
+
+# <Concise Product Name> — PRD
+
+**Status:** draft · **Source:** auto-drafted from research
+
+## Problem Alignment
+<3-5 sentences. The user-facing problem, who has it, why current solutions fall short. Connect to the user's seeds.>
+
+## Solution Summary
+<3-5 sentences. What we build and how the paper's method enables it — cite the actual mechanism.>
+
+## System Architecture
+<Concrete components with real technology choices and the data flows between them. When repository
+context is provided, name actual files/modules from it and respect its conventions; otherwise
+propose explicit paths (e.g. `app/policy_engine.py`). Include at least 3 quantified budgets or
+limits (latency, token, cache TTL, rate, size).>
+
+## Data Model
+<Every store named with its tables/classes AND their fields, e.g.
+`context_branches (id, parent_id, agent_id, state_hash, created_at)`. Include retention/size limits.>
+
+## API Surface
+<At least 3 concrete endpoint or tool signatures with methods and key params, e.g.
+`POST /api/v1/contexts/{id}/branch {label} -> {branch_id}`.>
+
+## Scope & Capabilities
+<**In:** the smallest shippable version, specific. **Out (v1):** explicit non-goals.>
+
+## Acceptance Evals
+<3-5 numbered, mechanically checkable tests a coding agent can run before reporting shipped,
+each with a concrete pass condition.>
+
+## Delivery Risks & Open Questions
+<3-4 bullets: riskiest assumptions, including where the paper's results may not transfer. Quantify where possible.>
+
+## Milestones
+<3-4 numbered milestones; each names a verifiable deliverable ("deliverable: eval 2 passes"), with day estimates.>
+
+## Agent State File
+<A deterministic, copy-pasteable block for the implementing agent's CLAUDE.md:
+hard constraints; conflict priority (this spec > repo conventions > agent judgment);
+do-not-touch list; token/cost budget and when to stop and ask.>
+
+Rules: ground in >=3 paper excerpts (name their sections) and >=2 garden seeds by title; commit to
+decisions (state the alternative you rejected at least twice); every number must be a real choice,
+not a placeholder; 800-1300 words; no filler."""
+
+PRD_RUBRIC_V2 = """You are a ruthless spec reviewer. Score this PRD draft against 7 demands and reply
+with ONLY valid JSON: {"score": <0-7>, "failures": ["<demand>: <what is missing, specifically>", ...]}
+
+The 7 demands:
+1. NUMBERS: >=6 concrete quantified values (budgets, limits, latencies, sizes, rates).
+2. DATA MODEL: every store has named tables/classes WITH field lists.
+3. API SURFACE: >=3 endpoint/tool signatures with methods and params.
+4. GROUNDED COMPONENTS: every architecture component names a file/module path.
+5. VERIFIABLE MILESTONES: each milestone names a checkable deliverable.
+6. ACCEPTANCE EVALS: >=3 mechanically checkable tests with pass conditions.
+7. COMMITTED DECISIONS: >=2 explicit decisions with the rejected alternative stated.
+
+A demand passes only if fully met. List every failure with the specific gap."""
+
 
 def _embed(text: str):
     from app.enricher_v2 import embed_text
@@ -127,15 +209,39 @@ domains; 4 = interesting but tangential; 0 = unrelated. Reply with ONLY the inte
         return 0
 
 
+def _critique_draft(content: str) -> dict:
+    """Score a draft against the v2 rubric. Returns {score, failures[]}."""
+    from app.briefings import _call_llm
+    raw = _call_llm(f"PRD DRAFT:\n\n{content[:18000]}", system=PRD_RUBRIC_V2,
+                    max_tokens=2000, model=settings.CHAT_MODEL)
+    try:
+        cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        data = json.loads(cleaned)
+        return {"score": int(data.get("score", 0)), "failures": list(data.get("failures", []))[:10]}
+    except Exception:
+        # Unparseable critique: don't block the pipeline, just skip revision
+        return {"score": 7, "failures": []}
+
+
 def generate_prd_draft(seed: Seed, chunks: list[dict], related: list[dict],
-                       user: User, db: Session) -> dict:
-    """Generate the PRD and save it as an auto-draft spec seed (no Library compile)."""
+                       user: User, db: Session, replace_draft_id: str = None,
+                       repo_map: str = "") -> dict:
+    """Generate the PRD and save it as an auto-draft spec seed (no Library compile).
+
+    v2 pipeline (spec: prd-generator-v2.md): draft → critique against the
+    7-point rubric → revise once fixing every failure. Drafts still failing
+    >=3 points get quality='rough' instead of silently shipping.
+    """
     from app.briefings import _call_llm
 
     # Quality floor: a hollow draft erodes trust faster than no draft
     if len(chunks) < 3 or len(related) < 2:
         return {"status": "skipped", "reason": "insufficient_context",
                 "chunks": len(chunks), "related": len(related)}
+
+    use_v2 = bool(getattr(settings, "PRD_PIPELINE_V2", True))
+    template = PRD_TEMPLATE_V2 if use_v2 else PRD_TEMPLATE_V1
+    sections = PRD_SECTIONS_V2 if use_v2 else PRD_SECTIONS_V1
 
     excerpts = "\n\n".join(
         f"[{c['section']} — excerpt {i+1}]\n{c['text'][:1200]}" for i, c in enumerate(chunks)
@@ -144,26 +250,74 @@ def generate_prd_draft(seed: Seed, chunks: list[dict], related: list[dict],
         f"- \"{r.get('title', '')}\": {(r.get('summary') or r.get('content') or '')[:200]}"
         for r in related
     )
+    repo_ctx = f"\n\nREPOSITORY CONTEXT (ground components in these real files):\n{repo_map[:16000]}" if repo_map else ""
     prompt = f"""RESEARCH PAPER: {seed.title}
 
 PAPER EXCERPTS:
 {excerpts[:14000]}
 
 USER'S GARDEN SEEDS:
-{seeds_ctx[:2500]}
+{seeds_ctx[:2500]}{repo_ctx}
 
 Draft the PRD now."""
 
     # Generous budget: thinking models spend tokens on reasoning before output
-    content = _call_llm(prompt, system=PRD_TEMPLATE_V1, max_tokens=6000, model=settings.CHAT_MODEL)
+    content = _call_llm(prompt, system=template, max_tokens=8000, model=settings.CHAT_MODEL)
     if not content or len(content) < 600:
         return {"status": "error", "reason": "generation_failed"}
-    missing = [s for s in PRD_SECTIONS_V1 if s not in content]
-    if len(missing) > 2:
+
+    quality = "ok"
+    rubric_score = None
+    if use_v2:
+        critique = _critique_draft(content)
+        rubric_score = critique["score"]
+        if critique["failures"]:
+            failures_txt = "\n".join(f"- {f}" for f in critique["failures"])
+            revised = _call_llm(
+                f"""Your PRD draft failed review. Fix EVERY failure below and return the complete
+revised PRD (same structure, keep what already works):
+
+FAILURES:
+{failures_txt}
+
+CURRENT DRAFT:
+{content[:18000]}""",
+                system=template, max_tokens=8000, model=settings.CHAT_MODEL,
+            )
+            if revised and len(revised) > 600:
+                content = revised
+                recheck = _critique_draft(content)
+                rubric_score = recheck["score"]
+                if len(recheck["failures"]) >= 3:
+                    quality = "rough"
+            else:
+                quality = "rough"
+
+    missing = [s for s in sections if s not in content]
+    if len(missing) > 3:
         return {"status": "error", "reason": f"structure_drift: missing {missing}"}
 
     title_line = next((l for l in content.split("\n") if l.startswith("# ")), "")
     title = title_line.lstrip("# ").replace("— PRD", "").strip() or f"{seed.title[:60]} — Product"
+
+    # In-place regeneration: upgrade an existing draft instead of duplicating it
+    if replace_draft_id:
+        try:
+            existing = db.query(Seed).filter(Seed.id == _uuid.UUID(replace_draft_id)).first()
+        except ValueError:
+            existing = None
+        if existing:
+            existing.title = f"{title[:170]} — PRD"
+            existing.content = content
+            m = dict(existing.seed_metadata or {})
+            m.update({"quality": quality, "rubric_score": rubric_score,
+                      "template": "PRD_TEMPLATE_V2" if use_v2 else "PRD_TEMPLATE_V1",
+                      "vision_status": m.get("vision_status", "pending")})
+            existing.seed_metadata = m
+            db.commit()
+            logger.info(f"[auto_prd] Regenerated draft '{existing.title}' (quality={quality}, score={rubric_score})")
+            return {"status": "ok", "draft_seed_id": str(existing.id), "title": existing.title,
+                    "quality": quality, "rubric_score": rubric_score}
 
     draft = Seed(
         id=_uuid.uuid4(),
@@ -182,7 +336,9 @@ Draft the PRD now."""
             "source_paper_title": seed.title,
             "build_status": "draft",
             "vision_status": "pending",
-            "template": "PRD_TEMPLATE_V1",
+            "quality": quality,
+            "rubric_score": rubric_score,
+            "template": "PRD_TEMPLATE_V2" if use_v2 else "PRD_TEMPLATE_V1",
         },
     )
     db.add(draft)
@@ -209,9 +365,11 @@ Draft the PRD now."""
     return {"status": "ok", "draft_seed_id": str(draft.id), "title": draft.title}
 
 
-def auto_prd_for_paper(seed_id: str, tenant_id: str, db: Session, force: bool = False) -> dict:
+def auto_prd_for_paper(seed_id: str, tenant_id: str, db: Session, force: bool = False,
+                       replace_draft_id: str = None) -> dict:
     """Gate → gather → generate. force=True bypasses relevance gate and cap
-    (the manual 'Draft PRD' button)."""
+    (the manual 'Draft PRD' button). replace_draft_id upgrades an existing
+    draft in place instead of creating a new seed."""
     from uuid import UUID
     seed = db.query(Seed).filter(Seed.id == UUID(seed_id)).first()
     if not seed:
@@ -246,7 +404,16 @@ def auto_prd_for_paper(seed_id: str, tenant_id: str, db: Session, force: bool = 
             _mark(f"skipped_low_relevance_{score}")
             return {"status": "skipped", "reason": "low_relevance", "score": score}
 
-    result = generate_prd_draft(seed, chunks, related, user, db)
+    # Repo grounding (github-repo-sync): inject the connected repo's map when available
+    repo_map = ""
+    try:
+        from app.github_sync import get_repo_map_for_tenant
+        repo_map = get_repo_map_for_tenant(str(seed.tenant_id), db) or ""
+    except Exception:
+        pass
+
+    result = generate_prd_draft(seed, chunks, related, user, db,
+                                replace_draft_id=replace_draft_id, repo_map=repo_map)
     if result.get("status") == "ok":
         m = dict(seed.seed_metadata or {})
         m["auto_prd"] = "drafted"

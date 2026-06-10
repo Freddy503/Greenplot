@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     # Auto-PRD pipeline (docs/specs/auto-prd-pipeline.md)
     AUTO_PRD_ENABLED: bool = True
     AUTO_PRD_DAILY_CAP: int = 3
+    # Generator v2: critique-and-revise loop (docs/specs/prd-generator-v2.md)
+    PRD_PIPELINE_V2: bool = True
 
     # Sentry error monitoring
     SENTRY_DSN: Optional[str] = None
