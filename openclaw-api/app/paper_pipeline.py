@@ -278,8 +278,33 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
             except Exception as e:
                 logger.warning(f"[paper_pipeline] chunk {i} index failed for {seed_id}: {e}")
 
-        _set_status("parsed" if indexed else "failed", chunk_count=indexed, parse_source=kind)
-        logger.info(f"[paper_pipeline] {seed.title[:50]}: {indexed} chunks indexed ({kind})")
+        # Doc tree for reasoning-based retrieval (tree-retrieval.md); silent
+        # degradation — the vector path remains when tree building fails
+        doc_tree = None
+        try:
+            from app.tree_retrieval import build_doc_tree
+            sec_counts: dict = {}
+            for ch in chunks:
+                sec_counts[ch["section"]] = sec_counts.get(ch["section"], 0) + 1
+            tree_sections = []
+            seen = set()
+            for s in sections:
+                name = s.get("section") or ""
+                if name in seen:
+                    continue
+                seen.add(name)
+                tree_sections.append({"section": name, "text": s.get("text", ""),
+                                      "chunk_count": sec_counts.get(name, 1)})
+            doc_tree = build_doc_tree(tree_sections)
+        except Exception as e:
+            logger.warning(f"[paper_pipeline] tree build failed for {seed_id}: {e}")
+
+        extra = {"chunk_count": indexed, "parse_source": kind}
+        if doc_tree:
+            extra["doc_tree"] = doc_tree
+            extra["tree_built_at"] = datetime.utcnow().isoformat()
+        _set_status("parsed" if indexed else "failed", **extra)
+        logger.info(f"[paper_pipeline] {seed.title[:50]}: {indexed} chunks indexed ({kind}), tree: {len(doc_tree) if doc_tree else 0} nodes")
 
         # Autopilot: digest papers that parsed successfully may earn a draft PRD
         # (relevance-gated + daily-capped inside auto_prd_for_paper).
