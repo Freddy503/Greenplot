@@ -1200,6 +1200,28 @@ export default function ChatPage() {
                                               )
                                             }
 
+                                            // Seed created/updated — hyperlink straight to it in the garden
+                                            if ((parsedOutput?.status === 'ok' || parsedOutput?.status === 'partial') && parsedOutput?.seed_id && tp.type !== 'write_spec') {
+                                              const isUpdate = tp.type === 'update_seed'
+                                              const isPaper = tp.type === 'ingest_paper'
+                                              return (
+                                                <a href={`/garden?seed=${encodeURIComponent(parsedOutput.seed_id)}`} className="mt-2 p-3 rounded-2xl flex items-center gap-3 tap" style={{ background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', textDecoration: 'none' }}>
+                                                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <Leaf size={19} color="#06281a" strokeWidth={1.75} />
+                                                  </div>
+                                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <p className="ui" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green-deep)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{parsedOutput.title || 'Seed'}</p>
+                                                    <p className="body-text" style={{ fontSize: 11.5, color: 'var(--green-700)' }}>
+                                                      {isPaper ? 'Paper planted in your garden' : isUpdate ? 'Seed updated' : 'Planted in your garden'}
+                                                    </p>
+                                                  </div>
+                                                  <span className="ui" style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: 'var(--green-700)', padding: '4px 10px', background: 'rgba(34,197,94,0.15)', borderRadius: 9 }}>
+                                                    Open →
+                                                  </span>
+                                                </a>
+                                              )
+                                            }
+
                                             // Connections focus card — related seeds as structured chips, not a text blob
                                             if ((tp.type === 'search_seeds' || tp.type === 'search_seeds_filtered') && parsedOutput?.status === 'ok' && Array.isArray(parsedOutput.results) && parsedOutput.results.length > 0) {
                                               const connections = parsedOutput.results.slice(0, 6) as Array<{ title: string; summary?: string; content?: string; domain?: string; tags?: string }>

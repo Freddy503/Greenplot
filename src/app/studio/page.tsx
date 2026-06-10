@@ -38,7 +38,15 @@ interface SeedMeta {
   build_pr_url?: string
   pdf_url?: string
   paper_url?: string
+  source_url?: string
   digest_date?: string
+}
+
+// Older digest papers only stored source_url — derive the PDF link from the abs page
+function paperPdfUrl(meta: SeedMeta): string {
+  if (meta.pdf_url) return meta.pdf_url
+  const src = meta.paper_url || meta.source_url || ''
+  return src.includes('arxiv.org/abs/') ? src.replace('/abs/', '/pdf/') : ''
 }
 
 function isPaperSeed(s: RawSeed): boolean {
@@ -78,11 +86,14 @@ const BUILD_STAGES = [
   { key: 'shipped',  label: 'Built',   blurb: 'Shipped — PR merged' },
 ]
 
+// Drafts stay off the canvas — the board tracks specs that are actually in motion
 const BOARD_COLUMNS = [
-  { key: 'design', label: 'Design', statuses: ['draft', 'ready'], dropStatus: 'draft', accent: 'var(--ink-3)' },
-  { key: 'doing',  label: 'Doing',  statuses: ['building'],       dropStatus: 'building', accent: 'var(--amber)' },
-  { key: 'built',  label: 'Built',  statuses: ['shipped'],        dropStatus: 'shipped', accent: 'var(--green-600)' },
+  { key: 'ready', label: 'Ready', statuses: ['ready'],    dropStatus: 'ready',    accent: 'var(--green-700)' },
+  { key: 'doing', label: 'Doing', statuses: ['building'], dropStatus: 'building', accent: 'var(--amber)' },
+  { key: 'built', label: 'Built', statuses: ['shipped'],  dropStatus: 'shipped',  accent: 'var(--green-600)' },
 ]
+
+const isDraft = (p: PRDItem) => !p.buildStatus || p.buildStatus === 'draft'
 
 // ── Build pipeline timeline (PRD detail) ─────────────
 
@@ -195,13 +206,13 @@ const MODE_ICONS: Record<string, React.ComponentType<any>> = {
 function IdeaDetail({ seed, onBack, onSpec }: { seed: RawSeed; onBack: () => void; onSpec: () => void }) {
   const meta = seed.seed_metadata || seed.metadata || {}
   const paper = isPaperSeed(seed)
-  const pdfUrl = meta.pdf_url || ''
+  const pdfUrl = paperPdfUrl(meta)
   const paperUrl = meta.paper_url || ''
   const content = seed.content || seed.text || seed.summary || ''
   const [pdfOpen, setPdfOpen] = useState(!!pdfUrl)
 
   return (
-    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
+    <div className="print-root" style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       <div className="print:hidden" style={{ position: 'fixed', top: 0, left: 'var(--sidenav-w, 0px)', right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', height: 56 }}>
           <button onClick={onBack} className="tap" style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green-700)', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -341,7 +352,8 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
   }
 
   const exportPdf = () => {
-    // Print stylesheet hides app chrome (print:hidden) — browser dialog → Save as PDF
+    // Print stylesheet hides app chrome (print:hidden) and .print-root
+    // removes the 100dvh clip so the whole document paginates
     window.print()
   }
 
@@ -394,7 +406,7 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
   }
 
   return (
-    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
+    <div className="print-root" style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Minimal header */}
       <div className="print:hidden" style={{ position: 'fixed', top: 0, left: 'var(--sidenav-w, 0px)', right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', height: 56 }}>
@@ -682,7 +694,7 @@ export default function StudioPage() {
               {ideas.map((seed) => {
                 const paper = isPaperSeed(seed)
                 const meta = seed.seed_metadata || seed.metadata || {}
-                const pdfUrl = meta.pdf_url || ''
+                const pdfUrl = paperPdfUrl(meta)
                 return (
                   <div key={seed.id || seed.notion_id} onClick={() => setSelectedIdea(seed)} className="v2-card tap" style={{ borderRadius: 15, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                     {paper ? <BookOpen size={18} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} /> : <Leaf size={18} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} />}
@@ -743,6 +755,7 @@ export default function StudioPage() {
             </button>
           </div>
         ) : prdView === 'board' ? (
+          <>
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-3)', gap: 12, alignItems: 'start' }}>
             {BOARD_COLUMNS.map((col) => {
               const cards = prds.filter(p => col.statuses.includes(p.buildStatus || 'draft'))
@@ -775,7 +788,7 @@ export default function StudioPage() {
                   </div>
                   {cards.length === 0 ? (
                     <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', padding: '22px 8px' }}>
-                      {col.key === 'design' ? 'Spec an idea to start' : 'Drag a spec here'}
+                      {col.key === 'ready' ? 'Drag a draft here when it’s ready' : 'Drag a spec here'}
                     </p>
                   ) : cards.map((prd) => (
                     <div
@@ -808,6 +821,35 @@ export default function StudioPage() {
               )
             })}
           </div>
+
+          {/* Drafts — off the canvas, drag onto the board when ready */}
+          {prds.some(isDraft) && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--ink-3)' }} />
+                <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)' }}>Drafts</span>
+                <span className="ui" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)' }}>{prds.filter(isDraft).length}</span>
+                <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginLeft: 6 }}>drag onto the board when ready</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-3)', gap: 9 }}>
+                {prds.filter(isDraft).map((prd) => (
+                  <div
+                    key={prd.id}
+                    draggable={!prd.local}
+                    onDragStart={(e) => e.dataTransfer.setData('text/prd-id', prd.id)}
+                    onClick={() => setSelected(prd)}
+                    className="v2-card tap"
+                    style={{ borderRadius: 13, padding: '10px 12px', cursor: prd.local ? 'pointer' : 'grab', display: 'flex', alignItems: 'center', gap: 9 }}
+                  >
+                    <FileText size={15} color="var(--ink-3)" strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                    <span className="ui" style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prd.title}</span>
+                    {prd.local && <span className="ui" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 9999, padding: '2px 6px', flexShrink: 0 }}>LOCAL</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
             {(showAllPrds ? prds : prds.slice(0, PRD_PAGE_SIZE)).map((prd) => (

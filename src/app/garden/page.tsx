@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Leaf, Share2, Filter, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -69,17 +69,22 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-function getStatusInfo(status: string): { label: string; color: string } {
-  const s = (status || '').toLowerCase()
+function getStatusInfo(seed: Seed): { label: string; color: string } {
+  const s = (seed.status || '').toLowerCase()
   if (s.includes('enrich') || s.includes('growing')) return { label: 'Enriched', color: 'var(--green)' }
   if (s.includes('sprout') || s.includes('seedling')) return { label: 'Sprouting', color: '#7dd3a0' }
+  // The backend rarely sends an explicit status — infer from enrichment
+  // artifacts (summary/domain are written by the enricher) and age.
+  if (seed.summary || seed.domain) return { label: 'Enriched', color: 'var(--green)' }
+  const ageHrs = (Date.now() - new Date(seed.created).getTime()) / 3_600_000
+  if (!isNaN(ageHrs) && ageHrs < 48) return { label: 'Sprouting', color: '#7dd3a0' }
   return { label: 'Dormant', color: 'var(--ink-3)' }
 }
 
 // ── Seed Row ──────────────────────────────────────────
 
 function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; onClick: () => void }) {
-  const statusInfo = getStatusInfo(seed.status || '')
+  const statusInfo = getStatusInfo(seed)
   const tags = seed.domain ? seed.domain.split(',').map(t => t.trim()).filter(Boolean) : []
   const connections = tags.length > 0
     ? allSeeds.filter(s => s.id !== seed.id && s.domain && tags.some(t => s.domain!.toLowerCase().includes(t.toLowerCase()))).length
@@ -185,6 +190,21 @@ export default function GardenPage() {
   }, [fetchSeeds])
 
   const handleSeedDeleted = (id: string) => setSeeds(prev => prev.filter(s => s.id !== id))
+
+  // Deep link: /garden?seed=<id> opens that seed's detail directly
+  // (used by chat result cards and Library source/seed chips)
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (deepLinkHandled.current || seeds.length === 0) return
+    const id = new URLSearchParams(window.location.search).get('seed')
+    if (!id) { deepLinkHandled.current = true; return }
+    const match = seeds.find(s => s.id === id)
+    if (match) {
+      deepLinkHandled.current = true
+      setSelectedSeed(match)
+      setDetailOpen(true)
+    }
+  }, [seeds])
 
   // Stat chips: Seeds count + unique non-generic domains
   const _GENERIC_DOMAINS = new Set(['', 'general', 'none', 'untagged', 'idea', 'note', 'misc'])
