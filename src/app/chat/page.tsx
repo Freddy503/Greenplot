@@ -425,7 +425,24 @@ export default function ChatPage() {
       try {
         const prefill = JSON.parse(prefillRaw)
         if (!mode) setSelectedMode(getMode('spec'))
-        const text = `I want to spec out this idea:\n\n${prefill.title ? prefill.title + '\n\n' : ''}${prefill.content || ''}`.trim()
+        // Vision flow: shape an auto-drafted PRD in tandem (spec: auto-prd-pipeline.md)
+        const text = prefill.vision
+          ? `Run a VISION interrogation on this auto-drafted PRD (seed_id: ${prefill.id}).
+
+Ask me these forcing questions ONE AT A TIME, waiting for my answer before the next:
+1. WHO exactly is this for, and what moment triggers their need?
+2. What demand signal proves they want it — what would they stop using?
+3. Why us, why now — what's our wedge versus the paper's authors or incumbents building this?
+4. What would make this taste-defining rather than just another feature?
+
+Ground follow-ups in the source paper via search_paper_content. When we're done, rewrite the FULL PRD — keep the six-section gstack structure, integrate my answers into Problem Alignment and Solution Summary — and save it with update_seed (seed_id "${prefill.id}", append false). Then confirm what changed.
+
+Here is the current draft:
+
+${prefill.title}
+
+${prefill.content || ''}`.trim()
+          : `I want to spec out this idea:\n\n${prefill.title ? prefill.title + '\n\n' : ''}${prefill.content || ''}`.trim()
         // Defer until the PromptBox has mounted, then inject + sync internal state
         setTimeout(() => {
           const ta = promptRef.current
