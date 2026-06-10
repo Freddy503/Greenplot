@@ -30,6 +30,30 @@ engine** makes every new auto-PRD vision-aware (extend, don't duplicate; declare
 facet served) and writes a **weekly Coherence Report** — clusters, contradictions, gaps,
 merge suggestions, the story so far — which also absorbs the pending stale-draft roundup.
 
+## Anti-Overwhelm Principles (binding UX rules)
+
+The Atlas must *reduce* felt complexity, never add a layer of management chores. These rules
+override anything else in this spec:
+
+1. **Progressive disclosure — the Atlas is invisible until earned.** No product exists → Studio
+   looks exactly like today; the only trace is one quiet, dismissible suggestion once ≥5 PRDs
+   exist ("These 7 PRDs serve no defined problem — want to define it?"). Coverage strip, orphan
+   strip, and backlog section render ONLY when non-empty; with one product and few PRDs the
+   Atlas is just a product card and a short list.
+2. **One badge per card, ever.** Priority: OVERLAPS > ROUGH > AUTO > proposed-dashed. A card
+   never wears two. No badge zoo.
+3. **The weekly report is the single home for findings.** Contradictions, gaps, and merge
+   suggestions live in the Coherence Report — never as persistent warning chrome scattered
+   across the UI. The interface stays calm; complexity gets digested in one place, once a week,
+   one notification max.
+4. **Defaults do the work; confirmation is batched, never interrupting.** Auto-PRDs attach to
+   MAIN/proposed-pillar silently — no modal at generation time. The Atlas shows a single
+   "N proposals to review" row; confirming is one tap each, in one sitting, when the user chooses.
+5. **No new top-level navigation.** Atlas is the third Studio lens (Board | List | Atlas), not a
+   new tab/page. Onboarding is unchanged; waitlist users can use Greenplot forever without
+   touching the Atlas.
+6. **Empty states teach in one sentence**, with one CTA. No explainer cards, no tours.
+
 ## System Architecture
 
 - **Product object**: `seed_type='product'` (reuses search/graph/MCP/deep-link infra).
@@ -90,6 +114,9 @@ MCP `get_product`.
 4. Coherence Report exists in the Library with ≥1 contradiction-or-gap finding and the stale-
    draft section; the Atlas coverage strip highlights an empty pillar.
 5. Graph shows product/pillar nodes with hierarchy edges; clicking a PRD node still deep-links.
+6. Anti-overwhelm: with no product defined, a screenshot diff of Studio vs today shows only the
+   single dismissible suggestion row; no card anywhere wears two badges; generation never opens
+   a modal or interrupts.
 
 ## Delivery Risks & Open Questions
 
