@@ -232,7 +232,6 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
   const draftPrd = async () => {
     if (drafting || !seed.id) return
     setDrafting(true)
-    const toastId = toast.loading('Drafting PRD from the paper — ~30s…')
     try {
       const token = localStorage.getItem('greenplot_token')
       const res = await fetch(`/api/papers/${seed.id}/draft-prd`, {
@@ -240,15 +239,17 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       const data = await res.json()
-      if (res.ok && data.draft_seed_id) {
-        toast.success(`Draft "${data.title}" created — find it in the Build pipeline drafts`, { id: toastId })
-        onDrafted?.()
+      if (res.ok) {
+        // Generation runs server-side in the background (~30-60s)
+        toast.success('Drafting started — the PRD will appear in Build pipeline drafts in ~1 min', { duration: 6000 })
+        setTimeout(() => { onDrafted?.(); setDrafting(false) }, 50_000)
+        setTimeout(() => onDrafted?.(), 90_000)
       } else {
-        toast.error(data.detail || data.error || 'Draft generation failed', { id: toastId })
+        toast.error(data.detail || data.error || 'Draft generation failed')
+        setDrafting(false)
       }
     } catch {
-      toast.error('Draft generation failed', { id: toastId })
-    } finally {
+      toast.error('Draft generation failed')
       setDrafting(false)
     }
   }
