@@ -46,6 +46,90 @@ interface JobConfig {
 
 function pad(n: number) { return String(n).padStart(2, '0') }
 
+
+// ── GitHub integration (docs/specs/github-repo-sync.md) ─────────
+function GitHubCard() {
+  const [conn, setConn] = useState<{ connected: boolean; repo_full_name?: string; webhook_url?: string; webhook_secret?: string } | null>(null)
+  const [repo, setRepo] = useState('')
+  const [pat, setPat] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const authHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem('greenplot_token')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
+  useEffect(() => {
+    fetch('/api/github/connection', { headers: authHeaders() })
+      .then(r => r.json()).then(setConn).catch(() => setConn({ connected: false }))
+  }, [])
+
+  const connect = async () => {
+    if (!repo.trim() || !pat.trim() || busy) return
+    setBusy(true)
+    try {
+      const res = await fetch('/api/github/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ repo_full_name: repo.trim(), token: pat.trim() }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Connected ${data.repo_full_name} — PRDs are now repo-grounded`)
+        setConn({ connected: true, ...data })
+        setPat('')
+      } else {
+        toast.error(data.detail || data.error || 'Connection failed')
+      }
+    } catch { toast.error('Connection failed') } finally { setBusy(false) }
+  }
+
+  const disconnect = async () => {
+    await fetch('/api/github/connection', { method: 'DELETE', headers: authHeaders() }).catch(() => {})
+    setConn({ connected: false })
+    toast.success('GitHub disconnected')
+  }
+
+  return (
+    <>
+      <SectionHeader>GitHub</SectionHeader>
+      <div className="v2-card" style={{ borderRadius: 18, padding: '14px 16px', marginBottom: 18 }}>
+        {conn?.connected ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 99, background: 'var(--green)', flexShrink: 0 }} />
+              <span className="ui" style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>{conn.repo_full_name}</span>
+              <button onClick={disconnect} className="tap ui" style={{ background: 'none', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '6px 12px', fontSize: 11.5, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>Disconnect</button>
+            </div>
+            <p className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+              PRDs are grounded in this repo and "Ship to GitHub" opens PRs. For merge→Built automation, add a webhook
+              (repo Settings → Webhooks): URL <code style={{ fontSize: 10.5, background: 'var(--surface-sunk)', padding: '1px 5px', borderRadius: 5 }}>{conn.webhook_url}</code>,
+              content type JSON, secret{' '}
+              <button onClick={() => { navigator.clipboard.writeText(conn.webhook_secret || ''); toast.success('Secret copied') }} className="tap ui" style={{ background: 'var(--surface-sunk)', border: 'none', borderRadius: 5, padding: '1px 7px', fontSize: 10.5, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>copy</button>,
+              events: Pull requests.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="body-text" style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 10, lineHeight: 1.6 }}>
+              Connect a repo to ground PRDs in your actual codebase and ship specs as pull requests.
+              Use a fine-grained PAT scoped to one repo (Contents, Issues, Pull requests: read/write).
+            </p>
+            <input value={repo} onChange={e => setRepo(e.target.value)} placeholder="owner/repo"
+              style={{ width: '100%', border: '1px solid var(--border-2)', borderRadius: 12, padding: '9px 12px', fontFamily: 'var(--body)', fontSize: 12.5, color: 'var(--ink)', background: 'var(--surface)', outline: 'none', marginBottom: 8 }} />
+            <input value={pat} onChange={e => setPat(e.target.value)} placeholder="github_pat_…" type="password"
+              style={{ width: '100%', border: '1px solid var(--border-2)', borderRadius: 12, padding: '9px 12px', fontFamily: 'var(--body)', fontSize: 12.5, color: 'var(--ink)', background: 'var(--surface)', outline: 'none', marginBottom: 10 }} />
+            <button onClick={connect} disabled={busy || !repo.trim() || !pat.trim()} className="tap ui"
+              style={{ width: '100%', background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '10px 0', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', opacity: busy || !repo.trim() || !pat.trim() ? 0.5 : 1 }}>
+              {busy ? 'Validating…' : 'Connect repo'}
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const [nickname, setNickname] = useState('')
@@ -470,6 +554,8 @@ export default function SettingsPage() {
             {sendingFeatureRequest ? 'Sending…' : 'Send Request'}
           </button>
         </div>
+
+        <GitHubCard />
 
         {/* Support */}
         <SectionHeader>Support</SectionHeader>
