@@ -560,6 +560,33 @@ class WeaviateClient:
         except Exception:
             return []
 
+    def near_object_seeds(self, tenant_id: str, object_id: str, limit: int = 3) -> list[dict]:
+        """Nearest semantic neighbors of an existing seed object (no re-embedding).
+
+        Returns [{"id": weaviate_uuid, "certainty": float}] excluding the object itself.
+        Used by the knowledge-graph dual-edge endpoint.
+        """
+        try:
+            where = {"path": ["tenant_id"], "operator": "Equal", "valueText": tenant_id}
+            result = (
+                self.client.query.get("IdeaSeed", ["title"])
+                .with_near_object({"id": object_id})
+                .with_where(where)
+                .with_additional(["id", "certainty"])
+                .with_limit(limit + 1)
+                .do()
+            )
+            hits = result.get("data", {}).get("Get", {}).get("IdeaSeed", []) or []
+            out = []
+            for h in hits:
+                add = h.get("_additional", {}) or {}
+                hid = add.get("id", "")
+                if hid and hid != object_id:
+                    out.append({"id": hid, "certainty": float(add.get("certainty") or 0)})
+            return out[:limit]
+        except Exception:
+            return []
+
     def update_wiki_article(self, article_id: str, **kwargs) -> bool:
         try:
             self.client.data_object.update(
