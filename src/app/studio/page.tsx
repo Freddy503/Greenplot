@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
-import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink } from 'lucide-react'
+import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink, X } from 'lucide-react'
 import Segmented from '@/components/ui/v2/segmented'
 import { readCache, writeCache } from '@/lib/swr-cache'
 
@@ -227,11 +227,52 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
   const paperUrl = meta.paper_url || ''
   const content = seed.content || seed.text || seed.summary || ''
   const [pdfOpen, setPdfOpen] = useState(!!pdfUrl)
-  const [drafting, setDrafting] = useState(false)
+  const [draftState, setDraftState] = useState<'idle' | 'drafting' | 'success' | 'error'>('idle')
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftError, setDraftError] = useState('')
+  const drafting = draftState === 'drafting'
+
+  // Poll the paper seed's metadata until the background job records an outcome
+  const pollOutcome = (token: string | null) => {
+    const started = Date.now()
+    const tick = async () => {
+      if (Date.now() - started > 180_000) {
+        setDraftError('Taking longer than expected — check the Build pipeline drafts in a few minutes.')
+        setDraftState('error')
+        return
+      }
+      try {
+        const res = await fetch(`/api/seeds/${seed.id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+        if (res.ok) {
+          const data = await res.json()
+          const m = data.seed_metadata || data.metadata || {}
+          const status: string = m.auto_prd || ''
+          if (status === 'drafted' && m.draft_prd_id) {
+            setDraftTitle(m.draft_prd_title || 'Draft PRD')
+            setDraftState('success')
+            onDrafted?.()
+            return
+          }
+          if (status.startsWith('error') || status.startsWith('skipped')) {
+            setDraftError(
+              status.includes('insufficient_context')
+                ? 'Not enough parsed content yet — the paper needs at least 3 indexed sections and 2 related seeds.'
+                : m.draft_prd_error || status.replace(/_/g, ' ')
+            )
+            setDraftState('error')
+            return
+          }
+        }
+      } catch {}
+      setTimeout(tick, 5000)
+    }
+    setTimeout(tick, 8000)
+  }
 
   const draftPrd = async () => {
     if (drafting || !seed.id) return
-    setDrafting(true)
+    setDraftState('drafting')
+    setDraftError('')
     try {
       const token = localStorage.getItem('greenplot_token')
       const res = await fetch(`/api/papers/${seed.id}/draft-prd`, {
@@ -240,17 +281,14 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
       })
       const data = await res.json()
       if (res.ok) {
-        // Generation runs server-side in the background (~30-60s)
-        toast.success('Drafting started — the PRD will appear in Build pipeline drafts in ~1 min', { duration: 6000 })
-        setTimeout(() => { onDrafted?.(); setDrafting(false) }, 50_000)
-        setTimeout(() => onDrafted?.(), 90_000)
+        pollOutcome(token)
       } else {
-        toast.error(data.detail || data.error || 'Draft generation failed')
-        setDrafting(false)
+        setDraftError(data.detail || data.error || 'Could not start draft generation')
+        setDraftState('error')
       }
     } catch {
-      toast.error('Draft generation failed')
-      setDrafting(false)
+      setDraftError('Could not reach the server')
+      setDraftState('error')
     }
   }
   const [parseStatus, setParseStatus] = useState(meta.parse_status || '')
@@ -365,6 +403,64 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
           )}
         </div>
       </div>
+
+      {/* Draft-PRD progress / outcome modal */}
+      {draftState !== 'idle' && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(10,38,24,0.45)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="glass" style={{ borderRadius: 24, padding: '28px 26px', maxWidth: 400, width: '100%', textAlign: 'center', background: 'rgba(255,255,255,0.95)' }}>
+            {draftState === 'drafting' && (
+              <>
+                <div style={{ width: 52, height: 52, borderRadius: 99, border: '3px solid var(--green-tint-2)', borderTopColor: 'var(--green)', animation: 'spin 0.9s linear infinite', margin: '0 auto 18px' }} />
+                <h3 className="serif" style={{ fontSize: 22, color: 'var(--ink)', marginBottom: 8 }}>Drafting your PRD</h3>
+                <p className="body-text" style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: 20 }}>
+                  Reading the paper's parsed sections and your related seeds, then writing a full gstack PRD. Usually ~1 minute.
+                </p>
+                <button onClick={() => setDraftState('idle')} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', cursor: 'pointer' }}>
+                  Continue in background
+                </button>
+              </>
+            )}
+            {draftState === 'success' && (
+              <>
+                <div style={{ width: 52, height: 52, borderRadius: 99, background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
+                  <Check size={28} color="#06281a" strokeWidth={3} />
+                </div>
+                <h3 className="serif" style={{ fontSize: 22, color: 'var(--ink)', marginBottom: 8 }}>Draft PRD created</h3>
+                <p className="ui" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--green-deep)', marginBottom: 6 }}>{draftTitle}</p>
+                <p className="body-text" style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: 20 }}>
+                  It's waiting in your Build pipeline drafts — shape the vision when you're ready.
+                </p>
+                <div style={{ display: 'flex', gap: 9, justifyContent: 'center' }}>
+                  <button onClick={() => setDraftState('idle')} className="tap ui" style={{ background: 'var(--surface-sunk)', border: 'none', borderRadius: 9999, padding: '10px 18px', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                    Stay here
+                  </button>
+                  <button onClick={() => { setDraftState('idle'); onBack() }} className="tap ui" style={{ background: 'var(--green)', border: 'none', borderRadius: 9999, padding: '10px 18px', fontSize: 12.5, fontWeight: 700, color: '#06281a', cursor: 'pointer' }}>
+                    View in drafts →
+                  </button>
+                </div>
+              </>
+            )}
+            {draftState === 'error' && (
+              <>
+                <div style={{ width: 52, height: 52, borderRadius: 99, background: 'rgba(212,80,62,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
+                  <X size={26} color="var(--red)" strokeWidth={2.5} />
+                </div>
+                <h3 className="serif" style={{ fontSize: 22, color: 'var(--ink)', marginBottom: 8 }}>Couldn't draft the PRD</h3>
+                <p className="body-text" style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: 20 }}>{draftError}</p>
+                <div style={{ display: 'flex', gap: 9, justifyContent: 'center' }}>
+                  <button onClick={() => setDraftState('idle')} className="tap ui" style={{ background: 'var(--surface-sunk)', border: 'none', borderRadius: 9999, padding: '10px 18px', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                    Close
+                  </button>
+                  <button onClick={draftPrd} className="tap ui" style={{ background: 'var(--green)', border: 'none', borderRadius: 9999, padding: '10px 18px', fontSize: 12.5, fontWeight: 700, color: '#06281a', cursor: 'pointer' }}>
+                    Try again
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
     </div>
   )
 }
