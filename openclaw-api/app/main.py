@@ -1976,6 +1976,44 @@ def list_products(current_user: User = Depends(get_current_user), db: Session = 
     } for s in rows]}
 
 
+class ProductRankRequest(BaseModel):
+    rank: str = Field(..., pattern="^(main|backlog)$")
+
+
+@app.patch("/api/v1/products/{product_id}")
+def set_product_rank(
+    product_id: str,
+    req: ProductRankRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Promote/demote a product. Promoting to main demotes the current main."""
+    try:
+        product = db.query(Seed).filter(
+            Seed.id == uuid.UUID(product_id),
+            Seed.tenant_id == current_user.tenant_id,
+            Seed.seed_type == "product",
+        ).first()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid id")
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if req.rank == "main":
+        for other in db.query(Seed).filter(
+            Seed.tenant_id == current_user.tenant_id, Seed.seed_type == "product"
+        ).all():
+            om = dict(other.seed_metadata or {})
+            if om.get("rank") == "main" and other.id != product.id:
+                om["rank"] = "backlog"
+                other.seed_metadata = om
+    m = dict(product.seed_metadata or {})
+    m["rank"] = req.rank
+    product.seed_metadata = m
+    db.commit()
+    return {"ok": True, "product_id": str(product.id), "rank": req.rank}
+
+
 class AttachRequest(BaseModel):
     product_id: str
     pillar_id: Optional[int] = None
