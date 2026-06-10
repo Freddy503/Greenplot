@@ -38,11 +38,16 @@ merge suggestions, the story so far — which also absorbs the pending stale-dra
 The Atlas must *reduce* felt complexity, never add a layer of management chores. These rules
 override anything else in this spec:
 
-1. **Progressive disclosure — the Atlas is invisible until earned.** No product exists → Studio
-   looks exactly like today; the only trace is one quiet, dismissible suggestion once ≥5 PRDs
-   exist ("These 7 PRDs serve no defined problem — want to define it?"). Coverage strip, orphan
-   strip, and backlog section render ONLY when non-empty; with one product and few PRDs the
-   Atlas is just a product card and a short list.
+1. **The question is always visible; only the machinery is earned.** (Revised per Freddy:
+   "what are we even building, in plain english, DOES need to be visible from the start.")
+   The Product lens exists from day one — its empty state is the question itself: *"What are
+   you building?"* with one CTA into the problem interrogation. Once a MAIN product exists,
+   its **plain-English statement becomes ambient**: the Studio hero subtitle shows
+   "<Product name> — <problem one-liner>", and the Product card leads with a **living
+   "story so far"** paragraph that updates automatically (on build-status changes via a cheap
+   templated line; rewritten properly by the weekly coherence run) — never stale, never
+   user-maintained. What stays earned/invisible until non-empty: coverage strip, orphan strip,
+   proposal-review row, backlog section.
 2. **One badge per card, ever.** Priority: OVERLAPS > ROUGH > AUTO > proposed-dashed. A card
    never wears two. No badge zoo.
 3. **The weekly report is the single home for findings.** Contradictions, gaps, and merge
@@ -117,9 +122,12 @@ MCP `get_product`.
 4. Coherence Report exists in the Library with ≥1 contradiction-or-gap finding and the stale-
    draft section; the Atlas coverage strip highlights an empty pillar.
 5. Graph shows product/pillar nodes with hierarchy edges; clicking a PRD node still deep-links.
-6. Anti-overwhelm: with no product defined, a screenshot diff of Studio vs today shows only the
-   single dismissible suggestion row; no card anywhere wears two badges; generation never opens
-   a modal or interrupts.
+6. Anti-overwhelm: no card anywhere wears two badges; generation never opens a modal or
+   interrupts; the only Studio change with no product defined is the Product lens whose empty
+   state is the single question "What are you building?" with one CTA.
+7. Always-visible statement: once MAIN exists, the Studio hero shows "<name> — <problem
+   one-liner>"; shipping a PRD updates the story-so-far line within a minute without any LLM
+   call; the weekly run rewrites it properly.
 
 ## Delivery Risks & Open Questions
 
