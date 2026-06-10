@@ -260,6 +260,17 @@ async def update_article(article_id: str, title: str = "", content: str = "", su
         return f"Article {article_id} updated."
 
 
+async def get_repo_map(_: str = "") -> str:
+    """Cached map of the user's connected GitHub repo (tree, README, hub files)."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(f"{API_URL}/api/v1/github/repo-map", headers=_headers())
+        if resp.status_code == 404:
+            return "No GitHub repo connected (Settings → GitHub in Greenplot)."
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        return resp.json().get("map", "")
+
+
 async def ingest_paper(arxiv_id: str = "", url: str = "") -> str:
     """Plant a research paper (arXiv id or URL) as a paper seed."""
     if not arxiv_id and not url:
@@ -446,6 +457,11 @@ TOOLS_SCHEMA = [
             "required": ["query"],
         },
     },
+    {
+        "name": "get_repo_map",
+        "description": "Map of the user's connected GitHub repo (file tree, README, manifest, hub-file heads) — orient yourself before implementing a spec.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -507,6 +523,8 @@ async def handle_message(msg: dict) -> dict | None:
                 )
             elif tool_name == "ingest_paper":
                 result = await ingest_paper(args.get("arxiv_id", ""), args.get("url", ""))
+            elif tool_name == "get_repo_map":
+                result = await get_repo_map()
             elif tool_name == "search_paper_content":
                 result = await search_paper_content(
                     args["query"], args.get("seed_id", ""), int(args.get("limit", 5)),

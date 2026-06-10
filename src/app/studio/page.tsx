@@ -647,6 +647,38 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
                   <Loader2 size={13} strokeWidth={2} /> Regenerate v2
                 </button>
               )}
+              {!prd.local && (
+                <button
+                  onClick={async () => {
+                    const token = localStorage.getItem('greenplot_token')
+                    const toastId = toast.loading('Shipping to GitHub — branch, PR and issue…')
+                    try {
+                      const res = await fetch(`/api/specs/${prd.id}/ship`, {
+                        method: 'POST',
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      })
+                      const data = await res.json()
+                      if (res.ok && data.pr_url) {
+                        toast.success('Shipped — PR and issue are open', {
+                          id: toastId, duration: 9000,
+                          action: { label: 'Open PR', onClick: () => window.open(data.pr_url, '_blank') },
+                        })
+                        setBuildStatus('ready')
+                        onUpdated?.(prd.id, { buildStatus: 'ready', prUrl: data.pr_url })
+                      } else {
+                        toast.error(data.detail || data.error || 'Ship failed', { id: toastId })
+                      }
+                    } catch {
+                      toast.error('Ship failed', { id: toastId })
+                    }
+                  }}
+                  className="tap"
+                  title="Open a PR with this spec + an implementation issue"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-sunk)', color: 'var(--ink-2)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  <ExternalLink size={13} strokeWidth={2} /> Ship to GitHub
+                </button>
+              )}
               <button onClick={copyForAgent} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 <Copy size={13} strokeWidth={2} /> Copy for Claude Code
               </button>

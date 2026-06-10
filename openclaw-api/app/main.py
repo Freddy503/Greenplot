@@ -111,6 +111,22 @@ with engine.connect() as conn:
         conn.execute(text("CREATE INDEX idx_calendar_tenant ON calendar_connections(tenant_id)"))
         conn.commit()
 
+    # GitHub repo connections (docs/specs/github-repo-sync.md)
+    result_gh = conn.execute(text("SELECT tablename FROM pg_tables WHERE tablename='github_connections'"))
+    if not result_gh.fetchone():
+        conn.execute(text("""
+            CREATE TABLE github_connections (
+                id UUID PRIMARY KEY,
+                tenant_id UUID NOT NULL UNIQUE,
+                repo_full_name VARCHAR(200) NOT NULL,
+                token_enc TEXT NOT NULL,
+                default_branch VARCHAR(100) DEFAULT 'main',
+                webhook_secret VARCHAR(64),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.commit()
+
     # seed_type column (idea/spec/paper/learning/log) — model has it, old tables may not
     result_st = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='seeds' AND column_name='seed_type'"))
     if not result_st.fetchone():
@@ -1635,6 +1651,117 @@ async def draft_prd_for_paper(
 
     background_tasks.add_task(_run_draft_prd_job, seed_id, str(current_user.tenant_id), replace)
     return {"status": "queued", "seed_id": seed_id, "message": "Draft PRD generation started — it will appear in Studio drafts in about a minute."}
+
+
+# --- GitHub repo sync (docs/specs/github-repo-sync.md) ---
+
+class GitHubConnectRequest(BaseModel):
+    repo_full_name: str = Field(..., pattern=r"^[\w.-]+/[\w.-]+$")
+    token: str = Field(..., min_length=20, max_length=400)
+
+
+@app.post("/api/v1/github/connect")
+def github_connect(
+    req: GitHubConnectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from app.github_sync import connect_repo
+    try:
+        result = connect_repo(str(current_user.tenant_id), req.repo_full_name, req.token, db)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"GitHub validation failed: {e}")
+    result["webhook_url"] = "https://api.greenplot.ink/api/v1/github/webhook"
+    return result
+
+
+@app.get("/api/v1/github/connection")
+def github_connection(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.github_sync import get_connection
+    conn = get_connection(str(current_user.tenant_id), db)
+    if not conn:
+        return {"connected": False}
+    return {"connected": True, "repo_full_name": conn["repo_full_name"],
+            "default_branch": conn["default_branch"], "webhook_secret": conn["webhook_secret"],
+            "webhook_url": "https://api.greenplot.ink/api/v1/github/webhook"}
+
+
+@app.delete("/api/v1/github/connection")
+def github_disconnect(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.github_sync import disconnect_repo
+    disconnect_repo(str(current_user.tenant_id), db)
+    return {"ok": True}
+
+
+@app.get("/api/v1/github/repo-map")
+def github_repo_map(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.github_sync import get_repo_map_for_tenant
+    repo_map = get_repo_map_for_tenant(str(current_user.tenant_id), db)
+    if not repo_map:
+        raise HTTPException(status_code=404, detail="No repo connected (or map build failed)")
+    return {"map": repo_map}
+
+
+@app.post("/api/v1/specs/{seed_id}/ship")
+def ship_spec_to_github(
+    seed_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Open a PR adding this PRD as docs/specs/<slug>.md + the implementation issue."""
+    from app.github_sync import get_connection, ship_spec
+    conn = get_connection(str(current_user.tenant_id), db)
+    if not conn:
+        raise HTTPException(status_code=422, detail="No GitHub repo connected — add one in Settings → Integrations")
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+    seed = db.query(Seed).filter(Seed.id == seed_uuid, Seed.tenant_id == current_user.tenant_id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Spec not found")
+
+    try:
+        result = ship_spec(conn, seed.title, seed.content or "", str(seed.id))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"GitHub ship failed: {str(e)[:200]}")
+
+    m = dict(seed.seed_metadata or {})
+    m["ship_pr_url"] = result["pr_url"]
+    m["ship_issue_url"] = result["issue_url"]
+    m["build_pr_url"] = result["pr_url"]
+    m["build_status"] = "ready"
+    m["repo_full_name"] = conn["repo_full_name"]
+    seed.seed_metadata = m
+    db.commit()
+    return result
+
+
+@app.post("/api/v1/github/webhook")
+async def github_webhook(request: Request, db: Session = Depends(get_db)):
+    """PR merged → spec marked Built. HMAC-verified, zero LLM calls."""
+    from app.github_sync import verify_webhook, handle_merged_pr
+    payload = await request.body()
+    try:
+        data = json.loads(payload)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+
+    repo_full_name = (data.get("repository") or {}).get("full_name", "")
+    row = db.execute(text("SELECT webhook_secret FROM github_connections WHERE repo_full_name = :r"),
+                     {"r": repo_full_name}).fetchone()
+    if not row:
+        return {"ok": True, "ignored": "unknown repo"}
+    if not verify_webhook(row[0], payload, request.headers.get("X-Hub-Signature-256", "")):
+        raise HTTPException(status_code=401, detail="Bad signature")
+
+    pr = data.get("pull_request") or {}
+    if data.get("action") == "closed" and pr.get("merged"):
+        seed_id = handle_merged_pr(repo_full_name, pr.get("html_url", ""), db)
+        return {"ok": True, "built_seed": seed_id}
+    return {"ok": True}
 
 
 # --- Design Vision Doc: one visual identity per PRD batch ---
