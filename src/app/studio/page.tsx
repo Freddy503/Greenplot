@@ -776,6 +776,62 @@ export default function StudioPage() {
   const [prdView, setPrdView] = useState<'board' | 'list'>('board')
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [visionBusy, setVisionBusy] = useState(false)
+
+  const toggleSel = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+
+  const createDesignVision = async () => {
+    if (selectedIds.size < 2 || visionBusy) return
+    setVisionBusy(true)
+    const toastId = toast.loading(`Creating design vision for ${selectedIds.size} PRDs — ~2 min…`)
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      const res = await fetch('/api/design-vision', { method: 'POST', headers, body: JSON.stringify({ seed_ids: [...selectedIds] }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || data.error || 'Could not start')
+      const pollId = data.poll_seed_id
+      const started = Date.now()
+      const tick = async () => {
+        if (Date.now() - started > 240_000) {
+          toast.error('Taking longer than expected — check the Library shortly', { id: toastId })
+          setVisionBusy(false)
+          return
+        }
+        try {
+          const r = await fetch(`/api/seeds/${pollId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+          if (r.ok) {
+            const s = await r.json()
+            const status = (s.seed_metadata || s.metadata || {}).design_vision_status || ''
+            if (status === 'done') {
+              toast.success('Design Vision created — every PRD in the batch now carries it', {
+                id: toastId, duration: 8000,
+                action: { label: 'Open Library', onClick: () => router.push('/library') },
+              })
+              setSelectMode(false); setSelectedIds(new Set()); setVisionBusy(false); setRefreshKey(k => k + 1)
+              return
+            }
+            if (status.startsWith('error')) {
+              toast.error(`Design vision failed: ${status.replace(/_/g, ' ')}`, { id: toastId })
+              setVisionBusy(false)
+              return
+            }
+          }
+        } catch {}
+        setTimeout(tick, 6000)
+      }
+      setTimeout(tick, 10_000)
+    } catch (e) {
+      toast.error((e as Error).message, { id: toastId })
+      setVisionBusy(false)
+    }
+  }
 
   const updatePrdStatus = useCallback(async (id: string, status: string) => {
     let prev: string | undefined
@@ -966,7 +1022,7 @@ export default function StudioPage() {
         <SectionHeader action="New spec" onAction={() => router.push('/chat?mode=spec')}>Build pipeline</SectionHeader>
 
         {!loading && prds.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <Segmented
               value={prdView}
               onChange={(k) => setPrdView(k as 'board' | 'list')}
@@ -975,6 +1031,13 @@ export default function StudioPage() {
                 { key: 'list', label: 'List', Icon: List },
               ]}
             />
+            <button
+              onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()) }}
+              className="tap ui"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: selectMode ? 'var(--green-tint)' : 'var(--surface-sunk)', color: selectMode ? 'var(--green-700)' : 'var(--ink-2)', border: 'none', borderRadius: 9999, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              <Sparkles size={13} strokeWidth={2} /> {selectMode ? 'Selecting…' : 'Design vision'}
+            </button>
           </div>
         )}
 
@@ -1030,10 +1093,10 @@ export default function StudioPage() {
                   ) : cards.map((prd) => (
                     <div
                       key={prd.id}
-                      draggable={!prd.local}
+                      draggable={!prd.local && !selectMode}
                       onDragStart={(e) => e.dataTransfer.setData('text/prd-id', prd.id)}
-                      onClick={() => setSelected(prd)}
-                      className="v2-card tap"
+                      onClick={() => (selectMode ? toggleSel(prd.id) : setSelected(prd))}
+                      className={'v2-card tap' + (selectMode && selectedIds.has(prd.id) ? ' sel-ring' : '')}
                       style={{ borderRadius: 14, padding: '11px 12px', cursor: prd.local ? 'pointer' : 'grab', marginBottom: 8 }}
                     >
                       <div className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.35 }}>{prd.title}</div>
@@ -1072,10 +1135,10 @@ export default function StudioPage() {
                 {prds.filter(isDraft).map((prd) => (
                   <div
                     key={prd.id}
-                    draggable={!prd.local}
+                    draggable={!prd.local && !selectMode}
                     onDragStart={(e) => e.dataTransfer.setData('text/prd-id', prd.id)}
-                    onClick={() => setSelected(prd)}
-                    className="v2-card tap"
+                    onClick={() => (selectMode ? toggleSel(prd.id) : setSelected(prd))}
+                    className={'v2-card tap' + (selectMode && selectedIds.has(prd.id) ? ' sel-ring' : '')}
                     style={{ borderRadius: 13, padding: '10px 12px', cursor: prd.local ? 'pointer' : 'grab', display: 'flex', alignItems: 'center', gap: 9 }}
                   >
                     <FileText size={15} color="var(--ink-3)" strokeWidth={1.75} style={{ flexShrink: 0 }} />
@@ -1104,7 +1167,7 @@ export default function StudioPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 9 }}>
             {(showAllPrds ? prds : prds.slice(0, PRD_PAGE_SIZE)).map((prd) => (
-              <div key={prd.id} onClick={() => setSelected(prd)} className="v2-card tap" style={{ borderRadius: 16, padding: 14, display: 'flex', gap: 12, cursor: 'pointer' }}>
+              <div key={prd.id} onClick={() => (selectMode ? toggleSel(prd.id) : setSelected(prd))} className={'v2-card tap' + (selectMode && selectedIds.has(prd.id) ? ' sel-ring' : '')} style={{ borderRadius: 16, padding: 14, display: 'flex', gap: 12, cursor: 'pointer' }}>
                 <span style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FileText size={19} color="var(--green-700)" strokeWidth={1.75} />
                 </span>
@@ -1134,6 +1197,25 @@ export default function StudioPage() {
           </div>
         )}
       </div>
+
+      {selectMode && (
+        <div className="print:hidden" style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 16px) + 84px)', left: 'var(--sidenav-w, 0px)', right: 0, display: 'flex', justifyContent: 'center', zIndex: 45, pointerEvents: 'none' }}>
+          <div className="glass" style={{ borderRadius: 9999, padding: '9px 12px', display: 'flex', gap: 10, alignItems: 'center', background: 'rgba(255,255,255,0.95)', pointerEvents: 'auto' }}>
+            <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', paddingLeft: 6 }}>{selectedIds.size} selected</span>
+            <button
+              onClick={createDesignVision}
+              disabled={selectedIds.size < 2 || visionBusy}
+              className="tap ui"
+              style={{ background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '8px 15px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: selectedIds.size < 2 || visionBusy ? 0.5 : 1 }}
+            >
+              {visionBusy ? 'Creating…' : 'Create design vision'}
+            </button>
+            <button onClick={() => { setSelectMode(false); setSelectedIds(new Set()) }} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', cursor: 'pointer', paddingRight: 6 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
       <style>{`@keyframes pulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }`}</style>

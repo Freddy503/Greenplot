@@ -171,14 +171,21 @@ async def get_spec(seed_id: str) -> str:
         if not resp.is_success:
             return f"Error {resp.status_code}: {resp.text[:200]}"
         s = resp.json()
-        meta = s.get("metadata") or {}
+        meta = s.get("metadata") or s.get("seed_metadata") or {}
         header = (
             f"# {s.get('title', 'Untitled')}\n"
             f"Build status: {meta.get('build_status', 'draft')}"
             + (f" | PR: {meta.get('build_pr_url')}" if meta.get("build_pr_url") else "")
             + (f" | Diagram: {meta.get('diagram_url')}" if meta.get("diagram_url") else "")
         )
-        return f"{header}\n\n{s.get('content', '')}"
+        body = f"{header}\n\n{s.get('content', '')}"
+        # Batch design identity rides along with the spec (design-vision-doc.md)
+        if meta.get("design_tokens_css"):
+            body += (
+                f"\n\nDESIGN TOKENS (from the batch Design Vision '{meta.get('design_vision_title', '')}' — "
+                f"use these CSS variables, do not invent a palette):\n```css\n{meta['design_tokens_css']}\n```"
+            )
+        return body
 
 
 async def report_build_progress(seed_id: str, status: str, pr_url: str = "", note: str = "") -> str:

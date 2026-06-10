@@ -670,3 +670,8 @@ html, body {
     padding: 0 !important;
   }
 }
+
+/* Batch-select ring (design vision flow) */
+.sel-ring {
+  box-shadow: 0 0 0 2.5px var(--green) !important;
+}

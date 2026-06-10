@@ -1637,6 +1637,74 @@ async def draft_prd_for_paper(
     return {"status": "queued", "seed_id": seed_id, "message": "Draft PRD generation started — it will appear in Studio drafts in about a minute."}
 
 
+# --- Design Vision Doc: one visual identity per PRD batch ---
+
+class DesignVisionRequest(BaseModel):
+    seed_ids: List[str] = Field(..., min_length=2, max_length=12)
+
+
+def _run_design_vision_job(seed_ids: list, user_id: str):
+    from app.database import SessionLocal
+    from app.design_vision import generate_design_vision
+    job_db = SessionLocal()
+    try:
+        user = job_db.query(User).filter(User.id == user_id).first()
+        result = generate_design_vision(seed_ids, user, job_db) if user else {"status": "error", "reason": "user_not_found"}
+        logger.info(f"[design_vision] job: {result.get('status')} ({result.get('title', result.get('reason', ''))})")
+        # Poll target: first seed's metadata carries the outcome
+        first = job_db.query(Seed).filter(Seed.id == uuid.UUID(seed_ids[0])).first()
+        if first:
+            m = dict(first.seed_metadata or {})
+            m["design_vision_status"] = "done" if result.get("status") == "ok" else f"error_{result.get('reason', 'unknown')}"
+            first.seed_metadata = m
+            job_db.commit()
+    except Exception as e:
+        logger.error(f"[design_vision] job crashed: {e}")
+        try:
+            first = job_db.query(Seed).filter(Seed.id == uuid.UUID(seed_ids[0])).first()
+            if first:
+                m = dict(first.seed_metadata or {})
+                m["design_vision_status"] = "error_exception"
+                first.seed_metadata = m
+                job_db.commit()
+        except Exception:
+            job_db.rollback()
+    finally:
+        job_db.close()
+
+
+@app.post("/api/v1/design-vision", status_code=202)
+async def create_design_vision(
+    req: DesignVisionRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Queue Design Vision generation for a batch of PRD seeds (~1-2 min).
+
+    Poll the first seed's metadata.design_vision_status for the outcome.
+    """
+    try:
+        ids = [uuid.UUID(s) for s in req.seed_ids]
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id in batch")
+    owned = db.query(func.count(Seed.id)).filter(
+        Seed.id.in_(ids), Seed.tenant_id == current_user.tenant_id
+    ).scalar() or 0
+    if owned != len(ids):
+        raise HTTPException(status_code=404, detail="One or more PRDs not found")
+
+    first = db.query(Seed).filter(Seed.id == ids[0]).first()
+    m = dict(first.seed_metadata or {})
+    m["design_vision_status"] = "generating"
+    first.seed_metadata = m
+    db.commit()
+
+    background_tasks.add_task(_run_design_vision_job, req.seed_ids, str(current_user.id))
+    return {"status": "queued", "poll_seed_id": req.seed_ids[0],
+            "message": "Design vision generation started — it lands in the Library in ~2 minutes."}
+
+
 # --- Spec build lifecycle (draft → ready → building → shipped) ---
 
 class BuildStatusRequest(BaseModel):
