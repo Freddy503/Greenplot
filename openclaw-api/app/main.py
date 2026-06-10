@@ -1503,16 +1503,33 @@ def parse_all_papers_endpoint(
 
 # --- Auto-PRD: manual trigger for any paper (bypasses relevance gate) ---
 
-@app.post("/api/v1/papers/{seed_id}/draft-prd")
+def _run_draft_prd_job(seed_id: str, tenant_id: str):
+    """Background draft generation with its own DB session (the request's
+    session is closed by the time this runs)."""
+    from app.database import SessionLocal
+    from app.auto_prd import auto_prd_for_paper
+    job_db = SessionLocal()
+    try:
+        result = auto_prd_for_paper(seed_id, tenant_id, job_db, force=True)
+        logger.info(f"[auto_prd] manual draft for {seed_id}: {result.get('status')} ({result.get('title', result.get('reason', ''))})")
+    except Exception as e:
+        logger.error(f"[auto_prd] manual draft failed for {seed_id}: {e}")
+    finally:
+        job_db.close()
+
+
+@app.post("/api/v1/papers/{seed_id}/draft-prd", status_code=202)
 async def draft_prd_for_paper(
     seed_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Generate a draft PRD from a paper seed on demand (Studio 'Draft PRD' button).
+    """Queue draft-PRD generation for a paper (Studio 'Draft PRD' button).
 
-    Synchronous — one generation call, ~20-40s. The autopilot path runs the
-    same logic on the worker after digest papers finish parsing.
+    Generation takes ~30s — far beyond Vercel's proxy-function timeout — so
+    this returns 202 immediately and the draft appears in the Studio drafts
+    strip when ready. The autopilot path runs the same logic on the worker.
     """
     try:
         seed_uuid = uuid.UUID(seed_id)
@@ -1524,14 +1541,12 @@ async def draft_prd_for_paper(
     ).first()
     if not seed:
         raise HTTPException(status_code=404, detail="Paper not found")
+    meta = seed.seed_metadata or {}
+    if meta.get("parse_status") not in ("parsed", None) and not meta.get("chunk_count"):
+        raise HTTPException(status_code=422, detail=f"Paper not parsed yet (status: {meta.get('parse_status')})")
 
-    from app.auto_prd import auto_prd_for_paper
-    result = auto_prd_for_paper(seed_id, str(current_user.tenant_id), db, force=True)
-    if result.get("status") == "error":
-        raise HTTPException(status_code=502, detail=result.get("reason", "Draft generation failed"))
-    if result.get("status") == "skipped":
-        raise HTTPException(status_code=422, detail=f"Could not draft: {result.get('reason')} — is the paper parsed yet?")
-    return result
+    background_tasks.add_task(_run_draft_prd_job, seed_id, str(current_user.tenant_id))
+    return {"status": "queued", "seed_id": seed_id, "message": "Draft PRD generation started — it will appear in Studio drafts in about a minute."}
 
 
 # --- Spec build lifecycle (draft → ready → building → shipped) ---
