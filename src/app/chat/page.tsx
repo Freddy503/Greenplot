@@ -427,13 +427,7 @@ export default function ChatPage() {
         if (!mode && !prefill.vision) setSelectedMode(getMode('spec'))
         // Vision flow: shape an auto-drafted PRD in tandem (spec: auto-prd-pipeline.md)
         const text = prefill.vision
-          ? `Run an ADAPTIVE vision interrogation on this auto-drafted PRD (seed_id: ${prefill.id}).
-
-FIRST ACTION: call build_ledger with kind "vision" and seed_id "${prefill.id}" — it grades what the draft, my garden, the source paper and my product already answer (who / demand_evidence / why_us_now / wedge / taste), and returns prior state if we already started.
-
-Then: open with ONE confirmation block for the known slots ("Here's what I already know — correct anything wrong"), and ask AT MOST 5 questions total, one at a time, only for unknown/weak slots — one drill-down max per vague answer. If my answer contradicts ledger evidence, say so.
-
-Ground follow-ups in the source paper via search_paper_content. When the slots are filled or the budget is spent, rewrite the FULL PRD — keep the six-section gstack structure, integrate the ledger and my answers into Problem Alignment and Solution Summary — and save it with update_seed (seed_id "${prefill.id}", append false). Then confirm what changed.
+          ? `Shape the vision of this auto-drafted PRD (seed_id: ${prefill.id}).
 
 Here is the current draft:
 

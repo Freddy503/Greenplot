@@ -55,13 +55,7 @@ interface Product {
   }
 }
 
-const PRODUCT_INTERROGATION = `I want to define the product I'm building — the root every PRD serves.
-
-FIRST ACTION: call build_ledger with kind "problem" — my garden, papers and existing PRDs may already answer parts of this (who_hurts / demand_evidence / cost_of_problem / why_now).
-
-Then run an ADAPTIVE problem interrogation: confirm what the ledger already knows in one block, and ask AT MOST 5 questions, one at a time, only for the genuine unknowns — one drill-down max per vague answer. Push back hard on vagueness: a product without a sharp problem must not be created.
-
-When the slots are filled, propose 3-5 pillars (facets of the PROBLEM, not feature buckets) and a plain-english problem statement, confirm them with me, then call write_product.`
+const PRODUCT_INTERROGATION = `Let's define the product I'm building — run the problem interrogation and anchor my Studio to it.`
 
 interface SeedMeta {
   tags?: string[] | string
@@ -238,9 +232,8 @@ function shapeVision(prd: PRDItem, router: ReturnType<typeof useRouter>) {
       id: prd.id, title: prd.title, content: prd.content, vision: true,
     }))
   } catch {}
-  // Plain chat: the vision directive is the only protocol — spec mode's own
-  // adaptive system prompt (kind=spec, write_spec) would compete with it
-  router.push('/chat')
+  // First-class 'vision' mode: its system prompt owns the adaptive protocol
+  router.push('/chat?mode=vision')
 }
 
 function timeAgo(date: string): string {
@@ -1177,7 +1170,7 @@ export default function StudioPage() {
               <h2 className="serif" style={{ fontSize: 26, color: 'var(--ink)', marginBottom: 8 }}>What are you building?</h2>
               <p className="body-text" style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 18 }}>State the problem in plain english — every PRD will serve it.</p>
               <button
-                onClick={() => router.push(`/chat?prompt=${encodeURIComponent(PRODUCT_INTERROGATION)}`)}
+                onClick={() => router.push(`/chat?mode=product&prompt=${encodeURIComponent(PRODUCT_INTERROGATION)}`)}
                 className="tap"
                 style={{ background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '11px 22px', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
