@@ -1276,6 +1276,95 @@ async def ingest_paper_endpoint(
     return result
 
 
+# --- Knowledge graph v2: dual-edge payload (explicit + semantic) ---
+# Spec: docs/specs/knowledge-graph-v2.md
+
+@app.get("/api/v1/graph")
+def get_knowledge_graph(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Nodes + dual edges for the graph view.
+
+    Explicit edges come from Postgres seed_links (the user's brain);
+    semantic edges from Weaviate nearest-neighbors with certainty > 0.85,
+    top 2 per node (the AI's brain). Cached 5 minutes per tenant.
+    """
+    from app.models import SeedLink
+    tenant_id = str(current_user.tenant_id)
+
+    try:
+        from app.cache import get_cached, set_cached
+        cached = get_cached(f"graph:{tenant_id}")
+        if cached:
+            return cached
+    except Exception:
+        get_cached = set_cached = None  # Redis down — compute uncached
+
+    seeds = db.query(Seed).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        (Seed.archived == False) | (Seed.archived == None)
+    ).order_by(Seed.created_at.desc()).limit(300).all()
+
+    seed_ids = {str(s.id) for s in seeds}
+    ref_to_id = {s.embedding_ref: str(s.id) for s in seeds if s.embedding_ref}
+
+    # Explicit edges — the user's brain
+    links = []
+    seen_pairs = set()
+    degree: dict = {}
+    rows = db.query(SeedLink).filter(SeedLink.source_seed_id.in_([s.id for s in seeds])).all()
+    for r in rows:
+        a, b = str(r.source_seed_id), str(r.target_seed_id)
+        if b not in seed_ids:
+            continue
+        key = tuple(sorted((a, b)))
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        links.append({"source": a, "target": b, "type": "explicit", "linkType": r.link_type or "related"})
+        degree[a] = degree.get(a, 0) + 1
+        degree[b] = degree.get(b, 0) + 1
+
+    # Semantic edges — the AI's brain (top 2 neighbors, certainty > 0.85)
+    for s in seeds[:150]:
+        if not s.embedding_ref:
+            continue
+        for hit in weaviate_client.near_object_seeds(tenant_id, s.embedding_ref, limit=2):
+            if hit["certainty"] <= 0.85:
+                continue
+            other = ref_to_id.get(hit["id"])
+            if not other or other == str(s.id):
+                continue
+            key = tuple(sorted((str(s.id), other)))
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            links.append({"source": str(s.id), "target": other, "type": "semantic", "strength": round(hit["certainty"], 3)})
+            degree[str(s.id)] = degree.get(str(s.id), 0) + 1
+            degree[other] = degree.get(other, 0) + 1
+
+    nodes = []
+    for s in seeds:
+        meta = s.seed_metadata or {}
+        sid = str(s.id)
+        nodes.append({
+            "id": sid,
+            "title": s.title or "Untitled",
+            "group": (meta.get("domain") or "untagged").strip() or "untagged",
+            "size": min(6 + 2 * degree.get(sid, 0), 22),
+            "seedType": s.seed_type or meta.get("seed_type") or "idea",
+        })
+
+    payload = {"nodes": nodes, "links": links}
+    try:
+        if set_cached:
+            set_cached(f"graph:{tenant_id}", payload, ttl=300)
+    except Exception:
+        pass
+    return payload
+
+
 # --- Manual seed editing (Studio PRD editor) ---
 
 class SeedUpdateRequest(BaseModel):

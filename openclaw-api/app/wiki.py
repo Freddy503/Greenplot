@@ -87,7 +87,7 @@ def _load_wiki_system_prompt() -> str:
 IMPORTANT: Do NOT include a Timeline section — that will be appended automatically after synthesis."""
 
 WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
-WIKI_MODEL = "google/gemini-2.5-flash-preview"
+WIKI_MODEL = "google/gemini-3.5-flash"
 
 async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
     """Download BFL image and save to local persistent storage. Returns absolute URL."""
