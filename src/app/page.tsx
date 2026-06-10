@@ -407,8 +407,9 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
           fontFamily: 'var(--font-body)', fontSize: 'clamp(16px,2vw,19px)',
           color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, maxWidth: 600, marginBottom: '2.75rem', fontWeight: 400,
         }}>
-          A living garden for your ideas — where every seed of thought grows into knowledge that
-          never fades, a partner helps you think it through, and the gap from idea to build finally closes.
+          A living garden for your ideas — research flows in and is read in full, draft PRDs
+          surface on autopilot, you shape the vision with a thinking partner, and coding agents
+          build it. The gap from idea to shipped finally closes.
         </p>
         <div className="fade-rise-3" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '3.5rem' }}>
           <HeroWaitlist />
@@ -1045,8 +1046,11 @@ const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc
     desc: 'Ask Greenplot anything. It searches your garden first, then the web — combining your personal knowledge with live information.',
     mockup: <MockupAIAgent /> },
   { icon: 'search', name: 'Research Digest', tag: 'Research', color: T.teal,
-    desc: 'Every morning, fresh arXiv papers are matched to your Garden seeds and Wiki — with source PDFs attached. Paste any paper link to plant it, then develop it into a buildable project.',
+    desc: 'Every morning, fresh arXiv papers are matched to your Garden — then parsed in full: methods, results and limitations are indexed, not just abstracts. Your specs cite what papers actually say.',
     mockup: <MockupAcademic /> },
+  { icon: 'auto_awesome', name: 'Autopilot PRDs', tag: 'Autopilot', color: T.green,
+    desc: 'When a relevant paper lands, a draft PRD appears in your Studio by itself — grounded in the paper’s full text and your existing seeds. You shape the vision with the thinking partner; the system does the drafting.',
+    mockup: <MockupSpec /> },
   { icon: 'auto_stories', name: 'Wiki', tag: 'Compile', color: T.green,
     desc: 'Your seeds compile into living wiki articles — encyclopedic summaries of everything you\'ve captured and learned.',
     mockup: <MockupWiki /> },
