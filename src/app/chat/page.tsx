@@ -405,6 +405,15 @@ export default function ChatPage() {
     const mode = getMode(modeId)
     if (mode) setSelectedMode(mode)
 
+    // One flow = one session: a mode/prompt/prefill directive arriving while a
+    // conversation is open starts a FRESH chat. Stacked directives in one
+    // thread made the agent juggle multiple ledgers and triple-fire
+    // finalization tools (3 duplicate products on first live run).
+    const hasDirective = !!(modeId || promptParam || localStorage.getItem('greenplot_spec_prefill'))
+    if (hasDirective && messages.length > 0) {
+      handleNewChat()
+    }
+
     // Pre-fill from ?prompt= (e.g. "Grow into an article", "Enrich" buttons)
     if (promptParam) {
       setTimeout(() => {
