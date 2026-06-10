@@ -471,6 +471,23 @@ export default function SettingsPage() {
           </button>
         </div>
 
+        {/* Support */}
+        <SectionHeader>Support</SectionHeader>
+        <a
+          href="https://buymeacoffee.com/freddy503"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="v2-card tap"
+          style={{ display: 'flex', alignItems: 'center', gap: 13, borderRadius: 18, padding: '14px 16px', marginBottom: 18, textDecoration: 'none', background: 'rgba(255,221,0,0.08)', border: '1px solid rgba(255,221,0,0.25)' }}
+        >
+          <span style={{ fontSize: 24, flexShrink: 0 }}>☕</span>
+          <span style={{ flex: 1 }}>
+            <span className="ui" style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>Buy Me a Coffee</span>
+            <span className="body-text" style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-2)', marginTop: 2 }}>Enjoying Greenplot? Support the build.</span>
+          </span>
+          <ChevronRight size={16} color="var(--ink-3)" strokeWidth={1.75} />
+        </a>
+
         {/* Account */}
         <SettingsGroup label="Account">
           <SettingsRow Icon={Download} title="Export My Data" sub="Download all seeds and sessions as JSON" right={<ChevronRight size={16} color="var(--ink-3)" strokeWidth={1.75} />}

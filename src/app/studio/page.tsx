@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
-import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List } from 'lucide-react'
+import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink } from 'lucide-react'
 import Segmented from '@/components/ui/v2/segmented'
 import { readCache, writeCache } from '@/lib/swr-cache'
 
@@ -38,6 +38,7 @@ interface SeedMeta {
   build_pr_url?: string
   pdf_url?: string
   paper_url?: string
+  digest_date?: string
 }
 
 function isPaperSeed(s: RawSeed): boolean {
@@ -189,12 +190,95 @@ const MODE_ICONS: Record<string, React.ComponentType<any>> = {
   spec: FileText,
 }
 
+// ── Idea / Paper Detail ───────────────────────────────
+
+function IdeaDetail({ seed, onBack, onSpec }: { seed: RawSeed; onBack: () => void; onSpec: () => void }) {
+  const meta = seed.seed_metadata || seed.metadata || {}
+  const paper = isPaperSeed(seed)
+  const pdfUrl = meta.pdf_url || ''
+  const paperUrl = meta.paper_url || ''
+  const content = seed.content || seed.text || seed.summary || ''
+  const [pdfOpen, setPdfOpen] = useState(!!pdfUrl)
+
+  return (
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
+      <div className="print:hidden" style={{ position: 'fixed', top: 0, left: 'var(--sidenav-w, 0px)', right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', height: 56 }}>
+          <button onClick={onBack} className="tap" style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green-700)', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <ArrowLeft size={18} strokeWidth={2} color="var(--green-700)" /> Studio
+          </button>
+          <div style={{ flex: 1 }} />
+          {paperUrl && (
+            <a href={paperUrl} target="_blank" rel="noopener noreferrer" className="tap" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--ink-2)', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600, textDecoration: 'none', padding: '7px 10px' }}>
+              <ExternalLink size={13} strokeWidth={2} /> arXiv
+            </a>
+          )}
+          <button onClick={onSpec} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '7px 15px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <Pencil size={13} strokeWidth={2} /> Spec it
+          </button>
+        </div>
+      </div>
+
+      <div className="desk-narrow" style={{ paddingBottom: 100, padding: '0 18px' }}>
+        <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Pill tone="soft" size="xs">{paper ? 'PAPER' : 'IDEA'}</Pill>
+            {meta.digest_date && (
+              <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>Research Digest · {meta.digest_date}</span>
+            )}
+          </div>
+          <h1 className="serif" style={{ fontSize: 28, lineHeight: 1.15, color: 'var(--ink)', marginTop: 12, marginBottom: 16, letterSpacing: '-0.02em' }}>
+            {seed.title || 'Untitled'}
+          </h1>
+
+          {/* Digest description / idea content — the connection to your garden */}
+          <div className="glass" style={{ borderRadius: 20, padding: '18px 22px', marginBottom: 16 }}>
+            <div className="prose prose-sm max-w-none" style={{ fontFamily: 'var(--body)', fontSize: 14.5, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
+          </div>
+
+          {/* Embedded PDF */}
+          {pdfUrl && (
+            <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hairline)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface-sunk)' }}>
+                <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>📄 Paper PDF</span>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button onClick={() => setPdfOpen(o => !o)} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>
+                    {pdfOpen ? 'Collapse' : 'Expand'}
+                  </button>
+                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>
+                    Open in new tab ↗
+                  </a>
+                </div>
+              </div>
+              {pdfOpen && (
+                <iframe
+                  src={pdfUrl}
+                  title="Paper PDF"
+                  style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── PRD Detail ────────────────────────────────────────
 
-function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; onBack: () => void; onDeleted: (id: string) => void; onStatusChanged?: (id: string, status: string) => void }) {
+function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd: PRDItem; onBack: () => void; onDeleted: (id: string) => void; onStatusChanged?: (id: string, status: string) => void; onUpdated?: (id: string, patch: Partial<PRDItem>) => void }) {
   const [diagramUrl, setDiagramUrl] = useState(prd.diagramUrl)
   const [generating, setGenerating] = useState(false)
   const [buildStatus, setBuildStatus] = useState(prd.buildStatus || 'draft')
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(prd.title)
+  const [editContent, setEditContent] = useState(prd.content)
+  const [title, setTitle] = useState(prd.title)
+  const [content, setContent] = useState(prd.content)
+  const [saving, setSaving] = useState(false)
 
   const generateDiagram = async () => {
     if (generating) return
@@ -208,6 +292,8 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; 
       const data = await res.json()
       if (res.ok && data.url) {
         setDiagramUrl(data.url)
+        // Persist into the list state so reopening the PRD keeps the diagram
+        onUpdated?.(prd.id, { diagramUrl: data.url })
         toast.success('Architecture diagram generated')
       } else {
         toast.error(data.detail || data.error || 'Diagram generation failed')
@@ -217,6 +303,46 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; 
     } finally {
       setGenerating(false)
     }
+  }
+
+  const saveEdits = async () => {
+    const newTitle = editTitle.trim()
+    const newContent = editContent.trim()
+    if (!newTitle || !newContent || saving) return
+    setSaving(true)
+    try {
+      if (prd.local) {
+        // Local drafts live in localStorage only
+        const raw = localStorage.getItem('greenplot_prds')
+        const list: PRDItem[] = raw ? JSON.parse(raw) : []
+        localStorage.setItem('greenplot_prds', JSON.stringify(list.map(p => p.id === prd.id ? { ...p, title: newTitle, content: newContent } : p)))
+      } else {
+        const token = localStorage.getItem('greenplot_token')
+        const res = await fetch(`/api/seeds/${prd.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ title: newTitle, content: newContent }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail || data.error || 'Save failed')
+        }
+      }
+      setTitle(newTitle)
+      setContent(newContent)
+      onUpdated?.(prd.id, { title: newTitle, content: newContent })
+      setEditing(false)
+      toast.success('PRD saved')
+    } catch (e) {
+      toast.error((e as Error).message || 'Could not save — backend update pending')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const exportPdf = () => {
+    // Print stylesheet hides app chrome (print:hidden) — browser dialog → Save as PDF
+    window.print()
   }
 
   const setStage = async (next: string) => {
@@ -244,16 +370,16 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; 
   }
 
   const copyForAgent = () => {
-    const framed = `# ${prd.title}\n\n${prd.content}\n\n---\nUse this PRD as the spec for the task I'm about to describe. Implement it faithfully, asking before making scope decisions not covered above.`
+    const framed = `# ${title}\n\n${content}\n\n---\nUse this PRD as the spec for the task I'm about to describe. Implement it faithfully, asking before making scope decisions not covered above.`
     navigator.clipboard.writeText(framed)
     toast.success('Copied — paste into Claude Code')
   }
 
   const downloadMd = () => {
-    const blob = new Blob([`# ${prd.title}\n\n${prd.content}\n`], { type: 'text/markdown' })
+    const blob = new Blob([`# ${title}\n\n${content}\n`], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url
-    a.download = `${prd.title.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 60)}.md`
+    a.download = `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 60)}.md`
     a.click(); URL.revokeObjectURL(url)
   }
 
@@ -270,41 +396,71 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; 
   return (
     <div style={{ background: 'var(--bg)', height: '100dvh', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Minimal header */}
-      <div style={{ position: 'fixed', top: 0, left: 'var(--sidenav-w, 0px)', right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', height: 56 }}>
+      <div className="print:hidden" style={{ position: 'fixed', top: 0, left: 'var(--sidenav-w, 0px)', right: 0, zIndex: 50, background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(16px)', paddingTop: 'env(safe-area-inset-top, 0px)', borderBottom: '1px solid var(--hairline)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', height: 56 }}>
           <button onClick={onBack} className="tap" style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green-700)', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             <ArrowLeft size={18} strokeWidth={2} color="var(--green-700)" /> Studio
           </button>
           <div style={{ flex: 1 }} />
-          <button onClick={copyForAgent} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            <Copy size={13} strokeWidth={2} /> Copy for Claude Code
-          </button>
-          <button onClick={downloadMd} className="tap" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
-            <Download size={16} strokeWidth={1.75} color="var(--ink-2)" />
-          </button>
-          {prd.local && (
-            <button onClick={deleteLocal} className="tap" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
-              <Trash2 size={16} strokeWidth={1.75} color="var(--red)" />
-            </button>
+          {editing ? (
+            <>
+              <button onClick={() => { setEditing(false); setEditTitle(title); setEditContent(content) }} className="tap" style={{ background: 'none', border: 'none', color: 'var(--ink-2)', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '7px 10px' }}>
+                Cancel
+              </button>
+              <button onClick={saveEdits} disabled={saving} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '7px 15px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                {saving ? <Loader2 size={13} strokeWidth={2} className="animate-spin" /> : <Check size={13} strokeWidth={2.5} />} Save
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={copyForAgent} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Copy size={13} strokeWidth={2} /> Copy for Claude Code
+              </button>
+              <button onClick={() => setEditing(true)} className="tap" title="Edit PRD" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
+                <Pencil size={16} strokeWidth={1.75} color="var(--ink-2)" />
+              </button>
+              <button onClick={exportPdf} className="tap" title="Export as PDF" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
+                <Printer size={16} strokeWidth={1.75} color="var(--ink-2)" />
+              </button>
+              <button onClick={downloadMd} className="tap" title="Download markdown" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
+                <Download size={16} strokeWidth={1.75} color="var(--ink-2)" />
+              </button>
+              {prd.local && (
+                <button onClick={deleteLocal} className="tap" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
+                  <Trash2 size={16} strokeWidth={1.75} color="var(--red)" />
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
       <div className="desk-narrow" style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)', paddingBottom: 100, padding: '0 18px' }}>
         <div style={{ paddingTop: 'calc(56px + env(safe-area-inset-top, 0px) + 24px)' }}>
-          <Pill tone="soft" size="xs">SPEC</Pill>
-          <h1 className="serif" style={{ fontSize: 32, lineHeight: 1.1, color: 'var(--ink)', marginTop: 12, marginBottom: 8, letterSpacing: '-0.02em' }}>{prd.title}</h1>
-          <p className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 20 }}>
+          <span className="print:hidden"><Pill tone="soft" size="xs">SPEC</Pill></span>
+          {editing ? (
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="serif"
+              style={{ width: '100%', fontSize: 32, lineHeight: 1.1, color: 'var(--ink)', marginTop: 12, marginBottom: 8, letterSpacing: '-0.02em', background: 'var(--surface-sunk)', border: '1px solid var(--border-2)', borderRadius: 12, padding: '6px 12px', outline: 'none' }}
+            />
+          ) : (
+            <h1 className="serif" style={{ fontSize: 32, lineHeight: 1.1, color: 'var(--ink)', marginTop: 12, marginBottom: 8, letterSpacing: '-0.02em' }}>{title}</h1>
+          )}
+          <p className="body-text print:hidden" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 20 }}>
             {prd.local ? 'Saved from Spec mode' : 'From your garden'} · {timeAgo(prd.createdAt)}
           </p>
-          {!prd.local && (
-            <BuildTimeline status={buildStatus} prUrl={prd.prUrl} onSelect={setStage} />
+          {!prd.local && !editing && (
+            <div className="print:hidden">
+              <BuildTimeline status={buildStatus} prUrl={prd.prUrl} onSelect={setStage} />
+            </div>
           )}
-          {!prd.local && (
+          {!prd.local && !editing && (
             diagramUrl ? (
               <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hairline)', marginBottom: 16 }}>
                 <img src={diagramUrl} alt="System architecture diagram" style={{ width: '100%', height: 'auto', display: 'block' }} loading="lazy" />
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface-sunk)' }}>
+                <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface-sunk)' }}>
                   <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>System architecture · BFL Flux</span>
                   <button onClick={generateDiagram} disabled={generating} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>
                     {generating ? 'Regenerating…' : 'Regenerate'}
@@ -312,17 +468,48 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged }: { prd: PRDItem; 
                 </div>
               </div>
             ) : (
-              <button onClick={generateDiagram} disabled={generating} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center', background: 'var(--green-tint)', color: 'var(--green-700)', border: '1px dashed var(--green-tint-2)', borderRadius: 16, padding: '13px 16px', fontFamily: 'var(--ui)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
+              <button onClick={generateDiagram} disabled={generating} className="tap print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center', background: 'var(--green-tint)', color: 'var(--green-700)', border: '1px dashed var(--green-tint-2)', borderRadius: 16, padding: '13px 16px', fontFamily: 'var(--ui)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
                 {generating ? <Loader2 size={15} strokeWidth={2} className="animate-spin" /> : <Network size={15} strokeWidth={2} />}
                 {generating ? 'Generating architecture diagram (~30s)…' : 'Generate architecture diagram'}
               </button>
             )
           )}
-          <div className="glass" style={{ borderRadius: 20, padding: '20px 24px' }}>
-            <div className="prose prose-sm max-w-none" style={{ fontFamily: 'var(--body)', fontSize: 15, lineHeight: 1.65, color: 'var(--ink)' }}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{prd.content}</ReactMarkdown>
+          {editing ? (
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              spellCheck={false}
+              style={{ width: '100%', minHeight: '60vh', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, lineHeight: 1.7, color: 'var(--ink)', background: 'var(--surface-sunk)', border: '1px solid var(--border-2)', borderRadius: 16, padding: '16px 18px', outline: 'none', resize: 'vertical' }}
+            />
+          ) : (
+            <div className="glass" style={{ borderRadius: 20, padding: '20px 24px' }}>
+              <div className="prd-prose" style={{ fontFamily: 'var(--body)', fontSize: 15, lineHeight: 1.7, color: 'var(--ink)' }}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="serif" style={{ fontSize: 24, lineHeight: 1.2, color: 'var(--ink)', margin: '6px 0 14px' }}>{children}</h1>,
+                    h2: ({ children }) => (
+                      <h2 className="ui" style={{ fontSize: 15, fontWeight: 700, color: 'var(--green-deep)', margin: '26px 0 10px', paddingBottom: 7, borderBottom: '2px solid var(--green-tint-2)', letterSpacing: '-0.01em' }}>{children}</h2>
+                    ),
+                    h3: ({ children }) => <h3 className="ui" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)', margin: '18px 0 7px' }}>{children}</h3>,
+                    p: ({ children }) => <p style={{ margin: '0 0 12px', color: 'var(--ink-2)' }}>{children}</p>,
+                    ul: ({ children }) => <ul style={{ margin: '0 0 12px', paddingLeft: 22, color: 'var(--ink-2)', listStyleType: 'disc' }}>{children}</ul>,
+                    ol: ({ children }) => <ol style={{ margin: '0 0 12px', paddingLeft: 22, color: 'var(--ink-2)', listStyleType: 'decimal' }}>{children}</ol>,
+                    li: ({ children }) => <li style={{ margin: '4px 0' }}>{children}</li>,
+                    strong: ({ children }) => <strong style={{ color: 'var(--ink)', fontWeight: 650 }}>{children}</strong>,
+                    code: ({ children }) => <code style={{ background: 'var(--surface-sunk)', borderRadius: 6, padding: '1.5px 6px', fontSize: 12.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{children}</code>,
+                    blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid var(--green-tint-2)', margin: '0 0 12px', padding: '4px 0 4px 14px', color: 'var(--ink-2)' }}>{children}</blockquote>,
+                    table: ({ children }) => <div style={{ overflowX: 'auto', margin: '0 0 12px' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>{children}</table></div>,
+                    th: ({ children }) => <th style={{ textAlign: 'left', padding: '7px 10px', borderBottom: '2px solid var(--border-2)', fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>{children}</th>,
+                    td: ({ children }) => <td style={{ padding: '7px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--ink-2)' }}>{children}</td>,
+                    hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--hairline)', margin: '20px 0' }} />,
+                  }}
+                >
+                  {content}
+                </ReactMarkdown>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -339,6 +526,7 @@ export default function StudioPage() {
   const [ideas, setIdeas] = useState<RawSeed[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<PRDItem | null>(null)
+  const [selectedIdea, setSelectedIdea] = useState<RawSeed | null>(null)
   const [showAllPrds, setShowAllPrds] = useState(false)
   const [prdView, setPrdView] = useState<'board' | 'list'>('board')
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
@@ -411,6 +599,16 @@ export default function StudioPage() {
 
   const handleDeleted = (id: string) => { setPrds(prev => prev.filter(p => p.id !== id)); setSelected(null) }
 
+  if (selectedIdea) {
+    return (
+      <IdeaDetail
+        seed={selectedIdea}
+        onBack={() => setSelectedIdea(null)}
+        onSpec={() => developSeed(selectedIdea)}
+      />
+    )
+  }
+
   if (selected) {
     return (
       <PRDDetail
@@ -418,6 +616,10 @@ export default function StudioPage() {
         onBack={() => setSelected(null)}
         onDeleted={handleDeleted}
         onStatusChanged={(id, status) => setPrds(prev => prev.map(p => p.id === id ? { ...p, buildStatus: status } : p))}
+        onUpdated={(id, patch) => {
+          setPrds(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
+          setSelected(prev => (prev && prev.id === id ? { ...prev, ...patch } : prev))
+        }}
       />
     )
   }
@@ -482,7 +684,7 @@ export default function StudioPage() {
                 const meta = seed.seed_metadata || seed.metadata || {}
                 const pdfUrl = meta.pdf_url || ''
                 return (
-                  <div key={seed.id || seed.notion_id} className="v2-card" style={{ borderRadius: 15, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div key={seed.id || seed.notion_id} onClick={() => setSelectedIdea(seed)} className="v2-card tap" style={{ borderRadius: 15, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                     {paper ? <BookOpen size={18} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} /> : <Leaf size={18} color="var(--green-700)" strokeWidth={1.75} style={{ flexShrink: 0 }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span className="ui" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -498,7 +700,7 @@ export default function StudioPage() {
                       )}
                     </div>
                     <button
-                      onClick={() => developSeed(seed)}
+                      onClick={(e) => { e.stopPropagation(); developSeed(seed) }}
                       className="tap ui"
                       style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 99, padding: '7px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
                     >
