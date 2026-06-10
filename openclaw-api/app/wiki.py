@@ -1456,6 +1456,39 @@ async def delete_article(article_id: str, request: Request, current_user = Depen
     return {"ok": True}
 
 
+@router.patch("/{article_id}")
+async def patch_article(article_id: str, request: Request, current_user = Depends(get_current_user)):
+    """Manually edit an article's title/content/summary (Library editor)."""
+    from datetime import datetime
+    body = await request.json()
+    updates = {}
+    if body.get("title"):
+        updates["title"] = str(body["title"]).strip()[:200]
+    if body.get("content"):
+        updates["content"] = str(body["content"])
+        if not body.get("summary"):
+            for line in str(body["content"]).split("\n"):
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    updates["summary"] = stripped[:300]
+                    break
+    if body.get("summary"):
+        updates["summary"] = str(body["summary"]).strip()[:300]
+    if not updates:
+        raise HTTPException(status_code=422, detail="Provide title and/or content")
+    updates["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+    # Ownership check
+    tenant_id = str(current_user.tenant_id)
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+    if not any(a.get("id") == article_id for a in articles):
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    if not weaviate_client.update_wiki_article(article_id, **updates):
+        raise HTTPException(status_code=502, detail="Article update failed")
+    return {"ok": True, "article_id": article_id, "title": updates.get("title")}
+
+
 def _detect_category(domain: str, links: list) -> str:
     """Simple heuristic category detection."""
     d = domain.lower()
