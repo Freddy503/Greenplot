@@ -244,13 +244,17 @@ def auto_prd_for_paper(seed_id: str, tenant_id: str, db: Session, force: bool = 
 
     result = generate_prd_draft(seed, chunks, related, user, db)
     if result.get("status") == "ok":
-        _mark("drafted")
         m = dict(seed.seed_metadata or {})
+        m["auto_prd"] = "drafted"
         m["draft_prd_id"] = result["draft_seed_id"]
+        m["draft_prd_title"] = result.get("title", "")
         seed.seed_metadata = m
         db.commit()
     elif result.get("status") == "skipped":
         _mark(f"skipped_{result.get('reason', 'unknown')}")
+    else:
+        # Mark errors too — the UI polls this to distinguish failure from in-progress
+        _mark(f"error_{result.get('reason', 'unknown')}")
     return result
 
 

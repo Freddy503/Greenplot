@@ -1514,6 +1514,17 @@ def _run_draft_prd_job(seed_id: str, tenant_id: str):
         logger.info(f"[auto_prd] manual draft for {seed_id}: {result.get('status')} ({result.get('title', result.get('reason', ''))})")
     except Exception as e:
         logger.error(f"[auto_prd] manual draft failed for {seed_id}: {e}")
+        # Surface the crash to the polling UI
+        try:
+            s = job_db.query(Seed).filter(Seed.id == uuid.UUID(seed_id)).first()
+            if s:
+                m = dict(s.seed_metadata or {})
+                m["auto_prd"] = "error_exception"
+                m["draft_prd_error"] = str(e)[:200]
+                s.seed_metadata = m
+                job_db.commit()
+        except Exception:
+            job_db.rollback()
     finally:
         job_db.close()
 
@@ -1544,6 +1555,13 @@ async def draft_prd_for_paper(
     meta = seed.seed_metadata or {}
     if meta.get("parse_status") not in ("parsed", None) and not meta.get("chunk_count"):
         raise HTTPException(status_code=422, detail=f"Paper not parsed yet (status: {meta.get('parse_status')})")
+
+    # Mark as drafting so the UI can poll this seed's metadata for the outcome
+    m = dict(seed.seed_metadata or {})
+    m["auto_prd"] = "drafting"
+    m.pop("draft_prd_error", None)
+    seed.seed_metadata = m
+    db.commit()
 
     background_tasks.add_task(_run_draft_prd_job, seed_id, str(current_user.tenant_id))
     return {"status": "queued", "seed_id": seed_id, "message": "Draft PRD generation started — it will appear in Studio drafts in about a minute."}
