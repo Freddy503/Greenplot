@@ -1232,6 +1232,66 @@ async def ingest_paper_endpoint(
     return result
 
 
+# --- Manual seed editing (Studio PRD editor) ---
+
+class SeedUpdateRequest(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=200)
+    content: Optional[str] = Field(default=None, max_length=50_000)
+
+
+@app.patch("/api/v1/seeds/{seed_id}")
+def patch_seed(
+    seed_id: str,
+    req: SeedUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a seed's title/content manually (Studio PRD editor)."""
+    if req.title is None and req.content is None:
+        raise HTTPException(status_code=422, detail="Provide title and/or content")
+    try:
+        seed_uuid = uuid.UUID(seed_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+
+    seed = db.query(Seed).filter(
+        Seed.id == seed_uuid,
+        Seed.tenant_id == current_user.tenant_id,
+    ).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Seed not found")
+
+    if req.title is not None and req.title.strip():
+        seed.title = req.title.strip()
+    if req.content is not None:
+        seed.content = req.content
+    meta = dict(seed.seed_metadata or {})
+    meta["edited_at"] = datetime.utcnow().isoformat()
+    seed.seed_metadata = meta
+    db.commit()
+    db.refresh(seed)
+
+    # Re-index in Weaviate (best-effort)
+    try:
+        from app.enricher_v2 import embed_text
+        embedding = embed_text(f"{seed.title}\n{(seed.content or '')[:500]}")
+        weaviate_client.add_seed(
+            tenant_id=str(current_user.tenant_id),
+            user_id=str(current_user.id),
+            thought_id=None,
+            title=seed.title,
+            content=seed.content or "",
+            embedding=embedding,
+            metadata=seed.seed_metadata or {},
+            image_url=seed.image_url,
+            created_at=seed.created_at.isoformat() if seed.created_at else None,
+        )
+    except Exception as e:
+        logger.warning(f"Weaviate re-index failed for edited seed {seed.id}: {e}")
+
+    return {"status": "ok", "seed_id": str(seed.id), "title": seed.title}
+
+
 # --- Spec build lifecycle (draft → ready → building → shipped) ---
 
 class BuildStatusRequest(BaseModel):
