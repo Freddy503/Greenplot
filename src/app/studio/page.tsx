@@ -238,7 +238,9 @@ function shapeVision(prd: PRDItem, router: ReturnType<typeof useRouter>) {
       id: prd.id, title: prd.title, content: prd.content, vision: true,
     }))
   } catch {}
-  router.push('/chat?mode=spec')
+  // Plain chat: the vision directive is the only protocol — spec mode's own
+  // adaptive system prompt (kind=spec, write_spec) would compete with it
+  router.push('/chat')
 }
 
 function timeAgo(date: string): string {
@@ -1175,7 +1177,7 @@ export default function StudioPage() {
               <h2 className="serif" style={{ fontSize: 26, color: 'var(--ink)', marginBottom: 8 }}>What are you building?</h2>
               <p className="body-text" style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 18 }}>State the problem in plain english — every PRD will serve it.</p>
               <button
-                onClick={() => router.push(`/chat?mode=spec&prompt=${encodeURIComponent(PRODUCT_INTERROGATION)}`)}
+                onClick={() => router.push(`/chat?prompt=${encodeURIComponent(PRODUCT_INTERROGATION)}`)}
                 className="tap"
                 style={{ background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '11px 22px', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >

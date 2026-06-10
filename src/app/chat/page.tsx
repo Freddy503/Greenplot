@@ -424,7 +424,7 @@ export default function ChatPage() {
       localStorage.removeItem('greenplot_spec_prefill')
       try {
         const prefill = JSON.parse(prefillRaw)
-        if (!mode) setSelectedMode(getMode('spec'))
+        if (!mode && !prefill.vision) setSelectedMode(getMode('spec'))
         // Vision flow: shape an auto-drafted PRD in tandem (spec: auto-prd-pipeline.md)
         const text = prefill.vision
           ? `Run an ADAPTIVE vision interrogation on this auto-drafted PRD (seed_id: ${prefill.id}).
