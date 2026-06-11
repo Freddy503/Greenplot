@@ -1445,6 +1445,33 @@ def get_knowledge_graph(
             "seedType": s.seed_type or meta.get("seed_type") or "idea",
         })
 
+    # Hierarchy layer: product → pillar → PRD, plus paper → PRD provenance
+    # (product-atlas.md m4 — all from metadata, zero LLM calls)
+    for s in seeds:
+        meta = s.seed_metadata or {}
+        if not isinstance(meta, dict):
+            continue
+        sid = str(s.id)
+        if s.seed_type == "product":
+            for n in nodes:
+                if n["id"] == sid:
+                    n["size"] = 26
+            for p in (meta.get("pillars") or []):
+                pid = f"pillar:{sid}:{p.get('id')}"
+                nodes.append({"id": pid, "title": p.get("name", "Pillar"), "group": "pillar",
+                              "size": 12, "seedType": "pillar"})
+                links.append({"source": sid, "target": pid, "type": "hierarchy"})
+        else:
+            prod_id = meta.get("product_id")
+            if prod_id and prod_id in seed_ids:
+                if meta.get("pillar_id") is not None:
+                    links.append({"source": f"pillar:{prod_id}:{meta['pillar_id']}", "target": sid, "type": "hierarchy"})
+                else:
+                    links.append({"source": prod_id, "target": sid, "type": "hierarchy"})
+            src_paper = meta.get("source_paper_id")
+            if src_paper and src_paper in seed_ids:
+                links.append({"source": src_paper, "target": sid, "type": "derived"})
+
     payload = {"nodes": nodes, "links": links}
     try:
         if set_cached:
@@ -1974,6 +2001,50 @@ def list_products(current_user: User = Depends(get_current_user), db: Session = 
         "metadata": s.seed_metadata or {},
         "created_at": s.created_at.isoformat() if s.created_at else None,
     } for s in rows]}
+
+
+def _run_coherence_job(user_id: str):
+    from app.database import SessionLocal
+    from app.coherence import build_coherence_report
+    job_db = SessionLocal()
+    try:
+        user = job_db.query(User).filter(User.id == user_id).first()
+        result = build_coherence_report(user, job_db) if user else {"status": "error"}
+        logger.info(f"[coherence] job: {result.get('status')} ({result.get('title', result.get('reason', ''))})")
+        if result.get("status") != "ok" and user:
+            # surface failure to the polling UI
+            main = next((p for p in job_db.query(Seed).filter(
+                Seed.tenant_id == user.tenant_id, Seed.seed_type == "product").all()
+                if (p.seed_metadata or {}).get("rank") == "main"), None)
+            if main:
+                m = dict(main.seed_metadata or {})
+                m["coherence_status"] = f"error_{result.get('reason', 'unknown')}"
+                main.seed_metadata = m
+                job_db.commit()
+    except Exception as e:
+        logger.error(f"[coherence] job crashed: {e}")
+    finally:
+        job_db.close()
+
+
+@app.post("/api/v1/coherence-report", status_code=202)
+async def create_coherence_report(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """On-demand coherence run (~1 min). Poll the MAIN product's metadata.coherence_status."""
+    main = next((p for p in db.query(Seed).filter(
+        Seed.tenant_id == current_user.tenant_id, Seed.seed_type == "product").all()
+        if (p.seed_metadata or {}).get("rank") == "main"), None)
+    if not main:
+        raise HTTPException(status_code=422, detail="Define a product first — coherence needs a MAIN to measure against")
+    m = dict(main.seed_metadata or {})
+    m["coherence_status"] = "running"
+    main.seed_metadata = m
+    db.commit()
+    background_tasks.add_task(_run_coherence_job, str(current_user.id))
+    return {"status": "queued", "poll_seed_id": str(main.id)}
 
 
 class ProductRankRequest(BaseModel):
@@ -4351,6 +4422,31 @@ def _job_afternoon_reflection():
         db.close()
 
 
+def _job_coherence_report():
+    """Weekly coherence synthesis for every user with a MAIN product — Sunday 17:00 CET."""
+    from app.database import SessionLocal
+    from app.coherence import build_coherence_report
+    job_db = SessionLocal()
+    try:
+        for user in job_db.query(User).all():
+            mains = [p for p in job_db.query(Seed).filter(
+                Seed.tenant_id == user.tenant_id, Seed.seed_type == "product").all()
+                if (p.seed_metadata or {}).get("rank") == "main"]
+            if not mains:
+                continue
+            result = build_coherence_report(user, job_db)
+            if result.get("status") == "ok":
+                _sto<RESEND_API_KEY>(
+                    "🧭 Weekly Coherence Report",
+                    "Contradictions, gaps and the story so far — your portfolio, digested.",
+                    f"/library?article={result['article_id']}",
+                )
+    except Exception as e:
+        logger.error(f"[coherence] weekly job crashed: {e}")
+    finally:
+        job_db.close()
+
+
 def _job_weekly_digest():
     """Weekly garden digest — Sunday 10:00 CET."""
     prompt = (
@@ -4778,6 +4874,13 @@ def _start_scheduler():
         _job_weekly_eval,
         CronTrigger(day_of_week="sun", hour=18, minute=0, timezone=_CET),
         id="weekly_eval",
+        replace_existing=True,
+    )
+    # Coherence Report — Sundays 17:00 CET (product-atlas.md milestone 4)
+    scheduler.add_job(
+        _job_coherence_report,
+        CronTrigger(day_of_week="sun", hour=17, minute=0, timezone=_CET),
+        id="coherence_report",
         replace_existing=True,
     )
     # Biweekly challenge — 1st and 15th at 10:00 CET

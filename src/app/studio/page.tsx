@@ -52,6 +52,8 @@ interface Product {
     pillars?: ProductPillar[]
     rank?: string
     story_so_far?: string
+    coherence_report_id?: string
+    coherence_status?: string
   }
 }
 
@@ -1247,6 +1249,47 @@ export default function StudioPage() {
                     {mainProduct.metadata.story_so_far}
                   </p>
                 )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                  <button
+                    onClick={async () => {
+                      const token = localStorage.getItem('greenplot_token')
+                      const toastId = toast.loading('Running coherence synthesis — ~1 min…')
+                      try {
+                        const res = await fetch('/api/coherence-report', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                        const data = await res.json()
+                        if (!res.ok) throw new Error(data.detail || data.error)
+                        const started = Date.now()
+                        const tick = async () => {
+                          if (Date.now() - started > 180_000) { toast.error('Taking long — check the Library shortly', { id: toastId }); return }
+                          try {
+                            const r = await fetch(`/api/seeds/${data.poll_seed_id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                            if (r.ok) {
+                              const s = await r.json()
+                              const m = s.seed_metadata || s.metadata || {}
+                              if (m.coherence_status === 'done' && m.coherence_report_id) {
+                                toast.success('Coherence Report ready', { id: toastId, duration: 8000, action: { label: 'Read it', onClick: () => router.push(`/library?article=${m.coherence_report_id}`) } })
+                                setProducts(prev => prev.map(pp => pp.id === mainProduct.id ? { ...pp, metadata: { ...pp.metadata, ...m } } : pp))
+                                return
+                              }
+                              if ((m.coherence_status || '').startsWith('error')) { toast.error(`Coherence failed: ${m.coherence_status}`, { id: toastId }); return }
+                            }
+                          } catch {}
+                          setTimeout(tick, 6000)
+                        }
+                        setTimeout(tick, 10_000)
+                      } catch (e) { toast.error((e as Error).message || 'Could not start', { id: toastId }) }
+                    }}
+                    className="tap ui"
+                    style={{ background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '6px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Check coherence
+                  </button>
+                  {mainProduct.metadata?.coherence_report_id && (
+                    <a href={`/library?article=${encodeURIComponent(mainProduct.metadata.coherence_report_id)}`} className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>
+                      Latest report →
+                    </a>
+                  )}
+                </div>
               </div>
 
               {/* Proposals to review — earned, only when non-empty */}

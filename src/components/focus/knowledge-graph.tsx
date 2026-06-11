@@ -21,7 +21,7 @@ interface GraphNode {
 interface GraphLink {
   source: string | GraphNode
   target: string | GraphNode
-  type: 'explicit' | 'semantic'
+  type: 'explicit' | 'semantic' | 'hierarchy' | 'derived'
   strength?: number
   linkType?: string
 }
@@ -204,8 +204,23 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
                 ctx.strokeStyle = '#fff'
                 ctx.stroke()
               }
+              if (n.seedType === 'product') {
+                ctx.lineWidth = 2.5 / globalScale
+                ctx.strokeStyle = '#fff'
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.arc(n.x || 0, n.y || 0, r + 4 / globalScale, 0, 2 * Math.PI)
+                ctx.lineWidth = 1 / globalScale
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)'
+                ctx.stroke()
+              }
+              if (n.seedType === 'pillar') {
+                ctx.lineWidth = 1 / globalScale
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+                ctx.stroke()
+              }
               // Labels appear once zoomed in (or for hubs)
-              if (globalScale > 1.4 || r > 8) {
+              if (globalScale > 1.4 || r > 8 || n.seedType === 'product' || n.seedType === 'pillar') {
                 ctx.font = `${Math.max(11 / globalScale, 2.5)}px Sora, sans-serif`
                 ctx.textAlign = 'center'
                 ctx.textBaseline = 'top'
@@ -220,10 +235,12 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
                 ? !(neighborhood.has(nodeId(link.source)) && neighborhood.has(nodeId(link.target)))
                 : false
               if (dimmed) return 'rgba(255,255,255,0.04)'
+              if (link.type === 'hierarchy') return 'rgba(255,255,255,0.6)'
+              if (link.type === 'derived') return 'rgba(167,139,250,0.45)'
               return link.type === 'explicit' ? 'rgba(126,240,168,0.85)' : 'rgba(45,212,191,0.4)'
             }}
-            linkWidth={(l) => ((l as GraphLink).type === 'explicit' ? 2 : 1)}
-            linkLineDash={(l) => ((l as GraphLink).type === 'semantic' ? [4, 3] : null)}
+            linkWidth={(l) => { const t = (l as GraphLink).type; return t === 'hierarchy' ? 2.5 : t === 'explicit' ? 2 : 1 }}
+            linkLineDash={(l) => { const t = (l as GraphLink).type; return t === 'semantic' ? [4, 3] : t === 'derived' ? [2, 3] : null }}
             onNodeHover={(n) => setHoverNode((n as GraphNode) || null)}
             onNodeClick={(n) => setSelected(n as GraphNode)}
             onBackgroundClick={() => setSelected(null)}
@@ -267,7 +284,8 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             </div>
 
             <button
-              onClick={() => { onClose(); window.location.href = `/garden?seed=${encodeURIComponent(selected.id)}` }}
+              disabled={selected.id.startsWith('pillar:')}
+              onClick={() => { if (selected.id.startsWith('pillar:')) return; onClose(); window.location.href = `/garden?seed=${encodeURIComponent(selected.id)}` }}
               style={{
                 width: '100%', padding: '11px', borderRadius: 13,
                 background: '#22c55e', border: 'none', cursor: 'pointer',
