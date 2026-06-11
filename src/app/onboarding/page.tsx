@@ -2,667 +2,253 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { motion, AnimatePresence } from 'motion/react'
-
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Spinner } from '@/components/ui/spinner'
-import { Checkbox } from '@/components/ui/checkbox'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
+import { GP_ICONS } from '@/components/onboarding/gp-icons'
 
-// ── Types ─────────────────────────────────────────────
+// ── Onboarding v2 — value-first 8-step flow (design: Seedify Onboarding v2) ──
+// Welcome → Invite → Interests → Rhythm → Weather → Push → Privacy → Account
+// → planting → bloom. Desktop (lg+) gets the editorial side panel.
 
-interface OnboardingProfile {
-  nickname: string
-  city: string
-  interests: string[]
-  digestFrequency: 'twice-daily' | 'once-daily' | 'bi-weekly' | 'weekly' | 'calendar'
-  onboardedAt: string
-}
+const SERIF = "var(--font-display, 'Instrument Serif', Georgia, serif)"
+const BODY = "var(--font-body, 'Barlow', system-ui, sans-serif)"
+const UI = "var(--font-ui, 'Sora', system-ui, sans-serif)"
 
-// ── Constants ─────────────────────────────────────────
+type Frequency = 'twice-daily' | 'once-daily' | 'bi-weekly' | 'weekly' | 'calendar'
+type TokenState = 'idle' | 'checking' | 'valid' | 'invalid' | 'error'
 
-const INTEREST_OPTIONS = [
-  { label: 'Technology', icon: 'rocket_launch' },
-  { label: 'Business trends', icon: 'trending_up' },
+const STEP_LABELS = ['Welcome', 'Invite', 'Interests', 'Rhythm', 'Weather', 'Stay in the loop', 'Your data', 'Account']
+
+const INTERESTS = [
+  { label: 'Technology', icon: 'cpu' },
+  { label: 'AI agents', icon: 'bot' },
+  { label: 'Business trends', icon: 'trending-up' },
   { label: 'Entrepreneurship', icon: 'lightbulb' },
-  { label: 'AI', icon: 'memory' },
   { label: 'Design', icon: 'palette' },
-  { label: 'Productivity', icon: 'bolt' },
-  { label: 'Learning', icon: 'menu_book' },
-  { label: 'Creativity', icon: 'auto_awesome' },
+  { label: 'Productivity', icon: 'zap' },
+  { label: 'Learning', icon: 'book-open' },
+  { label: 'Creativity', icon: 'sparkles' },
   { label: 'Consulting', icon: 'handshake' },
-  { label: 'Law', icon: 'gavel' },
-  { label: 'Medicine', icon: 'health_and_safety' },
-  { label: 'Sustainability', icon: 'eco' },
+  { label: 'Law', icon: 'scale' },
+  { label: 'Medicine', icon: 'heart-pulse' },
+  { label: 'Sustainability', icon: 'leaf' },
 ]
 
-const DIGEST_OPTIONS: { label: string; sublabel: string; value: OnboardingProfile['digestFrequency'] }[] = [
-  { label: 'Twice a day', sublabel: 'Morning & evening cycles', value: 'twice-daily' },
-  { label: 'Once a day', sublabel: 'Standard growth pattern', value: 'once-daily' },
-  { label: 'Bi-Weekly', sublabel: 'Mid-week and weekend updates', value: 'bi-weekly' },
-  { label: 'Weekly', sublabel: 'Batch collection every Sunday', value: 'weekly' },
-  { label: 'Based on Calendar', sublabel: 'Smart Scheduling', value: 'calendar' },
+const DIGESTS: { label: string; sublabel: string; value: Frequency }[] = [
+  { label: 'Twice a day', sublabel: 'Morning spark & evening reflection', value: 'twice-daily' },
+  { label: 'Once a day', sublabel: 'One rich morning briefing', value: 'once-daily' },
+  { label: 'Bi-weekly', sublabel: 'Mid-week & weekend digests', value: 'bi-weekly' },
+  { label: 'Weekly', sublabel: 'A Sunday roundup', value: 'weekly' },
+  { label: 'Around my calendar', sublabel: 'Smart timing in your free slots', value: 'calendar' },
 ]
 
-// Cron job previews per cadence
-const CRON_PREVIEW: Record<OnboardingProfile['digestFrequency'], Array<{ icon: string; name: string; time: string; desc: string }>> = {
+const CRON: Record<Frequency, Array<{ icon: string; name: string; time: string; desc: string }>> = {
   'twice-daily': [
-    { icon: 'wb_sunny', name: 'Morning Spark', time: '8:00 AM', desc: 'Weather, schedule & a creative prompt to start your day' },
-    { icon: 'nights_stay', name: 'Evening Reflection', time: '8:00 PM', desc: 'Review your day, capture loose thoughts' },
-    { icon: 'eco', name: 'Garden Pulse', time: '12:00 PM', desc: 'Seed enrichment & connection check' },
+    { icon: 'sun', name: 'Morning Spark', time: '8:00 AM', desc: 'Weather, your day ahead & a creative prompt.' },
+    { icon: 'moon', name: 'Evening Reflection', time: '8:00 PM', desc: 'Capture loose thoughts before they fade.' },
   ],
   'once-daily': [
-    { icon: 'wb_sunny', name: 'Daily Briefing', time: '9:00 AM', desc: 'Weather, calendar highlights, recent seeds & creative prompt' },
-    { icon: 'eco', name: 'Garden Pulse', time: '9:00 AM', desc: 'Runs alongside your briefing' },
+    { icon: 'sun', name: 'Daily Briefing', time: '9:00 AM', desc: 'Weather, calendar highlights, fresh seeds & a prompt.' },
+    { icon: 'leaf', name: 'Garden Pulse', time: 'alongside', desc: 'Seed enrichment & new connections, quietly.' },
   ],
   'bi-weekly': [
-    { icon: 'trending_up', name: 'Mid-Week Digest', time: 'Wed 10:00 AM', desc: 'Weekly trends, new seeds, web highlights' },
-    { icon: 'auto_stories', name: 'Weekend Review', time: 'Sun 10:00 AM', desc: 'Deep-dive into your garden, connection map' },
+    { icon: 'trending-up', name: 'Mid-Week Digest', time: 'Wed 10 AM', desc: 'Trends in your topics & new web finds.' },
+    { icon: 'book-open', name: 'Weekend Review', time: 'Sun 10 AM', desc: 'A deep-dive into your garden’s growth.' },
   ],
-  'weekly': [
-    { icon: 'auto_stories', name: 'Weekly Roundup', time: 'Sunday 10:00 AM', desc: 'Full week recap: seeds created, enriched, trending topics' },
+  weekly: [
+    { icon: 'book-open', name: 'Weekly Roundup', time: 'Sun 10 AM', desc: 'Seeds planted, enriched & trending topics.' },
   ],
-  'calendar': [
-    { icon: 'event', name: 'Smart Scheduling', time: 'Based on your calendar', desc: 'Delivers insights when you have free time — never during meetings' },
+  calendar: [
+    { icon: 'calendar-check', name: 'Smart Scheduling', time: 'around you', desc: 'Insights land in free slots — never mid-meeting.' },
   ],
 }
 
-const TOTAL_STEPS = 5
-const STEP_LABELS = ['Welcome', 'Roots', 'Interests', 'Nurture', 'The Loop']
+const CITIES = ['Berlin', 'Lisbon', 'London', 'New York', 'San Francisco', 'Tokyo', 'Amsterdam', 'Zurich', 'Paris', 'Copenhagen']
+const WEATHER: Record<string, [string, string]> = {
+  Berlin: ['12°', 'cloud-sun'], Lisbon: ['21°', 'sun'], London: ['11°', 'cloud-drizzle'],
+  'New York': ['16°', 'sun'], 'San Francisco': ['17°', 'cloud-sun'], Tokyo: ['19°', 'cloud-sun'],
+  Amsterdam: ['13°', 'cloud-rain'], Zurich: ['10°', 'cloud-sun'], Paris: ['14°', 'sun'], Copenhagen: ['9°', 'wind'],
+}
 
-// ── Ambient Background ────────────────────────────────
+const STORAGE_KEY = 'greenplot_onboarding_v2'
 
-function AmbientBg() {
+// ── Icon (inline lucide paths — identical to the design bundle) ──
+
+function Ic({ name, size, color, style }: { name: string; size: number; color: string; style?: React.CSSProperties }) {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute rounded-full w-[500px] h-[500px] bg-primary/10 -top-[15%] -right-[20%] blur-[120px]" />
-      <div className="absolute rounded-full w-[400px] h-[400px] bg-secondary/5 -bottom-[10%] -left-[20%] blur-[100px]" />
-    </div>
+    <svg
+      viewBox="0 0 24 24" width={size} height={size}
+      fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: 'inline-block', flexShrink: 0, transition: 'stroke .2s', ...style }}
+      dangerouslySetInnerHTML={{ __html: GP_ICONS[name] || '' }}
+    />
   )
 }
 
-// ── Progress Bar (Stitch: top, gradient, step labels) ─
+// ── Shared step typography ──
 
-function ProgressBar({ step }: { step: number }) {
-  const pct = ((step + 1) / TOTAL_STEPS) * 100
+function StepHeading({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="w-full max-w-md mb-12 flex flex-col gap-4">
-      <div className="flex justify-between items-end">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-          Step {step + 1} of {TOTAL_STEPS}
-        </span>
-        <span className="text-[10px] font-bold text-primary uppercase tracking-[0.1em]">
-          {STEP_LABELS[step]}
-        </span>
+    <>
+      <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: 38, lineHeight: 1.05, letterSpacing: '-0.02em', margin: '0 0 10px', color: '#141413' }}>{title}</h2>
+      <p style={{ fontFamily: BODY, fontSize: 15, lineHeight: 1.6, color: '#5f5f5a', margin: '0 0 24px', maxWidth: 330, textWrap: 'pretty' } as React.CSSProperties}>{sub}</p>
+    </>
+  )
+}
+
+const stepPad: React.CSSProperties = { padding: '16px 28px 24px', width: '100%', maxWidth: 470, margin: '0 auto' }
+
+// ── Editorial side panel (web ≥ 1024px) ──
+
+function SidePanel() {
+  return (
+    <aside className="ob-side">
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(70% 50% at 30% 20%, rgba(34,197,94,0.08), transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 9 }}>
+        <Ic name="sprout" size={20} color="#22c55e" />
+        <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 22, color: '#141413' }}>Greenplot</span>
       </div>
-      <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
-        <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-primary to-primary-container shadow-[0_0_15px_rgba(105,246,184,0.3)]"
-          initial={false}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-        />
-      </div>
-    </div>
-  )
-}
-
-// ── Step Wrapper ──────────────────────────────────────
-
-function StepShell({ children, step }: { children: React.ReactNode; step: number }) {
-  return (
-    <motion.div
-      key={step}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="w-full max-w-lg flex flex-col items-center"
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-// ── Gradient CTA Button (Stitch style) ────────────────
-
-function CTAButton({
-  children,
-  onClick,
-  disabled,
-  loading,
-  icon = 'arrow_forward',
-}: {
-  children: React.ReactNode
-  onClick?: () => void
-  disabled?: boolean
-  loading?: boolean
-  icon?: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className="w-full max-w-xs group relative flex items-center justify-center gap-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(105,246,184,0.3)] hover:shadow-[0_15px_50px_-10px_rgba(105,246,184,0.5)] active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
-    >
-      {loading ? (
-        <span className="flex items-center justify-center gap-2">
-          <Spinner className="text-on-primary" />
-          Setting up your garden…
-        </span>
-      ) : (
-        <>
-          <span className="text-lg">{children}</span>
-          <span
-            className="material-symbols-outlined transition-transform group-hover:translate-x-1"
-            style={{ fontVariationSettings: '"wght" 700' }}
-          >
-            {icon}
-          </span>
-        </>
-      )}
-    </button>
-  )
-}
-
-// ── Input Field (Stitch style: pill, with icon) ───────
-
-function StitchInput({
-  label,
-  icon,
-  optional,
-  ...props
-}: {
-  label: string
-  icon: string
-  optional?: boolean
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <div className="space-y-2">
-      <Label className="block text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant ml-4">
-        {label}
-        {optional && (
-          <span className="text-on-surface-variant/50 normal-case tracking-normal font-medium ml-1">
-            (Optional)
-          </span>
-        )}
-      </Label>
-      <div className="relative group">
-        <Input
-          {...props}
-          className="w-full bg-surface-container-highest border-none rounded-full px-6 py-4 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary transition-all pr-12"
-        />
-        <div className="absolute inset-y-0 right-4 flex items-center text-primary/40 pointer-events-none">
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>{icon}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── STEP 0: Welcome ───────────────────────────────────
-
-function StepWelcome({ onNext }: { onNext: () => void }) {
-  return (
-    <StepShell step={0}>
-      {/* Seed motif */}
-      <div className="relative mb-10">
-        <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-[1.8]" />
-        <div className="relative w-56 h-72 rounded-full flex items-center justify-center bg-surface-container border border-outline-variant/20 overflow-hidden">
-          <div className="absolute bg-surface-container/80 backdrop-blur-sm rounded-full w-16 h-16 top-[12%] right-[10%] flex items-center justify-center">
-            <span
-              className="material-symbols-outlined text-primary"
-              style={{ fontSize: 24, fontVariationSettings: '"FILL" 1' }}
-            >
-              eco
-            </span>
-          </div>
-          <span
-            className="material-symbols-outlined text-primary relative z-10"
-            style={{ fontSize: 72, fontVariationSettings: '"FILL" 1' }}
-          >
-            forest
-          </span>
-        </div>
-      </div>
-
-      <div className="text-center mb-10">
-        <h1 className="text-5xl font-normal tracking-tighter leading-[1.1] mb-6 text-on-surface">
-          Welcome to{'\n'}Greenplot
-        </h1>
-        <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
-          Your AI thinking partner. Capture ideas and research, grow them into specs, and ship them with coding agents.
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 30, lineHeight: 1.18, letterSpacing: '-0.01em', color: '#141413', margin: 0, textWrap: 'balance' } as React.CSSProperties}>
+          &ldquo;A living laboratory for your ideas.&rdquo;
         </p>
-      </div>
-
-      <CTAButton onClick={onNext}>Get Started</CTAButton>
-
-      <p className="mt-6 text-xs flex items-center gap-2 font-medium text-on-surface-variant/40">
-        <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-        Version 1.0 — Built for growers
-      </p>
-    </StepShell>
-  )
-}
-
-// ── STEP 1: Who Are You ───────────────────────────────
-
-function StepWhoAreYou({
-  email,
-  nickname,
-  city,
-  password,
-  confirmPassword,
-  onEmail,
-  onNickname,
-  onCity,
-  onPassword,
-  onConfirmPassword,
-  onNext,
-  onLogin,
-}: {
-  email: string
-  nickname: string
-  city: string
-  password: string
-  confirmPassword: string
-  onEmail: (v: string) => void
-  onNickname: (v: string) => void
-  onCity: (v: string) => void
-  onPassword: (v: string) => void
-  onConfirmPassword: (v: string) => void
-  onNext: () => void
-  onLogin: () => void
-}) {
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-  const passwordsMatch = password === confirmPassword
-  const passwordValid = password.length >= 6
-  const canProceed = emailValid && nickname.trim() && passwordValid && passwordsMatch
-
-  return (
-    <StepShell step={1}>
-      {/* Avatar upload placeholder */}
-      <div className="relative group mx-auto w-36 h-36 mb-8">
-        <div className="absolute inset-0 bg-primary/20 blur-2xl group-hover:bg-primary/30 transition-all duration-500 rounded-full" />
-        <div className="relative w-full h-full rounded-full flex items-center justify-center bg-surface-container-high border border-outline-variant/20 hover:border-primary/40 transition-colors cursor-pointer overflow-hidden">
-          <div className="relative z-10 flex flex-col items-center gap-2">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
-              <span className="material-symbols-outlined text-3xl">photo_camera</span>
-            </div>
-          </div>
-        </div>
-        <div className="absolute -bottom-1 -right-1 w-10 h-10 bg-secondary rounded-full flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
-          <span className="material-symbols-outlined text-on-secondary text-xl" style={{ fontVariationSettings: '"wght" 700' }}>add</span>
-        </div>
-      </div>
-
-      <div className="text-center mb-8">
-        <h2 className="text-4xl font-normal tracking-tight mb-3 text-on-surface">
-          Tell us about your roots
-        </h2>
-        <p className="text-base font-medium leading-relaxed max-w-xs mx-auto text-on-surface-variant">
-          Every garden needs a keeper. Choose a name that reflects your digital presence.
+        <p style={{ fontFamily: BODY, fontSize: 13.5, lineHeight: 1.6, color: '#71716b', margin: 0, textWrap: 'pretty' } as React.CSSProperties}>
+          Seeds become knowledge. Knowledge becomes specs. Specs become software — shipped by agents while you think.
         </p>
-      </div>
-
-      <div className="w-full space-y-4 mb-8">
-        <StitchInput label="Email" icon="mail" type="email" value={email} onChange={(e) => onEmail(e.target.value)} placeholder="you@example.com" autoFocus />
-        {email.length > 0 && !emailValid && (
-          <p className="text-xs text-error ml-4">Enter a valid email address</p>
-        )}
-        <StitchInput label="Nickname" icon="face" value={nickname} onChange={(e) => onNickname(e.target.value)} placeholder="Seedling_42" />
-        <StitchInput label="Password" icon="lock" type="password" value={password} onChange={(e) => onPassword(e.target.value)} placeholder="Min. 6 characters" />
-        {password.length > 0 && !passwordValid && (
-          <p className="text-xs text-error ml-4">At least 6 characters</p>
-        )}
-        <StitchInput label="Confirm Password" icon="lock" type="password" value={confirmPassword} onChange={(e) => onConfirmPassword(e.target.value)} placeholder="Repeat your password" />
-        {confirmPassword.length > 0 && !passwordsMatch && (
-          <p className="text-xs text-error ml-4">Passwords don't match</p>
-        )}
-        <StitchInput label="City" icon="location_on" optional value={city} onChange={(e) => onCity(e.target.value)} placeholder="The Digital Valley" />
-      </div>
-
-      <CTAButton onClick={onNext} disabled={!canProceed}>Next</CTAButton>
-
-      <button onClick={onLogin} className="mt-6 text-xs text-on-surface-variant/40 hover:text-primary transition-colors">
-        Already have an account? <span className="text-primary font-bold">Log In</span>
-      </button>
-    </StepShell>
-  )
-}
-
-// ── STEP 2: Interests ─────────────────────────────────
-
-function StepInterests({
-  selected,
-  onToggle,
-  custom,
-  onCustom,
-  onNext,
-}: {
-  selected: string[]
-  onToggle: (v: string) => void
-  custom: string
-  onCustom: (v: string) => void
-  onNext: () => void
-}) {
-  return (
-    <StepShell step={2}>
-      <div className="text-left mb-10 w-full">
-        <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
-          What seeds should<br />we plant?
-        </h2>
-        <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
-          Select topics that excite you to curate your digital garden.
-        </p>
-      </div>
-
-      {/* Interest chips with icons */}
-      <div className="w-full flex flex-wrap gap-3 mb-6">
-        {INTEREST_OPTIONS.map(({ label, icon }) => {
-          const isSelected = selected.includes(label)
-          return (
-            <button
-              key={label}
-              onClick={() => onToggle(label)}
-              className={`flex items-center px-5 py-3.5 rounded-full font-bold text-sm transition-all active:scale-95 ${
-                isSelected
-                  ? 'bg-gradient-to-br from-primary to-primary-container text-on-primary'
-                  : 'bg-surface-container hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              <span
-                className="material-symbols-outlined mr-2"
-                style={{ fontSize: '20px', fontVariationSettings: isSelected ? '"FILL" 1' : '"FILL" 0' }}
-              >
-                {icon}
-              </span>
-              {label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Custom interest */}
-      <div className="w-full mb-10">
-        <div className="relative">
-          <Input
-            value={custom}
-            onChange={(e) => onCustom(e.target.value)}
-            placeholder="Add your own…"
-            className="w-full bg-surface-container-highest border-none rounded-full px-6 py-4 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary pr-14"
-          />
-          <div className="absolute inset-y-0 right-4 flex items-center text-primary/40 pointer-events-none">
-            <span className="material-symbols-outlined">add</span>
-          </div>
-        </div>
-      </div>
-
-      <CTAButton onClick={onNext}>Continue</CTAButton>
-    </StepShell>
-  )
-}
-
-// ── STEP 3: Nurture Focus ─────────────────────────────
-
-function StepNurtureFocus({
-  frequency,
-  onFrequency,
-  onNext,
-}: {
-  frequency: OnboardingProfile['digestFrequency']
-  onFrequency: (v: OnboardingProfile['digestFrequency']) => void
-  onNext: () => void
-}) {
-  return (
-    <StepShell step={3}>
-      <div className="text-left mb-10 w-full">
-        <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
-          Nurture your focus.
-        </h2>
-        <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
-          Choose how often you want your AI garden to deliver insights. Each cadence includes a preview of what you'll receive.
-        </p>
-      </div>
-
-      {/* Radio cards */}
-      <div className="w-full space-y-3 mb-4">
-        {DIGEST_OPTIONS.map((opt) => {
-          const isSelected = frequency === opt.value
-          return (
-            <button
-              key={opt.value}
-              onClick={() => onFrequency(opt.value)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-left transition-all active:scale-[0.98] border ${
-                isSelected
-                  ? 'bg-primary/10 border-primary/30'
-                  : 'bg-surface-container border-outline-variant/20 hover:bg-surface-container-high'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all border-2 ${
-                  isSelected ? 'border-secondary bg-secondary' : 'border-on-surface-variant/50 bg-transparent'
-                }`}
-              >
-                {isSelected && <div className="w-2 h-2 rounded-full bg-on-secondary" />}
-              </div>
-              <div className="flex flex-col items-start">
-                <p className={`text-sm font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
-                  {opt.label}
-                </p>
-                <p className="text-xs font-medium mt-0.5 text-on-surface-variant">{opt.sublabel}</p>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Cron Preview Panel */}
-      <div className="w-full mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px', fontVariationSettings: '"FILL" 1' }}>
-            schedule
-          </span>
-          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant">
-            What you'll receive
-          </p>
-        </div>
-        <div className="space-y-2.5">
-          {CRON_PREVIEW[frequency]?.map((job, i) => (
-            <div
-              key={`${frequency}-${i}`}
-              className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-container-low border border-outline-variant/10"
-            >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-primary/10">
-                <span
-                  className="material-symbols-outlined text-primary"
-                  style={{ fontSize: '18px', fontVariationSettings: '"FILL" 1' }}
-                >
-                  {job.icon}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-on-surface">{job.name}</p>
-                  <span className="text-[10px] font-semibold text-primary/60 uppercase tracking-wide">
-                    {job.time}
-                  </span>
-                </div>
-                <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{job.desc}</p>
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 4 }}>
+          {[
+            { icon: 'sprout', text: 'Plant — capture ideas & research' },
+            { icon: 'waypoints', text: 'Grow — a wiki that writes itself' },
+            { icon: 'rocket', text: 'Ship — specs to coding agents' },
+          ].map((r) => (
+            <div key={r.icon} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <Ic name={r.icon} size={14} color="#16a34a" />
+              <span style={{ fontFamily: UI, fontSize: 12, fontWeight: 500, color: '#5f5f5a' }}>{r.text}</span>
             </div>
           ))}
         </div>
       </div>
-
-      <CTAButton onClick={onNext}>Next</CTAButton>
-
-      <p className="mt-4 text-xs text-center text-on-surface-variant/30">
-        You can change these settings later in Profile &gt; Vault.
-      </p>
-    </StepShell>
+      <p style={{ position: 'relative', fontFamily: UI, fontSize: 10.5, color: '#a3a29c', margin: 0 }}>Private beta · invite only</p>
+    </aside>
   )
 }
 
-// ── STEP 4: The Loop (idea → shipped) ─────────────────
-
-const LOOP_STEPS = [
-  { icon: 'flag', title: 'Define', place: 'Product view', body: 'State what you\'re building in plain english — the problem, who hurts, why now. Everything that follows serves it, and it stays visible and current from day one.' },
-  { icon: 'eco', title: 'Plant', place: 'Chat & Library', body: 'Capture thoughts in chat, save links, and plant research papers straight from your daily digest. Everything is enriched automatically.' },
-  { icon: 'auto_awesome', title: 'Grow', place: 'Garden & Wiki', body: 'Seeds connect into a knowledge graph and compile into living wiki articles. Briefings keep ideas warm.' },
-  { icon: 'science', title: 'Design', place: 'Studio', body: 'Develop an idea into a full PRD — forcing questions, system architecture, and a generated architecture diagram.' },
-  { icon: 'rocket_launch', title: 'Build', place: 'Build pipeline', body: 'Hand specs to coding agents like Claude Code. Track them from Design to Doing to Built, PR linked when shipped.' },
-]
-
-function StepHowItWorks({
-  onEnter,
-  loading,
-  error,
-  showIOSPrompt = false,
-}: {
-  onEnter: () => void
-  loading: boolean
-  error: string
-  showIOSPrompt?: boolean
-}) {
-  return (
-    <StepShell step={4}>
-      <div className="text-left mb-8 w-full">
-        <h2 className="text-[2.5rem] leading-[1.1] font-normal tracking-[-0.04em] text-on-surface mb-4">
-          From idea to shipped.
-        </h2>
-        <p className="text-base text-on-surface-variant max-w-md leading-relaxed">
-          Greenplot is one loop: define what you're building, plant ideas, grow them into knowledge, design specs, and build with agents.
-        </p>
-      </div>
-
-      {/* iOS home-screen install prompt — required for push notifications on Safari */}
-      {showIOSPrompt && (
-        <div className="w-full rounded-2xl px-5 py-4 mb-5 bg-primary/8 border border-primary/20">
-          <div className="flex items-start gap-3">
-            <span
-              className="material-symbols-outlined text-primary mt-0.5 shrink-0"
-              style={{ fontSize: 22, fontVariationSettings: '"FILL" 1' }}
-            >
-              ios_share
-            </span>
-            <div>
-              <p className="text-sm font-bold text-on-surface mb-1">Enable push notifications</p>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                To receive daily briefings on iOS, add this app to your Home Screen first:
-                tap <strong>Share</strong> <span className="inline-block">↑</span> then{' '}
-                <strong>Add to Home Screen</strong>. Then reopen and continue.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* The loop — numbered journey */}
-      <div className="w-full mb-6 space-y-3">
-        {LOOP_STEPS.map((step, i) => (
-          <div key={step.title} className="flex items-start gap-4 p-4 rounded-2xl bg-surface-container border border-outline-variant/10 relative overflow-hidden">
-            <div className="absolute w-16 h-16 rounded-full -top-4 -right-4 bg-primary opacity-[0.06]" />
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: 22, fontVariationSettings: '"FILL" 1' }}
-              >
-                {step.icon}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2">
-                <p className="text-sm font-bold leading-tight text-on-surface">{i + 1}. {step.title}</p>
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-primary/60">{step.place}</span>
-              </div>
-              <p className="text-xs leading-relaxed font-medium text-on-surface-variant mt-1">{step.body}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Sync banner */}
-      <div className="w-full rounded-full px-5 py-3 mb-6 text-center bg-primary/8 border border-primary/15">
-        <p className="text-xs font-medium text-on-surface-variant">
-          Works on your phone and desktop — seeds auto-sync, no manual saving.
-        </p>
-      </div>
-
-      {error && (
-        <div className="w-full rounded-full px-5 py-3 mb-4 text-sm font-medium bg-error/10 text-error">
-          {error}
-        </div>
-      )}
-
-      <CTAButton onClick={onEnter} loading={loading} icon="eco">
-        Enter the Garden
-      </CTAButton>
-
-      <p className="mt-4 text-xs text-center font-medium text-on-surface-variant/30">
-        Initializing the Greenhouse
-      </p>
-
-      <a
-        href="https://buymeacoffee.com/frederickk1"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-6 flex items-center gap-2 px-4 py-2 rounded-full bg-[#FFDD00]/10 border border-[#FFDD00]/20 hover:border-[#FFDD00]/50 hover:bg-[#FFDD00]/15 transition-all active:scale-[0.98]"
-      >
-        <span className="text-base">☕</span>
-        <span className="text-xs font-bold text-on-surface">Buy Me a Coffee</span>
-        <span className="text-[10px] text-on-surface-variant">— support the build</span>
-      </a>
-    </StepShell>
-  )
-}
-
-// ── Main Page ─────────────────────────────────────────
+// ── Main flow ──
 
 function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [currentStep, setCurrentStep] = useState(0)
-
-  const [email, setEmail] = useState('')
-
-  // Pre-fill email from invite link (?email=...)
-  useEffect(() => {
-    const inviteEmail = searchParams.get('email')
-    if (inviteEmail) setEmail(inviteEmail)
-  }, [searchParams])
-  const [nickname, setNickname] = useState('')
-  const [city, setCity] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([])
-  const [customInterest, setCustomInterest] = useState('')
-  const [digestFrequency, setDigestFrequency] = useState<OnboardingProfile['digestFrequency']>('once-daily')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const { requestPermission, isIOS, isStandalone } = usePushNotifications()
 
-  const toggleInterest = (val: string) => {
-    setSelectedInterests((prev) =>
-      prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]
-    )
+  const [step, setStep] = useState(0)
+  const [dir, setDir] = useState(1)
+  const [token, setToken] = useState('')
+  const [tokenState, setTokenState] = useState<TokenState>('idle')
+  const [interests, setInterests] = useState<string[]>([])
+  const [custom, setCustom] = useState('')
+  const [frequency, setFrequency] = useState<Frequency>('once-daily')
+  const [city, setCity] = useState('')
+  const [pushChoice, setPushChoice] = useState<string | null>(null)
+  const [consent, setConsent] = useState<Record<string, boolean>>({ enrich: true, web: true, calendar: false })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [planting, setPlanting] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const tokenSeq = useRef(0)
+
+  // Restore progress + magic-link invite prefill
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const s = JSON.parse(raw)
+        if (s && typeof s === 'object') {
+          if (typeof s.step === 'number') setStep(Math.min(Math.max(s.step, 0), 7))
+          if (Array.isArray(s.interests)) setInterests(s.interests)
+          if (typeof s.custom === 'string') setCustom(s.custom)
+          if (typeof s.frequency === 'string') setFrequency(s.frequency)
+          if (typeof s.city === 'string') setCity(s.city)
+          if (typeof s.pushChoice === 'string') setPushChoice(s.pushChoice)
+          if (s.consent && typeof s.consent === 'object') setConsent((c) => ({ ...c, ...s.consent }))
+          if (typeof s.email === 'string') setEmail(s.email)
+          if (typeof s.nickname === 'string') setNickname(s.nickname)
+          if (typeof s.token === 'string') setToken(s.token)
+          if (s.tokenOk) setTokenState('valid')
+        }
+      }
+    } catch { /* fresh start */ }
+    const inviteEmail = searchParams.get('email')
+    if (inviteEmail) {
+      // Arrived via magic-link invite — the email itself is the credential
+      setEmail(inviteEmail)
+      setToken('INVITE')
+      setTokenState('valid')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const persist = (extra: Record<string, unknown>) => {
+    try {
+      const base = {
+        step, interests, custom, frequency, city, pushChoice, consent, email, nickname, token,
+        tokenOk: tokenState === 'valid',
+        ...extra,
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(base))
+    } catch { /* private mode */ }
   }
 
-  const allInterests = [
-    ...selectedInterests,
-    ...(customInterest.trim() ? [customInterest.trim()] : []),
-  ]
+  const go = (next: number, d: number) => { setStep(next); setDir(d); persist({ step: next }) }
+  const back = () => { if (step > 0) go(step - 1, -1) }
 
-  const handleEnter = async () => {
-    setLoading(true)
+  // ── Invite code — real validation against the backend ──
+  const onTokenInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    setToken(v)
+    setTokenState(v.length === 6 ? 'checking' : 'idle')
+    if (v.length !== 6) return
+    const seq = ++tokenSeq.current
+    fetch('/api/auth/validate-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: v }),
+    })
+      .then(async (res) => {
+        if (seq !== tokenSeq.current) return
+        if (!res.ok) { setTokenState('error'); return }
+        const data = await res.json()
+        setTokenState(data.valid ? 'valid' : 'invalid')
+        if (data.valid) persist({ token: v, tokenOk: true })
+      })
+      .catch(() => { if (seq === tokenSeq.current) setTokenState('error') })
+  }
+
+  const toggleInterest = (label: string) => {
+    setInterests((prev) => {
+      const next = prev.includes(label) ? prev.filter((i) => i !== label) : [...prev, label]
+      persist({ interests: next })
+      return next
+    })
+  }
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  const pwOk = password.length >= 6
+  const matchOk = pwOk && password === confirm && confirm.length > 0
+  const accountValid = emailValid && pwOk && password === confirm
+
+  const allInterests = [...interests, ...(custom.trim() ? [custom.trim()] : [])]
+
+  // ── Register: planting screen runs while the account is created ──
+  const enter = async () => {
     setError('')
-
+    setPlanting(true)
+    const minDelay = new Promise((r) => setTimeout(r, 2600))
     try {
-      const registerRes = await fetch('/api/register', {
+      const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -671,108 +257,678 @@ function OnboardingContent() {
           city: city.trim() || undefined,
           nickname: nickname.trim() || undefined,
           interests: allInterests.length > 0 ? allInterests : undefined,
-          digest_frequency: digestFrequency,
+          digest_frequency: frequency,
+          invite_code: token !== 'INVITE' ? token : undefined,
+          consents: consent,
+          push_choice: pushChoice || undefined,
         }),
       })
-
-      if (!registerRes.ok) {
-        const text = await registerRes.text()
-        throw new Error(`Registration failed: ${text}`)
+      if (!res.ok) {
+        const text = await res.text()
+        let detail = text
+        try { detail = JSON.parse(text).detail || text } catch { /* plain text */ }
+        throw new Error(typeof detail === 'string' ? detail : 'Registration failed')
       }
-
-      const { access_token, tenant_id } = await registerRes.json()
-
-      const profile: OnboardingProfile = {
-        nickname: nickname.trim(),
-        city: city.trim(),
-        interests: allInterests,
-        digestFrequency,
-        onboardedAt: new Date().toISOString(),
-      }
-
+      const { access_token, tenant_id } = await res.json()
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
       localStorage.setItem('greenplot_nickname', nickname.trim())
       localStorage.setItem('greenplot_email', email.trim())
-      localStorage.setItem('greenplot_profile', JSON.stringify(profile))
-
+      localStorage.setItem('greenplot_profile', JSON.stringify({
+        nickname: nickname.trim(), city: city.trim(), interests: allInterests,
+        digestFrequency: frequency, consents: consent, onboardedAt: new Date().toISOString(),
+      }))
+      // First seed — non-blocking
       const interestStr = allInterests.length > 0 ? allInterests.join(', ') : 'general ideas'
       fetch('/api/thoughts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access_token}` },
         body: JSON.stringify({
-          content: `Welcome! I'm ${nickname.trim()}. My interests include: ${interestStr}. Let's start building my knowledge garden.`,
+          content: `Welcome! I'm ${nickname.trim() || email.split('@')[0]}. My interests include: ${interestStr}. Let's start building my knowledge garden.`,
           source: 'onboarding',
         }),
       }).catch(() => {})
-
-      // Register push notifications (non-blocking)
-      requestPermission().catch(() => {})
-
-      router.push('/chat')
+      if (pushChoice === 'yes') requestPermission().catch(() => {})
+      await minDelay
+      localStorage.removeItem(STORAGE_KEY)
+      setPlanting(false)
+      setDone(true)
     } catch (err) {
-      setError((err as Error).message)
-      setLoading(false)
+      await minDelay
+      setPlanting(false)
+      setError((err as Error).message || 'Something went wrong — please try again.')
     }
   }
 
-  const next = () => setCurrentStep((s) => Math.min(s + 1, TOTAL_STEPS - 1))
+  const next = () => { if (step < 7) go(step + 1, 1); else enter() }
+
+  // ── Derived UI state ──
+  const ctaDisabled = (step === 1 && tokenState !== 'valid') || (step === 7 && !accountValid)
+  const ctaLabel = ['Get started', 'Continue', 'Continue', 'Continue', 'Continue', 'Continue', 'Continue', 'Enter the garden'][step]
+  const showChrome = !planting && !done
+  const stepAnimStyle: React.CSSProperties = {
+    flex: 1, display: 'flex', flexDirection: 'column',
+    animation: `${dir >= 0 ? 'gp-slideL' : 'gp-slideR'} .45s cubic-bezier(.25,.8,.3,1) both`,
+  }
+
+  const count = interests.length + (custom.trim() ? 1 : 0)
+  const selectedHint = count === 0
+    ? 'Tip: 3–5 topics make the richest garden.'
+    : `${count} ${count === 1 ? 'topic' : 'topics'} chosen — your digests will cover these.`
+
+  const cityTrim = city.trim()
+  const cityMatch = CITIES.find((c) => c.toLowerCase() === cityTrim.toLowerCase())
+  const knownCity = cityMatch || (cityTrim.length >= 3 ? cityTrim : null)
+  const wx = cityMatch ? WEATHER[cityMatch] : (cityTrim.length >= 3 ? ['18°', 'cloud-sun'] as [string, string] : null)
+  const citySuggestions = cityTrim.length > 0 && !cityMatch
+    ? CITIES.filter((c) => c.toLowerCase().startsWith(cityTrim.toLowerCase())).slice(0, 3)
+    : []
+  const interestsPicked = interests.slice(0, 3).join(', ') || 'your topics'
+
+  const displayName = nickname.trim() || (email.split('@')[0] || 'friend')
+
+  const fieldLabel: React.CSSProperties = { display: 'block', fontFamily: UI, fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71716b', margin: '0 0 6px 4px' }
+  const fieldIcon: React.CSSProperties = { position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', opacity: 0.7 }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16 relative overflow-hidden bg-background">
-      <AmbientBg />
+    <div className="ob-page">
+      <SidePanel />
+      <div className="ob-flow">
 
-      {/* Progress at top */}
-      <div className="w-full max-w-lg mb-8">
-        <ProgressBar step={currentStep} />
+        {/* ░░ CHROME ░░ */}
+        {showChrome && (
+          <div className="ob-chrome">
+            <div style={{ width: '100%', maxWidth: 470, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 24 }}>
+                {step > 0 ? (
+                  <button onClick={back} className="ob-back" aria-label="Back">
+                    <Ic name="arrow-left" size={16} color="currentColor" />Back
+                  </button>
+                ) : <span />}
+                <span style={{ fontFamily: UI, fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#16a34a' }}>{STEP_LABELS[step]}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                  <div key={i} style={{ flex: 1, height: 4, borderRadius: 9999, background: '#e8e6df', overflow: 'hidden', position: 'relative' }}>
+                    {i <= step && <div style={{ position: 'absolute', inset: 0, background: '#22c55e', borderRadius: 9999, animation: 'gp-fadeIn .5s ease both' }} />}
+                    {i === step && <div style={{ position: 'absolute', inset: 0, background: '#22c55e', borderRadius: 9999, opacity: 0, animation: 'gp-pulseDot 1.8s ease-in-out infinite' }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ░░ BODY ░░ */}
+        <div style={{ flex: '1 0 auto', display: 'flex', flexDirection: 'column' }}>
+
+          {/* ── 0 · WELCOME ── */}
+          {step === 0 && showChrome && (
+            <div key="s0" style={stepAnimStyle}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '10px 28px 30px', width: '100%', maxWidth: 470, margin: '0 auto' }}>
+                <div style={{ position: 'relative', width: 190, height: 190, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}>
+                  <div style={{ position: 'absolute', width: 170, height: 170, borderRadius: 9999, background: 'radial-gradient(circle, rgba(34,197,94,0.22), transparent 68%)', animation: 'gp-breathe 5s ease-in-out infinite' }} />
+                  <div style={{ position: 'absolute', width: 190, height: 190, borderRadius: 9999, border: '1px dashed #d8e8dd', animation: 'gp-spin 28s linear infinite' }}>
+                    <div style={{ position: 'absolute', top: -4, left: '50%', width: 9, height: 9, borderRadius: 9999, background: '#22c55e', transform: 'translateX(-50%)', boxShadow: '0 0 0 4px rgba(34,197,94,0.14)' }} />
+                    <div style={{ position: 'absolute', bottom: 15, left: 8, width: 6, height: 6, borderRadius: 9999, background: '#14b8a6' }} />
+                  </div>
+                  <div style={{ position: 'absolute', width: 150, height: 150, borderRadius: 9999, border: '1px solid #e8e6df', animation: 'gp-spinR 36s linear infinite' }}>
+                    <div style={{ position: 'absolute', top: '50%', right: -3, width: 7, height: 7, borderRadius: 9999, background: '#86efac', transform: 'translateY(-50%)' }} />
+                  </div>
+                  <div style={{ position: 'relative', width: 124, height: 124, borderRadius: 9999, background: 'rgba(255,255,255,0.62)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.9), inset 0 0 0 1px rgba(20,20,19,0.06), 0 12px 30px -14px rgba(20,40,25,0.4)' }}>
+                    <Ic name="sprout" size={54} color="#22c55e" />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 13 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 9999, background: '#22c55e' }} />
+                  <span style={{ fontFamily: UI, fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#71716b', whiteSpace: 'nowrap' }}>Welcome to</span>
+                </div>
+                <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: 58, lineHeight: 0.98, letterSpacing: '-0.02em', margin: '0 0 16px', color: '#141413' }}>Greenplot</h1>
+                <p style={{ fontFamily: BODY, fontSize: 16, lineHeight: 1.6, color: '#5f5f5a', maxWidth: 310, margin: '0 0 24px', textWrap: 'pretty' } as React.CSSProperties}>
+                  Your AI thinking partner. Plant ideas, grow them into knowledge, ship them with coding agents.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                  {[
+                    { icon: 'sprout', text: 'Plant ideas', delay: '.12s' },
+                    { icon: 'waypoints', text: 'Grow knowledge', delay: '.24s' },
+                    { icon: 'rocket', text: 'Ship with agents', delay: '.36s' },
+                  ].map((c) => (
+                    <span key={c.text} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 34, padding: '0 14px', borderRadius: 9999, background: 'rgba(255,255,255,0.66)', backdropFilter: 'blur(8px)', boxShadow: 'inset 0 0 0 1px rgba(20,20,19,0.07)', fontFamily: UI, fontSize: 12, fontWeight: 500, color: '#5f5f5a', animation: 'gp-fadeUp .5s ease both', animationDelay: c.delay }}>
+                      <Ic name={c.icon} size={14} color="#22c55e" />{c.text}
+                    </span>
+                  ))}
+                </div>
+                <button onClick={() => router.push('/login')} className="ob-quiet" style={{ marginTop: 26 }}>
+                  Already have an account? <span style={{ color: '#16a34a', fontWeight: 600 }}>Log in</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── 1 · INVITE ── */}
+          {step === 1 && showChrome && (
+            <div key="s1" style={stepAnimStyle}>
+              <div style={stepPad}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 26, padding: '0 11px', borderRadius: 9999, background: '#dcfce7', fontFamily: UI, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#0a3622', marginBottom: 14 }}>
+                  <Ic name="key-round" size={12} color="#16a34a" />
+                  Private beta
+                </span>
+                <StepHeading title="Unlock your plot" sub="Greenplot is invite-only. Enter the 6-character code from your invite." />
+
+                <div style={{ position: 'relative', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', gap: 9 }}>
+                    {[0, 1, 2, 3, 4, 5].map((i) => {
+                      const ch = token[i] || ''
+                      const caret = i === token.length && tokenState === 'idle'
+                      const valid = tokenState === 'valid'
+                      const ring = valid ? 'inset 0 0 0 2px #22c55e' : ch ? 'inset 0 0 0 1.5px #ccc9c0' : 'inset 0 0 0 1px #e8e6df'
+                      return (
+                        <div key={i} style={{ position: 'relative', flex: 1, maxWidth: 58, height: 64, borderRadius: 14, background: valid ? '#f0fdf4' : '#ffffff', boxShadow: ring, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: UI, fontSize: 24, fontWeight: 600, color: '#141413', transition: 'all .25s', transform: valid ? 'translateY(-2px)' : undefined }}>
+                          {ch}
+                          {caret && <span style={{ position: 'absolute', width: 2, height: 26, background: '#22c55e', borderRadius: 2, animation: 'gp-caret 1.1s steps(1) infinite' }} />}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <input
+                    value={token} onChange={onTokenInput} maxLength={6} spellCheck={false}
+                    autoComplete="one-time-code" aria-label="Invite code" autoFocus
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, border: 'none', background: 'transparent', cursor: 'text', outline: 'none', fontSize: 24 }}
+                  />
+                </div>
+
+                <div style={{ minHeight: 32 }}>
+                  {tokenState === 'checking' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, animation: 'gp-fadeIn .3s ease both' }}>
+                      <span style={{ width: 16, height: 16, borderRadius: 9999, border: '2px solid #dcfce7', borderTopColor: '#22c55e', animation: 'gp-spin .8s linear infinite', flexShrink: 0 }} />
+                      <span style={{ fontFamily: UI, fontSize: 12.5, fontWeight: 500, color: '#71716b' }}>Checking your invite…</span>
+                    </div>
+                  )}
+                  {tokenState === 'valid' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, animation: 'gp-pop .4s cubic-bezier(.2,.8,.2,1) both' }}>
+                      <span style={{ width: 20, height: 20, borderRadius: 9999, background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Ic name="check" size={12} color="#fff" />
+                      </span>
+                      <span style={{ fontFamily: UI, fontSize: 12.5, fontWeight: 600, color: '#16a34a' }}>You&rsquo;re in. Welcome to the garden.</span>
+                    </div>
+                  )}
+                  {tokenState === 'invalid' && (
+                    <p style={{ fontFamily: BODY, fontSize: 13, color: '#b91c1c', margin: 0, animation: 'gp-fadeIn .3s ease both' }}>
+                      That code didn&rsquo;t unlock — check for typos and try again.
+                    </p>
+                  )}
+                  {tokenState === 'error' && (
+                    <p style={{ fontFamily: BODY, fontSize: 13, color: '#b45309', margin: 0, animation: 'gp-fadeIn .3s ease both' }}>
+                      Couldn&rsquo;t reach the garden — check your connection and try again.
+                    </p>
+                  )}
+                  {tokenState === 'idle' && (
+                    <p style={{ fontFamily: BODY, fontSize: 13, color: '#a3a29c', margin: 0 }}>
+                      Paste works too — the code is in your invite email.
+                    </p>
+                  )}
+                </div>
+
+                <a href="/#waitlist" className="ob-quiet" style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0', fontSize: 13.5, textDecoration: 'none' }}>
+                  No invite yet? <span style={{ color: '#16a34a', fontWeight: 600 }}>Join the waitlist</span>
+                  <Ic name="arrow-up-right" size={13} color="#16a34a" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* ── 2 · INTERESTS ── */}
+          {step === 2 && showChrome && (
+            <div key="s2" style={stepAnimStyle}>
+              <div style={stepPad}>
+                <StepHeading title="What should we plant?" sub="Your briefings, digests and wiki grow around these topics. Pick a few." />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, marginBottom: 20 }}>
+                  {INTERESTS.map((it) => {
+                    const selected = interests.includes(it.label)
+                    return (
+                      <button
+                        key={it.label} onClick={() => toggleInterest(it.label)} className="ob-chip"
+                        style={{
+                          position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, height: 42, padding: '0 15px',
+                          border: 'none', borderRadius: 9999, cursor: 'pointer', fontFamily: UI, fontSize: 13, fontWeight: 500,
+                          transition: 'all .22s cubic-bezier(.2,.8,.3,1)',
+                          ...(selected
+                            ? { background: '#16a34a', color: '#ffffff', boxShadow: '0 6px 16px -6px rgba(22,163,74,0.55)', transform: 'translateY(-1px)' }
+                            : { background: '#ffffff', color: '#5f5f5a', boxShadow: 'inset 0 0 0 1px #e8e6df' }),
+                        }}
+                      >
+                        <Ic name={it.icon} size={15} color={selected ? '#ffffff' : '#9ca39b'} />
+                        {it.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <Ic name="plus" size={17} color="#22c55e" style={fieldIcon} />
+                  <input
+                    value={custom} onChange={(e) => { setCustom(e.target.value); persist({ custom: e.target.value }) }}
+                    type="text" placeholder="Add your own — climate tech, typography…" className="ob-input"
+                    style={{ height: 50 }}
+                  />
+                </div>
+                <p style={{ fontFamily: BODY, fontSize: 13, color: '#a3a29c', margin: '12px 0 0 4px' }}>{selectedHint}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── 3 · RHYTHM ── */}
+          {step === 3 && showChrome && (
+            <div key="s3" style={stepAnimStyle}>
+              <div style={{ ...stepPad }}>
+                <StepHeading title="Find your rhythm" sub="How often should briefings reach you? Preview what arrives below." />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
+                  {DIGESTS.map((d) => {
+                    const selected = frequency === d.value
+                    return (
+                      <button
+                        key={d.value} onClick={() => { setFrequency(d.value); persist({ frequency: d.value }) }} className="ob-card-btn"
+                        style={{
+                          position: 'relative', display: 'flex', alignItems: 'center', gap: 13, width: '100%', padding: '13px 16px',
+                          border: 'none', borderRadius: 16, background: selected ? '#f0fdf4' : '#ffffff',
+                          boxShadow: selected ? 'inset 0 0 0 1.5px #22c55e' : 'inset 0 0 0 1px #e8e6df',
+                          cursor: 'pointer', textAlign: 'left', transition: 'all .2s',
+                        }}
+                      >
+                        <span style={{ position: 'relative', flexShrink: 0, width: 21, height: 21, borderRadius: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: selected ? '#22c55e' : 'transparent', boxShadow: selected ? 'none' : 'inset 0 0 0 1.5px #ccc9c0', transition: 'all .2s' }}>
+                          {selected && <Ic name="check" size={12} color="#fff" style={{ animation: 'gp-pop .25s ease both' }} />}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontFamily: UI, fontSize: 14, fontWeight: 600, color: selected ? '#15803d' : '#141413' }}>{d.label}</span>
+                          <span style={{ display: 'block', fontFamily: BODY, fontSize: 12.5, color: '#71716b', marginTop: 1 }}>{d.sublabel}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                  <Ic name="clock" size={15} color="#16a34a" />
+                  <span style={{ fontFamily: UI, fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#71716b' }}>What arrives</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  {CRON[frequency].map((p) => (
+                    <div key={p.name} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 15px', borderRadius: 16, background: 'rgba(255,255,255,0.65)', backdropFilter: 'blur(10px)', boxShadow: 'inset 0 0 0 1px rgba(20,20,19,0.06)', animation: 'gp-fadeUp .4s ease both' }}>
+                      <div style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 11, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ic name={p.icon} size={17} color="#16a34a" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontFamily: UI, fontSize: 13.5, fontWeight: 600, color: '#141413' }}>{p.name}</span>
+                          <span style={{ fontFamily: UI, fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#16a34a', whiteSpace: 'nowrap' }}>{p.time}</span>
+                        </div>
+                        <p style={{ fontFamily: BODY, fontSize: 12.5, lineHeight: 1.5, color: '#5f5f5a', margin: '3px 0 0', textWrap: 'pretty' } as React.CSSProperties}>{p.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontFamily: BODY, fontSize: 12, color: '#a3a29c', margin: '14px 0 0' }}>Change anytime in Profile → Briefings.</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── 4 · WEATHER / CITY ── */}
+          {step === 4 && showChrome && (
+            <div key="s4" style={stepAnimStyle}>
+              <div style={stepPad}>
+                <StepHeading title="Where does your day begin?" sub="Briefings open with your local weather and timing. Just a city — never your precise location." />
+                <div style={{ position: 'relative', marginBottom: 10 }}>
+                  <Ic name="map-pin" size={17} color="#22c55e" style={fieldIcon} />
+                  <input
+                    value={city} onChange={(e) => { setCity(e.target.value); persist({ city: e.target.value }) }}
+                    type="text" placeholder="Your city — try Berlin, Lisbon, Tokyo…" className="ob-input"
+                    style={{ height: 52 }}
+                  />
+                </div>
+                {citySuggestions.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, animation: 'gp-fadeIn .25s ease both' }}>
+                    {citySuggestions.map((c) => (
+                      <button key={c} onClick={() => { setCity(c); persist({ city: c }) }} className="ob-suggest">{c}</button>
+                    ))}
+                  </div>
+                )}
+                {wx && (
+                  <div style={{ marginTop: 14, borderRadius: 18, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', boxShadow: 'inset 0 0 0 1px rgba(20,20,19,0.06)', padding: 16, animation: 'gp-notif .45s cubic-bezier(.2,.8,.3,1) both' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: 9999, background: '#22c55e', animation: 'gp-pulseDot 2.2s ease-in-out infinite' }} />
+                      <span style={{ fontFamily: UI, fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#71716b' }}>Tomorrow&rsquo;s briefing — preview</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ flexShrink: 0, width: 54, height: 54, borderRadius: 16, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ic name={wx[1]} size={30} color="#16a34a" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 26, color: '#141413' }}>{wx[0]}</span>
+                          <span style={{ fontFamily: UI, fontSize: 13, fontWeight: 600, color: '#141413' }}>{knownCity}</span>
+                        </div>
+                        <p style={{ fontFamily: BODY, fontSize: 12.5, lineHeight: 1.5, color: '#5f5f5a', margin: '3px 0 0', textWrap: 'pretty' } as React.CSSProperties}>
+                          Good morning — clear start, then your latest on {interestsPicked}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── 5 · PUSH ── */}
+          {step === 5 && showChrome && (
+            <div key="s5" style={stepAnimStyle}>
+              <div style={stepPad}>
+                <StepHeading title="Hear the garden grow" sub="A gentle push when a briefing lands or a seed blooms into something bigger. Never noisy." />
+                <div style={{ borderRadius: 18, background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', boxShadow: 'inset 0 0 0 1px rgba(20,20,19,0.07), 0 14px 30px -18px rgba(20,40,25,0.35)', padding: '14px 16px', marginBottom: 22, display: 'flex', alignItems: 'flex-start', gap: 12, animation: 'gp-notif .55s cubic-bezier(.2,.8,.3,1) both' }}>
+                  <div style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 11, background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 5px 14px -5px rgba(34,197,94,0.6)' }}>
+                    <Ic name="sprout" size={20} color="#ffffff" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ fontFamily: UI, fontSize: 13, fontWeight: 600, color: '#141413' }}>Greenplot</span>
+                      <span style={{ fontFamily: UI, fontSize: 10.5, color: '#a3a29c' }}>now</span>
+                    </div>
+                    <p style={{ fontFamily: BODY, fontSize: 13, lineHeight: 1.45, color: '#5f5f5a', margin: '2px 0 0' }}>Your morning briefing is ready — 3 new connections in your garden 🌱</p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {[
+                    { value: 'yes', icon: 'bell-ring', title: 'Notify me', sub: 'Briefings arrive as gentle pushes' },
+                    { value: 'later', icon: 'bell-off', title: 'Maybe later', sub: 'You can enable them in Profile' },
+                  ].map((p) => {
+                    const selected = pushChoice === p.value
+                    return (
+                      <button
+                        key={p.value} onClick={() => { setPushChoice(p.value); persist({ pushChoice: p.value }) }} className="ob-card-btn"
+                        style={{
+                          position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10, flex: 1, padding: 16,
+                          border: 'none', borderRadius: 18, background: selected ? '#f0fdf4' : '#ffffff',
+                          boxShadow: selected ? 'inset 0 0 0 1.5px #22c55e' : 'inset 0 0 0 1px #e8e6df',
+                          cursor: 'pointer', textAlign: 'left', transition: 'all .2s',
+                        }}
+                      >
+                        <span style={{ width: 38, height: 38, borderRadius: 12, background: selected ? '#dcfce7' : '#f4f4f1', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s' }}>
+                          <Ic name={p.icon} size={19} color={selected ? '#16a34a' : '#9a988f'} />
+                        </span>
+                        <span>
+                          <span style={{ fontFamily: UI, fontSize: 14, fontWeight: 600, color: selected ? '#15803d' : '#141413' }}>{p.title}</span>
+                          <span style={{ display: 'block', fontFamily: BODY, fontSize: 12, lineHeight: 1.45, color: '#71716b', marginTop: 2 }}>{p.sub}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p style={{ fontFamily: BODY, fontSize: 12, color: isIOS && !isStandalone ? '#71716b' : '#a3a29c', margin: '14px 0 0', fontWeight: isIOS && !isStandalone ? 500 : 400 }}>
+                  On iPhone, add Greenplot to your home screen to receive pushes.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── 6 · PRIVACY ── */}
+          {step === 6 && showChrome && (
+            <div key="s6" style={stepAnimStyle}>
+              <div style={stepPad}>
+                <StepHeading title="Your garden, your rules" sub="Choose what Greenplot may do with your seeds. Every switch can be changed later." />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                  {[
+                    { key: 'enrich', icon: 'sparkles', title: 'AI enrichment', sub: 'Seeds are summarized, tagged & connected by AI' },
+                    { key: 'web', icon: 'globe', title: 'Web research', sub: 'Greenplot may search the web to enrich your topics' },
+                    { key: 'calendar', icon: 'calendar-days', title: 'Google Calendar', sub: 'Briefings reference your day & avoid meetings' },
+                  ].map((c) => {
+                    const on = !!consent[c.key]
+                    return (
+                      <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px', borderRadius: 17, background: '#ffffff', boxShadow: 'inset 0 0 0 1px #e8e6df' }}>
+                        <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 12, background: on ? '#dcfce7' : '#f4f4f1', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s' }}>
+                          <Ic name={c.icon} size={18} color={on ? '#16a34a' : '#9a988f'} />
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontFamily: UI, fontSize: 13.5, fontWeight: 600, color: '#141413' }}>{c.title}</span>
+                          <span style={{ display: 'block', fontFamily: BODY, fontSize: 12, lineHeight: 1.45, color: '#71716b', marginTop: 1 }}>{c.sub}</span>
+                        </span>
+                        <button
+                          onClick={() => { const next = { ...consent, [c.key]: !on }; setConsent(next); persist({ consent: next }) }}
+                          aria-label={c.title} role="switch" aria-checked={on}
+                          style={{ position: 'relative', flexShrink: 0, width: 46, height: 27, borderRadius: 9999, background: on ? '#22c55e' : '#dddbd3', transition: 'background .25s', cursor: 'pointer', border: 'none', padding: 0 }}
+                        >
+                          <span style={{ position: 'absolute', top: 2.5, left: on ? 21.5 : 2.5, width: 22, height: 22, borderRadius: 9999, background: '#ffffff', boxShadow: '0 1px 4px rgba(20,20,19,0.25)', transition: 'left .25s cubic-bezier(.3,.9,.4,1)' }} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '13px 16px', borderRadius: 15, background: '#f4f4f1' }}>
+                  <Ic name="shield-check" size={16} color="#71716b" style={{ marginTop: 1 }} />
+                  <p style={{ fontFamily: BODY, fontSize: 12.5, lineHeight: 1.55, color: '#5f5f5a', margin: 0, textWrap: 'pretty' } as React.CSSProperties}>
+                    Your seeds are yours. Stored encrypted, never used to train models, exportable anytime.{' '}
+                    <a href="/privacy" style={{ color: '#16a34a', fontWeight: 600, textDecoration: 'none' }}>Privacy policy</a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 7 · ACCOUNT ── */}
+          {step === 7 && showChrome && (
+            <div key="s7" style={stepAnimStyle}>
+              <div style={stepPad}>
+                <StepHeading title="Claim your plot" sub="Last step — everything you chose is saved to your account." />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                  <div>
+                    <label style={fieldLabel}>Email</label>
+                    <div style={{ position: 'relative' }}>
+                      <Ic name="mail" size={17} color="#22c55e" style={fieldIcon} />
+                      <input value={email} onChange={(e) => { setEmail(e.target.value); persist({ email: e.target.value }) }} type="email" placeholder="you@example.com" className="ob-input" style={{ height: 50 }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>Nickname <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: '#a3a29c' }}>· optional</span></label>
+                    <div style={{ position: 'relative' }}>
+                      <Ic name="leaf" size={17} color="#22c55e" style={fieldIcon} />
+                      <input value={nickname} onChange={(e) => { setNickname(e.target.value); persist({ nickname: e.target.value }) }} type="text" placeholder="Seedling_42" className="ob-input" style={{ height: 50 }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 11 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={fieldLabel}>Password</label>
+                      <div style={{ position: 'relative' }}>
+                        <Ic name="lock" size={17} color="#22c55e" style={fieldIcon} />
+                        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••" className="ob-input" style={{ height: 50, paddingRight: 14 }} />
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={fieldLabel}>Confirm</label>
+                      <div style={{ position: 'relative' }}>
+                        <Ic name="lock-keyhole" size={17} color="#22c55e" style={fieldIcon} />
+                        <input value={confirm} onChange={(e) => setConfirm(e.target.value)} type="password" placeholder="••••••" className="ob-input" style={{ height: 50, paddingRight: 14 }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 2 }}>
+                    {[
+                      { label: 'Valid email', ok: emailValid },
+                      { label: '6+ characters', ok: pwOk },
+                      { label: 'Passwords match', ok: matchOk },
+                    ].map((c) => (
+                      <span key={c.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 11px', borderRadius: 9999, fontFamily: UI, fontSize: 11, fontWeight: 600, transition: 'all .25s', ...(c.ok ? { background: '#dcfce7', color: '#15803d' } : { background: '#f4f4f1', color: '#a3a29c' }) }}>
+                        <Ic name={c.ok ? 'check' : 'circle'} size={12} color={c.ok ? '#16a34a' : '#c4c2ba'} />
+                        {c.label}
+                      </span>
+                    ))}
+                  </div>
+                  {error && (
+                    <div style={{ padding: '12px 16px', borderRadius: 14, background: '#fef2f2', boxShadow: 'inset 0 0 0 1px #fecaca', fontFamily: BODY, fontSize: 13, color: '#b91c1c', animation: 'gp-fadeIn .3s ease both' }}>
+                      {error}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── PLANTING ── */}
+          {planting && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 36px', animation: 'gp-fadeIn .4s ease both' }}>
+              <div style={{ position: 'relative', width: 150, height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}>
+                <div style={{ position: 'absolute', width: 150, height: 150, borderRadius: 9999, background: 'radial-gradient(circle, rgba(34,197,94,0.24), transparent 68%)', animation: 'gp-breathe 2.4s ease-in-out infinite' }} />
+                <div style={{ position: 'absolute', width: 150, height: 150, borderRadius: 9999, border: '2px solid #dcfce7', borderTopColor: '#22c55e', animation: 'gp-spin 1s linear infinite' }} />
+                <Ic name="sprout" size={52} color="#22c55e" />
+              </div>
+              <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: 30, lineHeight: 1.1, letterSpacing: '-0.02em', margin: '0 0 22px', color: '#141413' }}>Preparing your garden…</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%', maxWidth: 250, textAlign: 'left' }}>
+                {[
+                  { text: 'Planting your topics', delay: '.1s' },
+                  { text: 'Tuning your briefings', delay: '.9s' },
+                  { text: 'Securing your plot', delay: '1.7s' },
+                ].map((t) => (
+                  <div key={t.text} style={{ display: 'flex', alignItems: 'center', gap: 10, animation: 'gp-tick .4s ease both', animationDelay: t.delay }}>
+                    <Ic name="circle-check" size={18} color="#22c55e" />
+                    <span style={{ fontFamily: BODY, fontSize: 14, color: '#141413' }}>{t.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── DONE · BLOOM ── */}
+          {done && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 34px', position: 'relative', background: 'radial-gradient(80% 50% at 50% 38%, rgba(34,197,94,0.1), transparent 70%)', animation: 'gp-fadeIn .5s ease both' }}>
+              <div style={{ position: 'absolute', left: '30%', bottom: '34%', width: 7, height: 7, borderRadius: 9999, background: '#22c55e', animation: 'gp-rise 2.6s ease-in infinite', animationDelay: '.2s' }} />
+              <div style={{ position: 'absolute', left: '62%', bottom: '30%', width: 5, height: 5, borderRadius: 9999, background: '#14b8a6', animation: 'gp-rise 3.1s ease-in infinite', animationDelay: '.9s' }} />
+              <div style={{ position: 'absolute', left: '46%', bottom: '36%', width: 6, height: 6, borderRadius: 9999, background: '#86efac', animation: 'gp-rise 2.9s ease-in infinite', animationDelay: '1.5s' }} />
+
+              <div style={{ position: 'relative', width: 150, height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 26, animation: 'gp-pop .6s cubic-bezier(.2,.8,.2,1) both' }}>
+                <div style={{ position: 'absolute', width: 150, height: 150, borderRadius: 9999, background: 'radial-gradient(circle, rgba(34,197,94,0.22), transparent 68%)', animation: 'gp-breathe 5s ease-in-out infinite' }} />
+                <div style={{ position: 'relative', width: 118, height: 118, borderRadius: 9999, background: 'rgba(255,255,255,0.66)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.9), inset 0 0 0 1px rgba(20,20,19,0.06), 0 14px 32px -16px rgba(20,40,25,0.45)' }}>
+                  <Ic name="sprout" size={54} color="#22c55e" />
+                </div>
+              </div>
+
+              <span style={{ fontFamily: UI, fontSize: 11, fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#16a34a', marginBottom: 12 }}>Your garden is ready</span>
+              <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: 40, lineHeight: 1.06, letterSpacing: '-0.02em', margin: '0 0 14px', maxWidth: 320, color: '#141413', textWrap: 'balance' } as React.CSSProperties}>Welcome, {displayName}</h2>
+              <p style={{ fontFamily: BODY, fontSize: 15, lineHeight: 1.6, color: '#5f5f5a', maxWidth: 290, margin: '0 0 30px', textWrap: 'pretty' } as React.CSSProperties}>
+                Everything&rsquo;s planted. Capture your first thought and watch it grow.
+              </p>
+
+              <button onClick={() => router.push('/chat')} className="ob-cta" style={{ maxWidth: 290 }}>
+                <span className="ob-sheen" />
+                <span style={{ position: 'relative' }}>Open Greenplot</span>
+                <Ic name="arrow-right" size={18} color="#ffffff" style={{ position: 'relative' }} />
+              </button>
+              <a
+                href="https://buymeacoffee.com/frederickk1" target="_blank" rel="noopener noreferrer"
+                className="ob-quiet" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 6, fontFamily: UI, fontSize: 12.5, fontWeight: 500, textDecoration: 'none' }}
+              >
+                <span style={{ fontSize: 14 }}>☕</span>
+                Buy me a coffee — support the build
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* ░░ FOOTER CTA ░░ */}
+        {showChrome && (
+          <div style={{ position: 'sticky', bottom: 0, zIndex: 6, padding: '14px 28px calc(18px + env(safe-area-inset-bottom))', background: 'linear-gradient(transparent, #fafaf8 32%)' }}>
+            <div style={{ width: '100%', maxWidth: 470, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {ctaDisabled ? (
+                <div style={{ width: '100%', height: 54, borderRadius: 9999, background: '#eeeeec', color: '#b9b8b3', fontFamily: UI, fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, cursor: 'not-allowed' }}>
+                  {ctaLabel}
+                  <Ic name="arrow-right" size={18} color="#b9b8b3" />
+                </div>
+              ) : (
+                <button onClick={next} className="ob-cta">
+                  <span className="ob-sheen" />
+                  <span style={{ position: 'relative' }}>{ctaLabel}</span>
+                  <Ic name={step === 7 ? 'sprout' : 'arrow-right'} size={18} color="#ffffff" style={{ position: 'relative' }} />
+                </button>
+              )}
+              {(step === 4 || step === 5) && (
+                <button onClick={next} className="ob-skip">
+                  {step === 4 ? 'Skip — briefings without weather' : 'Not now'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      <AnimatePresence mode="wait">
-        {currentStep === 0 && <StepWelcome onNext={next} />}
-        {currentStep === 1 && (
-          <StepWhoAreYou
-            email={email}
-            nickname={nickname}
-            city={city}
-            password={password}
-            confirmPassword={confirmPassword}
-            onEmail={setEmail}
-            onNickname={setNickname}
-            onCity={setCity}
-            onPassword={setPassword}
-            onConfirmPassword={setConfirmPassword}
-            onNext={next}
-            onLogin={() => router.push('/login')}
-          />
-        )}
-        {currentStep === 2 && (
-          <StepInterests
-            selected={selectedInterests}
-            onToggle={toggleInterest}
-            custom={customInterest}
-            onCustom={setCustomInterest}
-            onNext={next}
-          />
-        )}
-        {currentStep === 3 && (
-          <StepNurtureFocus
-            frequency={digestFrequency}
-            onFrequency={setDigestFrequency}
-            onNext={next}
-          />
-        )}
-        {currentStep === 4 && (
-          <StepHowItWorks
-            onEnter={handleEnter}
-            loading={loading}
-            error={error}
-            showIOSPrompt={isIOS && !isStandalone}
-          />
-        )}
-      </AnimatePresence>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes gp-slideL { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes gp-slideR { from { opacity: 0; transform: translateX(-36px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes gp-fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes gp-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes gp-pop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes gp-breathe { 0%,100% { transform: scale(1); opacity: .55; } 50% { transform: scale(1.14); opacity: .9; } }
+        @keyframes gp-spin { to { transform: rotate(360deg); } }
+        @keyframes gp-spinR { to { transform: rotate(-360deg); } }
+        @keyframes gp-pulseDot { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .45; } }
+        @keyframes gp-caret { 0%,45% { opacity: 1; } 55%,100% { opacity: 0; } }
+        @keyframes gp-notif { 0% { opacity: 0; transform: translateY(-22px) scale(.96); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes gp-rise { 0% { transform: translateY(20px) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-150px) scale(1); opacity: 0; } }
+        @keyframes gp-sheen { 0% { transform: translateX(-130%); } 60%,100% { transform: translateX(130%); } }
+        @keyframes gp-tick { 0% { opacity: .2; } 100% { opacity: 1; } }
+
+        .ob-page { min-height: 100dvh; width: 100%; display: flex; background: #fafaf8; color: #141413; }
+        .ob-flow { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 100dvh; }
+        .ob-side { display: none; }
+        @media (min-width: 1024px) {
+          .ob-side {
+            display: flex; width: 340px; flex-shrink: 0; background: #f1f1ed; border-right: 1px solid #e8e6df;
+            flex-direction: column; justify-content: space-between; padding: 34px 32px;
+            position: sticky; top: 0; height: 100dvh; overflow: hidden;
+          }
+        }
+        .ob-chrome {
+          padding: calc(env(safe-area-inset-top) + 26px) 28px 12px;
+          position: sticky; top: 0; z-index: 6; background: #fafaf8;
+        }
+        .ob-back {
+          border: none; background: transparent; padding: 4px 6px 4px 0; margin: 0; cursor: pointer;
+          display: flex; align-items: center; gap: 6px; color: #71716b;
+          font-family: ${UI}; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; transition: color .2s;
+        }
+        .ob-back:hover { color: #141413; }
+        .ob-input {
+          width: 100%; border: none; border-radius: 15px; background: #ffffff;
+          box-shadow: inset 0 0 0 1px #e8e6df; padding: 0 16px 0 44px;
+          font-family: ${BODY}; font-size: 15px; color: #141413; outline: none; transition: box-shadow .2s;
+        }
+        .ob-input:focus { box-shadow: inset 0 0 0 2px #22c55e; }
+        .ob-input::placeholder { color: #a3a29c; }
+        .ob-chip:active { transform: scale(0.93) !important; }
+        .ob-card-btn:active { transform: scale(0.99); }
+        .ob-suggest {
+          height: 34px; padding: 0 14px; border: none; border-radius: 9999px; background: #ffffff;
+          box-shadow: inset 0 0 0 1px #e8e6df; cursor: pointer;
+          font-family: ${UI}; font-size: 12.5px; font-weight: 500; color: #5f5f5a; transition: all .15s;
+        }
+        .ob-suggest:hover { box-shadow: inset 0 0 0 1.5px #22c55e; color: #16a34a; }
+        .ob-cta {
+          position: relative; overflow: hidden; width: 100%; height: 54px; border: none; border-radius: 9999px;
+          background: #22c55e; color: #fff; font-family: ${UI}; font-size: 15px; font-weight: 600; letter-spacing: 0.01em;
+          cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px;
+          box-shadow: 0 10px 26px -10px rgba(34,197,94,0.6); transition: all .2s;
+        }
+        .ob-cta:hover { background: #16a34a; transform: translateY(-1px); box-shadow: 0 14px 32px -10px rgba(34,197,94,0.7); }
+        .ob-cta:active { transform: scale(0.985); }
+        .ob-sheen {
+          position: absolute; top: 0; left: 0; width: 40%; height: 100%;
+          background: linear-gradient(100deg, transparent, rgba(255,255,255,0.4), transparent);
+          animation: gp-sheen 3s ease-in-out infinite;
+        }
+        .ob-skip {
+          border: none; background: transparent; cursor: pointer; padding: 2px;
+          font-family: ${UI}; font-size: 12.5px; font-weight: 500; color: #a3a29c; transition: color .2s;
+        }
+        .ob-skip:hover { color: #71716b; }
+        .ob-quiet {
+          border: none; background: transparent; cursor: pointer; padding: 6px 0;
+          font-family: ${BODY}; font-size: 13px; color: #71716b; transition: color .2s;
+        }
+        .ob-quiet:hover { color: #141413; }
+      ` }} />
     </div>
   )
 }

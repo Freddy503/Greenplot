@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # Comma-separated list of emails allowed to call /api/v1/admin/* endpoints
     ADMIN_EMAILS: str = "contact@example.com"
 
+    # Private beta: 6-character invite codes (comma-separated, case-insensitive).
+    # INVITE_REQUIRED=true makes register reject signups without a valid code.
+    INVITE_CODES: str = "GARDEN"
+    INVITE_REQUIRED: bool = False
+
     # Auto-PRD pipeline (docs/specs/auto-prd-pipeline.md)
     AUTO_PRD_ENABLED: bool = True
     AUTO_PRD_DAILY_CAP: int = 3

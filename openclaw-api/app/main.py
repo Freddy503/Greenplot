@@ -185,6 +185,10 @@ with engine.connect() as conn:
     if not result9.fetchone():
         conn.execute(text("ALTER TABLE users ADD COLUMN interests JSONB DEFAULT '[]'::jsonb"))
         conn.commit()
+    result10 = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='consents'"))
+    if not result10.fetchone():
+        conn.execute(text("ALTER TABLE users ADD COLUMN consents JSONB DEFAULT '{}'::jsonb"))
+        conn.commit()
 
 # --- Sentry ---
 if settings.SENTRY_DSN:
@@ -218,11 +222,21 @@ def read_root():
 
 # --- Auth endpoints ---
 
+def _invite_code_valid(code: Optional[str]) -> bool:
+    normalized = (code or "").strip().upper()
+    valid = {c.strip().upper() for c in settings.INVITE_CODES.split(",") if c.strip()}
+    return normalized in valid
+
 @app.post("/api/v1/register", response_model=AuthResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if settings.INVITE_REQUIRED and not _invite_code_valid(req.invite_code):
+        raise HTTPException(status_code=403, detail="A valid invite code is required")
     existing = db.query(User).filter(User.email == req.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+    consents = dict(req.consents or {})
+    if req.push_choice:
+        consents["push"] = req.push_choice == "yes"
     user = User(
         email=req.email,
         password_hash=get_password_hash(req.password),
@@ -230,7 +244,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         city=req.city,
         nickname=req.nickname,
         interests=req.interests or [],
-        digest_frequency=req.digest_frequency or 'once-daily'
+        digest_frequency=req.digest_frequency or 'once-daily',
+        consents=consents,
     )
     db.add(user)
     db.commit()
@@ -254,6 +269,7 @@ class ProfileUpdate(BaseModel):
     nickname: Optional[str] = None
     interests: Optional[List[str]] = None
     digest_frequency: Optional[str] = None  # twice-daily, once-daily, bi-weekly, weekly, calendar
+    consents: Optional[dict] = None  # {enrich, web, calendar, push}
 
 @app.get("/api/v1/profile")
 def get_profile(
@@ -266,6 +282,7 @@ def get_profile(
         "nickname": getattr(current_user, "nickname", "") or "",
         "interests": getattr(current_user, "interests", None) or [],
         "digest_frequency": getattr(current_user, "digest_frequency", "daily") or "daily",
+        "consents": getattr(current_user, "consents", None) or {},
     }
 
 @app.patch("/api/v1/profile")
@@ -282,6 +299,8 @@ def update_profile(
         current_user.interests = req.interests
     if req.digest_frequency is not None:
         current_user.digest_frequency = req.digest_frequency
+    if req.consents is not None:
+        current_user.consents = {**(current_user.consents or {}), **req.consents}
     db.commit()
     db.refresh(current_user)
     return {
@@ -2461,6 +2480,15 @@ def admin_send_invites(
             failed.append(email)
 
     return {"sent": sent, "failed": failed}
+
+
+class InviteCodeRequest(BaseModel):
+    code: str
+
+@app.post("/api/v1/auth/validate-code")
+def validate_invite_code(req: InviteCodeRequest):
+    """Validate a 6-character private-beta invite code (onboarding v2 invite step)."""
+    return {"valid": _invite_code_valid(req.code)}
 
 
 @app.get("/api/v1/auth/validate-invite")
