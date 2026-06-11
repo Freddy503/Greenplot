@@ -17,6 +17,7 @@ class User(Base):
     nickname = Column(String(100), nullable=True)  # display name from onboarding
     interests = Column(JSON, nullable=True, default=list)  # e.g. ["Medicine","Legal","AI"]
     digest_frequency = Column(String, nullable=True, default='once-daily')  # twice-daily, once-daily, bi-weekly, weekly, calendar
+    consents = Column(JSON, nullable=True, default=dict)  # {enrich, web, calendar, push} from onboarding privacy step
     created_at = Column(DateTime, default=datetime.utcnow)
     stripe_customer_id = Column(String, nullable=True)
     subscription_status = Column(String, nullable=True, default='inactive')  # active, trialing, inactive

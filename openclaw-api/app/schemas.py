@@ -11,6 +11,9 @@ class RegisterRequest(BaseModel):
     nickname: Optional[str] = None
     interests: Optional[List[str]] = None
     digest_frequency: Optional[str] = 'once-daily'
+    invite_code: Optional[str] = None
+    consents: Optional[Dict[str, Any]] = None  # {enrich, web, calendar, push}
+    push_choice: Optional[str] = None  # 'yes' | 'later'
 
 class LoginRequest(BaseModel):
     email: EmailStr
