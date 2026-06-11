@@ -408,8 +408,8 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
           color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, maxWidth: 600, marginBottom: '2.75rem', fontWeight: 400,
         }}>
           A living garden for your ideas — research flows in and is read in full, draft PRDs
-          surface on autopilot, and coding agents build them. One plain-english Product view
-          holds it all together: what you're building, why, and what's still missing.
+          surface on autopilot, and coding agents ship them. At the center, one plain-english
+          answer that never goes stale: what you're building, why, and what's still missing.
         </p>
         <div className="fade-rise-3" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '3.5rem' }}>
           <HeroWaitlist />
@@ -540,6 +540,45 @@ function Pillar({ label, title, body, visual, reverse }: {
   )
 }
 
+
+function ProductViewMockup() {
+  const pillars = [
+    { name: 'Context governance', prds: [{ t: 'Policy Engine', s: 'BUILT' }, { t: 'Audit Timeline', s: 'DOING' }] },
+    { name: 'Safe staging', prds: [{ t: 'Shadow Sandbox', s: 'READY' }] },
+    { name: 'Fleet observability', prds: [] },
+  ]
+  const sc: Record<string, string> = { BUILT: T.green, DOING: '#d9a13d', READY: '#2dd4bf' }
+  return (
+    <div style={{ fontFamily: 'var(--font-ui)' }}>
+      <div style={{ borderRadius: '0.9rem', background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.9rem 1rem', marginBottom: '0.9rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#06281a', background: T.green, borderRadius: 999, padding: '2px 8px' }}>MAIN</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>The problem you're solving</span>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-body)', fontWeight: 300, lineHeight: 1.55 }}>
+          Stated in plain english, on top of everything — updated automatically as work ships.
+        </div>
+      </div>
+      {pillars.map(pl => (
+        <div key={pl.name} style={{ marginBottom: '0.7rem' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.75)', marginBottom: 5 }}>{pl.name}</div>
+          {pl.prds.length === 0 ? (
+            <div style={{ fontSize: 10.5, color: '#d9a13d', background: 'rgba(217,161,61,0.1)', borderRadius: '0.5rem', padding: '5px 10px', fontFamily: 'var(--font-body)' }}>
+              Nothing serves this yet
+            </div>
+          ) : pl.prds.map(prd => (
+            <div key={prd.t} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: '0.6rem', padding: '6px 10px', marginBottom: 4 }}>
+              <Icon name="file_text" size={12} color="rgba(255,255,255,0.5)" />
+              <span style={{ flex: 1, fontSize: 11.5, color: 'rgba(255,255,255,0.85)' }}>{prd.t} — PRD</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em', color: sc[prd.s], background: 'rgba(255,255,255,0.06)', borderRadius: 999, padding: '2px 7px' }}>{prd.s}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function TwoPillars() {
   return (
     <section style={{ padding: '6rem 2rem', background: '#0f1b16', position: 'relative' }}>
@@ -556,6 +595,12 @@ function TwoPillars() {
           title={<>A partner that<br />tends your thinking.</>}
           body="Not a search box — a gardener for your ideas. Open one up, stress its weak points, and shape the path forward. Every answer is rooted in the knowledge you've grown, not the open web."
           visual={<ThinkingPartnerMockup />}
+        />
+        <Pillar
+          label="Never lose the plot"
+          title={<>One product,<br />every thread.</>}
+          body="Ideas multiply; focus doesn't have to. Your product's problem statement sits on top of everything, in plain english — every PRD declares which part of it it serves, gaps stay visible, and the story updates itself as agents ship. Coherence, not just collection."
+          visual={<ProductViewMockup />}
         />
       </div>
     </section>
