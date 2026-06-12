@@ -708,6 +708,12 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
                         })
                         setBuildStatus('ready')
                         onUpdated?.(prd.id, { buildStatus: 'ready', prUrl: data.pr_url })
+                      } else if (res.status === 422) {
+                        toast.error('No GitHub repo connected yet', {
+                          id: toastId, duration: 9000,
+                          description: 'Connect a repo once in Settings — then Ship opens a PR + issue.',
+                          action: { label: 'Open Settings', onClick: () => { window.location.href = '/settings' } },
+                        })
                       } else {
                         toast.error(data.detail || data.error || 'Ship failed', { id: toastId })
                       }

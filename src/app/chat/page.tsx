@@ -82,7 +82,7 @@ import {
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
-import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft, Sprout } from 'lucide-react'
+import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft, Sprout, Sparkles, Rocket } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -142,6 +142,77 @@ function ThumbsRating({ messageId }: { messageId: string }) {
   )
 }
 
+// ── Dynamic suggested actions — the model appends <sugg>Label</sugg> lines ──
+const SUGG_RE = /<sugg>([\s\S]*?)<\/sugg>/g
+
+function stripSuggTags(text: string): string {
+  return text.replace(SUGG_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
+}
+
+function collectSuggTags(text: string): string[] {
+  const out: string[] = []
+  for (const m of text.matchAll(SUGG_RE)) {
+    const t = m[1].trim()
+    if (t && t.length <= 60 && !out.includes(t)) out.push(t)
+  }
+  return out
+}
+
+// ── Getting-started card — shown in the first chat right after onboarding ──
+const STARTER_ACTIONS = [
+  {
+    icon: Leaf, title: 'Plant your first thought',
+    sub: 'Capture an idea — it gets enriched and connected automatically',
+    prompt: "Help me plant my first thought. Ask me what's on my mind, then save it as a seed.",
+  },
+  {
+    icon: Sparkles, title: 'See what Greenplot can do',
+    sub: 'A quick tour of seeds, briefings, the wiki and the build loop',
+    prompt: 'Give me a quick tour — what can you do for me, in plain words?',
+  },
+  {
+    icon: Rocket, title: 'Develop an idea into a PRD',
+    sub: 'From a rough idea to a spec a coding agent can build',
+    prompt: 'I have a rough idea I want to develop into a buildable spec. Interrogate me.',
+  },
+]
+
+function StarterCard({ onAction, onDismiss }: { onAction: (prompt: string) => void; onDismiss: () => void }) {
+  return (
+    <div className="v2-card" style={{ width: '100%', maxWidth: 420, borderRadius: 20, overflow: 'hidden', padding: 0, textAlign: 'left' }}>
+      <div className="hero-forest" style={{ padding: '16px 18px 14px', position: 'relative' }}>
+        <button onClick={onDismiss} aria-label="Dismiss" className="glass-dark tap" style={{ position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 9, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2L10 10M10 2L2 10" stroke="rgba(255,255,255,0.85)" strokeWidth="1.75" strokeLinecap="round"/></svg>
+        </button>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <span className="caps" style={{ fontSize: 10, color: 'rgba(180,240,205,0.85)' }}>Your garden is planted</span>
+          <h3 className="serif" style={{ fontSize: 24, lineHeight: 1.1, color: '#fff', letterSpacing: '-0.01em', marginTop: 5 }}>Here&rsquo;s how to start</h3>
+        </div>
+      </div>
+      <div>
+        {STARTER_ACTIONS.map((a, i) => {
+          const IconCmp = a.icon
+          return (
+            <button
+              key={a.title} onClick={() => onAction(a.prompt)} className="tap"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', borderBottom: i === STARTER_ACTIONS.length - 1 ? 'none' : '1px solid var(--hairline)' }}
+            >
+              <span style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <IconCmp size={17} color="var(--green-700)" strokeWidth={1.75} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="ui" style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>{a.title}</span>
+                <span className="body-text" style={{ display: 'block', fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-3)', marginTop: 1 }}>{a.sub}</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><path d="M6 3L11 8L6 13" stroke="var(--ink-3)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function ChatPage() {
   const [authToken, setAuthToken] = useState('')
   const msgTimesRef = useRef<Record<string, string>>({})
@@ -170,6 +241,8 @@ export default function ChatPage() {
   const [sparkBanner, setSparkBanner] = useState<{ briefing: SparkNotification; body?: string } | null>(null)
   // Track if we've already fetched suggestions on mount
   const suggestionsInitializedRef = useRef(false)
+  // Getting-started card — set by onboarding, shown in the first chat
+  const [showStartCard, setShowStartCard] = useState(false)
 
   // ── Thinking-partner modes (GStack personas via _system_override) ──
   const [selectedMode, setSelectedMode] = useState<ThinkingMode | undefined>(undefined)
@@ -825,6 +898,20 @@ ${prefill.content || ''}`.trim()
     sendMessage({ text: enrichedText })
   }, [status, sendMessage, enrichWithGarden])
 
+  // Getting-started card: onboarding sets the flag; first real message clears it
+  useEffect(() => {
+    setShowStartCard(localStorage.getItem('greenplot_show_start_card') === '1')
+  }, [])
+  useEffect(() => {
+    if (messages.length > 0 && showStartCard) {
+      localStorage.removeItem('greenplot_show_start_card')
+    }
+  }, [messages.length, showStartCard])
+  const dismissStartCard = useCallback(() => {
+    localStorage.removeItem('greenplot_show_start_card')
+    setShowStartCard(false)
+  }, [])
+
   // ── Voice Memo ────────────────────────────────────────
 
   const handleTranscription = useCallback(
@@ -934,15 +1021,19 @@ ${prefill.content || ''}`.trim()
                     </div>
                   </div>
 
-                  {/* Title */}
-                  <div style={{ textAlign: 'center' }}>
-                    <h2 className="serif" style={{ fontSize: 26, color: 'var(--ink)', marginBottom: 8 }}>
-                      Start a conversation
-                    </h2>
-                    <p className="body-text" style={{ fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-2)', maxWidth: 280, margin: '0 auto' }}>
-                      Ask questions, capture ideas, or search the web. Your thinking partner is ready.
-                    </p>
-                  </div>
+                  {/* Getting-started card (first chat after onboarding) or title */}
+                  {showStartCard ? (
+                    <StarterCard onAction={handleSuggestion} onDismiss={dismissStartCard} />
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <h2 className="serif" style={{ fontSize: 26, color: 'var(--ink)', marginBottom: 8 }}>
+                        Start a conversation
+                      </h2>
+                      <p className="body-text" style={{ fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-2)', maxWidth: 280, margin: '0 auto' }}>
+                        Ask questions, capture ideas, or search the web. Your thinking partner is ready.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Suggestion chips */}
                   <ActivitySummary token={authToken} />
@@ -1062,7 +1153,7 @@ ${prefill.content || ''}`.trim()
                                 if (part.type === 'text') {
                                   return (
                                     <div key={`${message.id}-text-${i}`} className="text-on-surface-variant">
-                                      <MessageResponse>{part.text}</MessageResponse>
+                                      <MessageResponse>{stripSuggTags(part.text)}</MessageResponse>
                                     </div>
                                   )
                                 }
@@ -1335,6 +1426,33 @@ ${prefill.content || ''}`.trim()
                             })}
                           </div>
                         )}
+
+                        {/* Dynamic suggested actions — model-provided <sugg> chips */}
+                        {isLastAssistant && !isStreaming && (() => {
+                          const suggs = message.parts
+                            .filter(p => p.type === 'text')
+                            .flatMap(p => collectSuggTags((p as { text: string }).text))
+                            .slice(0, 3)
+                          if (suggs.length === 0) return null
+                          return (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                              {suggs.map(s => (
+                                <button
+                                  key={s} onClick={() => handleSuggestion(s)} className="tap ui"
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36,
+                                    padding: '7px 14px', border: 'none', borderRadius: 9999, cursor: 'pointer',
+                                    background: 'var(--green-tint)', color: 'var(--green-700)',
+                                    fontSize: 12.5, fontWeight: 600, transition: 'all .15s',
+                                  }}
+                                >
+                                  <Sparkles size={13} color="var(--green-700)" strokeWidth={2} />
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          )
+                        })()}
 
                         {/* Plant this insight → full-width CTA */}
                         {message.parts.some(p => p.type === 'text') && (

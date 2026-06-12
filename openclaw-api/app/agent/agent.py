@@ -124,10 +124,21 @@ class SeedifyAgent:
 
         yield AgentEvent.status("Thinking…")
 
+        # Recovery state: when the model ends a round with neither text nor
+        # tool calls (thinking models burning the budget on reasoning, or
+        # providers reporting odd finish_reasons), we retry once without
+        # tools and an explicit nudge instead of silently going mute.
+        force_text = False
+        nudged = False
+
+        replied = False
+
         async with httpx.AsyncClient() as client:
-            for round_num in range(self.max_rounds + 1):
-                is_final = round_num == self.max_rounds
-                yield AgentEvent.round(round_num, self.max_rounds)
+            # +2: one slot for the forced-text final round, one for the
+            # empty-reply recovery retry.
+            for round_num in range(self.max_rounds + 2):
+                is_final = round_num >= self.max_rounds or force_text
+                yield AgentEvent.round(min(round_num, self.max_rounds), self.max_rounds)
 
                 # Build API payload
                 llm_messages = session.to_llm_messages()
@@ -135,6 +146,13 @@ class SeedifyAgent:
                     llm_messages.insert(0, {
                         "role": "system",
                         "content": self.system_prompt,
+                    })
+                if is_final:
+                    # Ephemeral nudge — not persisted to the session
+                    llm_messages.append({
+                        "role": "user",
+                        "content": "(Respond to me now in plain text — no more tool calls. "
+                                   "Summarize what you found or did, and answer my last message directly.)",
                     })
 
                 payload: dict[str, Any] = {
@@ -210,7 +228,11 @@ class SeedifyAgent:
                     return
 
                 # ── Handle tool calls or finish ────────────────────
-                if tool_calls_acc and finish_reason == "tool_calls":
+                # Some providers report finish_reason "stop" even when tool
+                # calls were streamed — trust the accumulated calls, not the
+                # flag (gating on finish_reason == "tool_calls" silently
+                # dropped whole turns).
+                if tool_calls_acc and not is_final:
                     # Build assistant message with tool calls
                     assistant_msg = Message.assistant_with_tools(
                         content_buffer,
@@ -295,7 +317,22 @@ class SeedifyAgent:
                     # No tool calls — add final assistant message and finish
                     if content_buffer:
                         session.add(Message.assistant(content_buffer))
+                        replied = True
+                        break
+                    # Empty reply (reasoning ate the output, or a bare stop):
+                    # retry exactly once, tools off, with an explicit nudge.
+                    if not nudged:
+                        nudged = True
+                        force_text = True
+                        yield AgentEvent.status("Wrapping up…")
+                        continue
                     break
+
+        if not replied:
+            fallback = ("I finished the work above but had trouble composing a reply — "
+                        "ask me to summarize, or rephrase your message.")
+            session.add(Message.assistant(fallback))
+            yield AgentEvent.content(fallback)
 
         # Capture session for persistence
         self._last_session = session
