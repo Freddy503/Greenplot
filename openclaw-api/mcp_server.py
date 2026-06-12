@@ -19,8 +19,14 @@ Usage (stdio, for Claude Code ~/.claude/settings.json):
     }
   }
 
-Get your token: POST https://api.greenplot.ink/api/v1/login
-  {"email": "...", "password": "..."} → {"access_token": "..."}
+Get your token: mint an API key in Settings → Coding agents · MCP
+  (gp_live_... keys never expire and work everywhere a JWT does), or
+  POST https://api.greenplot.ink/api/v1/login → {"access_token": "..."}
+
+Prefer zero local setup? Use the remote HTTP transport instead:
+  { "type": "http", "url": "https://api.greenplot.ink/mcp",
+    "headers": { "Authorization": "Bearer gp_live_..." } }
+See docs/mcp-coding-agents.md.
 """
 
 import os

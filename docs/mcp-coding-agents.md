@@ -1,22 +1,52 @@
 # Connecting Coding Agents to Greenplot (MCP)
 
-Greenplot ships an MCP server (`openclaw-api/mcp_server.py`) that gives Claude Code,
-Claude Desktop, Cursor, and any MCP-compatible coding agent direct access to your
-knowledge base and Studio specs. This closes the Idea-to-Build loop:
+Greenplot gives Claude Code, Claude Desktop, Cursor, and any MCP-compatible
+coding agent direct access to your knowledge base and Studio specs. This
+closes the Idea-to-Build loop:
 
 > seed / research paper → PRD with architecture diagram (Studio) → coding agent
 > pulls the spec via MCP → builds it → reports the PR back → spec marked **shipped**
 
-## Setup (Claude Code)
+Two transports (spec: `docs/specs/mcp-server-v2.md`):
 
-1. Get a token:
+## Setup A — Remote HTTP (recommended, no local install)
+
+1. Mint an API key in the app: **Settings → Coding agents · MCP → Create key**
+   (keys look like `gp_live_…` and are shown once).
+
+2. Add the server. Claude Code (`.mcp.json` in your project, or
+   `claude mcp add --transport http greenplot https://api.greenplot.ink/mcp --header "Authorization: Bearer gp_live_..."`):
+
+```json
+{
+  "mcpServers": {
+    "greenplot": {
+      "type": "http",
+      "url": "https://api.greenplot.ink/mcp",
+      "headers": { "Authorization": "Bearer gp_live_..." }
+    }
+  }
+}
+```
+
+The same block works in Claude Desktop (`claude_desktop_config.json`) and
+Cursor (`.cursor/mcp.json`). Beyond tools, the HTTP server exposes
+**resources** (`greenplot://specs/{id}`, `greenplot://wiki/{id}`,
+`greenplot://papers/{seed_id}` — attach a PRD as context without a tool call)
+and **prompts** (`develop-idea`, `review-spec`).
+
+Smoke test:
 
 ```bash
-curl -s https://api.greenplot.ink/api/v1/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email": "you@example.com", "password": "..."}'
-# → {"access_token": "eyJ..."}
+curl -s https://api.greenplot.ink/mcp \
+  -H 'Authorization: Bearer gp_live_...' -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+## Setup B — Local stdio script
+
+1. Use a `gp_live_…` API key from Settings (or a login JWT — keys are better:
+   they don't expire in 30 days).
 
 2. Add to `~/.claude/settings.json`:
 
@@ -28,15 +58,15 @@ curl -s https://api.greenplot.ink/api/v1/login \
       "args": ["/absolute/path/to/Seedify/openclaw-api/mcp_server.py"],
       "env": {
         "GREENPLOT_API_URL": "https://api.greenplot.ink",
-        "GREENPLOT_TOKEN": "Bearer <access_token>"
+        "GREENPLOT_TOKEN": "Bearer gp_live_..."
       }
     }
   }
 }
 ```
 
-The server only needs `httpx` (`pip install httpx`) — it talks to the REST API,
-no database access required.
+The stdio server only needs `httpx` (`pip install httpx`) — it talks to the
+REST API, no database access required.
 
 ## Tools
 

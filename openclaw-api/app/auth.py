@@ -35,9 +35,29 @@ def decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+API_KEY_PREFIX = "gp_live_"
+
+def user_from_api_key(token: str, db: Session) -> User:
+    """Resolve a gp_live_... API key (MCP / programmatic access) to its user."""
+    import hashlib
+    from app.models import ApiKey
+    key_hash = hashlib.sha256(token.encode()).hexdigest()
+    key = db.query(ApiKey).filter(ApiKey.key_hash == key_hash, ApiKey.revoked == False).first()  # noqa: E712
+    if not key:
+        raise HTTPException(status_code=401, detail="Invalid or revoked API key",
+                            headers={"WWW-Authenticate": "Bearer"})
+    user = db.query(User).filter(User.id == key.user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="API key owner not found")
+    key.last_used_at = datetime.utcnow()
+    db.commit()
+    return user
+
 def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if token.startswith(API_KEY_PREFIX):
+        return user_from_api_key(token, db)
     payload = decode_token(token)
     user_id = payload.get("sub")
     if user_id is None:
@@ -55,6 +75,8 @@ def get_optional_user(token: Optional[str] = Depends(oauth2_scheme), db: Session
     Named 'optional' for legacy reasons — auth is now always required."""
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if token.startswith(API_KEY_PREFIX):
+        return user_from_api_key(token, db)
     payload = decode_token(token)
     user_id = payload.get("sub")
     if user_id is None:

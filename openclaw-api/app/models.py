@@ -26,6 +26,20 @@ class User(Base):
     seeds = relationship("Seed", back_populates="user", cascade="all, delete-orphan")
     usage = relationship("Usage", back_populates="user", cascade="all, delete-orphan")
 
+class ApiKey(Base):
+    """Per-user API keys for MCP / programmatic access (gp_live_...). Only the
+    sha256 hash is stored; the key itself is shown once at mint time."""
+    __tablename__ = 'api_keys'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
+    name = Column(String(100), nullable=False, default='MCP key')
+    key_hash = Column(String(64), unique=True, nullable=False, index=True)  # sha256 hex
+    prefix = Column(String(20), nullable=False, default='')  # display hint, e.g. gp_live_a1b2
+    scopes = Column(JSON, nullable=True, default=list)  # reserved; ["mcp"] for now
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    revoked = Column(Boolean, default=False, nullable=False)
+
 class Thought(Base):
     __tablename__ = 'thoughts'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
