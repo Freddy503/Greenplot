@@ -80,7 +80,9 @@ picks it up automatically. See §3.
 
 ### Known launch caveats
 
-- Backend rides a home Cloudflare tunnel — single point of failure (§5, infra).
+- Backend is a single Hetzner VPS behind a Cloudflare tunnel — solid for beta,
+  but one box: a crash means downtime until restart, and nightly backups mean
+  up to ~24h of data in the loss window (§5, infra).
 - iOS share-sheet capture is limited by Safari; Android + desktop Chrome get
   the full share target.
 - LLM cost figure on `/admin` is an estimate (blended $/Mtok constant in
@@ -173,7 +175,7 @@ eval runner → only then revisit Sia.
 | 1 | **Feedback-driven fixes** from wave 1 | The whole point of a beta | — |
 | 2 | **Agent dispatch via OpenHands resolver** (§4) | Completes Idea-to-Build; the demo nobody else has | ~1 wk |
 | 3 | **Telegram capture bot** | Text a thought → seed; `gp_live_` keys make auth trivial | 1–2 d |
-| 4 | **Backend off the home tunnel** | Hetzner/CAX + same docker-compose; removes the launch SPOF | weekend |
+| 4 | **Uptime alerting** | healthchecks.io/UptimeRobot on `/api/v1/admin/health` + a ping when the backup cron fails — know about downtime before users do | ~2 h |
 | 5 | **Acceptance-eval runner** | "Shipped" becomes *verified*, not just merged; unlocks Sia-style loops | ~1 wk |
 | 6 | **Review queue / resurfacing** | Decay scores exist; surface 3 fading seeds in the briefing with 1-tap actions | ~3 d |
 | 7 | **Public share links** (`/share/{token}` read-only wiki/PRD) | Beta users showing work = growth loop | 2–3 d |
