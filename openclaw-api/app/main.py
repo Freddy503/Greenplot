@@ -2427,21 +2427,26 @@ def public_health():
 
 class InviteRequest(BaseModel):
     emails: List[str]
+    code: Optional[str] = None  # access code to include; defaults to the first INVITE_CODES entry
 
 @app.post("/api/v1/admin/invite")
 def admin_send_invites(
     req: InviteRequest,
     x_api_key: str = Header(default=""),
 ):
-    """Send magic-link invite emails to waitlist users. Requires HARVEST_API_KEY."""
+    """Send invite emails with the access code and a direct onboarding link. Requires HARVEST_API_KEY."""
     expected = settings.HARVEST_API_KEY
     if not expected:
         raise HTTPException(status_code=503, detail="Invite API not configured")
     if x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    from app.auth import create_access_token
+    from urllib.parse import quote
     from app.email_sender import send_briefing_email
+
+    code = (req.code or settings.INVITE_CODES.split(",")[0]).strip().upper()
+    if not _invite_code_valid(code):
+        raise HTTPException(status_code=400, detail=f"Code '{code}' is not in INVITE_CODES")
 
     sent, failed = [], []
     for email in req.emails[:50]:  # cap at 50 per call
@@ -2450,25 +2455,21 @@ def admin_send_invites(
             failed.append(email)
             continue
         try:
-            # 7-day invite token with special 'invite' claim
-            token = create_access_token(
-                data={"invite_email": email, "type": "invite"},
-                expires_minutes=60 * 24 * 7,
-            )
-            invite_url = f"{settings.FRONTEND_URL}/invite?token={token}"
+            onboarding_url = f"{settings.FRONTEND_URL}/onboarding?email={quote(email)}&code={code}"
             briefing = {
                 "type": "invite",
-                "title": "You're invited to Seedify",
-                "subtitle": "Your personal AI knowledge garden is ready",
+                "title": "You're invited to Greenplot",
+                "subtitle": "Private beta · your plot is ready",
                 "sections": [
                     {
-                        "title": "Get started",
+                        "title": "Unlock your plot",
                         "icon": "eco",
                         "content": (
-                            f"You've been invited to Seedify — an AI-powered second brain "
-                            f"that captures, enriches, and synthesizes your ideas into a living knowledge garden.\n\n"
-                            f"[Accept your invite and create your account]({invite_url})\n\n"
-                            f"This invite link expires in 7 days."
+                            f"Greenplot is your AI thinking partner — plant ideas, grow them into "
+                            f"knowledge, and ship them with coding agents.\n\n"
+                            f"Your access code: **{code}**\n\n"
+                            f"[Start onboarding — code included]({onboarding_url})\n\n"
+                            f"The link unlocks the garden for {email} automatically."
                         ),
                     }
                 ],
@@ -2479,7 +2480,7 @@ def admin_send_invites(
             logger.error(f"Invite failed for {email}: {e}")
             failed.append(email)
 
-    return {"sent": sent, "failed": failed}
+    return {"sent": sent, "failed": failed, "code": code}
 
 
 class InviteCodeRequest(BaseModel):

@@ -46,3 +46,11 @@ openclaw-api/app/*.bak
 # Runtime data files — server-only, never overwrite on git pull
 openclaw-api/data/push_notifications.json
 openclaw-api/data/push_subscriptions.json
+
+# Local agent/tooling dirs — never commit
+.claude/
+.clawhub/
+.openclaw/
+.superset/
+logs/
+outputs/
