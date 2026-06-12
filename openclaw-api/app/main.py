@@ -2665,6 +2665,58 @@ def admin_list_tenants(current_user: User = Depends(get_current_user), db: Sessi
     info = [TenantsListResponse.TenantInfo(id=t.id, email=t.email, created_at=t.created_at, subscription_status=t.subscription_status) for t in tenants]
     return TenantsListResponse(tenants=info, total=len(info))
 
+
+@app.get("/api/v1/admin/stats")
+def admin_stats(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Operator dashboard: users, activity, token usage (ADMIN_EMAILS only)."""
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+    if (current_user.email or "").lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    from app.models import Usage as UsageModel
+    cutoff = datetime.utcnow() - timedelta(days=30)
+
+    # Per-user roll-up
+    seed_counts = dict(db.query(Seed.user_id, func.count(Seed.id)).group_by(Seed.user_id).all())
+    last_seed = dict(db.query(Seed.user_id, func.max(Seed.created_at)).group_by(Seed.user_id).all())
+    tokens_30d_by_user = dict(
+        db.query(UsageModel.user_id, func.coalesce(func.sum(UsageModel.llm_tokens), 0))
+        .filter(UsageModel.date >= cutoff).group_by(UsageModel.user_id).all())
+
+    users = []
+    for u in db.query(User).order_by(User.created_at.desc()).all():
+        users.append({
+            "email": u.email,
+            "nickname": getattr(u, "nickname", "") or "",
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "seeds": int(seed_counts.get(u.id, 0)),
+            "last_seed_at": last_seed.get(u.id).isoformat() if last_seed.get(u.id) else None,
+            "tokens_30d": int(tokens_30d_by_user.get(u.id, 0)),
+        })
+
+    # Tokens per day (30d)
+    daily = (db.query(func.date(UsageModel.date), func.coalesce(func.sum(UsageModel.llm_tokens), 0))
+             .filter(UsageModel.date >= cutoff)
+             .group_by(func.date(UsageModel.date))
+             .order_by(func.date(UsageModel.date)).all())
+    tokens_by_day = [{"date": str(d), "tokens": int(t)} for d, t in daily]
+    tokens_30d = sum(r["tokens"] for r in tokens_by_day)
+
+    spec_count = sum(
+        1 for s in db.query(Seed).all()
+        if isinstance(s.seed_metadata, dict) and s.seed_metadata.get("seed_type") == "spec")
+
+    return {
+        "users": users,
+        "user_count": len(users),
+        "seed_count": int(db.query(func.count(Seed.id)).scalar() or 0),
+        "spec_count": spec_count,
+        "tokens_30d": tokens_30d,
+        "tokens_by_day": tokens_by_day,
+        "chat_model": settings.CHAT_MODEL,
+        "daily_token_limit": settings.DAILY_TOKEN_LIMIT,
+    }
+
 # --- Attachments helper ---
 
 def process_attachments(attachments: list, max_size_mb: int = 10) -> list:
