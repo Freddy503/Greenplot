@@ -182,9 +182,15 @@ function OnboardingContent() {
       }
     } catch { /* fresh start */ }
     const inviteEmail = searchParams.get('email')
-    if (inviteEmail) {
-      // Arrived via magic-link invite — the email itself is the credential
-      setEmail(inviteEmail)
+    if (inviteEmail) setEmail(inviteEmail)
+    const codeParam = (searchParams.get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    if (codeParam.length === 6) {
+      // Invite email deep link — code arrives prefilled, still validated for real
+      setToken(codeParam)
+      setTokenState('checking')
+      validateCode(codeParam)
+    } else if (inviteEmail) {
+      // Legacy magic-link invite — the validated email itself is the credential
       setToken('INVITE')
       setTokenState('valid')
     }
@@ -206,11 +212,7 @@ function OnboardingContent() {
   const back = () => { if (step > 0) go(step - 1, -1) }
 
   // ── Invite code — real validation against the backend ──
-  const onTokenInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
-    setToken(v)
-    setTokenState(v.length === 6 ? 'checking' : 'idle')
-    if (v.length !== 6) return
+  const validateCode = (v: string) => {
     const seq = ++tokenSeq.current
     fetch('/api/auth/validate-code', {
       method: 'POST',
@@ -225,6 +227,13 @@ function OnboardingContent() {
         if (data.valid) persist({ token: v, tokenOk: true })
       })
       .catch(() => { if (seq === tokenSeq.current) setTokenState('error') })
+  }
+
+  const onTokenInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    setToken(v)
+    setTokenState(v.length === 6 ? 'checking' : 'idle')
+    if (v.length === 6) validateCode(v)
   }
 
   const toggleInterest = (label: string) => {
@@ -401,6 +410,14 @@ function OnboardingContent() {
                 <button onClick={() => router.push('/login')} className="ob-quiet" style={{ marginTop: 26 }}>
                   Already have an account? <span style={{ color: '#16a34a', fontWeight: 600 }}>Log in</span>
                 </button>
+                <a
+                  href="https://buymeacoffee.com/frederickk1" target="_blank" rel="noopener noreferrer"
+                  className="ob-bmc" style={{ marginTop: 10 }}
+                >
+                  <span style={{ fontSize: 14 }}>☕</span>
+                  <span style={{ fontFamily: UI, fontSize: 12, fontWeight: 600, color: '#141413' }}>Buy me a coffee</span>
+                  <span style={{ fontFamily: BODY, fontSize: 11, color: '#71716b' }}>— support the build</span>
+                </a>
               </div>
             </div>
           )}
@@ -928,6 +945,14 @@ function OnboardingContent() {
           font-family: ${BODY}; font-size: 13px; color: #71716b; transition: color .2s;
         }
         .ob-quiet:hover { color: #141413; }
+        .ob-bmc {
+          display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+          border-radius: 9999px; background: rgba(255,221,0,0.12);
+          box-shadow: inset 0 0 0 1px rgba(255,221,0,0.35); text-decoration: none;
+          transition: all .2s;
+        }
+        .ob-bmc:hover { background: rgba(255,221,0,0.2); box-shadow: inset 0 0 0 1px rgba(255,221,0,0.6); }
+        .ob-bmc:active { transform: scale(0.98); }
       ` }} />
     </div>
   )
