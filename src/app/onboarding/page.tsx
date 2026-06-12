@@ -298,7 +298,8 @@ function OnboardingContent() {
         }),
       }).catch(() => {})
       if (pushChoice === 'yes') requestPermission().catch(() => {})
-      // First chat shows the getting-started card
+      // First visit: walkthrough tour, then the getting-started card
+      localStorage.setItem('greenplot_tour_pending', '1')
       localStorage.setItem('greenplot_show_start_card', '1')
       await minDelay
       localStorage.removeItem(STORAGE_KEY)

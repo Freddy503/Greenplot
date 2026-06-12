@@ -216,6 +216,92 @@ def collect_arxiv_pdfs(briefing: dict) -> list:
     return attachments
 
 
+def render_invite_html(code: str, onboarding_url: str, email: str) -> str:
+    """Designed invite email — Greenplot branding, prominent access code, one CTA."""
+    return f"""<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background-color:#eceae4;">
+  <div style="max-width:480px;margin:0 auto;padding:36px 20px 48px;font-family:'Helvetica Neue',Arial,sans-serif;">
+
+    <!-- Wordmark -->
+    <div style="text-align:center;margin-bottom:26px;">
+      <span style="font-size:30px;">🌱</span><br>
+      <span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:24px;color:#141413;">Greenplot</span><br>
+      <span style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#8a897f;">Private beta &middot; invite only</span>
+    </div>
+
+    <!-- Card -->
+    <div style="background-color:#fafaf8;border-radius:22px;padding:34px 30px;border:1px solid #e3e1d8;">
+      <h1 style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:400;font-size:30px;line-height:1.15;color:#141413;margin:0 0 14px;">You're invited.</h1>
+      <p style="font-size:14.5px;line-height:1.65;color:#5f5f5a;margin:0 0 26px;">
+        Greenplot is your AI thinking partner — plant ideas, grow them into
+        knowledge, and ship them with coding agents. A spot in the garden is
+        waiting for you.
+      </p>
+
+      <!-- Access code -->
+      <div style="text-align:center;margin-bottom:26px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8a897f;margin-bottom:8px;">Your access code</div>
+        <div style="display:inline-block;background-color:#ffffff;border:1px solid #d8e8dd;border-radius:14px;padding:14px 26px;">
+          <span style="font-family:'Courier New',monospace;font-size:28px;font-weight:700;letter-spacing:8px;color:#15803d;">{code}</span>
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <div style="text-align:center;margin-bottom:18px;">
+        <a href="{onboarding_url}"
+           style="display:inline-block;background-color:#22c55e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:15px 34px;border-radius:9999px;">
+          Plant your first idea&nbsp;&nbsp;&rarr;
+        </a>
+      </div>
+
+      <p style="font-size:12px;line-height:1.6;color:#a3a29c;text-align:center;margin:0;">
+        The button carries your code — it unlocks the garden for<br>
+        <span style="color:#5f5f5a;">{email}</span> automatically.
+      </p>
+    </div>
+
+    <!-- What awaits -->
+    <div style="padding:24px 10px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">
+        <tr><td style="font-size:13px;line-height:2.1;color:#5f5f5a;">🌱&nbsp;&nbsp;<strong style="color:#141413;">Plant</strong> — capture ideas &amp; research, enriched automatically</td></tr>
+        <tr><td style="font-size:13px;line-height:2.1;color:#5f5f5a;">🌿&nbsp;&nbsp;<strong style="color:#141413;">Grow</strong> — a wiki that writes itself from your seeds</td></tr>
+        <tr><td style="font-size:13px;line-height:2.1;color:#5f5f5a;">🚀&nbsp;&nbsp;<strong style="color:#141413;">Ship</strong> — specs that coding agents build into software</td></tr>
+      </table>
+    </div>
+
+    <p style="font-size:11px;color:#a3a29c;text-align:center;margin:28px 0 0;">
+      Greenplot &middot; A living laboratory for your ideas<br>
+      Didn't expect this? You can safely ignore it.
+    </p>
+  </div>
+</body>
+</html>"""
+
+
+def send_invite_email(to: str, code: str, onboarding_url: str) -> bool:
+    """Send the designed private-beta invite (access code + deep link)."""
+    if not settings.RESEND_API_KEY:
+        print("[email_sender] RESEND_API_KEY not set — skipping invite email")
+        return False
+    if _resend is None:
+        print("[email_sender] resend package not installed")
+        return False
+    _resend.api_key = settings.RESEND_API_KEY
+    try:
+        _resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": to,
+            "subject": "You're invited to Greenplot 🌱",
+            "html": render_invite_html(code, onboarding_url, to),
+        })
+        print(f"[email_sender] Sent invite to {to}")
+        return True
+    except Exception as e:
+        print(f"[email_sender] Failed to send invite to {to}: {e}")
+        return False
+
+
 def send_briefing_email(to: str, briefing: dict, attachments: list = None) -> bool:
     """
     Render briefing as HTML and send via Resend.
