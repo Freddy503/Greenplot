@@ -318,14 +318,15 @@ function ArticleDetail({ article, links, onBack, onEdited }: { article: Article;
             <div className="caps" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 10, letterSpacing: '0.08em' }}>Grown from</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {article.tags.map((tag, i) => (
-                <button
+                <a
                   key={i}
+                  href={`/chat?prompt=${encodeURIComponent(`Show me my seeds and thinking about "${tag}"`)}`}
                   className="tap"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '8px 13px', cursor: 'pointer' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '8px 13px', cursor: 'pointer', textDecoration: 'none' }}
                 >
                   <Leaf size={14} color="var(--green-700)" strokeWidth={1.75} />
                   <span className="ui" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)' }}>{tag}</span>
-                </button>
+                </a>
               ))}
             </div>
           </div>
