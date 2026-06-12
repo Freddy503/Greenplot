@@ -96,6 +96,10 @@ picks it up automatically. See §3.
 - **Backend**: `cd /root/.openclaw/workspace && git pull && cd openclaw-api && docker compose up -d --build`
   — required whenever `openclaw-api/` changes. "Feature 404s in prod" almost
   always means this step was skipped.
+- **`.env` changes**: `docker compose up -d` does NOTHING when only `.env`
+  changed (compose sees no config diff). Use `docker restart openclaw-api`
+  (+ `docker restart openclaw-worker` if the var matters to background jobs).
+  Rule of thumb: code → `up -d --build`; env → `restart`.
 
 ### Backups (`scripts/backup.sh`)
 
