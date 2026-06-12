@@ -35,6 +35,7 @@ import { ActivitySummary } from '@/components/activity-summary'
 import { ConversationSidebar, type ConversationMeta } from '@/components/ai-elements/conversation-sidebar'
 import { SparkCard, type SparkNotification } from '@/components/ai-elements/spark-card'
 import { PushArrivalBanner } from '@/components/ai-elements/push-banner'
+import { Walkthrough } from '@/components/onboarding/walkthrough'
 
 // AI Elements
 import {
@@ -239,6 +240,8 @@ export default function ChatPage() {
   const suggestionsInitializedRef = useRef(false)
   // Getting-started card — set by onboarding, shown in the first chat
   const [showStartCard, setShowStartCard] = useState(false)
+  // First-visit walkthrough tour — set by onboarding, shown once
+  const [showTour, setShowTour] = useState(false)
 
   // ── Thinking-partner modes (GStack personas via _system_override) ──
   const [selectedMode, setSelectedMode] = useState<ThinkingMode | undefined>(undefined)
@@ -897,6 +900,11 @@ ${prefill.content || ''}`.trim()
   // Getting-started card: onboarding sets the flag; first real message clears it
   useEffect(() => {
     setShowStartCard(localStorage.getItem('greenplot_show_start_card') === '1')
+    setShowTour(localStorage.getItem('greenplot_tour_pending') === '1')
+  }, [])
+  const dismissTour = useCallback(() => {
+    localStorage.removeItem('greenplot_tour_pending')
+    setShowTour(false)
   }, [])
   useEffect(() => {
     if (messages.length > 0 && showStartCard) {
@@ -1756,6 +1764,8 @@ ${prefill.content || ''}`.trim()
       )}
 
       {/* ── Spark Card — shown when push notification is clicked ── */}
+      {showTour && <Walkthrough onDone={dismissTour} />}
+
       {sparkBanner && !sparkNotification && (
         <PushArrivalBanner
           notification={sparkBanner.briefing}

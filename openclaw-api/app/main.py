@@ -2542,7 +2542,7 @@ def admin_send_invites(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     from urllib.parse import quote
-    from app.email_sender import send_briefing_email
+    from app.email_sender import send_invite_email
 
     code = (req.code or settings.INVITE_CODES.split(",")[0]).strip().upper()
     if not _invite_code_valid(code):
@@ -2556,26 +2556,10 @@ def admin_send_invites(
             continue
         try:
             onboarding_url = f"{settings.FRONTEND_URL}/onboarding?email={quote(email)}&code={code}"
-            briefing = {
-                "type": "invite",
-                "title": "You're invited to Greenplot",
-                "subtitle": "Private beta · your plot is ready",
-                "sections": [
-                    {
-                        "title": "Unlock your plot",
-                        "icon": "eco",
-                        "content": (
-                            f"Greenplot is your AI thinking partner — plant ideas, grow them into "
-                            f"knowledge, and ship them with coding agents.\n\n"
-                            f"Your access code: **{code}**\n\n"
-                            f"[Start onboarding — code included]({onboarding_url})\n\n"
-                            f"The link unlocks the garden for {email} automatically."
-                        ),
-                    }
-                ],
-            }
-            send_briefing_email(email, briefing)
-            sent.append(email)
+            if send_invite_email(email, code, onboarding_url):
+                sent.append(email)
+            else:
+                failed.append(email)
         except Exception as e:
             logger.error(f"Invite failed for {email}: {e}")
             failed.append(email)
