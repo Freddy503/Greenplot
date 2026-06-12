@@ -1,9 +1,18 @@
 'use client'
 
+// SparkSheet — the opened briefing, redesigned (Greenplot Redesign · surfaces-e).
+// Forest-headed bottom sheet with tone-colored sections, bullet cards, source
+// chips and sticky actions. Exported as `SparkCard` so existing call sites
+// (chat, notifications) keep working unchanged.
+
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
+import {
+  Sun, BookOpen, Leaf, GraduationCap, FileText, BarChart2, Trophy, Bell,
+  X, MessageCircle, Sprout, Share2, Sparkles, Lightbulb, Target, CalendarDays,
+  Link2, Globe, type LucideIcon,
+} from 'lucide-react'
 
 export interface SparkSection {
   title?: string
@@ -26,26 +35,50 @@ interface SparkCardProps {
   onChatAboutThis: (content: string) => void
   onDismiss: () => void
   token: string
+  when?: string // e.g. "2h ago" — shown next to the type label
 }
 
-const typeConfig: Record<string, { icon: string; label: string; bgColor: string }> = {
-  morning_spark: { icon: 'light_mode', label: 'Morning Spark', bgColor: 'from-amber-500/20' },
-  daily_briefing: { icon: 'newspaper', label: 'Daily Briefing', bgColor: 'from-blue-500/20' },
-  reflection: { icon: 'psychology', label: 'Evening Reflection', bgColor: 'from-purple-500/20' },
-  weekly_eval: { icon: 'assessment', label: 'Weekly Eval', bgColor: 'from-green-500/20' },
-  challenge: { icon: 'emoji_events', label: 'Biweekly Challenge', bgColor: 'from-red-500/20' },
-  academic_digest: { icon: 'school', label: 'Research Digest', bgColor: 'from-indigo-500/20' },
-  academic_digest_evening: { icon: 'school', label: 'Research Digest', bgColor: 'from-indigo-500/20' },
-  solution_design: { icon: 'description', label: 'Strategy Paper', bgColor: 'from-violet-500/20' },
+type ToneKey = 'green' | 'amber' | 'blue' | 'violet'
+
+const TONES: Record<ToneKey, { bg: string; fg: string; heroIcon: string }> = {
+  green: { bg: 'var(--green-tint)', fg: 'var(--green-700)', heroIcon: 'rgba(180,240,205,0.95)' },
+  amber: { bg: 'rgba(201,138,27,0.12)', fg: '#b87a00', heroIcon: '#ffd989' },
+  blue: { bg: 'rgba(59,130,246,0.10)', fg: '#2563eb', heroIcon: '#bcd7ff' },
+  violet: { bg: 'rgba(139,92,246,0.10)', fg: '#7c3aed', heroIcon: '#d8c8ff' },
 }
 
-const DEFAULT_CONFIG = { icon: 'notifications', label: 'Notification', bgColor: 'from-primary/20' }
+const TYPE_CONFIG: Record<string, { Icon: LucideIcon; tone: ToneKey; label: string }> = {
+  morning_spark: { Icon: Sun, tone: 'amber', label: 'Morning Spark' },
+  daily_briefing: { Icon: BookOpen, tone: 'green', label: 'Daily Briefing' },
+  reflection: { Icon: Leaf, tone: 'green', label: 'Evening Reflection' },
+  weekly_eval: { Icon: BarChart2, tone: 'green', label: 'Weekly Eval' },
+  challenge: { Icon: Trophy, tone: 'green', label: 'Challenge' },
+  academic_digest: { Icon: GraduationCap, tone: 'blue', label: 'Research Digest' },
+  academic_digest_evening: { Icon: GraduationCap, tone: 'blue', label: 'Research Digest' },
+  solution_design: { Icon: FileText, tone: 'violet', label: 'Strategy Paper' },
+}
+const DEFAULT_TYPE = { Icon: Bell, tone: 'green' as ToneKey, label: 'Notification' }
 
-export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: SparkCardProps) {
+export function sparkTypeConfig(type: string | undefined) {
+  const t = type?.startsWith('solution_design') ? 'solution_design' : type || ''
+  return TYPE_CONFIG[t] || DEFAULT_TYPE
+}
+
+// Briefing payloads carry Material icon names — map the common ones to lucide
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  lightbulb: Lightbulb, eco: Leaf, leaf: Leaf, sparkles: Sparkles, auto_awesome: Sparkles,
+  target: Target, track_changes: Target, event: CalendarDays, calendar: CalendarDays,
+  calendar_today: CalendarDays, link: Link2, description: FileText, file: FileText,
+  school: GraduationCap, wb_sunny: Sun, light_mode: Sun, sun: Sun, book: BookOpen,
+  menu_book: BookOpen, psychology: Leaf, assessment: BarChart2, emoji_events: Trophy,
+}
+
+export function SparkCard({ notification, onChatAboutThis, onDismiss, token, when }: SparkCardProps) {
   const [addingToGarden, setAddingToGarden] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const type = notification.type?.startsWith('solution_design') ? 'solution_design' : notification.type
-  const config = typeConfig[type] || DEFAULT_CONFIG
+  const cfg = sparkTypeConfig(notification.type)
+  const tone = TONES[cfg.tone]
+  const HeroIcon = cfg.Icon
 
   const handleShare = async () => {
     setSharing(true)
@@ -74,7 +107,6 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
         .join('\n\n')
         .slice(0, 4000) // stay under ThoughtCreate 5000 char limit
 
-      // Read token fresh in case prop was empty at render time
       const freshToken = token || (typeof localStorage !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '')
 
       const res = await fetch('/api/seeds', {
@@ -101,121 +133,147 @@ export function SparkCard({ notification, onChatAboutThis, onDismiss, token }: S
     .map(s => typeof s.content === 'string' ? s.content : s.content.join('\n'))
     .join('\n\n')
 
+  const allSources = notification.sections.flatMap(s => s.sources || [])
+
   return (
-    <>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 80 }}>
       {/* Backdrop */}
       <div
         onClick={onDismiss}
-        className="fixed inset-0 bg-black/20 z-[75] animate-in fade-in duration-300"
+        style={{ position: 'absolute', inset: 0, background: 'rgba(8,22,14,0.42)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
       />
-      {/* Card - Full height bottom sheet on mobile */}
-      <div className="fixed inset-x-0 bottom-0 z-[80] flex items-end justify-center pointer-events-none">
-        <div className="pointer-events-auto w-full max-w-2xl bg-surface-container rounded-t-3xl border-t border-x border-outline-variant/15 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 h-[90vh] md:h-auto md:max-h-[80vh] md:mx-3 md:mb-24 md:rounded-3xl flex flex-col">
-        {/* Header - Sticky */}
-        <div className={`bg-gradient-to-r ${config.bgColor} to-transparent relative overflow-hidden sticky top-0 z-10`}>
-          <div className="flex items-center gap-3 px-6 py-5">
-            <div className="relative flex-shrink-0">
-              <div className="absolute inset-0 rounded-full blur-xl opacity-30 bg-primary scale-150" />
-              <span
-                className="material-symbols-outlined relative text-primary text-2xl"
-                style={{ fontVariationSettings: '"FILL" 1' }}
-              >
-                {config.icon}
-              </span>
+
+      {/* Sheet */}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+        <div
+          className="spark-sheetup"
+          style={{
+            pointerEvents: 'auto', width: '100%', maxWidth: 640, maxHeight: '88dvh',
+            display: 'flex', flexDirection: 'column', background: 'var(--bg)',
+            borderRadius: '26px 26px 0 0', overflow: 'hidden',
+            boxShadow: '0 -18px 60px -12px rgba(8,20,12,0.55)',
+          }}
+        >
+          {/* Forest header */}
+          <div className="hero-forest" style={{ borderRadius: '26px 26px 0 0', paddingTop: 10, paddingBottom: 18, flexShrink: 0 }}>
+            <div style={{ position: 'relative', zIndex: 2, padding: '0 18px' }}>
+              <div style={{ width: 36, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.28)', margin: '0 auto 14px' }} />
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <span className="glass-dark" style={{ width: 42, height: 42, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <HeroIcon size={21} color={tone.heroIcon} strokeWidth={1.75} />
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span className="caps" style={{ fontSize: 10, color: 'rgba(180,240,205,0.85)', whiteSpace: 'nowrap' }}>{cfg.label}</span>
+                    {when && <span className="body-text" style={{ fontSize: 10.5, color: 'rgba(233,250,239,0.55)', whiteSpace: 'nowrap', flexShrink: 0 }}>{when}</span>}
+                  </div>
+                  <h2 className="serif" style={{ fontSize: 24, lineHeight: 1.1, color: '#fff', letterSpacing: '-0.01em', marginTop: 4 }}>{notification.title}</h2>
+                  {notification.subtitle && (
+                    <div className="body-text" style={{ fontSize: 12, color: 'rgba(233,250,239,0.65)', marginTop: 4 }}>{notification.subtitle}</div>
+                  )}
+                </div>
+                <button onClick={onDismiss} className="glass-dark tap" style={{ width: 32, height: 32, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <X size={16} color="rgba(255,255,255,0.9)" strokeWidth={2} />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{config.label}</p>
-              <p className="text-lg font-semibold text-on-surface">{notification.title}</p>
-              {notification.subtitle && <p className="text-xs text-on-surface-variant mt-0.5">{notification.subtitle}</p>}
-            </div>
+          </div>
+
+          {/* Sections */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px 20px' }}>
+            {notification.sections.map((s, si) => {
+              const SectionIcon = SECTION_ICONS[(s.icon || '').toLowerCase()] || Sparkles
+              return (
+                <div key={si} style={{ marginBottom: si === notification.sections.length - 1 ? 0 : 20 }}>
+                  {s.title && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                      <SectionIcon size={15} color={tone.fg} strokeWidth={1.75} />
+                      <span className="caps" style={{ fontSize: 10, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{s.title}</span>
+                    </div>
+                  )}
+                  {typeof s.content === 'string' ? (
+                    <div className="spark-md">
+                      <ReactMarkdown>{s.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="card" style={{ borderRadius: 14, overflow: 'hidden', padding: 0 }}>
+                      {s.content.map((t, bi) => (
+                        <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 13px', borderBottom: bi === s.content.length - 1 ? 'none' : '1px solid var(--hairline)' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: 99, background: tone.fg, opacity: 0.7, flexShrink: 0, marginTop: 6 }} />
+                          <div className="spark-md spark-md-bullet">
+                            <ReactMarkdown>{t}</ReactMarkdown>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {allSources.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+                {allSources.map((src, i) => (
+                  <a
+                    key={`${src.url}-${i}`} href={src.url} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '6px 11px', textDecoration: 'none', maxWidth: '100%' }}
+                  >
+                    <Globe size={12} color="var(--ink-3)" strokeWidth={1.75} />
+                    <span className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{src.title}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Sticky actions */}
+          <div style={{
+            flexShrink: 0, display: 'flex', gap: 8,
+            padding: '12px 16px calc(16px + env(safe-area-inset-bottom))',
+            borderTop: '1px solid var(--hairline)',
+            background: 'rgba(250,249,246,0.92)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          }}>
             <button
-              onClick={onDismiss}
-              className="flex-shrink-0 p-1.5 rounded-full hover:bg-surface-container-high transition-colors"
+              onClick={() => onChatAboutThis(combinedContent)}
+              className="tap"
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'var(--green)', border: 'none', borderRadius: 14, padding: '13px 14px', cursor: 'pointer', boxShadow: '0 8px 20px -8px rgba(34,197,94,0.7)' }}
             >
-              <span className="material-symbols-outlined text-on-surface-variant/60 text-lg">close</span>
+              <MessageCircle size={17} color="#fff" strokeWidth={2} />
+              <span className="ui" style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>Chat about this</span>
+            </button>
+            <button
+              onClick={handleAddToGarden} disabled={addingToGarden}
+              className="tap"
+              style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 14, padding: '13px 15px', cursor: 'pointer', opacity: addingToGarden ? 0.5 : 1 }}
+            >
+              <Sprout size={17} color="var(--green-700)" strokeWidth={2} />
+              <span className="ui" style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>{addingToGarden ? '…' : 'Garden'}</span>
+            </button>
+            <button
+              onClick={handleShare} disabled={sharing} title="Share or copy"
+              className="tap"
+              style={{ width: 46, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: sharing ? 0.5 : 1 }}
+            >
+              <Share2 size={17} color="var(--ink-2)" strokeWidth={2} />
             </button>
           </div>
         </div>
-
-        {/* Sections - Scrollable */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {notification.sections.map((section, idx) => (
-            <div key={idx} className="space-y-3">
-              {section.title && (
-                <div className="flex items-center gap-2">
-                  {section.icon && (
-                    <span className={`material-symbols-outlined text-lg ${section.color || 'text-primary'}`}
-                      style={{ fontVariationSettings: '"FILL" 1' }}>
-                      {section.icon}
-                    </span>
-                  )}
-                  <h3 className="font-semibold text-on-surface">{section.title}</h3>
-                </div>
-              )}
-              <div className="text-sm text-on-surface-variant leading-relaxed space-y-2 prose prose-sm prose-invert max-w-none [&>*]:text-on-surface-variant [&_strong]:text-on-surface [&_a]:text-primary [&_ul]:pl-4 [&_ol]:pl-4">
-                {typeof section.content === 'string' ? (
-                  <ReactMarkdown>{section.content}</ReactMarkdown>
-                ) : (
-                  section.content.map((line, i) => (
-                    <ReactMarkdown key={i}>{line}</ReactMarkdown>
-                  ))
-                )}
-              </div>
-              {section.sources && section.sources.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-outline-variant/10">
-                  {section.sources.map((src, i) => (
-                    <a
-                      key={i}
-                      href={src.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:text-primary/80 underline"
-                    >
-                      {src.title}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Actions - Sticky Bottom */}
-        <div className="sticky bottom-0 flex items-center gap-2 px-6 pb-6 pt-4 border-t border-outline-variant/10 bg-surface-container">
-          <Button
-            onClick={() => onChatAboutThis(combinedContent)}
-            className="flex-1 rounded-2xl bg-primary text-on-primary hover:bg-primary/90 font-bold text-sm h-10"
-          >
-            <span className="material-symbols-outlined text-base mr-1.5">chat</span>
-            Chat about this
-          </Button>
-          <Button
-            onClick={handleAddToGarden}
-            disabled={addingToGarden}
-            variant="outline"
-            className="rounded-2xl border-outline-variant/20 text-on-surface-variant text-sm h-10 px-4"
-          >
-            {addingToGarden ? (
-              <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-base mr-1.5">eco</span>
-                Garden
-              </>
-            )}
-          </Button>
-          <Button
-            onClick={handleShare}
-            disabled={sharing}
-            variant="outline"
-            className="rounded-2xl border-outline-variant/20 text-on-surface-variant text-sm h-10 px-3"
-            title="Share or copy"
-          >
-            <span className="material-symbols-outlined text-base">share</span>
-          </Button>
-        </div>
-        </div>
       </div>
-    </>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes sparkSheetUp { from { transform: translateY(60%); opacity: 0.4; } to { transform: translateY(0); opacity: 1; } }
+        .spark-sheetup { animation: sparkSheetUp .38s cubic-bezier(.16,1,.3,1) both; }
+        .spark-md { font-family: var(--body); font-size: 14px; line-height: 1.65; color: var(--ink-2); }
+        .spark-md p { margin: 0 0 10px; }
+        .spark-md p:last-child { margin-bottom: 0; }
+        .spark-md strong { color: var(--ink); font-weight: 600; }
+        .spark-md a { color: var(--green-700); font-weight: 500; }
+        .spark-md ul, .spark-md ol { padding-left: 18px; margin: 0 0 10px; }
+        .spark-md li { margin-bottom: 4px; }
+        .spark-md code { background: var(--surface-sunk); border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
+        .spark-md-bullet { font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.45; }
+        .spark-md-bullet p { margin: 0; }
+      ` }} />
+    </div>
   )
 }

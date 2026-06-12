@@ -108,7 +108,7 @@ function NotifRow({ n, last, onOpen, onDismiss }: {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
-          <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{cfg.label}</span>
+          <span className="body-text" style={{ fontSize: 10.5, color: tone.fg }}>{cfg.label}</span>
           <span style={{ width: 3, height: 3, borderRadius: 99, background: 'var(--ink-3)', opacity: 0.4 }} />
           <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{timeAgo(n.timestamp)}</span>
         </div>
@@ -144,6 +144,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<StoredNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SparkNotification | null>(null)
+  const [selectedWhen, setSelectedWhen] = useState('')
   const [authToken, setAuthToken] = useState('')
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
   const [agentTopic, setAgentTopic] = useState('')
@@ -167,6 +168,7 @@ export default function NotificationsPage() {
     setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     if (n.briefing) {
       setSelected(n.briefing)
+      setSelectedWhen(timeAgo(n.timestamp))
     } else if (n.prompt) {
       router.push(`/chat?prompt=${encodeURIComponent(n.prompt)}`)
     }
@@ -425,6 +427,7 @@ export default function NotificationsPage() {
           onChatAboutThis={handleChatAbout}
           onDismiss={() => setSelected(null)}
           token={authToken}
+          when={selectedWhen}
         />
       )}
     </div>
