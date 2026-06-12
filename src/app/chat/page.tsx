@@ -34,6 +34,7 @@ import BottomNav from '@/components/layout/bottom-nav'
 import { ActivitySummary } from '@/components/activity-summary'
 import { ConversationSidebar, type ConversationMeta } from '@/components/ai-elements/conversation-sidebar'
 import { SparkCard, type SparkNotification } from '@/components/ai-elements/spark-card'
+import { PushArrivalBanner } from '@/components/ai-elements/push-banner'
 
 // AI Elements
 import {
@@ -165,6 +166,8 @@ export default function ChatPage() {
   const [gardenVizData, setGardenVizData] = useState<{ nodes: any[]; links: any[]; stats: any } | null>(null)
   // SparkCard — shown when a push notification is clicked
   const [sparkNotification, setSparkNotification] = useState<SparkNotification | null>(null)
+  // Push arrival — banner shown first; tapping it expands into the sheet
+  const [sparkBanner, setSparkBanner] = useState<{ briefing: SparkNotification; body?: string } | null>(null)
   // Track if we've already fetched suggestions on mount
   const suggestionsInitializedRef = useRef(false)
 
@@ -506,7 +509,7 @@ ${prefill.content || ''}`.trim()
     const storedBriefing = (window as any).__SPARK_BRIEFING
     if (storedBriefing) {
       console.log('[PUSH_SPARK] Using briefing stored by SW:', storedBriefing)
-      setSparkNotification(storedBriefing as SparkNotification)
+      setSparkBanner({ briefing: storedBriefing as SparkNotification, body: params.get('spark_body') || undefined })
       // Clean up after using
       delete (window as any).__SPARK_BRIEFING
       return
@@ -515,18 +518,21 @@ ${prefill.content || ''}`.trim()
     // Fallback: create basic notification from URL params only
     console.log('[PUSH_SPARK] Using URL param fallback (no briefing stored)')
     const sparkBody = params.get('spark_body') || sparkPrompt
-    setSparkNotification({
-      type: 'morning_spark',
-      title: sparkTitle || 'Briefing',
-      sections: sparkBody
-        ? [{
-          title: '',
-          icon: 'lightbulb',
-          color: 'text-primary',
-          content: sparkBody,
-        }]
-        : [],
-      prompt: sparkPrompt,
+    setSparkBanner({
+      body: sparkBody,
+      briefing: {
+        type: 'morning_spark',
+        title: sparkTitle || 'Briefing',
+        sections: sparkBody
+          ? [{
+            title: '',
+            icon: 'lightbulb',
+            color: 'text-primary',
+            content: sparkBody,
+          }]
+          : [],
+        prompt: sparkPrompt,
+      },
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, pushPromptHandled])
@@ -540,23 +546,26 @@ ${prefill.content || ''}`.trim()
         if (event.data.briefing) {
           // Store in window for URL param handler to find
           (window as any).__SPARK_BRIEFING = event.data.briefing
-          console.log('[PUSH_SPARK] Setting SparkCard with full briefing')
-          setSparkNotification(event.data.briefing as SparkNotification)
+          console.log('[PUSH_SPARK] Showing arrival banner with full briefing')
+          setSparkBanner({ briefing: event.data.briefing as SparkNotification, body: event.data.body })
         } else {
           console.log('[PUSH_SPARK] No briefing in SW message, using fallback')
           // Fallback to creating a basic notification from title/body
-          setSparkNotification({
-            type: 'morning_spark',
-            title: event.data.title || 'Briefing',
-            sections: event.data.body || event.data.prompt
-              ? [{
-                title: '',
-                icon: 'lightbulb',
-                color: 'text-primary',
-                content: event.data.body || event.data.prompt || '',
-              }]
-              : [],
-            prompt: event.data.prompt,
+          setSparkBanner({
+            body: event.data.body,
+            briefing: {
+              type: 'morning_spark',
+              title: event.data.title || 'Briefing',
+              sections: event.data.body || event.data.prompt
+                ? [{
+                  title: '',
+                  icon: 'lightbulb',
+                  color: 'text-primary',
+                  content: event.data.body || event.data.prompt || '',
+                }]
+                : [],
+              prompt: event.data.prompt,
+            },
           })
         }
       }
@@ -1624,6 +1633,15 @@ ${prefill.content || ''}`.trim()
       )}
 
       {/* ── Spark Card — shown when push notification is clicked ── */}
+      {sparkBanner && !sparkNotification && (
+        <PushArrivalBanner
+          notification={sparkBanner.briefing}
+          body={sparkBanner.body}
+          onOpen={() => { setSparkNotification(sparkBanner.briefing); setSparkBanner(null) }}
+          onDismiss={() => setSparkBanner(null)}
+        />
+      )}
+
       {sparkNotification && (
         <SparkCard
           notification={sparkNotification}
