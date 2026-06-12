@@ -216,6 +216,12 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "static"), html=True), name="static")
 
+# MCP v2: per-user API keys + Streamable HTTP transport (docs/specs/mcp-server-v2.md)
+from app.api_keys import router as api_keys_router  # noqa: E402
+from app.mcp_http import router as mcp_router  # noqa: E402
+app.include_router(api_keys_router)
+app.include_router(mcp_router)
+
 @app.get("/")
 def read_root():
     return FileResponse(os.path.join(os.path.dirname(__file__), "..", "static", "index.html"))

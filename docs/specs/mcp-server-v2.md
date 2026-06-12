@@ -1,6 +1,6 @@
 # Full MCP Server Support — PRD
 
-**Status:** ready · **Owner:** Freddy · **Target:** 1–1.5 weeks
+**Status:** built (2026-06-12) · **Owner:** Freddy · **Target:** 1–1.5 weeks
 
 ## Problem Alignment
 

@@ -130,6 +130,119 @@ function GitHubCard() {
   )
 }
 
+// ── MCP API keys (docs/specs/mcp-server-v2.md) ─────────
+interface ApiKeyRow { id: string; name: string; prefix: string; created_at: string | null; last_used_at: string | null }
+
+function McpKeysCard() {
+  const [keys, setKeys] = useState<ApiKeyRow[]>([])
+  const [keyName, setKeyName] = useState('')
+  const [minting, setMinting] = useState(false)
+  const [mintedKey, setMintedKey] = useState('')
+
+  const authHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem('greenplot_token')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
+  useEffect(() => {
+    fetch('/api/api-keys', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { keys: [] })
+      .then(d => setKeys(d.keys || []))
+      .catch(() => {})
+  }, [])
+
+  const mint = async () => {
+    if (minting) return
+    setMinting(true)
+    try {
+      const res = await fetch('/api/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ name: keyName.trim() || 'MCP key' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMintedKey(data.key)
+        setKeys(prev => [{ id: data.id, name: data.name, prefix: data.prefix, created_at: data.created_at, last_used_at: null }, ...prev])
+        setKeyName('')
+      } else {
+        toast.error(data.detail || data.error || 'Could not create key')
+      }
+    } catch { toast.error('Could not create key') } finally { setMinting(false) }
+  }
+
+  const revoke = async (id: string) => {
+    setKeys(prev => prev.filter(k => k.id !== id))
+    if (mintedKey) setMintedKey('')
+    await fetch(`/api/api-keys/${id}`, { method: 'DELETE', headers: authHeaders() }).catch(() => {})
+    toast.success('Key revoked')
+  }
+
+  const mcpConfig = `{
+  "mcpServers": {
+    "greenplot": {
+      "type": "http",
+      "url": "https://api.greenplot.ink/mcp",
+      "headers": { "Authorization": "Bearer ${mintedKey || 'gp_live_…'}" }
+    }
+  }
+}`
+
+  return (
+    <>
+      <SectionHeader>Coding agents · MCP</SectionHeader>
+      <div className="v2-card" style={{ borderRadius: 18, padding: '14px 16px', marginBottom: 18 }}>
+        <p className="body-text" style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 10, lineHeight: 1.6 }}>
+          Connect Claude Code, Claude Desktop or Cursor to your garden. Mint a key, then add the
+          server config below — agents can search seeds, read PRDs and report build progress.
+        </p>
+
+        {keys.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {keys.map(k => (
+              <div key={k.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: 'var(--surface-sunk)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: 'var(--green)', flexShrink: 0 }} />
+                <span className="ui" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</span>
+                <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', flexShrink: 0 }}>
+                  {k.prefix}… · {k.last_used_at ? `used ${new Date(k.last_used_at).toLocaleDateString()}` : 'never used'}
+                </span>
+                <button onClick={() => revoke(k.id)} className="tap ui" style={{ background: 'none', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '4px 10px', fontSize: 10.5, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer', flexShrink: 0 }}>Revoke</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: mintedKey ? 10 : 0 }}>
+          <input value={keyName} onChange={e => setKeyName(e.target.value)} placeholder="Key name — e.g. Claude Code"
+            onKeyDown={e => e.key === 'Enter' && mint()}
+            style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 12, padding: '9px 12px', fontFamily: 'var(--body)', fontSize: 12.5, color: 'var(--ink)', background: 'var(--surface)', outline: 'none' }} />
+          <button onClick={mint} disabled={minting} className="tap ui"
+            style={{ background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '0 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', opacity: minting ? 0.5 : 1, flexShrink: 0 }}>
+            {minting ? '…' : 'Create key'}
+          </button>
+        </div>
+
+        {mintedKey && (
+          <div style={{ borderRadius: 12, background: 'var(--green-tint)', padding: '10px 12px' }}>
+            <p className="body-text" style={{ fontSize: 11.5, color: 'var(--green-700)', fontWeight: 600, marginBottom: 6 }}>
+              Copy it now — this key is shown only once.
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <code style={{ flex: 1, minWidth: 0, fontSize: 10.5, background: 'var(--surface)', padding: '6px 8px', borderRadius: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink)' }}>{mintedKey}</code>
+              <button onClick={() => { navigator.clipboard.writeText(mintedKey); toast.success('Key copied') }} className="tap ui"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '5px 12px', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer', flexShrink: 0 }}>Copy</button>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(mcpConfig); toast.success('Config copied — paste into .mcp.json or claude_desktop_config.json') }} className="tap ui"
+              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-2)', borderRadius: 12, padding: '8px 0', fontSize: 11.5, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}>
+              Copy MCP config for Claude Code / Desktop / Cursor
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const [nickname, setNickname] = useState('')
@@ -556,6 +669,8 @@ export default function SettingsPage() {
         </div>
 
         <GitHubCard />
+
+        <McpKeysCard />
 
         {/* Support */}
         <SectionHeader>Support</SectionHeader>
