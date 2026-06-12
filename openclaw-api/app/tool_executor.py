@@ -2435,6 +2435,30 @@ async def write_spec(args: dict, user: User, db: Session) -> str:
                 "message": f"PRD '{title}' already exists in Studio.",
             })
 
+        # Near-duplicate guard: flow stacking produced several PRDs for the
+        # same feature under variant names. Compare word overlap against
+        # specs from the last 7 days (mirrors write_product's guard).
+        def _words(t: str) -> set:
+            return {w for w in t.lower().replace("&", " ").replace("—", " ").replace(":", " ").split() if len(w) > 2}
+        new_words = _words(title)
+        from datetime import timedelta as _td
+        recent_cutoff = datetime.utcnow() - _td(days=7)
+        for s in db.query(Seed).filter(
+            Seed.user_id == user.id, Seed.created_at >= recent_cutoff,
+        ).all():
+            m = s.seed_metadata or {}
+            if not isinstance(m, dict) or m.get("seed_type") != "spec":
+                continue
+            ew = _words(s.title or "")
+            if ew and new_words and len(ew & new_words) / max(1, min(len(ew), len(new_words))) >= 0.7:
+                return json.dumps({
+                    "status": "error",
+                    "seed_id": str(s.id),
+                    "message": f"A very similar PRD already exists: '{s.title}' (created recently). "
+                               "Update it with update_seed instead of creating a variant — "
+                               "or pick a clearly different title if this is genuinely a different feature.",
+                })
+
         # Save spec seed
         seed = Seed(
             tenant_id=user.tenant_id,

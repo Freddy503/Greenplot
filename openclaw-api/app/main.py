@@ -2890,6 +2890,20 @@ async def chat_v2_endpoint(
         "5. **develop_idea tool**: Use it proactively when the user expresses a vague idea that deserves rigorous development.",
     )
 
+    prompt_builder = prompt_builder.append_section(
+        "Reply Discipline & Suggested Actions",
+        "ALWAYS end your turn with a plain-text reply to the user — tools gather, you answer. "
+        "Never end on a tool call. Batch lookups: 2-3 searches are plenty before answering; "
+        "don't re-search what a previous tool result already contains.\n"
+        "Spec discipline: write_spec at most ONCE per conversation unless the user explicitly "
+        "asks for another PRD. To change an existing spec, use update_seed — never write a near-duplicate.\n"
+        "After your reply, append up to 3 suggested next actions the user can tap, each on its own "
+        "line in exactly this format: <sugg>Short imperative label</sugg>\n"
+        "Rules: ≤6 words each; concrete and tied to what just happened (e.g. <sugg>Plant this as a seed</sugg>, "
+        "<sugg>Draft a PRD from this</sugg>, <sugg>Show related seeds</sugg>); phrase them as things the USER says to you; "
+        "skip them when the conversation is mid-question.",
+    )
+
     system_prompt = prompt_builder.render()
 
     # ── Setup Agent ───────────────────────────────────────────────
@@ -2901,7 +2915,7 @@ async def chat_v2_endpoint(
         registry=registry,
         api_key=settings.OPENROUTER_API_KEY,
         model=settings.CHAT_MODEL,
-        max_rounds=8,
+        max_rounds=6,
         system_prompt=system_prompt,
     )
 
