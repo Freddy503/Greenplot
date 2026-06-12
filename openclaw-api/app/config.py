@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     # GitHub integration (for Spec → Issue export)
     GITHUB_TOKEN: Optional[str] = None
     GITHUB_REPO: str = "Freddy503/Seedify"  # default repo for issue filing
+    # One-click GitHub connect (OAuth app; callback must be
+    # https://api.greenplot.ink/api/v1/github/oauth/callback). When unset,
+    # the Settings UI falls back to the manual PAT flow.
+    GITHUB_OAUTH_CLIENT_ID: Optional[str] = None
+    GITHUB_OAUTH_CLIENT_SECRET: Optional[str] = None
 
     class Config:
         env_file = ".env"
