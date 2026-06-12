@@ -679,9 +679,29 @@ function OnboardingContent() {
                     )
                   })}
                 </div>
-                <p style={{ fontFamily: BODY, fontSize: 12, color: isIOS && !isStandalone ? '#71716b' : '#a3a29c', margin: '14px 0 0', fontWeight: isIOS && !isStandalone ? 500 : 400 }}>
-                  On iPhone, add Greenplot to your home screen to receive pushes.
-                </p>
+                {isIOS && !isStandalone ? (
+                  <div style={{ marginTop: 14, borderRadius: 16, background: '#ffffff', boxShadow: 'inset 0 0 0 1px #e8e6df', padding: '13px 15px' }}>
+                    <span style={{ display: 'block', fontFamily: UI, fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#16a34a', marginBottom: 10 }}>
+                      Add to Home Screen — pushes need this on iPhone
+                    </span>
+                    {[
+                      { icon: 'arrow-up-right', text: <>Tap <strong>Share</strong> in Safari&rsquo;s toolbar</> },
+                      { icon: 'plus', text: <>Choose <strong>Add to Home Screen</strong></> },
+                      { icon: 'bell-ring', text: <>Open Greenplot from your home screen — done</> },
+                    ].map((s, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: i === 2 ? 0 : 8 }}>
+                        <span style={{ width: 26, height: 26, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Ic name={s.icon} size={13} color="#16a34a" />
+                        </span>
+                        <span style={{ fontFamily: BODY, fontSize: 12.5, lineHeight: 1.5, color: '#5f5f5a' }}>{s.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontFamily: BODY, fontSize: 12, color: '#a3a29c', margin: '14px 0 0' }}>
+                    On iPhone, add Greenplot to your home screen to receive pushes.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -836,9 +856,20 @@ function OnboardingContent() {
                 <span style={{ position: 'relative' }}>Open Greenplot</span>
                 <Ic name="arrow-right" size={18} color="#ffffff" style={{ position: 'relative' }} />
               </button>
+
+              <div style={{ marginTop: 18, width: '100%', maxWidth: 320, borderRadius: 16, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: 'inset 0 0 0 1px rgba(20,20,19,0.06)', padding: '12px 15px', display: 'flex', alignItems: 'flex-start', gap: 10, textAlign: 'left' }}>
+                <span style={{ width: 28, height: 28, borderRadius: 9, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                  <Ic name="sparkles" size={14} color="#16a34a" />
+                </span>
+                <p style={{ fontFamily: BODY, fontSize: 12, lineHeight: 1.55, color: '#5f5f5a', margin: 0, textWrap: 'pretty' } as React.CSSProperties}>
+                  You&rsquo;re in a private beta — your feedback shapes Greenplot. Spotted a bug or
+                  wished for a feature? Send it anytime from <strong style={{ color: '#141413' }}>Settings → &ldquo;Got an idea?&rdquo;</strong> — it lands directly with Freddy.
+                </p>
+              </div>
+
               <a
                 href="https://buymeacoffee.com/frederickk1" target="_blank" rel="noopener noreferrer"
-                className="ob-quiet" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 6, fontFamily: UI, fontSize: 12.5, fontWeight: 500, textDecoration: 'none' }}
+                className="ob-quiet" style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6, fontFamily: UI, fontSize: 12.5, fontWeight: 500, textDecoration: 'none' }}
               >
                 <span style={{ fontSize: 14 }}>☕</span>
                 Buy me a coffee — support the build

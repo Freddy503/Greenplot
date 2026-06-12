@@ -73,10 +73,6 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import { Shimmer } from '@/components/ai-elements/shimmer'
-import {
-  Suggestions,
-  Suggestion,
-} from '@/components/ai-elements/suggestion'
 
 // Garden graph
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
@@ -972,7 +968,7 @@ ${prefill.content || ''}`.trim()
             <AlignLeft size={17} color="rgba(180,240,205,0.85)" strokeWidth={1.75} />
           </button>
           {/* Brand mark */}
-          <button style={{ background: 'none', border: 'none', cursor: 'default', display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #22c55e, #15803d)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2C7 2 3 5 3 8.5C3 10.43 4.84 12 7 12C9.16 12 11 10.43 11 8.5C11 5 7 2 7 2Z" fill="#fff" opacity="0.9"/><path d="M7 2L7 12" stroke="#fff" strokeWidth="0.8" opacity="0.4"/></svg>
             </div>
@@ -982,7 +978,7 @@ ${prefill.content || ''}`.trim()
                 <div className="ui" style={{ fontSize: 11, fontWeight: 600, color: '#7ef0a8' }}>{selectedMode.label} mode</div>
               )}
             </div>
-          </button>
+          </div>
           {/* Mode chip */}
           {selectedMode && (
             <button onClick={() => setSelectedMode(undefined)} className="glass-dark tap" style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 9999, padding: '5px 10px', border: 'none', cursor: 'pointer' }}>
@@ -1037,16 +1033,25 @@ ${prefill.content || ''}`.trim()
 
                   {/* Suggestion chips */}
                   <ActivitySummary token={authToken} />
-                  <Suggestions>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 480, padding: '0 16px' }}>
                     {dynamicSuggestions.map((s) => (
-                      <Suggestion
+                      <button
                         key={s}
-                        suggestion={s}
-                        onClick={handleSuggestion}
-                        className="rounded-2xl bg-surface-container border-outline-variant/15 text-on-surface-variant"
-                      />
+                        onClick={() => handleSuggestion(s)}
+                        className="tap ui"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 38,
+                          padding: '8px 15px', border: '1px solid var(--hairline)', borderRadius: 9999,
+                          cursor: 'pointer', background: 'var(--surface)', color: 'var(--ink-2)',
+                          fontSize: 12.5, fontWeight: 600, textAlign: 'left', transition: 'all .15s',
+                          boxShadow: '0 1px 2px rgba(20,19,12,0.03)',
+                        }}
+                      >
+                        <Sparkles size={13} color="var(--green-700)" strokeWidth={2} style={{ flexShrink: 0 }} />
+                        {s}
+                      </button>
                     ))}
-                  </Suggestions>
+                  </div>
                 </div>
               </ConversationEmptyState>
             ) : (

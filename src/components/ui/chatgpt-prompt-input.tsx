@@ -267,22 +267,52 @@ export const PromptBox = React.forwardRef<
         className
       )}
     >
-      <textarea
-        ref={(el) => {
-          textareaRef.current = el
-          if (internalTextareaRef && 'current' in (internalTextareaRef as object)) {
-            (internalTextareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el
-          }
-        }}
-        rows={1}
-        defaultValue=""
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        placeholder={listening ? 'Listening… speak freely' : 'Nurture a new idea...'}
-        className="custom-scrollbar w-full resize-none border-0 bg-transparent p-3 text-[15px] leading-relaxed text-on-surface placeholder:text-on-surface-variant/40 focus:ring-0 focus-visible:outline-none min-h-14 lg:min-h-16"
-        suppressHydrationWarning
-        {...props}
-      />
+      {/* Input row — on mobile the mic + send sit inline on the right */}
+      <div className="flex items-end lg:block">
+        <textarea
+          ref={(el) => {
+            textareaRef.current = el
+            if (internalTextareaRef && 'current' in (internalTextareaRef as object)) {
+              (internalTextareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el
+            }
+          }}
+          rows={1}
+          defaultValue=""
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder={listening ? 'Listening… speak freely' : 'Nurture a new idea...'}
+          className="custom-scrollbar w-full flex-1 min-w-0 resize-none border-0 bg-transparent p-3 text-[15px] leading-relaxed text-on-surface placeholder:text-on-surface-variant/40 focus:ring-0 focus-visible:outline-none min-h-14 lg:min-h-16"
+          suppressHydrationWarning
+          {...props}
+        />
+
+        {/* Mobile inline controls */}
+        <div className="flex lg:hidden items-center gap-1 pb-2 pr-2 flex-shrink-0">
+          {(onOpenVoice || liveSupported) && (
+            <button
+              type="button"
+              onClick={onOpenVoice ? onOpenVoice : (listening ? stopListening : startListening)}
+              disabled={isDisabled || isProcessingVoice}
+              className={cn(
+                'flex h-10 w-10 items-center justify-center rounded-full transition-all focus-visible:outline-none disabled:opacity-40',
+                isRecording || listening ? 'bg-error/15 text-error animate-pulse' : 'text-on-surface-variant hover:bg-surface-container'
+              )}
+            >
+              {onOpenVoice ? <WaveformIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
+              <span className="sr-only">Voice input</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!hasValue}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none disabled:pointer-events-none bg-primary text-primary-foreground hover:bg-primary/80 disabled:bg-primary/40"
+          >
+            <SendIcon className="h-5 w-5" />
+            <span className="sr-only">Send message</span>
+          </button>
+        </div>
+      </div>
 
       {/* Live transcription indicator */}
       {listening && (
@@ -346,8 +376,8 @@ export const PromptBox = React.forwardRef<
               </>
             )}
 
-            {/* Right-aligned: voice + send */}
-            <div className="ml-auto flex items-center gap-1.5">
+            {/* Right-aligned: voice + send (desktop — mobile has them inline in the input row) */}
+            <div className="ml-auto hidden lg:flex items-center gap-1.5">
               {/* Voice memo overlay (Whisper) */}
               {onOpenVoice && (
                 <Tooltip>
