@@ -79,8 +79,38 @@ def get_connection(tenant_id: str, db: Session) -> dict | None:
             "default_branch": row[3], "webhook_secret": row[4]}
 
 
+WEBHOOK_URL = "https://api.greenplot.ink/api/v1/github/webhook"
+
+
+def ensure_webhook(repo_full_name: str, token: str, secret: str) -> bool:
+    """Create the merge→Built webhook on the repo (idempotent). Returns True
+    when the hook exists or was created; False when the token can't manage
+    hooks (fine-grained PAT without Webhooks permission) — the UI then shows
+    the manual instructions."""
+    try:
+        resp = httpx.get(f"{GH_API}/repos/{repo_full_name}/hooks",
+                         headers=_gh_headers(token), timeout=15)
+        if resp.status_code == 200:
+            for hook in resp.json():
+                if (hook.get("config") or {}).get("url") == WEBHOOK_URL:
+                    return True
+        elif resp.status_code in (403, 404):
+            return False
+        resp = httpx.post(
+            f"{GH_API}/repos/{repo_full_name}/hooks",
+            headers=_gh_headers(token), timeout=15,
+            json={"name": "web", "active": True, "events": ["pull_request"],
+                  "config": {"url": WEBHOOK_URL, "content_type": "json", "secret": secret}},
+        )
+        return resp.status_code in (200, 201)
+    except Exception as e:
+        logger.warning(f"[github] webhook auto-create failed for {repo_full_name}: {e}")
+        return False
+
+
 def connect_repo(tenant_id: str, repo_full_name: str, token: str, db: Session) -> dict:
-    """Validate the PAT against the repo, then upsert the connection."""
+    """Validate the token against the repo, upsert the connection, and try to
+    install the merge→Built webhook automatically."""
     resp = httpx.get(f"{GH_API}/repos/{repo_full_name}", headers=_gh_headers(token), timeout=15)
     if resp.status_code == 404:
         raise ValueError("Repo not found — check the name and that the token can access it")
@@ -103,8 +133,38 @@ def connect_repo(tenant_id: str, repo_full_name: str, token: str, db: Session) -
         get_redis().delete(f"repomap:{tenant_id}")
     except Exception:
         pass
+
+    webhook_auto = ensure_webhook(repo_full_name, token, webhook_secret)
     return {"repo_full_name": repo_full_name, "default_branch": default_branch,
-            "webhook_secret": webhook_secret}
+            "webhook_secret": webhook_secret, "webhook_auto": webhook_auto}
+
+
+def sto<RESEND_API_KEY>(tenant_id: str, token: str, db: Session):
+    """OAuth callback landed but no repo picked yet — park the token in a
+    connection row with an empty repo name."""
+    db.execute(text("DELETE FROM github_connections WHERE tenant_id = :t"), {"t": tenant_id})
+    db.execute(text(
+        "INSERT INTO github_connections (id, tenant_id, repo_full_name, token_enc, default_branch, webhook_secret, created_at) "
+        "VALUES (:id, :t, '', :tok, 'main', '', NOW())"
+    ), {"id": str(_uuid.uuid4()), "t": tenant_id, "tok": _enc(token)})
+    db.commit()
+
+
+def get_stored_token(tenant_id: str, db: Session) -> str | None:
+    """Decrypted token from the tenant's connection row (pending or active)."""
+    conn = get_connection(tenant_id, db)
+    return _dec(conn["token_enc"]) if conn else None
+
+
+def list_user_repos(token: str, limit: int = 100) -> list[dict]:
+    """Repos the OAuth user can push to, most recently pushed first."""
+    resp = httpx.get(f"{GH_API}/user/repos",
+                     params={"per_page": min(limit, 100), "sort": "pushed", "affiliation": "owner,collaborator"},
+                     headers=_gh_headers(token), timeout=20)
+    resp.raise_for_status()
+    return [{"full_name": r["full_name"], "private": r.get("private", False),
+             "pushed_at": r.get("pushed_at", "")} for r in resp.json()
+            if r.get("permissions", {}).get("push", False)]
 
 
 def disconnect_repo(tenant_id: str, db: Session):

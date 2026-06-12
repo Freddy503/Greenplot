@@ -1777,12 +1777,106 @@ def github_connect(
 @app.get("/api/v1/github/connection")
 def github_connection(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.github_sync import get_connection
+    oauth_available = bool(settings.GITHUB_OAUTH_CLIENT_ID and settings.GITHUB_OAUTH_CLIENT_SECRET)
     conn = get_connection(str(current_user.tenant_id), db)
     if not conn:
-        return {"connected": False}
-    return {"connected": True, "repo_full_name": conn["repo_full_name"],
+        return {"connected": False, "oauth_available": oauth_available, "oauth_pending": False}
+    if not conn["repo_full_name"]:
+        # OAuth done, repo not picked yet
+        return {"connected": False, "oauth_available": oauth_available, "oauth_pending": True}
+    return {"connected": True, "oauth_available": oauth_available, "oauth_pending": False,
+            "repo_full_name": conn["repo_full_name"],
             "default_branch": conn["default_branch"], "webhook_secret": conn["webhook_secret"],
             "webhook_url": "https://api.greenplot.ink/api/v1/github/webhook"}
+
+
+# ── One-click GitHub connect (OAuth app flow) ────────────────────────────────
+
+@app.get("/api/v1/github/oauth/start")
+def github_oauth_start(current_user: User = Depends(get_current_user)):
+    """Authorize URL for the GitHub OAuth app. State carries the user identity."""
+    if not (settings.GITHUB_OAUTH_CLIENT_ID and settings.GITHUB_OAUTH_CLIENT_SECRET):
+        raise HTTPException(status_code=503, detail="GitHub OAuth not configured — use a PAT instead")
+    from urllib.parse import urlencode
+    state = create_access_token(
+        data={"sub": str(current_user.id), "tenant_id": str(current_user.tenant_id), "type": "gh_oauth"},
+        expires_minutes=10,
+    )
+    return {"url": "https://github.com/login/oauth/authorize?" + urlencode({
+        "client_id": settings.GITHUB_OAUTH_CLIENT_ID,
+        "scope": "repo",
+        "state": state,
+        "redirect_uri": "https://api.greenplot.ink/api/v1/github/oauth/callback",
+    })}
+
+
+@app.get("/api/v1/github/oauth/callback")
+def github_oauth_callback(code: str = "", state: str = "", db: Session = Depends(get_db)):
+    """GitHub redirects here; exchange the code, park the token, send the
+    browser back to Settings to pick a repo."""
+    from fastapi.responses import RedirectResponse
+    from app.auth import decode_token
+    from app.github_sync import sto<RESEND_API_KEY>
+    fail = f"{settings.FRONTEND_URL}/settings?github=error"
+    try:
+        payload = decode_token(state)
+        if payload.get("type") != "gh_oauth":
+            return RedirectResponse(fail)
+        tenant_id = payload.get("tenant_id", "")
+        import httpx as _httpx
+        resp = _httpx.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={"client_id": settings.GITHUB_OAUTH_CLIENT_ID,
+                  "client_secret": settings.GITHUB_OAUTH_CLIENT_SECRET,
+                  "code": code},
+            timeout=15,
+        )
+        token = resp.json().get("access_token", "")
+        if not token:
+            logger.warning(f"[github-oauth] exchange failed: {resp.text[:200]}")
+            return RedirectResponse(fail)
+        sto<RESEND_API_KEY>(tenant_id, token, db)
+        return RedirectResponse(f"{settings.FRONTEND_URL}/settings?github=pick")
+    except Exception as e:
+        logger.error(f"[github-oauth] callback failed: {e}")
+        return RedirectResponse(fail)
+
+
+@app.get("/api/v1/github/repos")
+def github_list_repos(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Repos the connected OAuth token can push to (for the picker)."""
+    from app.github_sync import get_stored_token, list_user_repos
+    token = get_stored_token(str(current_user.tenant_id), db)
+    if not token:
+        raise HTTPException(status_code=422, detail="No GitHub authorization yet — connect first")
+    try:
+        return {"repos": list_user_repos(token)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"GitHub repo listing failed: {e}")
+
+
+class GitHubPickRequest(BaseModel):
+    repo_full_name: str
+
+
+@app.post("/api/v1/github/connect-oauth")
+def github_connect_oauth(
+    req: GitHubPickRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Finish the OAuth flow: bind the parked token to the chosen repo."""
+    from app.github_sync import connect_repo, get_stored_token
+    token = get_stored_token(str(current_user.tenant_id), db)
+    if not token:
+        raise HTTPException(status_code=422, detail="No GitHub authorization yet — connect first")
+    try:
+        result = connect_repo(str(current_user.tenant_id), req.repo_full_name, token, db)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    result["webhook_url"] = "https://api.greenplot.ink/api/v1/github/webhook"
+    return result
 
 
 @app.delete("/api/v1/github/connection")
