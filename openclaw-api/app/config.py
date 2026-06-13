@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     WIKI_FALLBACK_MODEL: str = "minimax/minimax-m2.7"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
+
+    # Briefing/digest cron jobs skip any user whose email domain is listed here
+    # (comma-separated). Keeps throwaway/seed accounts off the mailing + push
+    # path. Add your own test domains (e.g. greenplot.app) via env if needed.
+    BRIEFING_EXCLUDE_DOMAINS: str = "test.com,example.com,test.test,localhost"
     EXA_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None  # for Whisper + vision
 
