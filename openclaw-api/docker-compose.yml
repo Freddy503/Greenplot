@@ -15,7 +15,7 @@ services:
     - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
     - WEAVIATE_URL=http://weaviate:8080
     - REDIS_URL=redis://redis:6379/0
-    - FRONTEND_URL=https://seedify-six.vercel.app
+    - FRONTEND_URL=https://www.greenplot.ink
     - EXA_API_KEY=${EXA_API_KEY}
     - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -98,8 +98,10 @@ services:
       PERSISTENCE_DATA_PATH: /var/lib/weaviate
       QUERY_DEFAULTS_LIMIT: 20
     image: cr.weaviate.io/semitechnologies/weaviate:1.36.6
-    ports:
-    - 127.0.0.1:8080:8080
+    # No host port publish: the API reaches Weaviate over the internal Docker
+    # network (WEAVIATE_URL=http://weaviate:8080). Publishing 8080 to the host
+    # collided with another project's Weaviate already bound there, which kept
+    # this container from ever starting.
     volumes:
     - weaviate_data:/var/lib/weaviate
 version: '3.8'
