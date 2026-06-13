@@ -25,7 +25,6 @@ import { pollNotifications } from '@/hooks/use-push-notifications'
 // Reflection detection & image generation
 import { isReflection } from '@/lib/reflection-detect'
 import { THINKING_MODES, getMode, type ThinkingMode } from '@/lib/thinking-modes'
-import { CreateImageButton } from '@/components/ai-elements/create-image-button'
 import { AddToGardenButton } from '@/components/ai-elements/add-to-garden-button'
 
 // Layout
@@ -216,8 +215,6 @@ export default function ChatPage() {
   const [gardenEnriching, setGardenEnriching] = useState(false)
   const [detectedUrls, setDetectedUrls] = useState<string[]>([])
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
-  // Track generated images keyed by the message ID they relate to
-  const [generatedImages, setGeneratedImages] = useState<Record<string, { url: string; prompt: string }>>({})
   // Dynamic suggestions from garden
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
   // Prevent double-firing the push notification prompt
@@ -1527,37 +1524,6 @@ ${prefill.content || ''}`.trim()
                             </button>
                           )}
                         </div>
-                        {/* Create Image button — only on reflection responses */}
-                        {(() => {
-                          const prevUserMsg = msgIdx > 0 ? messages[msgIdx - 1] : null
-                          const userText = prevUserMsg?.role === 'user'
-                            ? prevUserMsg.parts.filter((p) => p.type === 'text').map((p) => (p as any).text || '').join('')
-                            : ''
-                          const isLastAss = msgIdx === messages.length - 1
-                          const img = generatedImages[message.id]
-                          if (!isLastAss || !userText || !isReflection(userText)) return null
-                          return (
-                            <div style={{ marginTop: 8 }}>
-                              {!img && (
-                                <CreateImageButton
-                                  reflectionText={userText}
-                                  authToken={authToken}
-                                  onImageGenerated={(url, prompt) => {
-                                    setGeneratedImages((prev) => ({ ...prev, [message.id]: { url, prompt } }))
-                                  }}
-                                />
-                              )}
-                              {img && (
-                                <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--hairline)', maxWidth: 320 }}>
-                                  <img src={img.url} alt="Visualization" style={{ width: '100%', height: 'auto', display: 'block' }} loading="lazy" />
-                                  <div style={{ padding: '8px 14px', background: 'var(--surface-sunk)' }}>
-                                    <p style={{ fontSize: 10, color: 'var(--ink-3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.prompt}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()}
                         </div>
                       </div>
                     )}

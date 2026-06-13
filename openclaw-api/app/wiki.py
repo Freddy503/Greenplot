@@ -89,64 +89,9 @@ IMPORTANT: Do NOT include a Timeline section — that will be appended automatic
 WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
 WIKI_MODEL = "google/gemini-3.5-flash"
 
-async def _save_image_locally(<BFL_API_KEY>: str, article_id: str, title: str) -> str:
-    """Download BFL image and save to local persistent storage. Returns absolute URL."""
-    import re, os, urllib.request
-    IMAGES_DIR = "/app/public/wiki-images"
-    os.makedirs(IMAGES_DIR, exist_ok=True)
-    safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title)[:35]
-    filename = f'{safe_title}_{article_id[:8]}.jpeg'
-    filepath = f'{IMAGES_DIR}/{filename}'
-    try:
-        req = urllib.request.Request(<BFL_API_KEY>)
-        req.add_header('User-Agent', 'Mozilla/5.0')
-        with urllib.request.urlopen(req, timeout=30) as r:
-            img_data = r.read()
-        with open(filepath, 'wb') as f:
-            f.write(img_data)
-        return f"https://api.greenplot.ink/api/v1/wiki/images/{filename}"
-    except Exception as e:
-        logger.warning(f"Failed to download image for {title}: {e}")
-        return ""
-
-
 async def _auto_generate_image(article_id: str, title: str, category: str = "", domain: str = "", tenant_id: str = ""):
-    """Generate and store a hero image for a wiki article in the background."""
-    try:
-        from app.ingest import generate_concept_image
-        tags = [t.strip() for t in (category or "").split(",") if t.strip()]
-        if domain:
-            tags.append(domain)
-        if title and title not in tags:
-            tags.insert(0, title)
-        <BFL_API_KEY> = await generate_concept_image(title or "Concept", tags)
-        if <BFL_API_KEY>:
-            # Download and save locally, get permanent URL
-            image_url = await _save_image_locally(<BFL_API_KEY>, article_id, title)
-            if image_url:
-                try:
-                    weaviate_client.client.data_object.update(
-                        data_object={"imageUrl": image_url},
-                        class_name="WikiArticle",
-                        uuid=article_id,
-                    )
-                    logger.info(f"Auto-generated image for {title}: {image_url}")
-                except Exception as e:
-                    logger.warning(f"Failed to store image URL for {title}: {e}")
-    except Exception as e:
-        logger.warning(f"Auto image generation failed for {title}: {e}")
-
-WIKI_FALLBACK_MODEL = "google/gemini-2.0-flash-001"  # Fallback if primary is rate-limited
-WIKI_MAX_TOKENS = 4000
-WIKI_TEMPERATURE = 0.5
-
-# ─── Compiled Truth + Timeline ────────────────────────────────────────────────
-# Inspired by GBrain's page structure: synthesized knowledge above the divider,
-# immutable append-only evidence trail below. This makes articles auditable and
-# reveals when knowledge is stale vs. recently reinforced.
-
-_TIMELINE_DIVIDER = "\n\n---\n\n## Timeline\n\n*Evidence trail — append only. Each entry records when new seeds or sources were incorporated into this article.*\n\n"
-
+    """Image generation removed (BFL retired) — articles render without hero images."""
+    return None
 def _build_timeline_entry(seed_count: int, link_count: int, source_titles: list[str]) -> str:
     """Build a single dated timeline entry for a compile event."""
     from datetime import datetime, timezone
@@ -1588,47 +1533,9 @@ async def export_article(article_id: str, request: Request, current_user = Depen
 
 
 @router.post("/{article_id}/generate-image")
-async def generate_article_image(
-    article_id: str,
-    request: Request,
-    current_user=Depends(get_current_user),
-):
-    """Generate a BFL concept image for a wiki article."""
-    user = current_user
-    tenant_id = str(user.tenant_id)
-
-    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
-    article = next((a for a in articles if a.get("id") == article_id), None)
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-
-    title = article.get("title", "")
-    tags = article.get("tags", "")
-    if isinstance(tags, str):
-        tags = [t.strip() for t in tags.split(",") if t.strip()]
-
-    from app.ingest import generate_concept_image
-    <BFL_API_KEY> = await generate_concept_image(title, tags)
-
-    if <BFL_API_KEY>:
-        # Download and save locally for permanent URL
-        image_url = await _save_image_locally(<BFL_API_KEY>, article_id, title)
-        if image_url:
-            # Update article with image URL
-            try:
-                weaviate_client.client.data_object.update(
-                    data_object={"imageUrl": image_url},
-                    class_name="WikiArticle",
-                    uuid=article_id,
-                )
-                logger.info(f"Image generated and stored for article {article_id}")
-            except Exception as e:
-                logger.warning(f"Failed to update article image: {e}")
-
-            return {"ok": True, "image_url": image_url}
-
-    return {"ok": False, "message": "Image generation failed"}
-
+async def generate_article_image(article_id: str, current_user=Depends(get_current_user)):
+    """Image generation was removed (BFL retired)."""
+    raise HTTPException(status_code=410, detail="Image generation has been removed")
 
 @router.get("/{article_id}/concept-map")
 async def get_concept_map(

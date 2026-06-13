@@ -448,34 +448,6 @@ TOOLS.append({
     }
 })
 
-# Generate an image via BFL FLUX
-TOOLS.append({
-    "type": "function",
-    "function": {
-        "name": "generate_image",
-        "description": "Generate an image using AI (BFL FLUX). Use when the user asks to create, visualize, or generate an image. Returns the image URL.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "Detailed description of the image to generate."
-                },
-                "width": {
-                    "type": "integer",
-                    "description": "Image width in pixels (256-2048, default 1024).",
-                    "default": 1024
-                },
-                "height": {
-                    "type": "integer",
-                    "description": "Image height in pixels (256-2048, default 1024).",
-                    "default": 1024
-                }
-            },
-            "required": ["prompt"]
-        }
-    }
-})
 
 # Create a wiki article from chat
 TOOLS.append({

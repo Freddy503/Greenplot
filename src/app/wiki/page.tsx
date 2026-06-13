@@ -685,7 +685,6 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
  const [loadingSources, setLoadingSources] = useState(false)
 
  // Image generation
- const [generatingImage, setGeneratingImage] = useState(false)
  const [imageUrl, setImageUrl] = useState<string | null>(article.imageUrl || null)
 
  // Deletion
@@ -750,24 +749,6 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
  Promise.all(fetches).finally(() => setLoadingSources(false))
  }, [article.id])
 
- // Generate BFL image
- const handleGenerateImage = async () => {
- setGeneratingImage(true)
- try {
- const res = await fetch(`/api/wiki/${article.id}/generate-image`, {
- method: 'POST',
- headers: {
-  'Content-Type': 'application/json',
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
- },
- })
- const data = await res.json()
- if (data.ok && data.image_url) {
- setImageUrl(data.image_url)
- }
- } catch {}
- setGeneratingImage(false)
- }
 
  return (
  <div className="animate-in slide-in-from-right duration-200" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8rem)' }}>
@@ -781,19 +762,6 @@ function ArticleDetail({ article, onBack, allArticles }: { article: WikiArticle;
   <span className="font-bold">Plants</span>
  </button>
  <div className="flex items-center gap-1">
-  {/* Generate image */}
-  <button
-  onClick={handleGenerateImage}
-  disabled={generatingImage}
-  className="flex items-center gap-1 text-sm text-on-surface-variant/60 hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container"
-  title="Generate concept image"
-  >
-  {generatingImage ? (
-  <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
-  ) : (
-  <span className="material-symbols-outlined text-lg">image</span>
-  )}
-  </button>
   {/* Share */}
   <button
   onClick={() => {

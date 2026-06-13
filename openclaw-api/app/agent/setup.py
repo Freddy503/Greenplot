@@ -308,32 +308,6 @@ def setup_default_registry(api_key: str = "", model: str = "anthropic/claude-son
 
     # ── Image Generation ──────────────────────────────────────────
 
-    registry.register(ToolSpec(
-        name="generate_image",
-        description="Generate an image using BFL FLUX AI. ALWAYS call this tool immediately when the user asks to create, generate, or visualize an image. Do NOT respond with text — call this tool directly.",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "Detailed description of the image to generate.",
-                },
-                "width": {
-                    "type": "integer",
-                    "description": "Image width in pixels (256-2048, default 1024).",
-                    "default": 1024,
-                },
-                "height": {
-                    "type": "integer",
-                    "description": "Image height in pixels (256-2048, default 1024).",
-                    "default": 1024,
-                },
-            },
-            "required": ["prompt"],
-        },
-        permission=PermissionLevel.READ,
-        handler=TOOL_HANDLERS.get("generate_image"),
-    ))
 
     # ── Spec / PRD Tools ─────────────────────────────────────────
 

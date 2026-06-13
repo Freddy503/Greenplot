@@ -26,8 +26,6 @@ class Settings(BaseSettings):
     ENRICH_MODEL: str = "minimax/minimax-m2.7"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
-    BFL_API_KEY: Optional[str] = None
-    BFL_API_URL: str = "https://api.bfl.ai/v1/flux-dev"
     EXA_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None  # for Whisper + vision
 

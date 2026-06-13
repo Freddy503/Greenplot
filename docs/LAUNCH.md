@@ -207,6 +207,6 @@ critical paths, git-history purge once collaborators join
 | `DAILY_TOKEN_LIMIT` | Per-user daily LLM cap |
 | `VAPID_PRIVATE_KEY_BASE64` | Web push (frontend pair: `NEXT_PUBLIC_VAPID_KEY` on Vercel) |
 | `GITHUB_OAUTH_CLIENT_ID/SECRET` | One-click GitHub connect (§1.1) |
-| `EXA_API_KEY`, `OPENAI_API_KEY`, `BFL_API_KEY`, `GROQ_API_KEY`, `NVIDIA_API_KEY` | Search / Whisper / images / misc |
+| `EXA_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `NVIDIA_API_KEY` | Search / Whisper / misc |
 | `SENTRY_DSN` | Error monitoring |
 | `FRONTEND_URL` | Used in invite links + OAuth redirects — must be the prod URL |
