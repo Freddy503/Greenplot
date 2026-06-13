@@ -40,6 +40,16 @@ class ApiKey(Base):
     last_used_at = Column(DateTime, nullable=True)
     revoked = Column(Boolean, default=False, nullable=False)
 
+class WaitlistEntry(Base):
+    """Landing-page waitlist signups — durable storage (the Vercel route's
+    filesystem fallback was ephemeral and lost entries)."""
+    __tablename__ = 'waitlist'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(320), unique=True, nullable=False, index=True)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    invited_at = Column(DateTime, nullable=True)
+    source = Column(String(50), nullable=True, default='landing')
+
 class Thought(Base):
     __tablename__ = 'thoughts'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

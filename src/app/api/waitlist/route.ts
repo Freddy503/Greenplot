@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 
 const FROM = 'Greenplot <digest@greenplot.ink>'
 const NOTIFY_TO = 'contact@example.com'
+const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 
 const recentEmails = new Set<string>()
 
@@ -44,22 +43,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // Durable storage FIRST — the backend Postgres is the source of truth.
+    // (The old filesystem fallback wrote to Vercel's ephemeral lambda disk
+    // and silently lost entries.)
+    let stored = false
+    try {
+      const res = await fetch(`${BACKEND}/api/v1/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalized }),
+        signal: AbortSignal.timeout(8000),
+      })
+      stored = res.ok
+    } catch (err) {
+      console.error('[waitlist] Backend store failed:', err)
+    }
+
     if (!apiKey) {
-      // Fallback: persist email to filesystem when Resend is not configured
-      try {
-        const filePath = process.env.WAITLIST_FILE || path.join(process.cwd(), 'data', 'waitlist.json')
-        const dir = path.dirname(filePath)
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-        const existing: { email: string; joinedAt: string }[] = fs.existsSync(filePath)
-          ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
-          : []
-        if (!existing.some(e => e.email === normalized)) {
-          existing.push({ email: normalized, joinedAt: new Date().toISOString() })
-          fs.writeFileSync(filePath, JSON.stringify(existing, null, 2))
-        }
-        console.info(`[waitlist] No RESEND_API_KEY — saved ${normalized} to ${filePath}`)
-      } catch (err) {
-        console.error('[waitlist] Fallback write failed:', err)
+      // No Resend configured — storage is all we can do
+      if (!stored) {
+        return NextResponse.json({ error: 'Could not save — please try again' }, { status: 502 })
       }
       recentEmails.add(normalized)
       setTimeout(() => recentEmails.delete(normalized), 10 * 60 * 1000)

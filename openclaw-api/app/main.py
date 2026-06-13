@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, or_
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 import os
 import logging
 
@@ -2558,6 +2558,15 @@ def admin_send_invites(
             onboarding_url = f"{settings.FRONTEND_URL}/onboarding?email={quote(email)}&code={code}"
             if send_invite_email(email, code, onboarding_url):
                 sent.append(email)
+                # Mark on the waitlist if they're there
+                try:
+                    from app.models import WaitlistEntry
+                    entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+                    if entry and not entry.invited_at:
+                        entry.invited_at = datetime.utcnow()
+                        db.commit()
+                except Exception:
+                    db.rollback()
             else:
                 failed.append(email)
         except Exception as e:
@@ -2565,6 +2574,22 @@ def admin_send_invites(
             failed.append(email)
 
     return {"sent": sent, "failed": failed, "code": code}
+
+
+class WaitlistRequest(BaseModel):
+    email: EmailStr
+
+
+@app.post("/api/v1/waitlist")
+def join_waitlist(req: WaitlistRequest, db: Session = Depends(get_db)):
+    """Durable waitlist storage (public). Idempotent per email."""
+    from app.models import WaitlistEntry
+    email = req.email.strip().lower()
+    existing = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+    if not existing:
+        db.add(WaitlistEntry(email=email))
+        db.commit()
+    return {"ok": True}
 
 
 class InviteCodeRequest(BaseModel):
@@ -2690,6 +2715,13 @@ def admin_stats(current_user: User = Depends(get_current_user), db: Session = De
         1 for s in db.query(Seed).all()
         if isinstance(s.seed_metadata, dict) and s.seed_metadata.get("seed_type") == "spec")
 
+    from app.models import WaitlistEntry
+    waitlist = [{
+        "email": w.email,
+        "joined_at": w.joined_at.isoformat() if w.joined_at else None,
+        "invited_at": w.invited_at.isoformat() if w.invited_at else None,
+    } for w in db.query(WaitlistEntry).order_by(WaitlistEntry.joined_at.desc()).all()]
+
     return {
         "users": users,
         "user_count": len(users),
@@ -2699,6 +2731,8 @@ def admin_stats(current_user: User = Depends(get_current_user), db: Session = De
         "tokens_by_day": tokens_by_day,
         "chat_model": settings.CHAT_MODEL,
         "daily_token_limit": settings.DAILY_TOKEN_LIMIT,
+        "waitlist": waitlist,
+        "waitlist_count": len(waitlist),
     }
 
 # --- Attachments helper ---
