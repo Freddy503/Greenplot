@@ -8,6 +8,7 @@ import httpx
 import asyncio
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,9 @@ IMPORTANT: Do NOT include a Timeline section — that will be appended automatic
 WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
 WIKI_MODEL = settings.WIKI_MODEL  # kept on Gemini by default; see config.py to migrate
 WIKI_FALLBACK_MODEL = settings.WIKI_FALLBACK_MODEL
+WIKI_MAX_TOKENS = 4000
+WIKI_TEMPERATURE = 0.5
+_TIMELINE_DIVIDER = "\n\n---\n\n## Timeline\n\n*Evidence trail — append only. Each entry records when new seeds or sources were incorporated into this article.*\n\n"
 
 async def _auto_generate_image(article_id: str, title: str, category: str = "", domain: str = "", tenant_id: str = ""):
     """Image generation removed (BFL retired) — articles render without hero images."""

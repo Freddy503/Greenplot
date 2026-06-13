@@ -1,5 +1,6 @@
 import json
 import weaviate
+from datetime import datetime
 from weaviate.exceptions import UnexpectedStatusCodeException
 from app.config import settings
 
