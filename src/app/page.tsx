@@ -374,9 +374,10 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
   }, [onVisibilityChange])
   return (
     <section ref={ref} style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden', background: 'hsl(201,100%,13%)' }}>
+      {/* Hero loop generated with Higgsfield AI (2026-03-14) — provenance in docs/CREDITS.md */}
       <video autoPlay loop muted playsInline
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}>
-        <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4" type="video/mp4" />
+        <source src="/hero-garden.mp4" type="video/mp4" />
       </video>
       <div style={{
         position: 'absolute', inset: 0, zIndex: 1,
