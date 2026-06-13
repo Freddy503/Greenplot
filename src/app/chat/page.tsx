@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PromptBox } from '@/components/ui/chatgpt-prompt-input'
 import { VoiceOverlay } from '@/components/ui/voice-overlay'
+import { clearAuth } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Empty,
@@ -319,9 +320,7 @@ export default function ChatPage() {
       console.error('[chat] useChat error:', err)
       const msg = String(err)
       if (msg.includes('401') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('not authenticated') || msg.toLowerCase().includes('could not validate')) {
-        localStorage.removeItem('greenplot_token')
-        localStorage.removeItem('greenplot_tenant')
-        localStorage.removeItem('greenplot_nickname')
+        clearAuth() // also wipes cached chat state so the next user starts clean
         window.location.href = '/login'
       }
     },

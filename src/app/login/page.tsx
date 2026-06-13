@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 import { Leaf, User, Lock, Eye, EyeOff } from 'lucide-react'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
+import { clearChatCache } from '@/lib/api'
 
 function LoginForm() {
   const router = useRouter()
@@ -49,6 +50,9 @@ function LoginForm() {
 
       const { access_token, tenant_id } = await res.json()
 
+      // Switching accounts on this browser — drop any cached chats from the
+      // previously signed-in user before storing the new session.
+      clearChatCache()
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
 
