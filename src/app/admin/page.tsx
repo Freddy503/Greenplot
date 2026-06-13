@@ -26,6 +26,8 @@ interface AdminStats {
   tokens_by_day: Array<{ date: string; tokens: number }>
   chat_model: string
   daily_token_limit: number
+  waitlist?: Array<{ email: string; joined_at: string | null; invited_at: string | null }>
+  waitlist_count?: number
 }
 
 // Rough blended $/M tokens for the configured chat model — an estimate for
@@ -137,6 +139,32 @@ export default function AdminPage() {
                 <div className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green-700)' }}>{u.seeds} seeds</div>
                 <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{fmt(u.tokens_30d)} tok/30d</div>
               </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Waitlist */}
+        <div className="caps" style={{ fontSize: 10, color: 'var(--ink-3)', margin: '22px 2px 8px' }}>
+          Waitlist{typeof stats.waitlist_count === 'number' ? ` · ${stats.waitlist_count}` : ''}
+        </div>
+        <div className="v2-card" style={{ borderRadius: 18, overflow: 'hidden', padding: 0 }}>
+          {(!stats.waitlist || stats.waitlist.length === 0) && (
+            <p className="body-text" style={{ padding: '14px 15px', fontSize: 12, color: 'var(--ink-3)', margin: 0 }}>
+              No waitlist entries yet. (Signups before the Postgres fix live in your Gmail
+              notifications &amp; the Resend sent-mail log.)
+            </p>
+          )}
+          {(stats.waitlist || []).map((w, i) => (
+            <div key={w.email} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 15px', borderBottom: i === (stats.waitlist!.length - 1) ? 'none' : '1px solid var(--hairline)' }}>
+              <span className="ui" style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.email}</span>
+              <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', flexShrink: 0 }}>
+                {w.joined_at ? new Date(w.joined_at).toLocaleDateString() : '—'}
+              </span>
+              {w.invited_at ? (
+                <span className="caps" style={{ fontSize: 8.5, color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 99, padding: '3px 8px', flexShrink: 0 }}>invited</span>
+              ) : (
+                <span className="caps" style={{ fontSize: 8.5, color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 99, padding: '3px 8px', flexShrink: 0 }}>waiting</span>
+              )}
             </div>
           ))}
         </div>
