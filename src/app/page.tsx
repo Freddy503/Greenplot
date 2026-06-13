@@ -1366,6 +1366,10 @@ function Waitlist() {
         )}
         {status === 'error' && <p style={{ fontSize: 12, color: 'rgba(239,68,68,0.75)', marginTop: '0.75rem', fontFamily: 'var(--font-body)', margin: '0.75rem auto 0' }}>{errorMsg}</p>}
         <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', marginTop: '1.5rem', fontFamily: 'var(--font-body)', fontWeight: 300 }}>No spam. Unsubscribe anytime.</p>
+        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: '0.6rem', fontFamily: 'var(--font-body)', fontWeight: 300 }}>
+          Have an invite code?{' '}
+          <a href="/onboarding" style={{ color: 'rgba(34,197,94,0.85)', textDecoration: 'underline', fontWeight: 400 }}>Enter it here →</a>
+        </p>
       </div>
     </section>
   )
