@@ -1157,6 +1157,11 @@ async def generate_spec_diagram_code(
     return MermaidDiagramResponse(mermaid=code, seed_id=str(seed.id))
 
 
+class PaperIngestRequest(BaseModel):
+    arxiv_id: Optional[str] = None
+    url: Optional[str] = None
+
+
 @app.post("/api/v1/papers/ingest")
 async def ingest_paper_endpoint(
     req: PaperIngestRequest,
@@ -2321,6 +2326,7 @@ class InviteRequest(BaseModel):
 def admin_send_invites(
     req: InviteRequest,
     x_api_key: str = Header(default=""),
+    db: Session = Depends(get_db),
 ):
     """Send invite emails with the access code and a direct onboarding link. Requires HARVEST_API_KEY."""
     expected = settings.HARVEST_API_KEY

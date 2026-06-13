@@ -128,7 +128,7 @@ def skim_garden(agent_type: str, current_user: User = Depends(get_current_user))
     if agent_type in ("pattern", "all"): results["pattern"] = _pattern_agent(seeds, wiki_articles, tenant_id, str(current_user.id))
     if agent_type in ("gap", "all"): results["gap"] = _gap_agent(seeds, wiki_articles, tenant_id, str(current_user.id))
     if agent_type in ("trend", "all"): results["trend"] = _trend_agent(seeds, tenant_id, str(current_user.id))
-    if agent_type in ("quality", "all"): results["quality"] = _quality_agent(seeds, tensor_id, str(current_user.id))
+    if agent_type in ("quality", "all"): results["quality"] = _quality_agent(seeds, tenant_id, str(current_user.id))
     return {"success": True, "insights": results}
 
 
