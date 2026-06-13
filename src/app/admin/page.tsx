@@ -103,7 +103,7 @@ export default function AdminPage() {
   const maxDay = Math.max(1, ...stats.tokens_by_day.map(d => d.tokens))
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+    <div style={{ height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: 'var(--bg)' }}>
       <div className="hero-forest" style={{ borderRadius: '0 0 28px 28px', paddingTop: 'calc(env(safe-area-inset-top) + 44px)', paddingBottom: 22 }}>
         <div style={{ position: 'relative', zIndex: 2, padding: '0 18px', maxWidth: 920, margin: '0 auto' }}>
           <div className="caps" style={{ fontSize: 10.5, color: 'rgba(180,240,205,0.82)', marginBottom: 10 }}>Operator</div>
