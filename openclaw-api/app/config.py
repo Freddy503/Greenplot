@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: Optional[str] = None
     # Each tier is its own OpenRouter slug, overridable via the matching env var.
-    # Interactive chat / agent model.
-    CHAT_MODEL: str = "mistralai/mistral-small-2603"
+    # Interactive chat / agent — fast, low-latency, non-reasoning responses.
+    CHAT_MODEL: str = "deepseek/deepseek-v4-flash"
     # Briefings, Research Digest, reflections, weekly eval — long-context synthesis.
     BRIEFING_MODEL: str = "xiaomi/mimo-v2.5"
     # Premium one-off generation (strategy / solution-design papers).
