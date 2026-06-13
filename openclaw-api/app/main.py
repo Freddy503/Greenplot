@@ -2370,6 +2370,57 @@ def admin_send_invites(
     return {"sent": sent, "failed": failed, "code": code}
 
 
+class WaitlistInviteRequest(BaseModel):
+    emails: Optional[List[str]] = None  # specific addresses; omit to invite everyone still waiting
+    code: Optional[str] = None
+
+
+@app.post("/api/v1/admin/waitlist/invite")
+def admin_invite_waitlist(
+    req: WaitlistInviteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Invite waitlist signups straight from the /admin dashboard (gated on
+    ADMIN_EMAILS via the operator's JWT — no API key needed). With no `emails`,
+    invites everyone still waiting. Sets invited_at so nobody is invited twice."""
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+    if (current_user.email or "").lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    from urllib.parse import quote
+    from app.email_sender import send_invite_email
+    from app.models import WaitlistEntry
+
+    code = (req.code or settings.INVITE_CODES.split(",")[0]).strip().upper()
+    if not _invite_code_valid(code):
+        raise HTTPException(status_code=400, detail=f"Code '{code}' is not in INVITE_CODES")
+
+    q = db.query(WaitlistEntry).filter(WaitlistEntry.invited_at.is_(None))
+    if req.emails:
+        wanted = {e.strip().lower() for e in req.emails if e and "@" in e}
+        q = q.filter(WaitlistEntry.email.in_(wanted))
+    entries = q.order_by(WaitlistEntry.joined_at.asc()).limit(100).all()
+
+    sent, failed = [], []
+    for entry in entries:
+        try:
+            onboarding_url = f"{settings.FRONTEND_URL}/onboarding?email={quote(entry.email)}&code={code}"
+            if send_invite_email(entry.email, code, onboarding_url):
+                entry.invited_at = datetime.utcnow()
+                db.commit()
+                sent.append(entry.email)
+            else:
+                db.rollback()
+                failed.append(entry.email)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Waitlist invite failed for {entry.email}: {e}")
+            failed.append(entry.email)
+
+    return {"sent": sent, "failed": failed, "code": code, "count": len(sent)}
+
+
 class WaitlistRequest(BaseModel):
     email: EmailStr
 

@@ -5,8 +5,8 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
-import { Users, Sprout, FileText, Cpu } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Users, Sprout, FileText, Cpu, Send } from 'lucide-react'
 
 interface AdminUser {
   email: string
@@ -58,17 +58,35 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: React.ComponentType
 export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'denied'>('loading')
+  const [inviting, setInviting] = useState<string | null>(null) // email being invited, or 'all'
 
-  useEffect(() => {
+  const loadStats = useCallback(async () => {
     const token = localStorage.getItem('greenplot_token') || ''
-    fetch('/api/admin/stats', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then(async (r) => {
-        if (!r.ok) { setState('denied'); return }
-        setStats(await r.json())
-        setState('ok')
-      })
-      .catch(() => setState('denied'))
+    try {
+      const r = await fetch('/api/admin/stats', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      if (!r.ok) { setState('denied'); return }
+      setStats(await r.json())
+      setState('ok')
+    } catch { setState('denied') }
   }, [])
+
+  useEffect(() => { loadStats() }, [loadStats])
+
+  const invite = useCallback(async (emails: string[] | null, key: string) => {
+    if (inviting) return
+    const token = localStorage.getItem('greenplot_token') || ''
+    setInviting(key)
+    try {
+      const r = await fetch('/api/admin/waitlist/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(emails ? { emails } : {}),
+      })
+      const data = await r.json()
+      if (r.ok) await loadStats()
+      else alert(data.detail || data.error || 'Invite failed')
+    } catch { alert('Could not reach backend') } finally { setInviting(null) }
+  }, [inviting, loadStats])
 
   if (state === 'loading') {
     return <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -144,8 +162,21 @@ export default function AdminPage() {
         </div>
 
         {/* Waitlist */}
-        <div className="caps" style={{ fontSize: 10, color: 'var(--ink-3)', margin: '22px 2px 8px' }}>
-          Waitlist{typeof stats.waitlist_count === 'number' ? ` · ${stats.waitlist_count}` : ''}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '22px 2px 8px', gap: 10 }}>
+          <span className="caps" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
+            Waitlist{typeof stats.waitlist_count === 'number' ? ` · ${stats.waitlist_count}` : ''}
+          </span>
+          {(stats.waitlist || []).some(w => !w.invited_at) && (
+            <button
+              onClick={() => { const n = (stats.waitlist || []).filter(w => !w.invited_at).length; if (confirm(`Send invite emails to all ${n} waiting?`)) invite(null, 'all') }}
+              disabled={!!inviting}
+              className="tap"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', border: '1px solid var(--green-700)', borderRadius: 9999, padding: '5px 12px', fontFamily: 'var(--ui)', fontSize: 11, fontWeight: 600, color: 'var(--green-700)', cursor: inviting ? 'default' : 'pointer', opacity: inviting ? 0.6 : 1 }}
+            >
+              <Send size={11} strokeWidth={2} />
+              {inviting === 'all' ? 'Inviting…' : 'Invite all waiting'}
+            </button>
+          )}
         </div>
         <div className="v2-card" style={{ borderRadius: 18, overflow: 'hidden', padding: 0 }}>
           {(!stats.waitlist || stats.waitlist.length === 0) && (
@@ -163,7 +194,15 @@ export default function AdminPage() {
               {w.invited_at ? (
                 <span className="caps" style={{ fontSize: 8.5, color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 99, padding: '3px 8px', flexShrink: 0 }}>invited</span>
               ) : (
-                <span className="caps" style={{ fontSize: 8.5, color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 99, padding: '3px 8px', flexShrink: 0 }}>waiting</span>
+                <button
+                  onClick={() => invite([w.email], w.email)}
+                  disabled={!!inviting}
+                  className="tap"
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1px solid var(--green-700)', borderRadius: 99, padding: '4px 10px', fontFamily: 'var(--ui)', fontSize: 10, fontWeight: 600, color: 'var(--green-700)', cursor: inviting ? 'default' : 'pointer', opacity: inviting ? 0.6 : 1, flexShrink: 0 }}
+                >
+                  <Send size={10} strokeWidth={2} />
+                  {inviting === w.email ? 'Inviting…' : 'Invite'}
+                </button>
               )}
             </div>
           ))}
