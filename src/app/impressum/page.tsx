@@ -59,6 +59,18 @@ export default function ImpressumPage() {
       </section>
 
       <section className="mb-8">
+        <h2 className="text-lg font-semibold text-on-surface mb-3">Urheberrecht &amp; verwendete Inhalte</h2>
+        <p className="text-sm text-on-surface-variant leading-relaxed">
+          Die Inhalte dieser Seiten unterliegen dem deutschen Urheberrecht. Das Hintergrundvideo
+          auf der Startseite wurde mit{' '}
+          <a href="https://higgsfield.ai" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Higgsfield AI</a>{' '}
+          erstellt (KI-generiert, 2026). Verwendete Schriften: Instrument Serif, Barlow und Sora
+          (Google Fonts, SIL Open Font License); Icons: Lucide (ISC-Lizenz). Eine vollständige
+          Übersicht der verwendeten Assets ist in unserem Repository dokumentiert.
+        </p>
+      </section>
+
+      <section className="mb-8">
         <h2 className="text-lg font-semibold text-on-surface mb-3">Datenschutz</h2>
         <p className="text-sm text-on-surface-variant leading-relaxed">
           Informationen zur Verarbeitung personenbezogener Daten finden Sie in unserer{' '}
