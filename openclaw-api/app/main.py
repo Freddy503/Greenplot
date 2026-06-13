@@ -4451,6 +4451,8 @@ def _job_coherence_report():
     job_db = SessionLocal()
     try:
         for user in job_db.query(User).all():
+            if _is_test_account(user):
+                continue
             mains = [p for p in job_db.query(Seed).filter(
                 Seed.tenant_id == user.tenant_id, Seed.seed_type == "product").all()
                 if (p.seed_metadata or {}).get("rank") == "main"]
@@ -4484,6 +4486,8 @@ def _job_weekly_digest():
     db = next(get_db())
     try:
         for user in db.query(User).all():
+            if _is_test_account(user):
+                continue
             _sto<RESEND_API_KEY>(
                 str(user.id),
                 "📚 Weekly Garden Digest",
@@ -4501,6 +4505,8 @@ def _job_weekly_eval():
     db = next(get_db())
     try:
         for user in db.query(User).filter(User.email != None, User.email != '').all():  # noqa: E711
+            if _is_test_account(user):
+                continue
             try:
                 briefing = briefings.build_weekly_eval(user_id=str(user.id), db=db)
                 _sto<RESEND_API_KEY>(briefing, user)
@@ -4526,6 +4532,8 @@ def _job_biweekly_challenge():
     db = next(get_db())
     try:
         for user in db.query(User).all():
+            if _is_test_account(user):
+                continue
             try:
                 briefing = briefings.build_biweekly_challenge(user_id=str(user.id), db=db)
                 _sto<RESEND_API_KEY>(briefing, user)
@@ -4647,10 +4655,29 @@ def _sto<RESEND_API_KEY>(briefing: dict):
         logger.error(f"❌ Briefing storage failed: {e}", exc_info=True)
 
 
+def _is_test_account(user) -> bool:
+    """True when the user's email belongs to a configured test/seed domain (or
+    is missing). Briefing + digest jobs skip these so cron runs don't email or
+    push throwaway accounts. Domains come from settings.BRIEFING_EXCLUDE_DOMAINS."""
+    email = (getattr(user, "email", "") or "").strip().lower()
+    if not email or "@" not in email:
+        return True  # no real address — never a briefing recipient
+    domain = email.rsplit("@", 1)[1]
+    excluded = {
+        d.strip().lower()
+        for d in (settings.BRIEFING_EXCLUDE_DOMAINS or "").split(",")
+        if d.strip()
+    }
+    return domain in excluded
+
+
 def _cadence_allows(job_type: str, user) -> bool:
     """Per-user delivery gate — maps the onboarding rhythm (digest_frequency)
     onto the global briefing jobs. The Research Digest is the flagship: on
     slower cadences it thins out instead of disappearing."""
+    # Test/seed accounts never receive scheduled briefings.
+    if _is_test_account(user):
+        return False
     freq = (getattr(user, "digest_frequency", None) or "once-daily")
     weekday = datetime.now(_CET).weekday()  # 0=Mon .. 6=Sun
     # The evening Research Digest (18:00) is the twice-daily tier's second
