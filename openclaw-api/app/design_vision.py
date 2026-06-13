@@ -5,7 +5,7 @@ Spec: docs/specs/design-vision-doc.md
 
 Select 2+ PRDs → generate one Design Vision document (positioning, experience
 principles, CSS design tokens, screen inventory) stored as an editable Library
-article, plus a BFL moodboard. Each batch PRD gains a Design section and the
+article. Each batch PRD gains a Design section and the
 token sheet in metadata so MCP serves it to implementing agents.
 """
 
@@ -56,13 +56,6 @@ TOKENS_PROMPT = """Derive a design-token sheet from this Design Vision Doc. Repl
  "radius": {"sm": "<px>", "md": "<px>", "lg": "<px>"}}
 All colors as hex. Honor the doc's commitments exactly."""
 
-MOODBOARD_STYLE = (
-    "Professional product design moodboard, flat vector style, clean 2x3 grid on white: "
-    "color palette swatches with hex labels, a typography specimen card, one abstract app "
-    "screen impression, one UI component cluster (buttons, cards, input), a spacing/radius "
-    "study, and one texture/mood tile. Single accent color discipline. "
-    "STRICTLY NO photorealism, 3D, gradients, or people. Brief: "
-)
 
 REQUIRED_TOKEN_KEYS = {"color", "type", "spacing", "radius"}
 
@@ -151,16 +144,6 @@ def generate_design_vision(seed_ids: list[str], user: User, db: Session) -> dict
         source_seed_ids=",".join(str(s.id) for s in seeds),
         status="published",
     )
-
-    # Moodboard (best-effort — BFL is allowed to fail without blocking the doc)
-    try:
-        import asyncio
-        from app.main import <BFL_API_KEY>
-        brief = (doc.split("## Visual Language")[1][:600] if "## Visual Language" in doc else doc[:600])
-        url = asyncio.run(<BFL_API_KEY>(MOODBOARD_STYLE + brief, width=1408, height=1024))
-        weaviate_client.update_wiki_article(article_id, imageUrl=url)
-    except Exception as e:
-        logger.warning(f"[design_vision] moodboard failed: {e}")
 
     # Stamp every PRD: Design section + tokens in metadata (served over MCP)
     principles = _extract_principles(doc)

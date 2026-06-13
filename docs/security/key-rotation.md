@@ -30,7 +30,6 @@ Create the new key first, then delete the old one:
 | `OPENAI_API_KEY` | <https://platform.openai.com/api-keys> |
 | `RESEND_API_KEY` | <https://resend.com/api-keys> |
 | `EXA_API_KEY` | <https://dashboard.exa.ai/api-keys> |
-| `BFL_API_KEY` | <https://api.bfl.ai> → account → keys |
 | `NVIDIA_API_KEY` | <https://build.nvidia.com> → profile → API keys |
 | `GROQ_API_KEY` | <https://console.groq.com/keys> |
 | `GITHUB_TOKEN` | <https://github.com/settings/tokens> — use fine-grained, repo-scoped |

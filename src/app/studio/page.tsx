@@ -532,7 +532,7 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
     try {
       const token = localStorage.getItem('greenplot_token')
       // Mermaid code from the text model — deterministic render with real
-      // labels (BFL raster diagrams garbled text and structure)
+      // labels (raster image diagrams garbled text and structure)
       const res = await fetch(`/api/specs/${prd.id}/diagram-code`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -813,7 +813,7 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
               <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hairline)', marginBottom: 16 }}>
                 <img src={diagramUrl} alt="System architecture diagram" style={{ width: '100%', height: 'auto', display: 'block' }} loading="lazy" />
                 <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface-sunk)' }}>
-                  <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>System architecture · BFL Flux</span>
+                  <span className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>System architecture</span>
                   <button onClick={generateDiagram} disabled={generating} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>
                     {generating ? 'Regenerating…' : 'Regenerate'}
                   </button>

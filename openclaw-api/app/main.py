@@ -1079,151 +1079,7 @@ def get_briefing(current_user: User = Depends(get_current_user), db: Session = D
     image_url = None
     return BriefingResponse(text="\n".join(parts), image_url=image_url)
 
-# --- Image Generation (BFL/FLUX) ---
-
-BFL_API_KEY = os.environ.get("BFL_API_KEY", "")
-BFL_BASE_URL = "https://api.bfl.ai"
-
-class ImageGenerateRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=2000)
-    width: int = Field(default=1024, ge=256, le=2048)
-    height: int = Field(default=1024, ge=256, le=2048)
-
-class ImageGenerateResponse(BaseModel):
-    url: str
-    prompt: str
-
-async def <BFL_API_KEY>(prompt: str, width: int = 1024, height: int = 1024) -> str:
-    """Generate an image via BFL FLUX — async submit → poll → return URL. Raises HTTPException on failure."""
-    if not BFL_API_KEY:
-        raise HTTPException(status_code=503, detail="Image generation not configured (missing BFL_API_KEY)")
-
-    import httpx
-    import asyncio
-
-    headers = {
-        "Content-Type": "application/json",
-        "x-key": BFL_API_KEY,
-    }
-
-    # 1. Submit generation task
-    async with httpx.AsyncClient(timeout=60) as client:
-        submit_resp = await client.post(
-            f"{BFL_BASE_URL}/v1/flux-pro-1.1",
-            headers=headers,
-            json={
-                "prompt": prompt,
-                "width": width,
-                "height": height,
-            },
-        )
-
-        if submit_resp.status_code == 402:
-            raise HTTPException(status_code=502, detail="BFL credits exhausted")
-        if submit_resp.status_code == 429:
-            raise HTTPException(status_code=429, detail="BFL rate limited, try again later")
-        if submit_resp.status_code != 200:
-            raise HTTPException(
-                status_code=502,
-                detail=f"BFL submit failed ({submit_resp.status_code}): {submit_resp.text[:200]}"
-            )
-
-        task = submit_resp.json()
-        task_id = task.get("id")
-        if not task_id:
-            raise HTTPException(status_code=502, detail=f"BFL response missing task id: {task}")
-
-        # 2. Poll for result (max ~30s)
-        for _ in range(30):
-            await asyncio.sleep(1)
-            poll_resp = await client.get(
-                f"{BFL_BASE_URL}/v1/get_result",
-                headers={"x-key": BFL_API_KEY},
-                params={"id": task_id},
-            )
-
-            # Non-retryable errors
-            if poll_resp.status_code == 402:
-                raise HTTPException(status_code=502, detail="BFL credits exhausted")
-            if poll_resp.status_code == 429:
-                raise HTTPException(status_code=429, detail="BFL rate limited")
-            if poll_resp.status_code != 200:
-                continue  # Transient error, retry
-
-            result = poll_resp.json()
-            status = result.get("status", "")
-
-            if status == "Ready":
-                sample = result.get("result", {}).get("sample")
-                if sample:
-                    return sample
-                raise HTTPException(status_code=502, detail="BFL returned Ready but no sample URL")
-
-            if status == "Error":
-                error_msg = result.get("result", "Unknown BFL error")
-                raise HTTPException(status_code=502, detail=f"BFL generation failed: {error_msg}")
-
-        raise HTTPException(status_code=504, detail="Image generation timed out (30s)")
-
-
-def _track_image_usage(db: Session, current_user: User):
-    today = date.today()
-    usage = db.query(Usage).filter(
-        Usage.tenant_id == current_user.tenant_id,
-        Usage.date >= today
-    ).first()
-    if not usage:
-        usage = Usage(
-            tenant_id=current_user.tenant_id,
-            user_id=current_user.id,
-            date=today,
-            images_generated=1,
-        )
-        db.add(usage)
-    else:
-        usage.images_generated = (usage.images_generated or 0) + 1
-    db.commit()
-
-
-@app.post("/api/v1/images/generate", response_model=ImageGenerateResponse)
-async def generate_image(
-    req: ImageGenerateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate an image via BFL FLUX.2 [pro] — async submit → poll → return URL."""
-    url = await <BFL_API_KEY>(req.prompt, req.width, req.height)
-    _track_image_usage(db, current_user)
-    return ImageGenerateResponse(url=url, prompt=req.prompt)
-
-
-# --- Spec Architecture Diagrams (BFL/FLUX) ---
-
-# System prompt for architecture diagrams: a fixed compositional template so
-# every generated diagram looks like it came from the same professional deck —
-# only the boxes' contents change with the spec.
-ARCHITECTURE_DIAGRAM_STYLE = (
-    "Professional software architecture diagram in clean flat vector style, as drawn by a "
-    "senior solutions architect for an executive deck. "
-    "FIXED COMPOSITION: pure white background; a thin dark title bar across the very top with the "
-    "system name in white sans-serif; below it exactly three horizontal layers separated by "
-    "generous whitespace — top layer 'Clients & Interfaces', middle layer 'Application & Services', "
-    "bottom layer 'Data & Infrastructure' — each layer labeled with a small uppercase grey caption "
-    "on the left. Components are rounded rectangles with 2px dark-slate outlines, white fill, a "
-    "single short bold label inside, and a small flat monochrome icon above the label. Data flows "
-    "are straight vertical or right-angle arrows with solid dark-slate heads and small italic labels. "
-    "External third-party services sit in a dashed-outline group on the right edge. "
-    "COLOR: white background, dark slate (#2f3b3a) lines and text, one single accent color "
-    "forest green (#15803d) used only for the 2-3 most important components and the title bar. "
-    "STRICTLY NO: photorealism, 3D, gradients, shadows, decorative illustrations, people, "
-    "screenshots, more than 12 boxes, or any text smaller than legible label size"
-)
-
-
-class SpecDiagramResponse(BaseModel):
-    url: str
-    seed_id: str
-    article_updated: bool
+# --- Spec Architecture Diagrams (Mermaid) ---
 
 
 def _extract_architecture_section(content: str) -> str:
@@ -1260,7 +1116,7 @@ async def generate_spec_diagram_code(
 ):
     """Generate the architecture diagram as Mermaid code (deterministic render).
 
-    Replaces BFL raster diagrams for PRDs: diffusion models cannot spell or
+    Text-native diagrams: diffusion models cannot spell or
     keep structure coherent — text-model-generated Mermaid can. ~5s, one
     small LLM call; the frontend renders it client-side.
     """
@@ -1299,74 +1155,6 @@ async def generate_spec_diagram_code(
     db.commit()
 
     return MermaidDiagramResponse(mermaid=code, seed_id=str(seed.id))
-
-
-@app.post("/api/v1/specs/{seed_id}/diagram", response_model=SpecDiagramResponse)
-async def generate_spec_diagram(
-    seed_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate a BFL Flux system-architecture diagram for a spec seed.
-
-    Uses the PRD's '## System Architecture' section as the diagram brief
-    (falls back to title + summary), stores the image on the seed and on
-    the compiled Library article when one exists.
-    """
-    try:
-        seed_uuid = uuid.UUID(seed_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid seed id")
-
-    seed = db.query(Seed).filter(
-        Seed.id == seed_uuid,
-        Seed.tenant_id == current_user.tenant_id,
-    ).first()
-    if not seed:
-        raise HTTPException(status_code=404, detail="Spec not found")
-
-    content = seed.content or ""
-    arch_section = _extract_architecture_section(content)
-    brief = arch_section or f"{seed.title}. {content[:600]}"
-    prompt = (
-        f"{ARCHITECTURE_DIAGRAM_STYLE}. "
-        f"Diagram the following system: {brief[:1200]}"
-    )
-
-    url = await <BFL_API_KEY>(prompt, width=1408, height=1024)
-    _track_image_usage(db, current_user)
-
-    # Persist on the seed
-    seed.image_url = url
-    meta = dict(seed.seed_metadata or {})
-    meta["diagram_url"] = url
-    meta["diagram_generated_at"] = datetime.utcnow().isoformat()
-    seed.seed_metadata = meta
-    db.commit()
-
-    # Best-effort: attach to the compiled Library article (Weaviate)
-    article_updated = False
-    try:
-        articles = weaviate_client.get_wiki_articles(
-            tenant_id=str(current_user.tenant_id), limit=200
-        )
-        for art in articles:
-            if str(seed.id) in (art.get("sourceSeedIds") or []):
-                article_id = art.get("id")
-                if article_id and weaviate_client.update_wiki_article(article_id, imageUrl=url):
-                    article_updated = True
-                break
-    except Exception as e:
-        logger.warning(f"Spec diagram: could not update Library article image: {e}")
-
-    return SpecDiagramResponse(url=url, seed_id=str(seed.id), article_updated=article_updated)
-
-
-# --- Research paper ingestion (arXiv / paper URL → paper seed) ---
-
-class PaperIngestRequest(BaseModel):
-    arxiv_id: Optional[str] = Field(default=None, max_length=100)
-    url: Optional[str] = Field(default=None, max_length=500)
 
 
 @app.post("/api/v1/papers/ingest")
@@ -2846,7 +2634,7 @@ async def ingest_image_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Image ingestion: image → Vision extract → Thought → enrich_v2 → BFL concept art → Seed"""
+    """Image ingestion: image → Vision extract → Thought → enrich_v2 → Seed"""
     from app.ingest import ingest_image
     result = await ingest_image(file, current_user, db)
     return result

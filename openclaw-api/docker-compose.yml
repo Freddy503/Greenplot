@@ -20,7 +20,6 @@ services:
     - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
     - GROQ_API_KEY=${GROQ_API_KEY}
-    - BFL_API_KEY=${BFL_API_KEY}
     - VAPID_PRIVATE_KEY_BASE64=${VAPID_PRIVATE_KEY_BASE64}
     - CORS_ORIGINS=https://seedify-six.vercel.app,https://greenplot.ink,https://www.greenplot.ink,https://api.greenplot.ink,http://localhost:3000,http://localhost:5173
     - SENTRY_DSN=${SENTRY_DSN}
@@ -73,7 +72,6 @@ services:
     - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
     - GROQ_API_KEY=${GROQ_API_KEY}
-    - BFL_API_KEY=${BFL_API_KEY}
     - SENTRY_DSN=${SENTRY_DSN}
     - HARVEST_API_KEY=${HARVEST_API_KEY}
     restart: unless-stopped

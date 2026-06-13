@@ -1,9 +1,9 @@
 """
 ingest.py
-Voice (Whisper) and Image (Vision + BFL) ingestion endpoints.
+Voice (Whisper) and Image (Vision) ingestion endpoints.
 
 Voice flow:  audio upload → Whisper transcribe → Thought → enrich_v2 → Seed
-Image flow:  image upload → Vision extract ideas → Thought → enrich_v2 → BFL concept image → Seed
+Image flow:  image upload → Vision extract ideas → Thought → enrich_v2 → Seed
 """
 
 import os
@@ -189,63 +189,6 @@ async def extract_ideas_from_image(file: UploadFile) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# BFL concept image generation
-# ---------------------------------------------------------------------------
-
-BFL_POLL_TIMEOUT = 60  # seconds
-
-
-async def generate_concept_image(seed_title: str, seed_tags: list[str]) -> Optional[str]:
-    """Generate a concept image via BFL Flux.dev. Returns image URL or None."""
-    key = settings.BFL_API_KEY
-    if not key:
-        return None
-
-    tags_str = ", ".join(seed_tags[:5])
-    prompt = (
-        f"Minimalist abstract concept art for an idea called '{seed_title}'. "
-        f"Themes: {tags_str}. "
-        "Clean geometric shapes, soft gradients, modern editorial illustration style. "
-        "No text, no letters, no words."
-    )
-
-    payload = json.dumps({
-        "prompt": prompt,
-        "width": 1024,
-        "height": 768,
-    }).encode()
-
-    try:
-        # Submit generation request
-        req = urllib.request.Request(
-            settings.BFL_API_URL,
-            data=payload,
-            headers={"x-key": key, "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            res = json.loads(r.read())
-
-        polling_url = res.get("polling_url")
-        if not polling_url:
-            return None
-
-        # Poll for result
-        deadline = time.time() + BFL_POLL_TIMEOUT
-        while time.time() < deadline:
-            time.sleep(3)
-            poll_req = urllib.request.Request(polling_url, headers={"x-key": key})
-            with urllib.request.urlopen(poll_req, timeout=15) as r:
-                poll = json.loads(r.read())
-            if poll.get("status") == "Ready":
-                return poll.get("result", {}).get("sample")
-            if poll.get("status") in ("Error", "Failed"):
-                return None
-        return None
-    except Exception:
-        return None
-
-
-# ---------------------------------------------------------------------------
 # High-level ingestion helpers (called from route handlers)
 # ---------------------------------------------------------------------------
 
@@ -295,7 +238,7 @@ async def ingest_voice(file: UploadFile, user, db: Session) -> dict:
 async def ingest_image(file: UploadFile, user, db: Session) -> dict:
     """
     Full image ingestion pipeline:
-    image → Vision extract → Thought → enrich_v2 → BFL concept art → Seed
+    image → Vision extract → Thought → enrich_v2 → Seed
     """
     # 1. Extract ideas from image via vision
     extracted = await extract_ideas_from_image(file)
@@ -328,14 +271,8 @@ async def ingest_image(file: UploadFile, user, db: Session) -> dict:
         thought.error_message = str(e)
     db.commit()
 
-    # 4. Generate concept image via BFL (best-effort)
     seeds = db.query(Seed).filter(Seed.thought_id == thought.id).all()
-    image_url = None
-    if seeds:
-        image_url = await generate_concept_image(seeds[0].title, tags)
-        if image_url:
-            seeds[0].image_url = image_url
-            db.commit()
+    image_url = None  # concept-image generation removed (BFL retired)
 
     return {
         "status": "ok",

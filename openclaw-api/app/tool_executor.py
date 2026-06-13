@@ -1573,14 +1573,13 @@ TOOL_HANDLERS["garden_skimmer"] = garden_skimmer
 
 
 async def auto_compile_for_domain(domain: str, tenant_id: str, user_id: str, skip_image: bool = False):
-    """Auto-compile a wiki article using full LLM synthesis + BFL image pipeline.
+    """Auto-compile a wiki article using full LLM synthesis.
 
     skip_image: when True, skip the (slow) hero-image generation — used by the
     inline create_seed trigger so the Library populates fast; the cron path
     still generates images.
     """
     from app.wiki import synthesize_with_llm, WIKI_SYSTEM_PROMPT, build_wiki_user_prompt
-    from app.ingest import generate_concept_image
     import asyncio, re, urllib.request
 
     # Check if domain already has a wiki article
@@ -1721,37 +1720,10 @@ Reply with just the title, no quotes, no explanation."""
                 status="published",
             )
         
-        # Generate BFL hero image (skipped on the inline create_seed path)
-        try:
-            if not skip_image:
-                await asyncio.sleep(1)  # Small delay
-                image_url = await generate_concept_image(title, [domain])
-            else:
-                image_url = None
-            if image_url:
-                # Download and save locally
-                safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title)[:35]
-                filename = f'{safe_title}_{article_id[:8]}.jpeg'
-                local_path = f'/app/public/wiki-images/{filename}'
-                req = urllib.request.Request(image_url)
-                req.add_header('User-Agent', 'Mozilla/5.0')
-                with urllib.request.urlopen(req, timeout=30) as r:
-                    img_data = r.read()
-                import os
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                with open(local_path, 'wb') as f:
-                    f.write(img_data)
-                permanent_url = f"https://api.greenplot.ink/api/v1/wiki/images/{filename}"
-                weaviate_client.client.data_object.update(
-                    data_object={"imageUrl": permanent_url},
-                    class_name="WikiArticle",
-                    uuid=article_id,
-                )
-        except Exception as e:
-            pass  # Image gen is optional
+        # Hero-image generation removed (BFL retired)
         
         return {"article_id": article_id, "title": title, "seeds": len(domain_seeds),
-                "links": len(domain_links), "image_generated": not skip_image}
+                "links": len(domain_links), "image_generated": False}
     except Exception as e:
         # Previously this swallowed the error and returned None with no log line —
         # the single biggest reason wiki failures were invisible across rounds.
@@ -1941,76 +1913,6 @@ async def save_link(args: dict, user: User, db: Session) -> str:
 
 TOOL_HANDLERS["save_link"] = save_link
 
-
-async def generate_image(args: dict, user: User, db: Session) -> str:
-    """Generate an image via BFL FLUX using the user's prompt."""
-    import httpx
-    import asyncio
-    import os
-
-    prompt = args.get("prompt", "").strip()
-    if not prompt:
-        return json.dumps({"status": "error", "message": "Prompt is required"})
-
-    <BFL_API_KEY> = os.environ.get("BFL_API_KEY", "")
-    if not <BFL_API_KEY>:
-        return json.dumps({"status": "error", "message": "Image generation not configured (BFL_API_KEY missing)"})
-
-    width = int(args.get("width", 1024))
-    height = int(args.get("height", 1024))
-    # Clamp to valid range
-    width = max(256, min(2048, width))
-    height = max(256, min(2048, height))
-
-    headers = {"Content-Type": "application/json", "x-key": <BFL_API_KEY>}
-    <BFL_API_KEY> = "https://api.bfl.ai"
-
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            submit = await client.post(
-                f"{<BFL_API_KEY>}/v1/flux-2-pro",
-                headers=headers,
-                json={"prompt": prompt, "width": width, "height": height},
-            )
-            if submit.status_code == 402:
-                return json.dumps({"status": "error", "message": "BFL credits exhausted"})
-            if submit.status_code != 200:
-                return json.dumps({"status": "error", "message": f"BFL submit failed: {submit.status_code}"})
-
-            task_id = submit.json().get("id")
-            if not task_id:
-                return json.dumps({"status": "error", "message": "BFL did not return a task ID"})
-
-            for _ in range(30):
-                await asyncio.sleep(1)
-                poll = await client.get(
-                    f"{<BFL_API_KEY>}/v1/get_result",
-                    headers={"x-key": <BFL_API_KEY>},
-                    params={"id": task_id},
-                )
-                if poll.status_code != 200:
-                    continue
-                result = poll.json()
-                status = result.get("status", "")
-                if status == "Ready":
-                    sample = result.get("result", {}).get("sample")
-                    if sample:
-                        return json.dumps({
-                            "status": "ok",
-                            "type": "image_generated",
-                            "url": sample,
-                            "prompt": prompt,
-                            "message": f"Image generated: {sample}",
-                        })
-                if status == "Error":
-                    return json.dumps({"status": "error", "message": f"BFL generation failed: {result.get('result', 'unknown')}"})
-
-        return json.dumps({"status": "error", "message": "Image generation timed out"})
-    except Exception as e:
-        return json.dumps({"status": "error", "message": str(e)})
-
-
-TOOL_HANDLERS["generate_image"] = generate_image
 
 
 async def create_wiki_article(args: dict, user: User, db: Session) -> str:

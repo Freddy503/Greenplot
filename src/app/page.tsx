@@ -1076,7 +1076,7 @@ const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc
     desc: 'A strategist, not a search box. Brainstorm to open an idea up, pressure-test its weak points, or strategize the path forward — every mode reasoning from the knowledge you already hold.',
     mockup: <MockupThinkingPartner /> },
   { icon: 'file_text', name: 'Spec it Out', tag: 'Build', color: T.teal,
-    desc: 'When the thinking is done, Greenplot shapes the thread into a full PRD — problem, scope, system architecture with a generated diagram — ready to hand straight to your coding agent.',
+    desc: 'When the thinking is done, Greenplot shapes the thread into a full PRD — problem, scope, system architecture with diagram — ready to hand straight to your coding agent.',
     mockup: <MockupSpec /> },
   { icon: 'layers', name: 'Build Pipeline', tag: 'Ship', color: T.green,
     desc: 'Drag your PRDs from Design to Doing to Built. Coding agents report progress back automatically — every spec tracked from first draft to merged PR.',

@@ -45,7 +45,6 @@ export default function PrivacyPage() {
           <li><strong>Cloudflare</strong> (USA) — network routing and DDoS protection in front of the API.</li>
           <li><strong>OpenRouter / model providers</strong> (USA) — LLM inference for chat, enrichment, and wiki synthesis. Content you submit is processed to generate responses.</li>
           <li><strong>OpenAI</strong> (USA) — voice transcription (Whisper) and image understanding when you use those features.</li>
-          <li><strong>Black Forest Labs</strong> — image generation for moodboards when you request it.</li>
           <li><strong>Exa</strong> (USA) — web search and content fetching when you use the web-search tool.</li>
           <li><strong>Resend</strong> (USA) — transactional email for briefings and invites.</li>
           <li><strong>Google</strong> (USA) — optional Calendar integration (OAuth; token stored encrypted) and weather/context lookups.</li>

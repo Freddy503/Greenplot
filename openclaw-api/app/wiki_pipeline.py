@@ -3,7 +3,6 @@ Wiki Pipeline — Fully automated wiki maintenance.
 Runs after harvest or on schedule to:
 1. Auto-compile wiki articles for knowledge gaps
 2. Regenerate backlinks for all articles
-3. Generate BFL images for articles missing them
 """
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user
