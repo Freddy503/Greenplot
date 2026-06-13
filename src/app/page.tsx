@@ -1405,8 +1405,8 @@ function Footer() {
       <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <Logo light size={18} />
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          {['Privacy', 'Terms', 'GitHub'].map(l => (
-            <a key={l} href="#" style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontSize: 13, fontWeight: 400, fontFamily: 'var(--font-body)', transition: 'color 0.2s' }}
+          {[['Privacy', '/privacy'], ['Impressum', '/impressum']].map(([l, href]) => (
+            <a key={l} href={href} style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontSize: 13, fontWeight: 400, fontFamily: 'var(--font-body)', transition: 'color 0.2s' }}
               onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.35)')}
             >{l}</a>
