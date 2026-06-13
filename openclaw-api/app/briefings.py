@@ -9,7 +9,8 @@ Generates rich, multi-section briefings for:
 - Biweekly Challenge (Cross-domain synthesis)
 
 Uses:
-- OpenRouter (via OpenAI SDK) for LLM: Nemotron Super (minimax/minimax-m2.7)
+- OpenRouter (via OpenAI SDK) for LLM; model per tier from config.py
+  (BRIEFING_MODEL for briefings, PREMIUM_MODEL for strategy papers, FALLBACK_MODEL on retry)
 - Exa API for web search
 - Open-Meteo for weather (free)
 """
@@ -20,6 +21,8 @@ from typing import Optional, List, Dict, Any
 import json
 import httpx
 import os
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ def get_llm_client():
 def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str = None) -> str:
     """
     Call OpenRouter LLM with a prompt.
-    Default model: Nemotron Super (minimax/minimax-m2.7)
+    Default model: settings.BRIEFING_MODEL (falls back to settings.FALLBACK_MODEL).
     Returns empty string on failure.
     """
     try:
@@ -63,9 +66,9 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
             logger.warning("No LLM client available")
             return ""
 
-        # Use provided model or default to Nemotron Super
+        # Use provided model or default to the briefing-tier model
         if not model:
-            model = "minimax/minimax-m2.7"
+            model = settings.BRIEFING_MODEL
 
         messages = []
         if system:
@@ -86,16 +89,16 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
         # Thinking models (e.g. Gemini 3.5 Flash) can burn the whole max_tokens
         # budget on reasoning and return empty content with no error — treat
         # that as a failure and fall back to a non-thinking model.
-        if not content and model != "minimax/minimax-m2.7":
+        if not content and model != settings.FALLBACK_MODEL:
             logger.warning(f"LLM returned empty content (model={model}, likely reasoning-budget exhaustion) — retrying with fallback")
-            return _call_llm(prompt, system, max_tokens, model="minimax/minimax-m2.7")
+            return _call_llm(prompt, system, max_tokens, model=settings.FALLBACK_MODEL)
         return content
     except Exception as e:
         logger.error(f"LLM call failed (model={model}): {e}")
         # Try fallback model
-        if model != "minimax/minimax-m2.7":
-            logger.info("Retrying with Nemotron fallback...")
-            return _call_llm(prompt, system, max_tokens, model="minimax/minimax-m2.7")
+        if model != settings.FALLBACK_MODEL:
+            logger.info(f"Retrying with fallback model ({settings.FALLBACK_MODEL})...")
+            return _call_llm(prompt, system, max_tokens, model=settings.FALLBACK_MODEL)
         return ""
 
 
@@ -382,7 +385,7 @@ Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Rel
     deep_pattern = _call_llm(
         llm_prompt,
         max_tokens=500,
-        model="minimax/minimax-m2.7"  # Nemotron is more reliable
+        model=settings.BRIEFING_MODEL  # Nemotron is more reliable
     )
     if not deep_pattern:
         deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
@@ -441,7 +444,7 @@ Keep concise. Format as bullet points.
     news_synthesis = _call_llm(
         news_prompt,
         max_tokens=600,
-        model="minimax/minimax-m2.7"  # Longer context for news synthesis
+        model=settings.BRIEFING_MODEL  # Longer context for news synthesis
     )
     if not news_synthesis:
         news_synthesis = "• Check recent news on " + theme_str + " for latest enterprise AI developments."
@@ -456,7 +459,7 @@ Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} prac
     academic_synthesis = _call_llm(
         academic_prompt,
         max_tokens=300,
-        model="minimax/minimax-m2.7"
+        model=settings.BRIEFING_MODEL
     )
     if not academic_synthesis:
         academic_synthesis = "Explore recent academic work in your domain."
@@ -505,7 +508,7 @@ Then propose ONE concrete 15-minute action for tomorrow that tests this contrari
     contrarian = _call_llm(
         contrarian_prompt,
         max_tokens=300,
-        model="minimax/minimax-m2.7"
+        model=settings.BRIEFING_MODEL
     )
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
@@ -553,7 +556,7 @@ Be analytical. Format: [Theme] / [Gap] / [Next Week's Constraint]
     evaluation = _call_llm(
         eval_prompt,
         max_tokens=400,
-        model="minimax/minimax-m2.7"  # Longer context for analysis
+        model=settings.BRIEFING_MODEL  # Longer context for analysis
     )
     if not evaluation:
         evaluation = f"Review your {theme_str} work this week. What emerged as most valuable?"
@@ -613,7 +616,7 @@ Be specific, not abstract. 15-min experiment.
     challenge = _call_llm(
         challenge_prompt,
         max_tokens=500,
-        model="minimax/minimax-m2.7"
+        model=settings.BRIEFING_MODEL
     )
     if not challenge:
         challenge = f"Apply concepts from {themes[0]} to solve a challenge in {themes[1]}."
@@ -914,7 +917,7 @@ Produce a JSON object with this exact structure:
 Include all {len(paper_texts)} papers in the "papers" array. Synthesize each independently."""
 
     raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
-                    model="minimax/minimax-m2.7")
+                    model=settings.BRIEFING_MODEL)
 
     # Parse JSON, strip fences if needed
     cleaned = _re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=_re.IGNORECASE)
@@ -1055,7 +1058,7 @@ Write a markdown document with these sections:
 ## Success Criteria
 """
 
-    md_content = _call_llm(prompt, system=system, max_tokens=2000, model="minimax/minimax-m2.7")
+    md_content = _call_llm(prompt, system=system, max_tokens=2000, model=settings.PREMIUM_MODEL)
     if not md_content:
         return None
 
@@ -1125,7 +1128,7 @@ Produce a well-structured markdown document with these sections:
 ## Next Immediate Steps (copy-paste ready for an agentic coding tool)
 """
 
-    md_content = _call_llm(prompt, system=system, max_tokens=3000, model="minimax/minimax-m2.7")
+    md_content = _call_llm(prompt, system=system, max_tokens=3000, model=settings.PREMIUM_MODEL)
     if not md_content:
         logger.error(f"[agent] LLM returned no content for topic: {topic[:80]}")
         return None

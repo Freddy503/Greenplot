@@ -19,11 +19,21 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: Optional[str] = None
-    # Model for chat/agent responses — needs strong tool-use and reasoning.
-    # Overridable via CHAT_MODEL env var if the OpenRouter slug changes.
-    CHAT_MODEL: str = "google/gemini-3.5-flash"
-    # Model for enrichment (structured JSON output, seed generation)
-    ENRICH_MODEL: str = "minimax/minimax-m2.7"
+    # Each tier is its own OpenRouter slug, overridable via the matching env var.
+    # Interactive chat / agent — strong tool-use + agentic quality.
+    CHAT_MODEL: str = "tencent/hy3-preview"
+    # Briefings, Research Digest, reflections, weekly eval — long-context synthesis.
+    BRIEFING_MODEL: str = "xiaomi/mimo-v2.5"
+    # Premium one-off generation (strategy / solution-design papers).
+    PREMIUM_MODEL: str = "xiaomi/mimo-v2.5-pro"
+    # Bulk structured background work — enrichment, extraction, backlinking, insight mining.
+    ENRICH_MODEL: str = "deepseek/deepseek-v4-flash"
+    # Reliable non-thinking safety net for briefing retries.
+    FALLBACK_MODEL: str = "minimax/minimax-m2.7"
+    # Wiki article compilation — long-form synthesis, same tier as briefings.
+    WIKI_MODEL: str = "xiaomi/mimo-v2.5"
+    # Secondary model wiki synthesis falls back to if the primary fails.
+    WIKI_FALLBACK_MODEL: str = "minimax/minimax-m2.7"
     # Model for embeddings (use OpenRouter's embedding endpoint)
     EMBEDDING_MODEL: str = "openai/text-embedding-ada-002"
     EXA_API_KEY: Optional[str] = None
