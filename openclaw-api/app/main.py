@@ -3648,12 +3648,13 @@ def _load_notifs() -> list:
 
 
 def _notif_visible_to(notif: dict, user_id: Optional[str]) -> bool:
-    """A notification is visible to a user when it is explicitly addressed to
-    them, or when it carries no owner (legacy / system-wide broadcast). New
-    per-user briefings always set user_id, so they never cross accounts."""
+    """A notification is visible only to the account it is explicitly addressed
+    to. Entries with no user_id (legacy/global, from before per-user delivery)
+    are shown to no one — so one account's briefings can never surface in
+    another's inbox, even if a stray global entry is ever written again."""
     owner = notif.get("user_id")
     if not owner:
-        return True  # legacy / system broadcast — visible to all
+        return False  # unaddressed legacy/global entry — never shown
     return user_id is not None and str(owner) == str(user_id)
 
 def _save_notifs(notifs: list):
