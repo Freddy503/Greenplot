@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
 import { GP_ICONS } from '@/components/onboarding/gp-icons'
+import { clearChatCache } from '@/lib/api'
 
 // ── Onboarding v2 — value-first 8-step flow (design: Seedify Onboarding v2) ──
 // Welcome → Invite → Interests → Rhythm → Weather → Push → Privacy → Account
@@ -45,22 +46,26 @@ const DIGESTS: { label: string; sublabel: string; value: Frequency }[] = [
 
 const CRON: Record<Frequency, Array<{ icon: string; name: string; time: string; desc: string }>> = {
   'twice-daily': [
-    { icon: 'sun', name: 'Morning Spark', time: '8:00 AM', desc: 'Weather, your day ahead & a creative prompt.' },
-    { icon: 'moon', name: 'Evening Reflection', time: '8:00 PM', desc: 'Capture loose thoughts before they fade.' },
+    { icon: 'microscope', name: 'Research Digest', time: '7:00 AM & 6:00 PM', desc: 'New arXiv & web research linked to your seeds — twice daily.' },
+    { icon: 'sun', name: 'Morning Spark', time: '8:30 AM', desc: 'Weather, your day ahead & a creative prompt.' },
+    { icon: 'moon', name: 'Evening Reflection', time: '4:00 PM', desc: 'Capture loose thoughts before they fade.' },
   ],
   'once-daily': [
-    { icon: 'sun', name: 'Daily Briefing', time: '9:00 AM', desc: 'Weather, calendar highlights, fresh seeds & a prompt.' },
+    { icon: 'microscope', name: 'Research Digest', time: '7:00 AM', desc: 'New arXiv & web research connected to your seeds & wiki.' },
+    { icon: 'sun', name: 'Daily Briefing', time: '9:30 AM', desc: 'Weather, calendar highlights, fresh seeds & a prompt.' },
     { icon: 'leaf', name: 'Garden Pulse', time: 'alongside', desc: 'Seed enrichment & new connections, quietly.' },
   ],
   'bi-weekly': [
-    { icon: 'trending-up', name: 'Mid-Week Digest', time: 'Wed 10 AM', desc: 'Trends in your topics & new web finds.' },
-    { icon: 'book-open', name: 'Weekend Review', time: 'Sun 10 AM', desc: 'A deep-dive into your garden’s growth.' },
+    { icon: 'microscope', name: 'Research Digest', time: 'Wed & Sun 7 AM', desc: 'New research linked to your seeds — mid-week & weekend.' },
+    { icon: 'book-open', name: 'Garden Review', time: 'Wed & Sun', desc: 'Trends in your topics & a deep-dive into your growth.' },
   ],
   weekly: [
+    { icon: 'microscope', name: 'Research Digest', time: 'Sun 7 AM', desc: 'The week’s new research, connected to your seeds & wiki.' },
     { icon: 'book-open', name: 'Weekly Roundup', time: 'Sun 10 AM', desc: 'Seeds planted, enriched & trending topics.' },
   ],
   calendar: [
-    { icon: 'calendar-check', name: 'Smart Scheduling', time: 'around you', desc: 'Insights land in free slots — never mid-meeting.' },
+    { icon: 'microscope', name: 'Research Digest', time: '7:00 AM', desc: 'New arXiv & web research connected to your seeds & wiki.' },
+    { icon: 'calendar-check', name: 'Smart Scheduling', time: 'around you', desc: 'Briefings land in free slots — never mid-meeting.' },
   ],
 }
 
@@ -279,6 +284,8 @@ function OnboardingContent() {
         throw new Error(typeof detail === 'string' ? detail : 'Registration failed')
       }
       const { access_token, tenant_id } = await res.json()
+      // Fresh account on this browser — clear any chats cached by a prior user.
+      clearChatCache()
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
       localStorage.setItem('greenplot_nickname', nickname.trim())

@@ -2707,7 +2707,7 @@ async def chat_v2_endpoint(
     agent_session = None
 
     if session_id and current_user:
-        agent_session = store.load_session(session_id)
+        agent_session = store.load_session(session_id, tenant_id=str(current_user.tenant_id))
 
     if agent_session is None:
         import uuid as _uuid
@@ -2991,7 +2991,7 @@ def get_session(
         return {"error": "Not authenticated"}
     from app.agent.persist import ChatSessionStore
     store = ChatSessionStore(db)
-    session = store.load_session(session_id)
+    session = store.load_session(session_id, tenant_id=str(current_user.tenant_id))
     if session is None:
         return {"error": "Session not found"}
     return {
@@ -3011,7 +3011,7 @@ def delete_session(
         return {"error": "Not authenticated"}
     from app.agent.persist import ChatSessionStore
     store = ChatSessionStore(db)
-    ok = store.delete(session_id)
+    ok = store.delete(session_id, tenant_id=str(current_user.tenant_id))
     db.commit()
     return {"deleted": ok}
 
@@ -3092,7 +3092,7 @@ def harvest_all(
     harvested = 0
     for session_row in sessions:
         try:
-            session = store.load_session(str(session_row.id))
+            session = store.load_session(str(session_row.id), tenant_id=str(session_row.tenant_id))
             if not session or not session.messages:
                 continue
 
@@ -3159,7 +3159,7 @@ def harvest_chat(
 
     # Load session
     if session_id:
-        session = store.load_session(session_id)
+        session = store.load_session(session_id, tenant_id=str(current_user.tenant_id))
     else:
         sessions = store.list_sessions(
             tenant_id=str(current_user.tenant_id),
@@ -3253,7 +3253,7 @@ def extract_insights(
 
     try:
         response = openai_client.chat.completions.create(
-            model="minimax/minimax-m2.7",
+            model=settings.ENRICH_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -3636,11 +3636,19 @@ _SUBS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "p
 def _load_notifs() -> list:
     try:
         with open(_NOTIFS_FILE, "r") as f:
-            data = json.load(f)
-            # Only keep last 50
-            return data[-50:]
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
+
+
+def _notif_visible_to(notif: dict, user_id: Optional[str]) -> bool:
+    """A notification is visible to a user when it is explicitly addressed to
+    them, or when it carries no owner (legacy / system-wide broadcast). New
+    per-user briefings always set user_id, so they never cross accounts."""
+    owner = notif.get("user_id")
+    if not owner:
+        return True  # legacy / system broadcast — visible to all
+    return user_id is not None and str(owner) == str(user_id)
 
 def _save_notifs(notifs: list):
     os.makedirs(os.path.dirname(_NOTIFS_FILE), exist_ok=True)
@@ -3776,34 +3784,45 @@ def get_push_notifications(
     all: bool = False,
     current_user: User = Depends(get_optional_user),
 ):
-    """Get push notifications for PWA. ?all=true returns full history (read + unread)."""
-    notifs = _load_notifs()
+    """Get push notifications for the current user. ?all=true returns full
+    history (read + unread). Only the user's own notifications (plus legacy
+    system broadcasts) are returned — never another account's."""
+    uid = str(current_user.id) if current_user else None
+    mine = [n for n in _load_notifs() if _notif_visible_to(n, uid)]
     if all:
-        # Return all notifications, newest first, capped at 200
-        return {"notifications": list(reversed(notifs[-200:])), "total": len(notifs)}
-    unread = [n for n in notifs if not n.get("read")]
-    return {"notifications": unread, "total": len(notifs)}
+        # Newest first, capped at 50 per user
+        return {"notifications": list(reversed(mine))[:50], "total": len(mine)}
+    unread = [n for n in mine if not n.get("read")]
+    return {"notifications": list(reversed(unread))[:50], "total": len(mine)}
 
 @app.post("/api/v1/push/mark-read")
-def mark_notifications_read():
-    """Mark all notifications as read."""
+def mark_notifications_read(current_user: User = Depends(get_current_user)):
+    """Mark the current user's notifications as read."""
+    uid = str(current_user.id)
     notifs = _load_notifs()
     for n in notifs:
-        n["read"] = True
+        if _notif_visible_to(n, uid):
+            n["read"] = True
     _save_notifs(notifs)
     return {"success": True}
 
 @app.delete("/api/v1/push/notifications")
 def clear_all_notifications(current_user: User = Depends(get_current_user)):
-    """Delete all notifications (clear inbox)."""
-    _save_notifs([])
+    """Delete the current user's notifications (clear their inbox)."""
+    uid = str(current_user.id)
+    notifs = [n for n in _load_notifs() if not _notif_visible_to(n, uid)]
+    _save_notifs(notifs)
     return {"success": True}
 
 @app.delete("/api/v1/push/notifications/{notif_id}")
 def dismiss_notification(notif_id: str, current_user: User = Depends(get_current_user)):
-    """Dismiss a single notification by id."""
+    """Dismiss a single notification by id — only if it belongs to the user."""
+    uid = str(current_user.id)
     notifs = _load_notifs()
-    notifs = [n for n in notifs if n.get("id") != notif_id]
+    notifs = [
+        n for n in notifs
+        if not (n.get("id") == notif_id and _notif_visible_to(n, uid))
+    ]
     _save_notifs(notifs)
     return {"success": True}
 
@@ -4334,6 +4353,8 @@ def _job_morning_spark():
 
         for user in users:
             try:
+                if not _cadence_allows('morning_spark', user):
+                    continue
                 city = getattr(user, 'city', None)
                 logger.info(f"📍 User {user.id}: city={city}")
 
@@ -4354,7 +4375,7 @@ def _job_morning_spark():
                     weather=weather or f"Check weather in {city or 'your location'}"
                 )
                 logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
-                _sto<RESEND_API_KEY>(briefing)
+                _sto<RESEND_API_KEY>(briefing, user)
                 logger.info(f"✅ Morning Spark sent to user {user.id}")
             except Exception as ue:
                 logger.error(f"❌ Morning Spark failed for user {user.id}: {ue}", exc_info=True)
@@ -4380,11 +4401,13 @@ def _job_daily_briefing():
         logger.info(f"📰 Generating daily briefing for {len(users)} user(s)")
         for user in users:
             try:
+                if not _cadence_allows('daily_briefing', user):
+                    continue
                 briefing = asyncio.run(briefings.build_daily_briefing(
                     user_id=str(user.id),
                     db=db
                 ))
-                _sto<RESEND_API_KEY>(briefing)
+                _sto<RESEND_API_KEY>(briefing, user)
                 if settings.RESEND_API_KEY and user.email:
                     try:
                         email_sender.send_briefing_email(user.email, briefing)
@@ -4406,16 +4429,14 @@ def _job_afternoon_reflection():
     """
     db = next(get_db())
     try:
-        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
-        if not default_user:
-            logger.warning("No users found for reflection")
-            return
-
-        briefing = briefings.build_reflection(
-            user_id=str(default_user.id),
-            db=db
-        )
-        _sto<RESEND_API_KEY>(briefing)
+        for user in db.query(User).all():
+            try:
+                if not _cadence_allows('reflection', user):
+                    continue
+                briefing = briefings.build_reflection(user_id=str(user.id), db=db)
+                _sto<RESEND_API_KEY>(briefing, user)
+            except Exception as ue:
+                logger.error(f"❌ Reflection failed for {user.id}: {ue}")
         logger.info("✅ Evening Reflection generated")
     except Exception as e:
         logger.error(f"❌ Evening Reflection failed: {e}")
@@ -4438,6 +4459,7 @@ def _job_coherence_report():
             result = build_coherence_report(user, job_db)
             if result.get("status") == "ok":
                 _sto<RESEND_API_KEY>(
+                    str(user.id),
                     "🧭 Weekly Coherence Report",
                     "Contradictions, gaps and the story so far — your portfolio, digested.",
                     f"/library?article={result['article_id']}",
@@ -4459,12 +4481,16 @@ def _job_weekly_digest():
         "4. **To enrich** — Which seeds are still raw and worth expanding?\n\n"
         "Make it feel like a garden walk — what's growing, what needs tending?"
     )
-    _sto<RESEND_API_KEY>(
-        "📚 Weekly Garden Digest",
-        "Your weekly knowledge summary is ready. Let's review what grew.",
-        "/chat",
-        prompt=prompt,
-    )
+    db = next(get_db())
+    try:
+        for user in db.query(User).all():
+            _sto<RESEND_API_KEY>(
+                str(user.id),
+                "📚 Weekly Garden Digest",
+                "Your weekly knowledge summary is ready. Let's review what grew.",
+                "/chat", prompt=prompt)
+    finally:
+        db.close()
 
 
 def _job_weekly_eval():
@@ -4474,21 +4500,17 @@ def _job_weekly_eval():
     """
     db = next(get_db())
     try:
-        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
-        if not default_user:
-            logger.warning("No users found for weekly eval")
-            return
-
-        briefing = briefings.build_weekly_eval(
-            user_id=str(default_user.id),
-            db=db
-        )
-        _sto<RESEND_API_KEY>(briefing)
-        if settings.RESEND_API_KEY and default_user.email:
+        for user in db.query(User).filter(User.email != None, User.email != '').all():  # noqa: E711
             try:
-                email_sender.send_briefing_email(default_user.email, briefing)
-            except Exception as email_err:
-                logger.error(f"Email delivery failed for weekly eval: {email_err}")
+                briefing = briefings.build_weekly_eval(user_id=str(user.id), db=db)
+                _sto<RESEND_API_KEY>(briefing, user)
+                if settings.RESEND_API_KEY and user.email:
+                    try:
+                        email_sender.send_briefing_email(user.email, briefing)
+                    except Exception as email_err:
+                        logger.error(f"Email delivery failed for weekly eval ({user.id}): {email_err}")
+            except Exception as ue:
+                logger.error(f"❌ Weekly eval failed for {user.id}: {ue}")
         logger.info("✅ Weekly Content Eval generated")
     except Exception as e:
         logger.error(f"❌ Weekly Content Eval failed: {e}")
@@ -4503,16 +4525,12 @@ def _job_biweekly_challenge():
     """
     db = next(get_db())
     try:
-        default_user = db.query(User).filter(User.email != 'admin@example.com').first()
-        if not default_user:
-            logger.warning("No users found for biweekly challenge")
-            return
-
-        briefing = briefings.build_biweekly_challenge(
-            user_id=str(default_user.id),
-            db=db
-        )
-        _sto<RESEND_API_KEY>(briefing)
+        for user in db.query(User).all():
+            try:
+                briefing = briefings.build_biweekly_challenge(user_id=str(user.id), db=db)
+                _sto<RESEND_API_KEY>(briefing, user)
+            except Exception as ue:
+                logger.error(f"❌ Biweekly challenge failed for {user.id}: {ue}")
         logger.info("✅ Biweekly Challenge generated")
     except Exception as e:
         logger.error(f"❌ Biweekly Challenge failed: {e}")
@@ -4527,27 +4545,24 @@ def _job_academic_digest(evening: bool = False):
     """
     db = next(get_db())
     try:
-        default_user = db.query(User).filter(User.email == 'contact@example.com').first()
-        if not default_user:
-            logger.warning("No users found for academic digest")
-            return
-
-        briefing = asyncio.run(briefings.build_academic_digest(
-            user_id=str(default_user.id),
-            db=db
-        ))
-        if evening:
-            briefing = {**briefing, "type": "academic_digest_evening"}
-
-        _sto<RESEND_API_KEY>(briefing)
-
-        if settings.RESEND_API_KEY and default_user.email:
+        gate = 'academic_digest_evening' if evening else 'academic_digest'
+        for user in db.query(User).filter(User.email != None, User.email != '').all():  # noqa: E711
             try:
-                attachments = email_sender.collect_arxiv_pdfs(briefing)
-                email_sender.send_briefing_email(default_user.email, briefing, attachments)
-            except Exception as email_err:
-                logger.error(f"Email delivery failed for academic digest: {email_err}")
-
+                if not _cadence_allows(gate, user):
+                    continue
+                briefing = asyncio.run(briefings.build_academic_digest(
+                    user_id=str(user.id), db=db))
+                if evening:
+                    briefing = {**briefing, "type": "academic_digest_evening"}
+                _sto<RESEND_API_KEY>(briefing, user)
+                if settings.RESEND_API_KEY and user.email:
+                    try:
+                        attachments = email_sender.collect_arxiv_pdfs(briefing)
+                        email_sender.send_briefing_email(user.email, briefing, attachments)
+                    except Exception as email_err:
+                        logger.error(f"Email delivery failed for academic digest ({user.id}): {email_err}")
+            except Exception as ue:
+                logger.error(f"❌ Academic digest failed for {user.id}: {ue}")
         logger.info("✅ Academic Digest generated")
     except Exception as e:
         logger.error(f"❌ Academic Digest failed: {e}", exc_info=True)
@@ -4630,6 +4645,109 @@ def _sto<RESEND_API_KEY>(briefing: dict):
         print(f"🔔 Web push sent to {sent} subscribers", flush=True)
     except Exception as e:
         logger.error(f"❌ Briefing storage failed: {e}", exc_info=True)
+
+
+def _cadence_allows(job_type: str, user) -> bool:
+    """Per-user delivery gate — maps the onboarding rhythm (digest_frequency)
+    onto the global briefing jobs. The Research Digest is the flagship: on
+    slower cadences it thins out instead of disappearing."""
+    freq = (getattr(user, "digest_frequency", None) or "once-daily")
+    weekday = datetime.now(_CET).weekday()  # 0=Mon .. 6=Sun
+    # The evening Research Digest (18:00) is the twice-daily tier's second
+    # edition — every other cadence gets only the morning Research Digest, so a
+    # "once a day" user receives exactly one, not two.
+    if job_type == "academic_digest_evening":
+        return freq == "twice-daily"
+    if freq == "twice-daily":
+        return True
+    if job_type in ("morning_spark", "reflection"):
+        return False  # extra touchpoints belong to the twice-daily rhythm only
+    if freq in ("once-daily", "calendar"):
+        return True
+    if freq == "bi-weekly":
+        return weekday in (2, 6)  # Wednesday + Sunday
+    if freq == "weekly":
+        return weekday == 6  # Sunday
+    return True
+
+
+def _push_to_user(user_id: str, title: str, body: str, url: str = "/chat", prompt: str = "") -> int:
+    """Web Push to a single user's subscriptions only."""
+    if not VAPID_PRIVATE_KEY:
+        return 0
+    payload = json.dumps({"title": title, "body": (body or "")[:120], "url": url,
+                          "prompt": prompt[:200] if prompt else ""})
+    sent = 0
+    expired = []
+    subs = _load_subs()
+    for sub_entry in subs:
+        if str(sub_entry.get("user_id", "")) != str(user_id):
+            continue
+        sub_info = sub_entry.get("subscription", {})
+        if not sub_info.get("endpoint"):
+            continue
+        result = _send_web_push_to_all(sub_info, payload)
+        if result == "ok":
+            sent += 1
+        elif result == "expired":
+            expired.append(sub_info.get("endpoint"))
+    if expired:
+        _save_subs([s for s in subs if s.get("subscription", {}).get("endpoint") not in expired])
+    return sent
+
+
+def _sto<RESEND_API_KEY>(briefing: dict, user) -> None:
+    """Per-user variant of _sto<RESEND_API_KEY>: the notification is
+    stored with the owner's user_id and pushed only to their devices."""
+    from datetime import timedelta
+    user_id = str(user.id)
+    try:
+        notifs = _load_notifs()
+        notif_type = briefing.get("type", "briefing")
+        cutoff = (datetime.utcnow() - timedelta(hours=4)).isoformat()
+        if any(n.get("briefing", {}).get("type") == notif_type
+               and n.get("user_id") == user_id
+               and n.get("timestamp", "") >= cutoff for n in notifs):
+            return
+        body = briefing.get("sections", [{}])[0].get("content", "")
+        if isinstance(body, list):
+            body = body[0] if body else briefing.get("title", "")
+        clean_briefing = {k: v for k, v in briefing.items() if k != "prompt"}
+        section_titles = [s.get("title", "") for s in briefing.get("sections", []) if s.get("title")]
+        short_prompt = briefing.get("title", "") + (f" — {section_titles[0]}" if section_titles else "")
+        ts = datetime.utcnow()
+        notifs.append({
+            "id": f"{notif_type}_{user_id[:8]}_{ts.strftime('%Y%m%d%H%M')}",
+            "user_id": user_id,
+            "title": briefing.get("title", "Briefing"),
+            "body": body[:100] if body else briefing.get("subtitle", ""),
+            "url": "/chat",
+            "prompt": short_prompt[:200],
+            "briefing": clean_briefing,
+            "timestamp": ts.isoformat(),
+            "read": False,
+        })
+        _save_notifs(notifs)
+        sent = _push_to_user(user_id, briefing.get("title", "Briefing"),
+                             body[:100] if body else "", "/chat", prompt=briefing.get("prompt", ""))
+        logger.info(f"✅ Briefing '{notif_type}' → user {user_id[:8]} ({sent} devices)")
+    except Exception as e:
+        logger.error(f"❌ Per-user briefing storage failed: {e}", exc_info=True)
+
+
+def _sto<RESEND_API_KEY>(user_id: str, title: str, body: str, url: str, prompt: str = "") -> None:
+    """Per-user simple notification (no briefing payload)."""
+    try:
+        notifs = _load_notifs()
+        notifs.append({
+            "id": f"simple_{user_id[:8]}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "user_id": user_id, "title": title, "body": body, "url": url,
+            "prompt": prompt, "timestamp": datetime.utcnow().isoformat(), "read": False,
+        })
+        _save_notifs(notifs)
+        _push_to_user(user_id, title, body, url, prompt=prompt)
+    except Exception as e:
+        logger.error(f"❌ Simple per-user notification failed: {e}")
 
 
 def _job_enrich_pending_seeds():
@@ -5098,8 +5216,12 @@ def _run_agent_job_bg(topic: str, user_id: str, db_gen):
             "prompt": f"Let's discuss the strategy paper on: {topic}",
         }
 
-        _sto<RESEND_API_KEY>(briefing)
-        logger.info(f"[agent] Strategy paper delivered to Inbox for topic: {topic[:60]}")
+        paper_user = db.query(User).filter(User.id == uuid.UUID(str(user_id))).first()
+        if paper_user:
+            _sto<RESEND_API_KEY>(briefing, paper_user)
+        else:
+            _sto<RESEND_API_KEY>(briefing)  # fallback if user vanished
+        logger.info(f"[agent] Strategy paper delivered to Inbox for user {str(user_id)[:8]}: {topic[:60]}")
     except Exception as e:
         logger.error(f"[agent] Background job failed: {e}", exc_info=True)
     finally:

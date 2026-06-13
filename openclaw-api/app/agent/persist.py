@@ -124,20 +124,26 @@ class ChatSessionStore:
 
         return [Message.from_dict(m) for m in (record.messages or [])]
 
-    def load_session(self, session_id: str) -> Optional[Session]:
+    def load_session(self, session_id: str, tenant_id: Optional[str] = None) -> Optional[Session]:
         """
         Load a full Session object with metadata.
 
         Args:
             session_id: The session UUID string.
+            tenant_id:  When provided, the session must belong to this tenant —
+                        REQUIRED for any user-facing path (session ids arrive
+                        from the client and must never cross tenants).
 
         Returns:
-            Session object, or None if not found.
+            Session object, or None if not found (or owned by another tenant).
         """
         try:
-            record = self._db.query(ChatSession).filter(
+            query = self._db.query(ChatSession).filter(
                 ChatSession.id == uuid.UUID(session_id)
-            ).first()
+            )
+            if tenant_id:
+                query = query.filter(ChatSession.tenant_id == uuid.UUID(tenant_id))
+            record = query.first()
         except (ValueError, Exception):
             return None
 
@@ -184,20 +190,26 @@ class ChatSessionStore:
             })
         return summaries
 
-    def delete(self, session_id: str) -> bool:
+    def delete(self, session_id: str, tenant_id: Optional[str] = None) -> bool:
         """
         Delete a chat session.
 
         Args:
             session_id: The session UUID string.
+            tenant_id:  When provided, the session must belong to this tenant —
+                        REQUIRED for any user-facing path so a guessed session
+                        id can't delete another tenant's chat.
 
         Returns:
-            True if deleted, False if not found.
+            True if deleted, False if not found (or owned by another tenant).
         """
         try:
-            result = self._db.query(ChatSession).filter(
+            query = self._db.query(ChatSession).filter(
                 ChatSession.id == uuid.UUID(session_id)
-            ).delete()
+            )
+            if tenant_id:
+                query = query.filter(ChatSession.tenant_id == uuid.UUID(tenant_id))
+            result = query.delete()
             self._db.flush()
             return result > 0
         except (ValueError, Exception):

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarConnectCard } from '@/components/settings/calendar-connect-card'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
+import { clearAuth } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Bell, Sun, Mail, Download, LogOut, ChevronRight, Copy, Plus, X,
@@ -494,9 +495,8 @@ export default function SettingsPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('greenplot_token'); localStorage.removeItem('greenplot_tenant')
-    localStorage.removeItem('greenplot_nickname'); localStorage.removeItem('greenplot_chat_messages')
-    localStorage.removeItem('greenplot_profile')
+    clearAuth() // clears token, tenant, nickname AND all cached chat state
+    localStorage.removeItem('greenplot_profile'); localStorage.removeItem('greenplot_email')
     toast.success('Logged out'); router.push('/onboarding')
   }
 
