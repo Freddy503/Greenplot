@@ -87,7 +87,8 @@ def _load_wiki_system_prompt() -> str:
 IMPORTANT: Do NOT include a Timeline section — that will be appended automatically after synthesis."""
 
 WIKI_SYSTEM_PROMPT = _load_wiki_system_prompt()
-WIKI_MODEL = "google/gemini-3.5-flash"
+WIKI_MODEL = settings.WIKI_MODEL  # kept on Gemini by default; see config.py to migrate
+WIKI_FALLBACK_MODEL = settings.WIKI_FALLBACK_MODEL
 
 async def _auto_generate_image(article_id: str, title: str, category: str = "", domain: str = "", tenant_id: str = ""):
     """Image generation removed (BFL retired) — articles render without hero images."""

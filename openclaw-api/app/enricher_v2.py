@@ -173,7 +173,7 @@ def _call_llm_for_seed(thought_text: str, web_context: Optional[str], strict: bo
         user_parts.append(f"Fetched web content:\n{web_context[:4000]}")
     try:
         response = openai_client.chat.completions.create(
-            model="minimax/minimax-m2.7",
+            model=settings.ENRICH_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "\n\n".join(user_parts)}

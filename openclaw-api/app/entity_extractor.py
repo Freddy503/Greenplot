@@ -59,7 +59,7 @@ def extract_entities(text: str) -> dict:
 
     try:
         response = openai_client.chat.completions.create(
-            model="minimax/minimax-m2.7",
+            model=settings.ENRICH_MODEL,
             messages=[
                 {"role": "system", "content": EXTRACTION_PROMPT},
                 {"role": "user", "content": text[:3000]}  # Cap input to avoid token waste

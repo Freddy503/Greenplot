@@ -1937,7 +1937,7 @@ async def create_wiki_article(args: dict, user: User, db: Session) -> str:
     if not openrouter_key:
         return json.dumps({"status": "error", "message": "LLM not configured"})
 
-    wiki_model = "deepseek/deepseek-chat-v3-0324"
+    wiki_model = settings.WIKI_MODEL
     article_content = content
 
     try:
