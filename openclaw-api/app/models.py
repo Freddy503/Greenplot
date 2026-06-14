@@ -72,6 +72,22 @@ class CanvasShare(Base):
         Index('ix_canvas_share_collab', 'collaborator_user_id', 'status'),
     )
 
+class Comment(Base):
+    """A comment on a PRD seed, scoped to a shared canvas. Access is enforced via
+    resolve_canvas_access — anyone with access to the canvas (owner or active
+    collaborator) may read and post. Flat in v1; parent_id is reply-ready."""
+    __tablename__ = 'comments'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    seed_id = Column(UUID(as_uuid=True), nullable=False, index=True)     # the PRD
+    product_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # the canvas (access scope)
+    author_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    author_name = Column(String(120), nullable=True)
+    body = Column(String(4000), nullable=False)
+    parent_id = Column(UUID(as_uuid=True), nullable=True)
+    resolved = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    edited_at = Column(DateTime, nullable=True)
+
 class Thought(Base):
     __tablename__ = 'thoughts'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
