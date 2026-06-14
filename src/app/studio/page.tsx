@@ -70,6 +70,9 @@ interface SeedMeta {
   pdf_url?: string
   paper_url?: string
   source_url?: string
+  source?: string
+  file_path?: string
+  original_filename?: string
   digest_date?: string
   parse_status?: string
   chunk_count?: number
@@ -270,10 +273,35 @@ const MODE_ICONS: Record<string, React.ComponentType<any>> = {
 function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack: () => void; onSpec: () => void; onDrafted?: () => void }) {
   const meta = seed.seed_metadata || seed.metadata || {}
   const paper = isPaperSeed(seed)
-  const pdfUrl = paperPdfUrl(meta)
+  const isUpload = meta.source === 'upload' || !!meta.file_path
+  const pdfUrl = isUpload ? '' : paperPdfUrl(meta)
   const paperUrl = meta.paper_url || ''
   const content = seed.content || seed.text || seed.summary || ''
-  const [pdfOpen, setPdfOpen] = useState(!!pdfUrl)
+  const [pdfOpen, setPdfOpen] = useState(!!pdfUrl || isUpload)
+  // Uploaded PDFs are auth-gated, so an iframe can't load them directly —
+  // fetch the file as a blob (with the bearer) and view it via an object URL.
+  const [blobUrl, setBlobUrl] = useState('')
+  useEffect(() => {
+    if (!isUpload || !seed.id) return
+    let made = ''
+    const token = localStorage.getItem('greenplot_token')
+    fetch(`/api/papers/${seed.id}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => (r.ok ? r.blob() : null))
+      .then(b => { if (b) { made = URL.createObjectURL(b); setBlobUrl(made) } })
+      .catch(() => {})
+    return () => { if (made) URL.revokeObjectURL(made) }
+  }, [isUpload, seed.id])
+  const viewerUrl = isUpload ? blobUrl : pdfUrl
+  // Live "links to your garden" for this paper
+  const [gardenLinks, setGardenLinks] = useState<{ related_seeds: Array<{ id: string; title: string }>; papers: Array<{ id: string; title: string }> } | null>(null)
+  useEffect(() => {
+    if (!isPaperSeed(seed) || !seed.id) return
+    const token = localStorage.getItem('greenplot_token')
+    fetch(`/api/papers/${seed.id}/links`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setGardenLinks(d) })
+      .catch(() => {})
+  }, [seed.id])
   const [draftState, setDraftState] = useState<'idle' | 'drafting' | 'success' | 'error'>('idle')
   const [draftTitle, setDraftTitle] = useState('')
   const [draftError, setDraftError] = useState('')
@@ -426,7 +454,7 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
           </div>
 
           {/* Embedded PDF */}
-          {pdfUrl && (
+          {(pdfUrl || isUpload) && (
             <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hairline)', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface-sunk)' }}>
                 <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>📄 Paper PDF</span>
@@ -434,18 +462,39 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
                   <button onClick={() => setPdfOpen(o => !o)} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>
                     {pdfOpen ? 'Collapse' : 'Expand'}
                   </button>
-                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>
-                    Open in new tab ↗
-                  </a>
+                  {viewerUrl && (
+                    <a href={viewerUrl} target="_blank" rel="noopener noreferrer" className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)', textDecoration: 'none' }}>
+                      Open in new tab ↗
+                    </a>
+                  )}
                 </div>
               </div>
               {pdfOpen && (
-                <iframe
-                  src={pdfUrl}
-                  title="Paper PDF"
-                  style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }}
-                />
+                viewerUrl ? (
+                  <iframe
+                    src={viewerUrl}
+                    title="Paper PDF"
+                    style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }}
+                  />
+                ) : (
+                  <div style={{ padding: 28, textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--body)', fontSize: 12.5 }}>Loading PDF…</div>
+                )
               )}
+            </div>
+          )}
+
+          {/* Links to your garden */}
+          {gardenLinks && (gardenLinks.related_seeds.length > 0 || gardenLinks.papers.length > 0) && (
+            <div className="glass" style={{ borderRadius: 20, padding: '16px 18px', marginBottom: 16 }}>
+              <div className="caps" style={{ fontSize: 9.5, color: 'var(--ink-3)', marginBottom: 10 }}>Links to your garden</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[...gardenLinks.related_seeds.map(s => ({ ...s, kind: 'seed' })), ...gardenLinks.papers.map(p => ({ ...p, kind: 'paper' }))].map((it) => (
+                  <a key={it.id} href={`/garden?seed=${it.id}`} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', borderRadius: 9999, padding: '6px 11px', fontSize: 11.5, fontWeight: 600, textDecoration: 'none', maxWidth: 240, overflow: 'hidden' }}>
+                    {it.kind === 'paper' ? <BookOpen size={12} strokeWidth={2} /> : <Leaf size={12} strokeWidth={2} />}
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title || 'Untitled'}</span>
+                  </a>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1114,6 +1163,40 @@ export default function StudioPage() {
     router.push('/chat?mode=spec')
   }, [router])
 
+  // ── Drop-a-PDF (docs/specs/studio-pdf-drop.md) ──
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'error'>('idle')
+  const [uploadPct, setUploadPct] = useState(0)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadPdf = useCallback((file: File) => {
+    if (!file) return
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Please drop a PDF file'); return
+    }
+    if (file.size > 25 * 1024 * 1024) { toast.error('PDF exceeds the 25 MB limit'); return }
+    const token = localStorage.getItem('greenplot_token')
+    const form = new FormData()
+    form.append('file', file)
+    setUploadState('uploading'); setUploadPct(0)
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/papers/upload')
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100)) }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setUploadState('idle'); setUploadPct(0)
+        toast.success('PDF uploaded — indexing into your garden')
+        setRefreshKey(k => k + 1)
+      } else {
+        setUploadState('error')
+        try { toast.error(JSON.parse(xhr.responseText).detail || 'Upload failed') } catch { toast.error('Upload failed') }
+      }
+    }
+    xhr.onerror = () => { setUploadState('error'); toast.error('Could not reach the server') }
+    xhr.send(form)
+  }, [])
+
   useEffect(() => {
     const local = loadLocalPRDs()
     setPrds(local)
@@ -1238,6 +1321,37 @@ export default function StudioPage() {
             <div className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 2 }}>Structured tutoring grounded in your garden.</div>
           </div>
         </button>
+
+        {/* Drop a PDF → chunked + linked to your garden */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) uploadPdf(f) }}
+          onClick={() => fileInputRef.current?.click()}
+          className="tap"
+          style={{ marginTop: 11, borderRadius: 18, padding: '14px 16px', cursor: 'pointer', border: `1.5px dashed ${dragOver ? 'var(--green-700)' : 'var(--border-2, var(--hairline))'}`, background: dragOver ? 'var(--green-tint)' : 'transparent', display: 'flex', alignItems: 'center', gap: 13, transition: 'all .15s ease' }}
+        >
+          <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {uploadState === 'uploading'
+              ? <Loader2 size={20} color="var(--green-700)" strokeWidth={1.75} className="animate-spin" />
+              : <FileText size={20} color="var(--green-700)" strokeWidth={1.75} />}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ui" style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>
+              {uploadState === 'uploading' ? `Uploading… ${uploadPct}%` : 'Drop a PDF'}
+            </div>
+            <div className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 2 }}>
+              {uploadState === 'uploading' ? 'Then it’s chunked & linked to your garden' : 'Research papers, reports — indexed into your garden (≤ 25 MB)'}
+            </div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPdf(f); e.target.value = '' }}
+          />
+        </div>
 
         {/* Ideas ready to develop */}
         {ideas.length > 0 && (

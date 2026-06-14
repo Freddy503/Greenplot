@@ -14,6 +14,7 @@ Redis is unavailable.
 """
 
 import logging
+import os
 import re
 from datetime import datetime
 from uuid import UUID
@@ -230,6 +231,7 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
     meta = dict(seed.seed_metadata or {})
     source_url = meta.get("paper_url") or meta.get("source_url") or ""
     pdf_url = meta.get("pdf_url") or ""
+    local_file = meta.get("file_path") or ""
 
     def _set_status(status: str, **extra):
         m = dict(seed.seed_metadata or {})
@@ -241,13 +243,21 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
 
     try:
         _set_status("parsing")
-        kind, payload = fetch_paper(source_url, pdf_url)
-        if kind == "html":
-            sections = parse_html(payload)
-        elif kind == "pdf":
+        # Uploaded PDFs (source="upload") are already on local disk — parse them
+        # directly and skip the network fetch stage.
+        if local_file and os.path.exists(local_file):
+            with open(local_file, "rb") as fh:
+                payload = fh.read()
+            kind = "pdf"
             sections = parse_pdf(payload)
         else:
-            sections = parse_text(payload)
+            kind, payload = fetch_paper(source_url, pdf_url)
+            if kind == "html":
+                sections = parse_html(payload)
+            elif kind == "pdf":
+                sections = parse_pdf(payload)
+            else:
+                sections = parse_text(payload)
 
         chunks = chunk_sections(sections)
         if not chunks:
