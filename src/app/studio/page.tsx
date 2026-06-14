@@ -13,6 +13,7 @@ import { readCache, writeCache } from '@/lib/swr-cache'
 import Hero from '@/components/layout/hero'
 import Header from '@/components/layout/header'
 import BottomNav from '@/components/layout/bottom-nav'
+import CommentsPanel from '@/components/studio/comments-panel'
 import Pill from '@/components/ui/v2/pill'
 import SectionHeader from '@/components/ui/v2/section-header'
 import { THINKING_MODES } from '@/lib/thinking-modes'
@@ -862,6 +863,7 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
               </div>
             </div>
           )}
+          {prd.productId && !prd.local && <CommentsPanel seedId={prd.id} productId={prd.productId} />}
         </div>
       </div>
     </div>
@@ -1311,6 +1313,7 @@ export default function StudioPage() {
                     <span className="caps" style={{ fontSize: 8.5, color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 99, padding: '2px 7px', flexShrink: 0 }}>{p.build_status}</span>
                   </div>
                   <p className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.content.replace(/^#+\s.*/gm, '').slice(0, 220)}</p>
+                  <CommentsPanel seedId={p.id} productId={sharedView.product.id} />
                 </div>
               ))}
             </div>
