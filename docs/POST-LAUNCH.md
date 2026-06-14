@@ -39,6 +39,50 @@ accept/revoke/list endpoints + email invite, Studio Share button, and a
   Exa / Resend as sub-processors (the landing EU strip already notes "third-party
   providers"); confirm the legal copy matches before broad EU launch.
 
+## Notifications redesign — remaining + bigger bets
+
+Shipped now: notifications shifted from *chat-prompts* to *delivered artifacts*.
+Killed the pure-prompt **Weekly Garden Digest**; **merged Daily Briefing** into
+the Research Digest; added **Garden Story** (narrated weekly recap) and **Garden
+Signals** (connection alerts on strong new SeedLinks + theme-emergence when a
+seed becomes a hub). Reframed the two daily offenders to be garden-grounded:
+**Morning Spark → "Today's thread"** (one real seed + provocation + a concrete
+10-min action) and **Evening Reflection → "Loose threads"** (surfaces the user's
+own underdeveloped seeds + a tend-one nudge).
+
+### Remaining per-notification reframes (lower frequency — deferred)
+- **Weekly Content Eval → deliver the finding.** Today it asks the LLM to riff on
+  theme strings. Ground it in real data: the user's most-revisited / most-linked
+  seeds this week + a synthesized "what stuck" theme, saved as an artifact (not a
+  chat prompt). Source from `Seed` access/link counts.
+- **Biweekly Challenge → experiment card.** Keep the cross-domain idea, but emit a
+  concrete, saveable **experiment card** (hypothesis · 3 steps · measurable
+  outcome) with a one-tap "Plant as a seed/spec" action, instead of dumping the
+  brief into chat.
+- **Coherence Report → lead with the contradiction.** It already produces a real
+  Library article (good). Improve the *notification*: surface the single top
+  contradiction/gap in the body, and one-tap open the two conflicting seeds side
+  by side (needs `build_coherence_report` to return a `top_contradiction` field).
+- **Per-type notification toggles in Settings.** Let users mute/enable each type
+  (spark / reflection / digest / story / signals / eval / challenge / coherence)
+  independently — `digest_frequency` already exists; generalize it.
+
+### Bigger product bets (the "rest" from the feature brainstorm)
+- **Explorable Garden Graph** — promote the graph from a view to a first-class
+  space you wander (zoom, cluster, focus a node, walk its links). The visual
+  "mind." (`/garden` already deep-links to a seed; build out the graph surface.)
+- **Reading queue** — pairs with PDF-drop: saved papers/PDFs get parsed + queued;
+  the Research Digest pulls from *your* queue, not just arXiv.
+- **North-star / goals** — seeds → products → a personal north star the AI tracks
+  progress against; surfaces in Garden Story.
+- **Capture-from-anywhere** — browser extension / share-target → seed in one tap.
+- **Resurfacing (spaced repetition)** — a Garden Signals extension: surface a
+  forgotten older seed that's newly relevant to something just captured.
+- **Contradiction watch** — when a new seed contradicts an earlier belief
+  (`link_type='contradicts'`), flag it proactively (intellectual honesty).
+- **"Pick up where you left off"** — nudge on a stalled spec/PRD with the literal
+  next step (ties into the chat Artifacts work).
+
 ## Chat experience rebuild — remaining milestones
 
 Shipped now (M-A): reliability layer — 90s turn deadline, 8-tool budget +
