@@ -37,7 +37,7 @@ const INTERESTS = [
 ]
 
 const DIGESTS: { label: string; sublabel: string; value: Frequency }[] = [
-  { label: 'Twice a day', sublabel: 'Morning spark & evening reflection', value: 'twice-daily' },
+  { label: 'Twice a day', sublabel: 'Morning thread & evening loose-threads', value: 'twice-daily' },
   { label: 'Once a day', sublabel: 'One rich morning briefing', value: 'once-daily' },
   { label: 'Bi-weekly', sublabel: 'Mid-week & weekend digests', value: 'bi-weekly' },
   { label: 'Weekly', sublabel: 'A Sunday roundup', value: 'weekly' },
@@ -47,13 +47,13 @@ const DIGESTS: { label: string; sublabel: string; value: Frequency }[] = [
 const CRON: Record<Frequency, Array<{ icon: string; name: string; time: string; desc: string }>> = {
   'twice-daily': [
     { icon: 'microscope', name: 'Research Digest', time: '7:00 AM & 6:00 PM', desc: 'New arXiv & web research linked to your seeds — twice daily.' },
-    { icon: 'sun', name: 'Morning Spark', time: '8:30 AM', desc: 'Weather, your day ahead & a creative prompt.' },
-    { icon: 'moon', name: 'Evening Reflection', time: '4:00 PM', desc: 'Capture loose thoughts before they fade.' },
+    { icon: 'sun', name: 'Today’s Thread', time: '8:30 AM', desc: 'One idea from your garden + a 10-min move to grow it.' },
+    { icon: 'moon', name: 'Loose Threads', time: '4:00 PM', desc: 'Your undeveloped seeds, surfaced to tend before they fade.' },
   ],
   'once-daily': [
     { icon: 'microscope', name: 'Research Digest', time: '7:00 AM', desc: 'New arXiv & web research connected to your seeds & wiki.' },
-    { icon: 'sun', name: 'Daily Briefing', time: '9:30 AM', desc: 'Weather, calendar highlights, fresh seeds & a prompt.' },
-    { icon: 'leaf', name: 'Garden Pulse', time: 'alongside', desc: 'Seed enrichment & new connections, quietly.' },
+    { icon: 'sun', name: 'Today’s Thread', time: '8:30 AM', desc: 'One idea from your garden + a 10-min move to grow it.' },
+    { icon: 'leaf', name: 'Garden Signals', time: 'as they form', desc: 'New connections & emerging themes, quietly.' },
   ],
   'bi-weekly': [
     { icon: 'microscope', name: 'Research Digest', time: 'Wed & Sun 7 AM', desc: 'New research linked to your seeds — mid-week & weekend.' },
@@ -61,7 +61,7 @@ const CRON: Record<Frequency, Array<{ icon: string; name: string; time: string; 
   ],
   weekly: [
     { icon: 'microscope', name: 'Research Digest', time: 'Sun 7 AM', desc: 'The week’s new research, connected to your seeds & wiki.' },
-    { icon: 'book-open', name: 'Weekly Roundup', time: 'Sun 10 AM', desc: 'Seeds planted, enriched & trending topics.' },
+    { icon: 'book-open', name: 'Garden Story', time: 'Sun 10 AM', desc: 'Your week of thinking, narrated — what grew & connected.' },
   ],
   calendar: [
     { icon: 'microscope', name: 'Research Digest', time: '7:00 AM', desc: 'New arXiv & web research connected to your seeds & wiki.' },

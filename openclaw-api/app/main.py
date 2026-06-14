@@ -5666,7 +5666,18 @@ _DEFAULT_SCHEDULE = {
     "reflection":       {"enabled": True, "hour": 16, "minute": 0,  "label": "Evening Reflection"},
     "weekly_eval":      {"enabled": True, "hour": 18, "minute": 0,  "label": "Weekly Content Eval"},
     "biweekly_challenge":{"enabled": True,"hour": 10, "minute": 0,  "label": "Biweekly Challenge"},
+    "garden_story":     {"enabled": True, "hour": 10, "minute": 0,  "label": "Garden Story"},
+    "garden_signals":   {"enabled": True, "hour": 9,  "minute": 20, "label": "Garden Signals"},
 }
+
+# Jobs whose cadence is NOT a simple daily hour/minute — when re-enabled via the
+# settings toggle, restore their real trigger instead of a daily one.
+def _special_trigger(job_id: str):
+    if job_id == "garden_story":
+        return CronTrigger(day_of_week="sun", hour=10, minute=0, timezone=_CET)
+    if job_id == "garden_signals":
+        return CronTrigger(hour="9,12,15,18,21", minute=20, timezone=_CET)
+    return None
 
 def _load_schedule() -> dict:
     try:
@@ -5695,7 +5706,8 @@ def _reschedule_job(job_id: str, hour: int, minute: int, enabled: bool):
         if not enabled:
             scheduler.pause_job(job_id)
         else:
-            scheduler.reschedule_job(job_id, trigger=CronTrigger(hour=hour, minute=minute, timezone=_CET))
+            trigger = _special_trigger(job_id) or CronTrigger(hour=hour, minute=minute, timezone=_CET)
+            scheduler.reschedule_job(job_id, trigger=trigger)
             scheduler.resume_job(job_id)
     except Exception as e:
         logger.warning(f"Could not reschedule {job_id}: {e}")
