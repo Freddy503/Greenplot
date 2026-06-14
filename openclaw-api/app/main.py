@@ -2002,6 +2002,25 @@ class AttachRequest(BaseModel):
     pillar_id: Optional[int] = None
 
 
+def _stamp_product_vision_dirty(db: Session, tenant_id, product_id):
+    """Mark a product's Design Vision stale so the debounced refresh job
+    regenerates it once changes settle. Does not commit — the caller commits."""
+    if not product_id:
+        return
+    try:
+        product = db.query(Seed).filter(
+            Seed.id == uuid.UUID(str(product_id)),
+            Seed.tenant_id == tenant_id,
+            Seed.seed_type == "product",
+        ).first()
+        if product:
+            pm = dict(product.seed_metadata or {})
+            pm["vision_dirty_at"] = datetime.utcnow().isoformat()
+            product.seed_metadata = pm
+    except Exception as e:
+        logger.warning(f"[vision] stamp dirty failed: {e}")
+
+
 @app.post("/api/v1/seeds/{seed_id}/attach")
 def attach_seed_to_product(
     seed_id: str,
@@ -2023,6 +2042,7 @@ def attach_seed_to_product(
         m["pillar_id"] = req.pillar_id
     m["attachment"] = "confirmed"
     seed.seed_metadata = m
+    _stamp_product_vision_dirty(db, current_user.tenant_id, str(product.id))
     db.commit()
     return {"ok": True, "seed_id": str(seed.id), "product_id": str(product.id), "pillar_id": m.get("pillar_id")}
 
@@ -2097,6 +2117,7 @@ def update_build_status(
         history.append({"at": meta["build_updated_at"], "status": req.status, "note": req.note})
         meta["build_notes"] = history[-20:]
     seed.seed_metadata = meta
+    _stamp_product_vision_dirty(db, current_user.tenant_id, meta.get("product_id"))
     db.commit()
 
     # Living "story so far" on the owning product (templated, no LLM)
@@ -4835,6 +4856,50 @@ def _sto<RESEND_API_KEY>(user_id: str, title: str, body: str, url: str, prompt: 
         logger.error(f"❌ Simple per-user notification failed: {e}")
 
 
+def _job_refresh_stale_visions():
+    """Debounced auto-refresh of product Design Visions. When a product's PRDs
+    change (attach / build-status), the product is stamped vision_dirty_at;
+    once the changes have settled (>5 min with no further edits) this job
+    regenerates the vision and clears the flag. Runs every 5 minutes."""
+    from app.design_vision import generate_design_vision
+    debounce = timedelta(minutes=5)
+    db = next(get_db())
+    try:
+        now = datetime.utcnow()
+        for product in db.query(Seed).filter(Seed.seed_type == "product").all():
+            meta = product.seed_metadata or {}
+            dirty = meta.get("vision_dirty_at")
+            if not dirty:
+                continue
+            try:
+                if now - datetime.fromisoformat(dirty) < debounce:
+                    continue  # changes still settling — wait for the next run
+            except Exception:
+                pass
+            # PRDs currently attached to this product
+            prd_ids = [
+                str(s.id) for s in db.query(Seed).filter(Seed.tenant_id == product.tenant_id).all()
+                if (s.seed_metadata or {}).get("product_id") == str(product.id)
+            ]
+            user = db.query(User).filter(User.id == product.user_id).first()
+            # Clear the flag first so a failure doesn't re-fire every run
+            pm = dict(product.seed_metadata or {})
+            pm.pop("vision_dirty_at", None)
+            pm["vision_refreshed_at"] = now.isoformat()
+            product.seed_metadata = pm
+            db.commit()
+            if len(prd_ids) >= 2 and user:
+                try:
+                    result = generate_design_vision(prd_ids, user, db)
+                    logger.info(f"[vision] auto-refreshed product {str(product.id)[:8]} ({len(prd_ids)} PRDs): {result.get('status')}")
+                except Exception as e:
+                    logger.error(f"[vision] auto-refresh failed for {str(product.id)[:8]}: {e}")
+    except Exception as e:
+        logger.error(f"[vision] refresh job failed: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
 def _job_enrich_pending_seeds():
     """Enrich pending seeds — runs every 30 minutes. Processes up to 5 seeds per run."""
     try:
@@ -5105,6 +5170,12 @@ def _start_scheduler():
         lambda: _job_academic_digest(evening=True),
         CronTrigger(hour=18, minute=0, timezone=_CET),
         id="academic_digest_evening", replace_existing=True,
+    )
+    # Product Design Vision — debounced auto-refresh when canvas PRDs change
+    scheduler.add_job(
+        _job_refresh_stale_visions,
+        CronTrigger(minute="*/5", timezone=_CET),
+        id="refresh_visions", replace_existing=True,
     )
     # Seed enrichment — every 30 minutes
     scheduler.add_job(
