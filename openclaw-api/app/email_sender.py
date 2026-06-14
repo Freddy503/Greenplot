@@ -302,6 +302,37 @@ def send_invite_email(to: str, code: str, onboarding_url: str) -> bool:
         return False
 
 
+def send_canvas_invite_email(to: str, owner_name: str, canvas_title: str, accept_url: str) -> bool:
+    """Invite a collaborator to a shared Studio canvas."""
+    if not settings.RESEND_API_KEY or _resend is None:
+        print("[email_sender] cannot send canvas invite (Resend not configured)")
+        return False
+    _resend.api_key = settings.RESEND_API_KEY
+    who = owner_name or "Someone"
+    title = canvas_title or "a canvas"
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#141413">
+      <div style="font-size:22px;font-weight:700;color:#15803d;margin-bottom:8px">🌱 Greenplot</div>
+      <h1 style="font-size:20px;margin:16px 0 8px">{who} shared a canvas with you</h1>
+      <p style="font-size:15px;line-height:1.6;color:#5f5f5a">You've been invited to collaborate on <strong>{title}</strong> in Greenplot Studio — explore the PRDs and product vision.</p>
+      <a href="{accept_url}" style="display:inline-block;margin:20px 0;background:#22c55e;color:#fff;text-decoration:none;font-weight:600;border-radius:9999px;padding:13px 28px;font-size:15px">Open the canvas →</a>
+      <p style="font-size:12px;color:#a3a29c">If you didn't expect this, you can safely ignore this email.</p>
+    </div>
+    """
+    try:
+        _resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": to,
+            "subject": f"{who} shared a Greenplot canvas with you 🌱",
+            "html": html,
+        })
+        print(f"[email_sender] Sent canvas invite to {to}")
+        return True
+    except Exception as e:
+        print(f"[email_sender] Failed to send canvas invite to {to}: {e}")
+        return False
+
+
 def send_briefing_email(to: str, briefing: dict, attachments: list = None) -> bool:
     """
     Render briefing as HTML and send via Resend.
