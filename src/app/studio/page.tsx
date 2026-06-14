@@ -888,6 +888,8 @@ export default function StudioPage() {
   const [shareRole, setShareRole] = useState<'viewer' | 'editor'>('viewer')
   const [shareList, setShareList] = useState<Array<{ id: string; email: string; role: string; status: string }>>([])
   const [shareBusy, setShareBusy] = useState(false)
+  const [sharedView, setSharedView] = useState<{ role: string; product: { id: string; title: string; content: string }; prds: Array<{ id: string; title: string; content: string; build_status: string }> } | null>(null)
+  const [sharedList, setSharedList] = useState<Array<{ product_id: string; title: string; role: string; share_id: string }>>([])
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectMode, setSelectMode] = useState(false)
@@ -947,6 +949,28 @@ export default function StudioPage() {
       const r = await fetch(`/api/canvas/share/${id}`, { method: 'DELETE', headers: { ...authHeader() } })
       if (r.ok) setShareList(prev => prev.filter(s => s.id !== id))
     } catch {}
+  }, [])
+
+  // Collaborator side: accept an invite link, list canvases shared with me, open read-only
+  const loadSharedCanvas = useCallback(async (productId: string) => {
+    try {
+      const r = await fetch(`/api/canvas/${productId}`, { headers: { ...authHeader() } })
+      if (r.ok) setSharedView(await r.json())
+      else toast.error('Could not open shared canvas')
+    } catch {}
+  }, [])
+  useEffect(() => {
+    fetch('/api/canvas/shared-with-me', { headers: { ...authHeader() } })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d?.canvases) setSharedList(d.canvases) }).catch(() => {})
+    const params = new URLSearchParams(window.location.search)
+    const canvas = params.get('canvas'); const share = params.get('share')
+    if (share && canvas) {
+      fetch(`/api/canvas/share/${share}/accept`, { method: 'POST', headers: { ...authHeader() } })
+        .then(r => r.json()).then(() => loadSharedCanvas(canvas)).catch(() => loadSharedCanvas(canvas))
+    } else if (canvas) {
+      loadSharedCanvas(canvas)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const promoteProduct = async (productId: string) => {
@@ -1252,6 +1276,47 @@ export default function StudioPage() {
           </>
         )}
 
+        {/* Canvases shared with me */}
+        {sharedList.length > 0 && !sharedView && (
+          <div style={{ marginBottom: 16 }}>
+            <div className="caps" style={{ fontSize: 9.5, color: 'var(--ink-3)', margin: '0 2px 8px' }}>Shared with you</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {sharedList.map(c => (
+                <button key={c.product_id} onClick={() => loadSharedCanvas(c.product_id)} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', cursor: 'pointer' }}>
+                  <Share2 size={12} color="var(--green-700)" /> {c.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Viewing a shared canvas — read-only */}
+        {sharedView && (
+          <div className="v2-card" style={{ borderRadius: 18, padding: 16, marginBottom: 18, border: '1.5px solid var(--green-700)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span className="caps" style={{ fontSize: 8.5, fontWeight: 700, color: '#fff', background: 'var(--green-deep)', borderRadius: 9999, padding: '2.5px 8px' }}>SHARED · VIEW ONLY</span>
+              <span className="ui" style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{sharedView.product.title}</span>
+              <button onClick={() => setSharedView(null)} className="tap" title="Close" style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}><X size={16} color="var(--ink-3)" /></button>
+            </div>
+            {sharedView.product.content && (
+              <p className="body-text" style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 12, lineHeight: 1.5 }}>{sharedView.product.content.slice(0, 280)}</p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sharedView.prds.length === 0 ? (
+                <p className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)' }}>No PRDs on this canvas yet.</p>
+              ) : sharedView.prds.map(p => (
+                <div key={p.id} className="v2-card" style={{ borderRadius: 12, padding: '11px 13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="ui" style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>{p.title}</span>
+                    <span className="caps" style={{ fontSize: 8.5, color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 99, padding: '2px 7px', flexShrink: 0 }}>{p.build_status}</span>
+                  </div>
+                  <p className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.content.replace(/^#+\s.*/gm, '').slice(0, 220)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Build pipeline — PRDs from Design to Doing to Built */}
         <SectionHeader action="New spec" onAction={() => router.push('/chat?mode=spec')}>Build pipeline</SectionHeader>
 
@@ -1273,6 +1338,11 @@ export default function StudioPage() {
             >
               <Sparkles size={13} strokeWidth={2} /> {selectMode ? 'Selecting…' : 'Design vision'}
             </button>
+            {mainProduct && (
+              <button onClick={openShare} className="tap ui" title="Share canvas" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', border: '1px solid var(--green-700)', borderRadius: 9999, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Share2 size={13} strokeWidth={2} /> Share
+              </button>
+            )}
           </div>
         )}
 
