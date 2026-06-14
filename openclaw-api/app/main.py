@@ -2,7 +2,7 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, Header
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -610,6 +610,7 @@ def delete_seed(seed_id: str, current_user: User = Depends(get_current_user), db
     if not seed:
         raise HTTPException(status_code=404, detail="Seed not found")
     weaviate_ref = seed.embedding_ref or seed_id
+    _paper_file = (seed.seed_metadata or {}).get("file_path")  # uploaded PDF, if any
     # Cascade: comments on this seed, plus shares if it's a shared canvas (product)
     from app.models import Comment as _Comment, CanvasShare as _CanvasShare
     db.query(_Comment).filter(_Comment.seed_id == seed.id).delete(synchronize_session=False)
@@ -626,7 +627,122 @@ def delete_seed(seed_id: str, current_user: User = Depends(get_current_user), db
         weaviate_client.delete_paper_chunks(seed_id)
     except Exception:
         pass
+    # Uploaded PDFs: remove the stored file from disk (GDPR + disk hygiene)
+    try:
+        if _paper_file and os.path.exists(_paper_file):
+            os.remove(_paper_file)
+    except Exception as _e:
+        logger.warning(f"[papers] could not remove file for {seed_id}: {_e}")
     return {"ok": True}
+
+
+# ── Drop-a-PDF in Studio (docs/specs/studio-pdf-drop.md) ──────────────────────
+PAPERS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "papers")
+_MAX_PDF_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
+@app.post("/api/v1/papers/upload")
+async def upload_paper(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a PDF → create a paper seed → store the file → enqueue the existing
+    parse→chunk→embed pipeline (local-file branch). Returns {seed_id}."""
+    fname = (file.filename or "document.pdf").strip()
+    if not fname.lower().endswith(".pdf") and (file.content_type or "") != "application/pdf":
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    data = await file.read()
+    if not data[:5].startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="That doesn't look like a valid PDF")
+    if len(data) > _MAX_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="PDF exceeds the 25 MB limit")
+
+    seed_id = uuid.uuid4()
+    os.makedirs(PAPERS_DIR, exist_ok=True)
+    file_path = os.path.join(PAPERS_DIR, f"{seed_id}.pdf")
+    with open(file_path, "wb") as fh:
+        fh.write(data)
+
+    title = fname[:-4] if fname.lower().endswith(".pdf") else fname
+    seed = Seed(
+        id=seed_id,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        title=title[:200],
+        content=f"**Uploaded PDF** — {fname}\n\nFull text is being indexed into your garden.",
+        seed_type="paper",
+        created_by="user_upload",
+        created_via="pdf_upload",
+        embedding_ref="",
+        seed_metadata={
+            "tags": ["paper", "research-paper", "upload"],
+            "seed_type": "paper",
+            "domain": "Research",
+            "source": "upload",
+            "original_filename": fname,
+            "file_path": file_path,
+            "parse_status": "queued",
+            "chunk_count": 0,
+            "energy": "HIGH",
+        },
+    )
+    db.add(seed)
+    db.commit()
+
+    try:
+        from app.paper_pipeline import enqueue_or_run_parse
+        enqueue_or_run_parse(str(seed_id), str(current_user.tenant_id), db)
+    except Exception as e:
+        logger.warning(f"[papers] parse enqueue failed for {seed_id}: {e}")
+
+    return {"seed_id": str(seed_id), "title": title, "parse_status": "queued"}
+
+
+@app.get("/api/v1/papers/{seed_id}/file")
+def serve_paper_file(seed_id: str, current_user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db)):
+    """Stream the stored PDF for an uploaded paper seed (tenant-scoped)."""
+    seed = db.query(Seed).filter(Seed.id == seed_id,
+                                 Seed.tenant_id == current_user.tenant_id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    fp = (seed.seed_metadata or {}).get("file_path")
+    if not fp or not os.path.exists(fp):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(fp, media_type="application/pdf",
+                        filename=(seed.seed_metadata or {}).get("original_filename") or f"{seed_id}.pdf")
+
+
+@app.get("/api/v1/papers/{seed_id}/links")
+def paper_garden_links(seed_id: str, current_user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    """Live 'links to your garden' for a paper: related seeds + papers, by
+    semantic similarity. Each item deep-links to /garden?seed=<id>."""
+    seed = db.query(Seed).filter(Seed.id == seed_id,
+                                 Seed.tenant_id == current_user.tenant_id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    related_seeds, papers = [], []
+    try:
+        from app.backlinker import embed_text, search_similar
+        emb = embed_text(f"{seed.title}\n{(seed.content or '')[:600]}")
+        hits = search_similar(str(current_user.tenant_id), emb, exclude_id=str(seed.id), limit=10)
+        ids = [h.get("id") for h in hits if h.get("id")]
+        type_map = {}
+        if ids:
+            try:
+                for sid, stype in db.query(Seed.id, Seed.seed_type).filter(Seed.id.in_(ids)).all():
+                    type_map[str(sid)] = stype
+            except Exception:
+                pass
+        for h in hits:
+            item = {"id": h.get("id"), "title": h.get("title", ""),
+                    "certainty": round(h.get("certainty") or 0, 3)}
+            (papers if type_map.get(str(h.get("id"))) == "paper" else related_seeds).append(item)
+    except Exception as e:
+        logger.warning(f"[papers] links lookup failed for {seed_id}: {e}")
+    return {"related_seeds": related_seeds[:6], "papers": papers[:6], "wiki_articles": []}
 
 
 @app.post("/api/v1/seeds/bulk-delete")
