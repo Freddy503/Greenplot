@@ -72,7 +72,7 @@ export default function AdminPage() {
 
   useEffect(() => { loadStats() }, [loadStats])
 
-  const invite = useCallback(async (emails: string[] | null, key: string) => {
+  const invite = useCallback(async (emails: string[] | null, key: string, force = false) => {
     if (inviting) return
     const token = localStorage.getItem('greenplot_token') || ''
     setInviting(key)
@@ -80,7 +80,7 @@ export default function AdminPage() {
       const r = await fetch('/api/admin/waitlist/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify(emails ? { emails } : {}),
+        body: JSON.stringify({ ...(emails ? { emails } : {}), ...(force ? { force: true } : {}) }),
       })
       const data = await r.json()
       if (r.ok) await loadStats()
@@ -192,7 +192,19 @@ export default function AdminPage() {
                 {w.joined_at ? new Date(w.joined_at).toLocaleDateString() : '—'}
               </span>
               {w.invited_at ? (
-                <span className="caps" style={{ fontSize: 8.5, color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 99, padding: '3px 8px', flexShrink: 0 }}>invited</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span className="caps" style={{ fontSize: 8.5, color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 99, padding: '3px 8px' }}>invited</span>
+                  <button
+                    onClick={() => invite([w.email], w.email, true)}
+                    disabled={!!inviting}
+                    className="tap"
+                    title="Send the invite email again"
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: '1px solid var(--hairline)', borderRadius: 99, padding: '3px 9px', fontFamily: 'var(--ui)', fontSize: 9.5, fontWeight: 600, color: 'var(--ink-3)', cursor: inviting ? 'default' : 'pointer', opacity: inviting ? 0.6 : 1 }}
+                  >
+                    <Send size={9} strokeWidth={2} />
+                    {inviting === w.email ? '…' : 'Re-invite'}
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => invite([w.email], w.email)}

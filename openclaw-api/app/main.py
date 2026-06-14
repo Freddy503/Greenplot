@@ -2730,6 +2730,7 @@ def admin_send_invites(
 class WaitlistInviteRequest(BaseModel):
     emails: Optional[List[str]] = None  # specific addresses; omit to invite everyone still waiting
     code: Optional[str] = None
+    force: bool = False  # re-send even to already-invited addresses (requires explicit emails)
 
 
 @app.post("/api/v1/admin/waitlist/invite")
@@ -2753,7 +2754,11 @@ def admin_invite_waitlist(
     if not _invite_code_valid(code):
         raise HTTPException(status_code=400, detail=f"Code '{code}' is not in INVITE_CODES")
 
-    q = db.query(WaitlistEntry).filter(WaitlistEntry.invited_at.is_(None))
+    # Normally only invite people still waiting; with force + explicit emails,
+    # re-send to the named addresses even if they were already invited.
+    q = db.query(WaitlistEntry)
+    if not (req.force and req.emails):
+        q = q.filter(WaitlistEntry.invited_at.is_(None))
     if req.emails:
         wanted = {e.strip().lower() for e in req.emails if e and "@" in e}
         q = q.filter(WaitlistEntry.email.in_(wanted))
