@@ -3319,7 +3319,7 @@ async def chat_v2_endpoint(
         # Send session_id as first event
         yield f"data: {_json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
-        async for event in agent.run(messages, current_user, db, attachments=attachments):
+        async for event in agent.run(messages, current_user, db, attachments=attachments, should_cancel=request.is_disconnected):
             d = event.to_dict()
 
             # Record events

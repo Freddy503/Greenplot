@@ -93,6 +93,7 @@ class SeedifyAgent:
         db: Any = None,
         *,
         attachments: Optional[list[dict]] = None,
+        should_cancel: Optional[Any] = None,
     ) -> AsyncGenerator[AgentEvent, None]:
         """
         Run one agent turn. Yields typed AgentEvents.
@@ -114,6 +115,13 @@ class SeedifyAgent:
             attachments: Optional file attachments
         """
         import asyncio
+        import time as _time
+
+        # ── Reliability budget — a turn ALWAYS terminates ──
+        _deadline = _time.monotonic() + 90.0   # hard wall-clock cap per turn
+        _MAX_TOOL_CALLS = 8                     # total tool calls across all rounds
+        _tool_calls_made = 0
+        _seen_tool_calls: set[str] = set()      # exact-duplicate-call guard
 
         # Build session from input messages
         session = self._build_session(messages, attachments)
@@ -137,7 +145,16 @@ class SeedifyAgent:
             # +2: one slot for the forced-text final round, one for the
             # empty-reply recovery retry.
             for round_num in range(self.max_rounds + 2):
-                is_final = round_num >= self.max_rounds or force_text
+                # Stop cleanly if the client went away (Stop button / tab close)
+                if should_cancel is not None:
+                    try:
+                        if await should_cancel():
+                            return
+                    except Exception:
+                        pass
+                # A blown deadline or tool budget forces a final text wrap-up
+                over_limit = _time.monotonic() > _deadline or _tool_calls_made >= _MAX_TOOL_CALLS
+                is_final = round_num >= self.max_rounds or force_text or over_limit
                 yield AgentEvent.round(min(round_num, self.max_rounds), self.max_rounds)
 
                 # Build API payload
@@ -177,7 +194,7 @@ class SeedifyAgent:
                         self.api_base,
                         headers=self._headers(),
                         json=payload,
-                        timeout=120.0,
+                        timeout=60.0,
                     ) as resp:
                         if resp.status_code != 200:
                             error_text = await resp.aread()
@@ -258,6 +275,17 @@ class SeedifyAgent:
                             args = json.loads(tc["arguments"])
                         except json.JSONDecodeError:
                             args = {}
+
+                        # Reliability: skip exact-duplicate calls + count the budget
+                        _sig = f"{tool_name}:{tc['arguments']}"
+                        if _sig in _seen_tool_calls:
+                            yield AgentEvent.tool_call(tool_id, tool_name, tc["arguments"])
+                            _dup = json.dumps({"status": "skipped", "message": "Skipped — an identical call was already made this turn."})
+                            yield AgentEvent.tool_result(tool_id, _dup)
+                            session.add(Message.tool_result(tool_id, tool_name, _dup, False))
+                            continue
+                        _seen_tool_calls.add(_sig)
+                        _tool_calls_made += 1
 
                         yield AgentEvent.tool_call(tool_id, tool_name, tc["arguments"])
 
