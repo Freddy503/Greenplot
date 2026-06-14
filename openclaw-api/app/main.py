@@ -4112,8 +4112,10 @@ def _send_web_push_to_all(subscription_info: dict, payload: str) -> str:
         )
         return "ok" if response.status_code in (200, 201) else "error"
     except WebPushException as e:
-        if e.response and e.response.status_code in (404, 410):
-            logger.info(f"🗑️ Push subscription expired (endpoint gone)")
+        # NB: a requests.Response is falsy for any 4xx/5xx (bool(resp) == resp.ok),
+        # so `if e.response` would wrongly skip 404/410 here — test `is not None`.
+        if e.response is not None and e.response.status_code in (404, 410):
+            logger.info(f"🗑️ Push subscription expired (endpoint gone) — pruning")
             return "expired"
         else:
             logger.error(f"❌ Web Push failed: {e}")
