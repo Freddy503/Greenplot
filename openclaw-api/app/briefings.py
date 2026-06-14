@@ -70,10 +70,14 @@ def _call_llm(prompt: str, system: str = "", max_tokens: int = 1500, model: str 
         if not model:
             model = settings.BRIEFING_MODEL
 
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        # Enforce English — BRIEFING_MODEL is a multilingual model (e.g. mimo)
+        # that otherwise sometimes replies in Chinese.
+        lang_directive = "Always write your entire response in English."
+        sys_content = f"{system}\n\n{lang_directive}" if system else lang_directive
+        messages = [
+            {"role": "system", "content": sys_content},
+            {"role": "user", "content": prompt},
+        ]
 
         response = client.chat.completions.create(
             model=model,
