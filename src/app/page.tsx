@@ -1397,6 +1397,25 @@ function CTA() {
             onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
             onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
           >Get started — it&apos;s free</a>
+
+          {/* EU data-safety trust strip */}
+          <div style={{ marginTop: '2.25rem', paddingTop: '1.75rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 12 }}>
+              {[
+                { icon: '🇪🇺', label: 'Hosted in Frankfurt · EU' },
+                { icon: '🔒', label: 'GDPR · encrypted in transit' },
+                { icon: '🗑️', label: 'Delete anytime' },
+              ].map(b => (
+                <span key={b.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 999, padding: '7px 14px', fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-ui)' }}>
+                  <span aria-hidden style={{ fontSize: 13 }}>{b.icon}</span>{b.label}
+                </span>
+              ))}
+            </div>
+            <p style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-body)', fontWeight: 300, margin: '0 auto', lineHeight: 1.6, maxWidth: 470 }}>
+              Your seeds and chats are stored in the EU (Frankfurt, Germany). AI and web-search
+              features use third-party providers — see our <a href="/privacy" style={{ color: 'rgba(34,197,94,0.8)', textDecoration: 'underline' }}>Privacy Policy</a>.
+            </p>
+          </div>
         </div>
       </div>
     </section>
