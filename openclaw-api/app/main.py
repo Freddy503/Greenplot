@@ -2171,6 +2171,42 @@ def canvases_shared_with_me(current_user: User = Depends(get_current_user), db: 
     return {"canvases": out}
 
 
+@app.get("/api/v1/canvas/{product_id}")
+def get_shared_canvas(product_id: str,
+                      current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Read a canvas (product + its attached PRDs) for anyone with access —
+    owner or an active collaborator. Scoped strictly to the canvas's allowlist;
+    never exposes the owner's other seeds."""
+    from app.canvas_access import resolve_canvas_access, canvas_prd_ids
+    role = resolve_canvas_access(db, current_user, product_id)
+    if role is None:
+        raise HTTPException(status_code=403, detail="No access to this canvas")
+    pid = uuid.UUID(product_id)
+    product = db.query(Seed).filter(Seed.id == pid, Seed.seed_type == "product").first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    prd_ids = canvas_prd_ids(db, product_id)
+    prds = db.query(Seed).filter(Seed.id.in_([uuid.UUID(x) for x in prd_ids])).all() if prd_ids else []
+
+    def _ser(s):
+        m = s.seed_metadata or {}
+        return {
+            "id": str(s.id), "title": s.title, "content": s.content,
+            "build_status": m.get("build_status", "draft"),
+            "design_vision_id": m.get("design_vision_id"),
+            "design_vision_title": m.get("design_vision_title"),
+            "product_id": m.get("product_id"), "pillar_id": m.get("pillar_id"),
+        }
+
+    pm = product.seed_metadata or {}
+    return {
+        "role": role,
+        "product": {"id": str(product.id), "title": product.title,
+                    "content": product.content, "rank": pm.get("rank")},
+        "prds": [_ser(s) for s in prds],
+    }
+
+
 def _append_product_story(db: Session, tenant_id, prd_seed: Seed, status: str):
     """Templated story-so-far update on build events — zero LLM calls (spec rule 7)."""
     pid = (prd_seed.seed_metadata or {}).get("product_id")
