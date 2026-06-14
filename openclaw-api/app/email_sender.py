@@ -302,6 +302,35 @@ def send_invite_email(to: str, code: str, onboarding_url: str) -> bool:
         return False
 
 
+def send_password_reset_email(to: str, reset_url: str) -> bool:
+    """Send a password-reset link (valid ~1 hour)."""
+    if not settings.RESEND_API_KEY or _resend is None:
+        print("[email_sender] cannot send password reset (Resend not configured)")
+        return False
+    _resend.api_key = settings.RESEND_API_KEY
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#141413">
+      <div style="font-size:22px;font-weight:700;color:#15803d;margin-bottom:8px">🌱 Greenplot</div>
+      <h1 style="font-size:20px;margin:16px 0 8px">Reset your password</h1>
+      <p style="font-size:15px;line-height:1.6;color:#5f5f5a">Click below to choose a new password. This link expires in 1 hour. If you didn't request this, you can safely ignore this email — your password won't change.</p>
+      <a href="{reset_url}" style="display:inline-block;margin:20px 0;background:#22c55e;color:#fff;text-decoration:none;font-weight:600;border-radius:9999px;padding:13px 28px;font-size:15px">Reset password →</a>
+      <p style="font-size:12px;color:#a3a29c">Or paste this link: {reset_url}</p>
+    </div>
+    """
+    try:
+        _resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": to,
+            "subject": "Reset your Greenplot password 🌱",
+            "html": html,
+        })
+        print(f"[email_sender] Sent password reset to {to}")
+        return True
+    except Exception as e:
+        print(f"[email_sender] Failed to send password reset to {to}: {e}")
+        return False
+
+
 def send_canvas_invite_email(to: str, owner_name: str, canvas_title: str, accept_url: str) -> bool:
     """Invite a collaborator to a shared Studio canvas."""
     if not settings.RESEND_API_KEY or _resend is None:

@@ -20,8 +20,24 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { requestPermission } = usePushNotifications()
+  const [mode, setMode] = useState<'login' | 'forgot'>('login')
+  const [resetSent, setResetSent] = useState(false)
 
   const ready = !!email.trim() && !!password.trim()
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim() || loading) return
+    setLoading(true); setError('')
+    const target = email.includes('@') ? email.trim() : `${email.trim().toLowerCase().replace(/\s+/g, '')}@greenplot.app`
+    try {
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: target }),
+      })
+    } catch { /* never reveal — anti-enumeration */ }
+    setResetSent(true); setLoading(false)
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -111,62 +127,77 @@ function LoginForm() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <label style={glassField}>
-            <User size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />
-            <input
-              type="text" value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="Nickname or email" autoFocus autoComplete="username"
-              style={glassInput}
-            />
-          </label>
-          <label style={glassField}>
-            <Lock size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />
-            <input
-              type={showPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password" autoComplete="current-password"
-              style={glassInput}
-            />
-            <button type="button" onClick={() => setShowPass(s => !s)} className="tap" aria-label={showPass ? 'Hide password' : 'Show password'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, flexShrink: 0, display: 'flex' }}>
-              {showPass
-                ? <EyeOff size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />
-                : <Eye size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />}
+        {mode === 'forgot' && resetSent ? (
+          <div style={{ borderRadius: 16, padding: '18px', background: 'rgba(255,255,255,0.10)', border: '0.5px solid rgba(255,255,255,0.16)', textAlign: 'center' }}>
+            <p className="ui" style={{ fontSize: 14.5, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Check your email</p>
+            <p className="body-text" style={{ fontSize: 13, color: 'rgba(233,250,239,0.7)', lineHeight: 1.5 }}>If an account exists for that address, we&apos;ve sent a link to reset your password. It expires in 1 hour.</p>
+          </div>
+        ) : (
+          <form onSubmit={mode === 'forgot' ? handleForgot : handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={glassField}>
+              <User size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />
+              <input
+                type="text" value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder={mode === 'forgot' ? 'Your email' : 'Nickname or email'} autoFocus autoComplete="username"
+                style={glassInput}
+              />
+            </label>
+            {mode === 'login' && (
+              <label style={glassField}>
+                <Lock size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />
+                <input
+                  type={showPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password" autoComplete="current-password"
+                  style={glassInput}
+                />
+                <button type="button" onClick={() => setShowPass(s => !s)} className="tap" aria-label={showPass ? 'Hide password' : 'Show password'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, flexShrink: 0, display: 'flex' }}>
+                  {showPass
+                    ? <EyeOff size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />
+                    : <Eye size={17} color="rgba(233,250,239,0.55)" strokeWidth={1.75} />}
+                </button>
+              </label>
+            )}
+
+            {mode === 'login' && (
+              <button type="button" onClick={() => { setMode('forgot'); setError('') }} className="tap" style={{ alignSelf: 'flex-end', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: 'rgba(233,250,239,0.6)', padding: 2 }}>
+                Forgot password?
+              </button>
+            )}
+
+            {error && (
+              <div style={{ borderRadius: 14, padding: '11px 15px', background: 'rgba(212,80,62,0.16)', border: '0.5px solid rgba(212,80,62,0.4)' }}>
+                <span className="body-text" style={{ fontSize: 12.5, color: '#ffb4a8' }}>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit" disabled={(mode === 'login' ? !ready : !email.trim()) || loading}
+              className="tap ui"
+              style={{
+                marginTop: 6, width: '100%', borderRadius: 16, border: 'none', padding: 15,
+                background: 'var(--green, #22c55e)', color: '#fff', fontSize: 15, fontWeight: 700,
+                cursor: 'pointer', opacity: ((mode === 'login' ? ready : !!email.trim()) && !loading) ? 1 : 0.45,
+                boxShadow: '0 12px 30px -8px rgba(34,197,94,0.65)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+                transition: 'opacity .15s ease',
+              }}
+            >
+              {loading ? (
+                <>
+                  <span className="gp-login-spin" style={{ width: 16, height: 16, borderRadius: 99, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff' }} />
+                  {mode === 'forgot' ? 'Sending…' : 'Logging in…'}
+                </>
+              ) : (mode === 'forgot' ? 'Send reset link' : 'Log in')}
             </button>
-          </label>
-
-          {error && (
-            <div style={{ borderRadius: 14, padding: '11px 15px', background: 'rgba(212,80,62,0.16)', border: '0.5px solid rgba(212,80,62,0.4)' }}>
-              <span className="body-text" style={{ fontSize: 12.5, color: '#ffb4a8' }}>{error}</span>
-            </div>
-          )}
-
-          <button
-            type="submit" disabled={!ready || loading}
-            className="tap ui"
-            style={{
-              marginTop: 6, width: '100%', borderRadius: 16, border: 'none', padding: 15,
-              background: 'var(--green, #22c55e)', color: '#fff', fontSize: 15, fontWeight: 700,
-              cursor: ready ? 'pointer' : 'default', opacity: ready ? 1 : 0.45,
-              boxShadow: ready ? '0 12px 30px -8px rgba(34,197,94,0.65)' : 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-              transition: 'opacity .15s ease',
-            }}
-          >
-            {loading ? (
-              <>
-                <span className="gp-login-spin" style={{ width: 16, height: 16, borderRadius: 99, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff' }} />
-                Logging in…
-              </>
-            ) : 'Log in'}
-          </button>
-        </form>
+          </form>
+        )}
 
         <button
-          onClick={() => router.push('/onboarding')}
+          onClick={() => { if (mode === 'forgot') { setMode('login'); setResetSent(false); setError('') } else { router.push('/onboarding') } }}
           className="tap ui"
           style={{ marginTop: 18, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#7ef0a8', padding: 10 }}
         >
-          New here? Create an account
+          {mode === 'forgot' ? '← Back to login' : 'New here? Create an account'}
         </button>
 
         <div className="caps" style={{ position: 'absolute', bottom: 22, left: 0, right: 0, textAlign: 'center', fontSize: 9.5, color: 'rgba(233,250,239,0.35)' }}>

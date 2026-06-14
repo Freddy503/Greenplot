@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -23,6 +24,34 @@ def create_access_token(data: dict, expires_minutes: int = None) -> str:
     expire = datetime.utcnow() + timedelta(minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def _pw_fingerprint(password_hash: str) -> str:
+    # Bind a reset token to the current password — once it changes, the token dies.
+    return hashlib.sha256((password_hash or "").encode()).hexdigest()[:16]
+
+def create_password_reset_token(user, expires_minutes: int = 60) -> str:
+    payload = {
+        "sub": str(user.id),
+        "purpose": "pwreset",
+        "pwf": _pw_fingerprint(user.password_hash),
+        "exp": datetime.utcnow() + timedelta(minutes=expires_minutes),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def verify_password_reset_token(token: str, db: Session):
+    """Return the User for a valid, unexpired, single-use reset token, else None.
+    The token is bound to the password it was issued for, so it can't be reused
+    after the password changes."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        return None
+    if payload.get("purpose") != "pwreset":
+        return None
+    user = db.query(User).filter(User.id == payload.get("sub")).first()
+    if not user or payload.get("pwf") != _pw_fingerprint(user.password_hash):
+        return None
+    return user
 
 def decode_token(token: str) -> dict:
     try:
