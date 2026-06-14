@@ -38,3 +38,30 @@ accept/revoke/list endpoints + email invite, Studio Share button, and a
 - **Privacy page sub-processor accuracy** — ensure `/privacy` lists OpenRouter /
   Exa / Resend as sub-processors (the landing EU strip already notes "third-party
   providers"); confirm the legal copy matches before broad EU launch.
+
+## Chat experience rebuild — remaining milestones
+
+Shipped now (M-A): reliability layer — 90s turn deadline, 8-tool budget +
+duplicate-call guard, client-disconnect cancellation, tighter stream timeout.
+This fixes the "stuck" + runaway-tools symptoms. Full plan in
+`docs/specs/chat-experience-rebuild.md`. Deferred:
+
+- **M-B — Typed suggested-actions** (replace the `<sugg>…</sugg>` tags parsed
+  from prose with a structured `suggested_actions` data part). Fixes the
+  web/mobile button gap at the root; render identical Greenplot action chips
+  (Plant as seed / Turn into a PRD / Add to wiki / Go deeper) on both.
+- **M-C — AI SDK data-stream protocol** behind a `chat_v3` flag: emit the SDK's
+  typed stream from the backend so streaming lifecycle, tool state, and ordering
+  are handled by the SDK — structurally killing the status/order/gating bugs.
+  Keep `chat_v2` until parity is proven.
+- **M-D — Tool timeline + result-card registry**: replace the ~250-line bespoke
+  per-tool block with a collapsible "working" timeline + a small typed
+  result-card registry (seed/spec/wiki/graph/paper + generic fallback).
+- **M-E — Message controls + polish**: Stop / Regenerate / Copy / Edit-and-resend,
+  polished markdown + code blocks, expandable garden provenance.
+- **M-F (Phase 2) — Greenplot Artifacts**: spec/wiki/vision/graph open as an
+  editable artifact (side panel desktop / sheet mobile) that pushes to
+  Studio/Library; plus a "Think harder" reasoning mode toggle.
+
+Also confirm SSE isn't buffered by the Cloudflare tunnel (add a heartbeat/flush)
+— some "stuck" reports may be buffering, not the agent.
