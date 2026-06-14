@@ -268,6 +268,49 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     token = create_access_token(data={"sub": str(user.id), "tenant_id": str(user.tenant_id)})
     return AuthResponse(access_token=token, refresh_token=token, tenant_id=user.tenant_id)
 
+
+# --- Password reset ---
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.post("/api/v1/auth/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Always returns ok regardless of whether the email exists (no account
+    enumeration). If it matches a user, emails a 1-hour reset link."""
+    user = db.query(User).filter(User.email == req.email.strip()).first()
+    if user:
+        try:
+            from app.auth import create_password_reset_token
+            from app.email_sender import send_password_reset_email
+            token = create_password_reset_token(user)
+            reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+            send_password_reset_email(user.email, reset_url)
+        except Exception as e:
+            logger.error(f"[auth] password reset email failed: {e}")
+    return {"ok": True}
+
+
+@app.post("/api/v1/auth/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Set a new password from a valid, unexpired, single-use reset token."""
+    from app.auth import verify_password_reset_token
+    if len((req.password or "").strip()) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    user = verify_password_reset_token(req.token, db)
+    if not user:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired")
+    user.password_hash = get_password_hash(req.password.strip())
+    db.commit()
+    return {"ok": True}
+
+
 # --- Profile ---
 
 class ProfileUpdate(BaseModel):
