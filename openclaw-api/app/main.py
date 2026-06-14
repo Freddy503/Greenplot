@@ -4899,27 +4899,95 @@ def _job_coherence_report():
         job_db.close()
 
 
-def _job_weekly_digest():
-    """Weekly garden digest — Sunday 10:00 CET."""
-    prompt = (
-        "📚 Weekly Garden Digest\n\n"
-        "Search my garden and give me a weekly summary:\n"
-        "1. **This week's seeds** — What new ideas did I capture?\n"
-        "2. **Top domains** — Which topics are growing most?\n"
-        "3. **Connections** — Any surprising links between seeds?\n"
-        "4. **To enrich** — Which seeds are still raw and worth expanding?\n\n"
-        "Make it feel like a garden walk — what's growing, what needs tending?"
-    )
+def _job_garden_story():
+    """Garden Story — Sunday 10:00 CET. A narrated weekly recap *artifact* per
+    user (what grew, the strongest new connection, the emerging theme). Replaces
+    the old prompt-only 'weekly garden digest'."""
     db = next(get_db())
     try:
         for user in db.query(User).all():
             if _is_test_account(user):
                 continue
-            _sto<RESEND_API_KEY>(
-                str(user.id),
-                "📚 Weekly Garden Digest",
-                "Your weekly knowledge summary is ready. Let's review what grew.",
-                "/chat", prompt=prompt)
+            try:
+                briefing = briefings.build_garden_story(str(user.id), db)
+                _sto<RESEND_API_KEY>(briefing, user)
+            except Exception as ue:
+                logger.error(f"❌ Garden Story failed for {user.id}: {ue}")
+        logger.info("✅ Garden Story generated")
+    finally:
+        db.close()
+
+
+def _job_garden_signals():
+    """Garden Signals — every 3h. Turns the garden's own activity into proactive
+    artifact notifications:
+      • Connection alerts — a strong new link just formed between two of the
+        user's seeds (deduped by a 3h lookback window).
+      • Theme emergence — a seed has become a hub (≥4 connections); offer to
+        compile a wiki article. Deduped once via a seed-metadata flag.
+    """
+    from app.models import Seed, SeedLink
+    from sqlalchemy.orm.attributes import flag_modified
+    window = datetime.utcnow() - timedelta(hours=3)
+    db = next(get_db())
+    try:
+        for user in db.query(User).all():
+            if _is_test_account(user):
+                continue
+            try:
+                user_seed_ids = {sid for (sid,) in db.query(Seed.id).filter(Seed.user_id == user.id).all()}
+                if not user_seed_ids:
+                    continue
+
+                # ── Connection alerts: strong links created in the last window ──
+                new_links = db.query(SeedLink).filter(
+                    SeedLink.created_at >= window,
+                    SeedLink.source_seed_id.in_(user_seed_ids),
+                    or_(SeedLink.confidence == None, SeedLink.confidence >= 700),  # noqa: E711
+                ).order_by(SeedLink.confidence.desc().nullslast()).limit(2).all()
+                for link in new_links:
+                    src = db.query(Seed).filter(Seed.id == link.source_seed_id).first()
+                    tgt = db.query(Seed).filter(Seed.id == link.target_seed_id).first()
+                    if not src or not tgt or not src.title or not tgt.title:
+                        continue
+                    rel = {"contradicts": "challenges", "builds_on": "builds on"}.get(link.link_type, "connects to")
+                    _sto<RESEND_API_KEY>(
+                        str(user.id),
+                        "🔗 Two ideas just linked up",
+                        f"“{src.title[:48]}” {rel} “{tgt.title[:48]}” — see how they fit.",
+                        f"/garden?seed={src.id}",
+                    )
+
+                # ── Theme emergence: a seed becoming a hub (≥4 links), once ──
+                counts: dict = {}
+                for link in db.query(SeedLink).filter(
+                        or_(SeedLink.source_seed_id.in_(user_seed_ids),
+                            SeedLink.target_seed_id.in_(user_seed_ids))).all():
+                    for sid in (link.source_seed_id, link.target_seed_id):
+                        if sid in user_seed_ids:
+                            counts[sid] = counts.get(sid, 0) + 1
+                hubs = sorted(((c, sid) for sid, c in counts.items() if c >= 4), reverse=True)
+                for c, sid in hubs[:1]:
+                    seed = db.query(Seed).filter(Seed.id == sid).first()
+                    if not seed or not seed.title:
+                        continue
+                    meta = dict(seed.seed_metadata or {})
+                    if meta.get("theme_notified_at"):
+                        continue
+                    _sto<RESEND_API_KEY>(
+                        str(user.id),
+                        f"🌱 A theme is forming around “{seed.title[:40]}”",
+                        f"{c} of your ideas now connect here — want a wiki article that ties them together?",
+                        "/chat",
+                        prompt=f"Compile a wiki article connecting my seeds around: {seed.title}",
+                    )
+                    meta["theme_notified_at"] = datetime.utcnow().isoformat()
+                    seed.seed_metadata = meta
+                    flag_modified(seed, "seed_metadata")
+                    db.commit()
+            except Exception as ue:
+                db.rollback()
+                logger.error(f"❌ Garden Signals failed for {user.id}: {ue}")
     finally:
         db.close()
 
@@ -5465,13 +5533,9 @@ def _start_scheduler():
         CronTrigger(hour=ms.get("hour", 8), minute=ms.get("minute", 30), timezone=_CET),
         id="morning_spark", replace_existing=True,
     )
-    # Daily briefing — configurable, default 09:30 CET daily
-    db_cfg = saved.get("daily_briefing", {})
-    scheduler.add_job(
-        _job_daily_briefing,
-        CronTrigger(hour=db_cfg.get("hour", 9), minute=db_cfg.get("minute", 30), timezone=_CET),
-        id="daily_briefing", replace_existing=True,
-    )
+    # Daily briefing — MERGED into the Research Digest (07:00/18:00). The
+    # standalone morning briefing was redundant with the digest, so it no longer
+    # fires on a schedule (the _job_daily_briefing fn is kept for manual trigger).
     # Afternoon reflection — configurable, default 16:00 CET daily
     ref = saved.get("reflection", {})
     scheduler.add_job(
@@ -5479,11 +5543,18 @@ def _start_scheduler():
         CronTrigger(hour=ref.get("hour", 16), minute=ref.get("minute", 0), timezone=_CET),
         id="afternoon_reflection", replace_existing=True,
     )
-    # Weekly digest — Sunday 10:00 CET
+    # Garden Story — Sunday 10:00 CET (replaces the old weekly garden digest)
     scheduler.add_job(
-        _job_weekly_digest,
+        _job_garden_story,
         CronTrigger(day_of_week="sun", hour=10, minute=0, timezone=_CET),
-        id="weekly_digest",
+        id="garden_story",
+        replace_existing=True,
+    )
+    # Garden Signals — connection alerts + theme emergence, every 3 hours
+    scheduler.add_job(
+        _job_garden_signals,
+        CronTrigger(hour="9,12,15,18,21", minute=20, timezone=_CET),
+        id="garden_signals",
         replace_existing=True,
     )
     # Weekly content eval — Sundays 18:00 CET
@@ -5762,7 +5833,8 @@ def _run_trigger_job(job_id: str):
         "daily_briefing": _job_daily_briefing,
         "reflection": _job_afternoon_reflection,
         "afternoon_reflection": _job_afternoon_reflection,
-        "weekly_digest": _job_weekly_digest,
+        "garden_story": _job_garden_story,
+        "garden_signals": _job_garden_signals,
         "weekly_eval": _job_weekly_eval,
         "biweekly_challenge": _job_biweekly_challenge,
         "academic_digest": _job_academic_digest,

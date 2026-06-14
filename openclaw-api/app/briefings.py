@@ -539,6 +539,97 @@ Then propose ONE concrete 15-minute action for tomorrow that tests this contrari
     }
 
 
+def build_garden_story(user_id: str, db) -> Dict[str, Any]:
+    """Garden Story — a weekly narrated recap of what the user's mind did this
+    week: what grew, the strongest new connection, and the theme taking shape.
+    A finished artifact to read (not a chat prompt). Replaces the old prompt-only
+    'weekly garden digest'."""
+    from app.models import Seed, SeedLink
+    week_ago = datetime.utcnow() - timedelta(days=7)
+
+    new_seeds = db.query(Seed).filter(
+        Seed.user_id == user_id, Seed.created_at >= week_ago
+    ).order_by(Seed.created_at.desc()).all()
+    new_titles = [s.title for s in new_seeds if s.title][:12]
+
+    user_seed_ids = {sid for (sid,) in db.query(Seed.id).filter(Seed.user_id == user_id).all()}
+
+    # Strongest new connection formed this week
+    strongest = None
+    rel = "connects to"
+    if user_seed_ids:
+        link = db.query(SeedLink).filter(
+            SeedLink.created_at >= week_ago,
+            SeedLink.source_seed_id.in_(user_seed_ids),
+        ).order_by(SeedLink.confidence.desc().nullslast()).first()
+        if link:
+            src = db.query(Seed).filter(Seed.id == link.source_seed_id).first()
+            tgt = db.query(Seed).filter(Seed.id == link.target_seed_id).first()
+            if src and tgt and src.title and tgt.title:
+                rel = {"contradicts": "challenges", "builds_on": "builds on"}.get(link.link_type, "connects to")
+                strongest = (src.title, tgt.title)
+
+    themes = fetch_user_themes(user_id, db)
+    subtitle = datetime.now().strftime('Week of %B %d')
+
+    # Quiet week → still an artifact, a gentle nudge (never a chat prompt)
+    if not new_seeds and not strongest:
+        return {
+            "type": "garden_story",
+            "title": "🌿 Your Garden This Week",
+            "subtitle": subtitle,
+            "sections": [{
+                "title": "A quiet week", "icon": "spa", "color": "text-green-400",
+                "content": "No new seeds took root this week. One small capture — a thought, a link, a question you can't shake — is enough to start growth again.",
+            }],
+            "prompt": "",
+        }
+
+    facts = []
+    if new_titles:
+        facts.append(f"New seeds planted this week ({len(new_seeds)}): " + "; ".join(new_titles))
+    if strongest:
+        facts.append(f'Strongest new connection: "{strongest[0]}" {rel} "{strongest[1]}"')
+    if themes:
+        facts.append("Recurring themes: " + ", ".join(themes[:4]))
+
+    story_prompt = (
+        "You are the narrator of someone's personal knowledge garden. Using ONLY the facts "
+        "below, write a short, warm, second-person recap of their week of thinking — what grew, "
+        "the most interesting connection, and the theme taking shape. Max 3 short paragraphs, no "
+        "headings, no preamble, no invented seeds.\n\nFACTS:\n" + "\n".join(facts)
+    )
+    story = _call_llm(story_prompt, max_tokens=420, model=settings.BRIEFING_MODEL)
+    if not story:
+        story = (f"This week you planted {len(new_seeds)} new seed(s). "
+                 + (f'Your strongest new link: "{strongest[0]}" {rel} "{strongest[1]}". ' if strongest else "")
+                 + (f"Themes taking shape: {', '.join(themes[:3])}." if themes else "")).strip()
+
+    sections = [{
+        "title": "What grew this week", "icon": "auto_stories", "color": "text-green-400",
+        "content": story,
+    }]
+    if strongest:
+        sections.append({
+            "title": "Strongest new connection", "icon": "link", "color": "text-emerald-400",
+            "content": f"**{strongest[0]}** {rel} **{strongest[1]}**",
+        })
+    if new_titles:
+        sections.append({
+            "title": f"{len(new_seeds)} new seed{'s' if len(new_seeds) != 1 else ''}",
+            "icon": "eco", "color": "text-lime-400",
+            "content": "\n".join(f"- {t}" for t in new_titles),
+        })
+
+    return {
+        "type": "garden_story",
+        "title": "🌿 Your Garden This Week",
+        "subtitle": subtitle,
+        "sections": sections,
+        "prompt": "",   # artifact, not a chat prompt
+    }
+
+
 def build_weekly_eval(user_id: str, db) -> Dict[str, Any]:
     """
     Build weekly eval: What stuck + Creative constraint.
