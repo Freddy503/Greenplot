@@ -50,6 +50,28 @@ class WaitlistEntry(Base):
     invited_at = Column(DateTime, nullable=True)
     source = Column(String(50), nullable=True, default='landing')
 
+class CanvasShare(Base):
+    """Grants a collaborator access to ONE canvas — a product seed plus the PRD
+    seeds attached to it — across tenant boundaries. This is the only sanctioned
+    exception to per-tenant isolation: every shared-resource read/write must go
+    through resolve_canvas_access(), never a tenant fallback."""
+    __tablename__ = 'canvas_shares'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # the shared canvas (a product seed)
+    owner_tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    owner_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    collaborator_email = Column(String(320), nullable=False, index=True)
+    collaborator_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True, index=True)
+    role = Column(String(16), nullable=False, default='viewer')      # 'viewer' | 'editor'
+    status = Column(String(16), nullable=False, default='pending')   # 'pending' | 'active' | 'revoked'
+    invited_at = Column(DateTime, default=datetime.utcnow)
+    accepted_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('product_id', 'collaborator_email', name='uq_canvas_collaborator'),
+        Index('ix_canvas_share_collab', 'collaborator_user_id', 'status'),
+    )
+
 class Thought(Base):
     __tablename__ = 'thoughts'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
