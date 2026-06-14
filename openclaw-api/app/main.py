@@ -2187,6 +2187,8 @@ def get_shared_canvas(product_id: str,
         raise HTTPException(status_code=404, detail="Canvas not found")
     prd_ids = canvas_prd_ids(db, product_id)
     prds = db.query(Seed).filter(Seed.id.in_([uuid.UUID(x) for x in prd_ids])).all() if prd_ids else []
+    from app.models import Comment as _Comment
+    _counts = dict(db.query(_Comment.seed_id, func.count(_Comment.id)).filter(_Comment.product_id == pid).group_by(_Comment.seed_id).all())
 
     def _ser(s):
         m = s.seed_metadata or {}
@@ -2196,6 +2198,7 @@ def get_shared_canvas(product_id: str,
             "design_vision_id": m.get("design_vision_id"),
             "design_vision_title": m.get("design_vision_title"),
             "product_id": m.get("product_id"), "pillar_id": m.get("pillar_id"),
+            "comment_count": int(_counts.get(s.id, 0)),
         }
 
     pm = product.seed_metadata or {}
@@ -2205,6 +2208,131 @@ def get_shared_canvas(product_id: str,
                     "content": product.content, "rank": pm.get("rank")},
         "prds": [_ser(s) for s in prds],
     }
+
+
+# --- PRD comments (docs/specs/prd-comments.md) ---
+
+class CommentCreateRequest(BaseModel):
+    product_id: str
+    body: str
+    parent_id: Optional[str] = None
+
+
+class CommentEditRequest(BaseModel):
+    body: Optional[str] = None
+    resolved: Optional[bool] = None
+
+
+def _comment_to_dict(c) -> dict:
+    return {
+        "id": str(c.id), "seed_id": str(c.seed_id),
+        "author_name": c.author_name or "Someone", "author_user_id": str(c.author_user_id),
+        "body": c.body, "parent_id": str(c.parent_id) if c.parent_id else None,
+        "resolved": c.resolved,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "edited_at": c.edited_at.isoformat() if c.edited_at else None,
+    }
+
+
+@app.get("/api/v1/seeds/{seed_id}/comments")
+def list_comments(seed_id: str, product_id: str,
+                  current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.canvas_access import can_read_seed_for_canvas
+    from app.models import Comment
+    try:
+        seed = db.query(Seed).filter(Seed.id == uuid.UUID(seed_id)).first()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid seed id")
+    if not seed or not can_read_seed_for_canvas(db, current_user, seed, product_id):
+        raise HTTPException(status_code=403, detail="No access")
+    rows = db.query(Comment).filter(Comment.seed_id == seed.id).order_by(Comment.created_at.asc()).all()
+    return {"comments": [_comment_to_dict(c) for c in rows]}
+
+
+@app.post("/api/v1/seeds/{seed_id}/comments")
+def add_comment(seed_id: str, req: CommentCreateRequest,
+                current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.canvas_access import can_read_seed_for_canvas
+    from app.models import Comment
+    body = (req.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=422, detail="Empty comment")
+    try:
+        seed = db.query(Seed).filter(Seed.id == uuid.UUID(seed_id)).first()
+        pid = uuid.UUID(req.product_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid id")
+    if not seed or not can_read_seed_for_canvas(db, current_user, seed, req.product_id):
+        raise HTTPException(status_code=403, detail="No access")
+    c = Comment(
+        seed_id=seed.id, product_id=pid, author_user_id=current_user.id,
+        author_name=current_user.nickname or (current_user.email or "").split("@")[0],
+        body=body[:4000], parent_id=(uuid.UUID(req.parent_id) if req.parent_id else None),
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    # Notify the canvas owner + prior commenters (best-effort)
+    try:
+        product = db.query(Seed).filter(Seed.id == pid, Seed.seed_type == "product").first()
+        recipients = set()
+        if product and product.user_id != current_user.id:
+            recipients.add(product.user_id)
+        for (uid,) in db.query(Comment.author_user_id).filter(Comment.seed_id == seed.id).distinct().all():
+            if uid != current_user.id:
+                recipients.add(uid)
+        for uid in recipients:
+            _sto<RESEND_API_KEY>(str(uid), f"💬 New comment on {(seed.title or 'a PRD')[:40]}",
+                                     f"{c.author_name}: {body[:80]}", f"/studio?canvas={req.product_id}&prd={seed_id}")
+    except Exception as e:
+        logger.warning(f"[comments] notify failed: {e}")
+    return _comment_to_dict(c)
+
+
+@app.patch("/api/v1/comments/{comment_id}")
+def edit_comment(comment_id: str, req: CommentEditRequest,
+                 current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.canvas_access import resolve_canvas_access
+    from app.models import Comment
+    try:
+        c = db.query(Comment).filter(Comment.id == uuid.UUID(comment_id)).first()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid id")
+    if not c:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    role = resolve_canvas_access(db, current_user, str(c.product_id))
+    if role is None:
+        raise HTTPException(status_code=403, detail="No access")
+    if req.body is not None:
+        if c.author_user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Can only edit your own comment")
+        c.body = req.body.strip()[:4000]
+        c.edited_at = datetime.utcnow()
+    if req.resolved is not None:
+        if c.author_user_id != current_user.id and role != "owner":
+            raise HTTPException(status_code=403, detail="Only the author or owner can resolve")
+        c.resolved = bool(req.resolved)
+    db.commit()
+    return _comment_to_dict(c)
+
+
+@app.delete("/api/v1/comments/{comment_id}")
+def delete_comment(comment_id: str,
+                   current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.canvas_access import resolve_canvas_access
+    from app.models import Comment
+    try:
+        c = db.query(Comment).filter(Comment.id == uuid.UUID(comment_id)).first()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid id")
+    if not c:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    role = resolve_canvas_access(db, current_user, str(c.product_id))
+    if c.author_user_id != current_user.id and role != "owner":
+        raise HTTPException(status_code=403, detail="Only the author or canvas owner can delete")
+    db.delete(c)
+    db.commit()
+    return {"ok": True}
 
 
 def _append_product_story(db: Session, tenant_id, prd_seed: Seed, status: str):
