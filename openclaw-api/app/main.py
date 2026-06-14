@@ -567,6 +567,11 @@ def delete_seed(seed_id: str, current_user: User = Depends(get_current_user), db
     if not seed:
         raise HTTPException(status_code=404, detail="Seed not found")
     weaviate_ref = seed.embedding_ref or seed_id
+    # Cascade: comments on this seed, plus shares if it's a shared canvas (product)
+    from app.models import Comment as _Comment, CanvasShare as _CanvasShare
+    db.query(_Comment).filter(_Comment.seed_id == seed.id).delete(synchronize_session=False)
+    if seed.seed_type == "product":
+        db.query(_CanvasShare).filter(_CanvasShare.product_id == seed.id).delete(synchronize_session=False)
     db.delete(seed)
     db.commit()
     try:
@@ -4444,6 +4449,18 @@ def delete_account(
     db.query(ChatSession).filter(ChatSession.user_id == current_user.id).delete()
     db.query(Rating).filter(Rating.user_id == current_user.id).delete()
     db.query(CalendarConnection).filter(CalendarConnection.user_id == current_user.id).delete()
+    # Comments authored by the user (or on their canvases) + canvas shares they
+    # own, collaborate on, or that target their products
+    from app.models import Comment as _Comment, CanvasShare as _CanvasShare
+    my_pids = [pid for (pid,) in db.query(Seed.id).filter(
+        Seed.user_id == current_user.id, Seed.seed_type == "product").all()]
+    comment_filter = _Comment.author_user_id == current_user.id
+    share_filter = (_CanvasShare.owner_user_id == current_user.id) | (_CanvasShare.collaborator_user_id == current_user.id)
+    if my_pids:
+        comment_filter = comment_filter | _Comment.product_id.in_(my_pids)
+        share_filter = share_filter | _CanvasShare.product_id.in_(my_pids)
+    db.query(_Comment).filter(comment_filter).delete(synchronize_session=False)
+    db.query(_CanvasShare).filter(share_filter).delete(synchronize_session=False)
     # Seeds, Thoughts, Usage cascade from User via SQLAlchemy relationship
     db.delete(current_user)
     db.commit()
