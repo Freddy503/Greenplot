@@ -3242,7 +3242,7 @@ async def chat_v2_endpoint(
     agent_session = None
 
     if session_id and current_user:
-        agent_session = store.load_session(session_id, tenant_id=str(current_user.tenant_id))
+        agent_session = store.load_session(session_id, tenant_id=str(current_user.tenant_id), user_id=str(current_user.id))
 
     if agent_session is None:
         import uuid as _uuid
@@ -3526,7 +3526,7 @@ def get_session(
         return {"error": "Not authenticated"}
     from app.agent.persist import ChatSessionStore
     store = ChatSessionStore(db)
-    session = store.load_session(session_id, tenant_id=str(current_user.tenant_id))
+    session = store.load_session(session_id, tenant_id=str(current_user.tenant_id), user_id=str(current_user.id))
     if session is None:
         return {"error": "Session not found"}
     return {
@@ -3546,7 +3546,7 @@ def delete_session(
         return {"error": "Not authenticated"}
     from app.agent.persist import ChatSessionStore
     store = ChatSessionStore(db)
-    ok = store.delete(session_id, tenant_id=str(current_user.tenant_id))
+    ok = store.delete(session_id, tenant_id=str(current_user.tenant_id), user_id=str(current_user.id))
     db.commit()
     return {"deleted": ok}
 
@@ -3694,7 +3694,7 @@ def harvest_chat(
 
     # Load session
     if session_id:
-        session = store.load_session(session_id, tenant_id=str(current_user.tenant_id))
+        session = store.load_session(session_id, tenant_id=str(current_user.tenant_id), user_id=str(current_user.id))
     else:
         sessions = store.list_sessions(
             tenant_id=str(current_user.tenant_id),
