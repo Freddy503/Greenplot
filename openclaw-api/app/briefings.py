@@ -902,6 +902,7 @@ RECENT NEWS ({theme_str}):
 
 Produce a JSON object with this exact structure:
 {{
+  "tldr": "2-3 markdown bullet points ('- ') with the single most important takeaways from today's research — what's new and why it matters to the user. Keep it skimmable.",
   "papers": [
     {{
       "title": "Paper title + authors + year",
@@ -934,6 +935,16 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
 
     # Build standard briefing sections
     sections = []
+
+    # TL;DR — at-a-glance summary, the first thing the user sees
+    tldr = (data.get("tldr") or "").strip()
+    if tldr:
+        sections.append({
+            "title": "TL;DR",
+            "icon": "bolt",
+            "color": "text-green-400",
+            "content": tldr,
+        })
 
     # Weather
     if weather and city:
