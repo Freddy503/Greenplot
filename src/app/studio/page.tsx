@@ -917,7 +917,7 @@ export default function StudioPage() {
     } catch { toast.error('Could not attach — backend update pending') }
   }
 
-  const authHeader = () => { const t = localStorage.getItem('greenplot_token') || ''; return t ? { Authorization: `Bearer ${t}` } : {} }
+  const authHeader = (): Record<string, string> => { const t = localStorage.getItem('greenplot_token') || ''; return t ? { Authorization: `Bearer ${t}` } : {} }
   const openShare = useCallback(async () => {
     if (!mainProduct) return
     setShareOpen(true)
