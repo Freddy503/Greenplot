@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
-import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink, X } from 'lucide-react'
+import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink, X, Share2 } from 'lucide-react'
 import Segmented from '@/components/ui/v2/segmented'
 import MermaidDiagram from '@/components/ui/mermaid-diagram'
 import { readCache, writeCache } from '@/lib/swr-cache'
@@ -882,6 +882,12 @@ export default function StudioPage() {
   const [showAllPrds, setShowAllPrds] = useState(false)
   const [prdView, setPrdView] = useState<'board' | 'list' | 'product'>('board')
   const [products, setProducts] = useState<Product[]>([])
+  // Canvas sharing
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareEmail, setShareEmail] = useState('')
+  const [shareRole, setShareRole] = useState<'viewer' | 'editor'>('viewer')
+  const [shareList, setShareList] = useState<Array<{ id: string; email: string; role: string; status: string }>>([])
+  const [shareBusy, setShareBusy] = useState(false)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectMode, setSelectMode] = useState(false)
@@ -910,6 +916,38 @@ export default function StudioPage() {
       toast.success('Attached')
     } catch { toast.error('Could not attach — backend update pending') }
   }
+
+  const authHeader = () => { const t = localStorage.getItem('greenplot_token') || ''; return t ? { Authorization: `Bearer ${t}` } : {} }
+  const openShare = useCallback(async () => {
+    if (!mainProduct) return
+    setShareOpen(true)
+    try {
+      const r = await fetch(`/api/canvas/${mainProduct.id}/shares`, { headers: { ...authHeader() } })
+      if (r.ok) { const d = await r.json(); setShareList(d.shares || []) }
+    } catch {}
+  }, [mainProduct])
+  const submitShare = useCallback(async () => {
+    if (!mainProduct || !shareEmail.trim() || shareBusy) return
+    setShareBusy(true)
+    try {
+      const r = await fetch(`/api/canvas/${mainProduct.id}/share`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ email: shareEmail.trim(), role: shareRole }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        toast.success(`Invite sent to ${d.email}`)
+        setShareEmail('')
+        setShareList(prev => [...prev.filter(s => s.email !== d.email), { id: d.share_id, email: d.email, role: d.role, status: d.status }])
+      } else toast.error(d.detail || 'Could not share')
+    } catch { toast.error('Could not reach backend') } finally { setShareBusy(false) }
+  }, [mainProduct, shareEmail, shareRole, shareBusy])
+  const revokeShare = useCallback(async (id: string) => {
+    try {
+      const r = await fetch(`/api/canvas/share/${id}`, { method: 'DELETE', headers: { ...authHeader() } })
+      if (r.ok) setShareList(prev => prev.filter(s => s.id !== id))
+    } catch {}
+  }, [])
 
   const promoteProduct = async (productId: string) => {
     try {
@@ -1277,7 +1315,10 @@ export default function StudioPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span className="ui" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', background: 'var(--green-deep)', borderRadius: 9999, padding: '2.5px 8px' }}>MAIN</span>
                   <a href={`/garden?seed=${encodeURIComponent(mainProduct.id)}`} className="ui tap" style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', textDecoration: 'none' }}>{mainProduct.title}</a>
-                  <button onClick={() => deleteProduct(mainProduct.id, mainProduct.title)} className="tap" title="Delete product" style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                  <button onClick={openShare} className="tap" title="Share canvas" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', border: '1px solid var(--green-700)', borderRadius: 9999, padding: '5px 11px', fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 600, color: 'var(--green-700)', cursor: 'pointer' }}>
+                    <Share2 size={13} strokeWidth={2} /> Share
+                  </button>
+                  <button onClick={() => deleteProduct(mainProduct.id, mainProduct.title)} className="tap" title="Delete product" style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
                     <Trash2 size={14} color="var(--ink-3)" strokeWidth={1.75} />
                   </button>
                 </div>
@@ -1592,6 +1633,42 @@ export default function StudioPage() {
             <button onClick={() => { setSelectMode(false); setSelectedIds(new Set()) }} className="tap ui" style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', cursor: 'pointer', paddingRight: 6 }}>
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {shareOpen && (
+        <div onClick={() => setShareOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(10,38,24,0.45)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} className="v2-card" style={{ width: '100%', maxWidth: 440, borderRadius: 20, padding: 22, background: 'var(--surface)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Share2 size={17} color="var(--green-700)" strokeWidth={2} />
+              <span className="ui" style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>Share this canvas</span>
+              <button onClick={() => setShareOpen(false)} className="tap" style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}><X size={16} color="var(--ink-3)" /></button>
+            </div>
+            <p className="body-text" style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 14, lineHeight: 1.5 }}>Invite a collaborator by email. They&apos;ll see this product and its PRDs — nothing else in your garden.</p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <input type="email" value={shareEmail} onChange={e => setShareEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitShare() }} placeholder="collaborator@email.com"
+                style={{ flex: 1, minWidth: 0, border: '1px solid var(--hairline)', borderRadius: 10, padding: '9px 12px', fontFamily: 'var(--body)', fontSize: 13.5, color: 'var(--ink)', outline: 'none', background: 'var(--surface-sunk)' }} />
+              <select value={shareRole} onChange={e => setShareRole(e.target.value as 'viewer' | 'editor')} style={{ border: '1px solid var(--hairline)', borderRadius: 10, padding: '0 8px', fontFamily: 'var(--ui)', fontSize: 12.5, color: 'var(--ink-2)', background: 'var(--surface-sunk)', cursor: 'pointer' }}>
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+              </select>
+            </div>
+            <button onClick={submitShare} disabled={!shareEmail.trim() || shareBusy} className="tap ui" style={{ width: '100%', background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 10, padding: '10px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (!shareEmail.trim() || shareBusy) ? 0.5 : 1, marginBottom: shareList.length ? 16 : 0 }}>
+              {shareBusy ? 'Sending…' : 'Send invite'}
+            </button>
+            {shareList.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 12 }}>
+                <div className="caps" style={{ fontSize: 9.5, color: 'var(--ink-3)', marginBottom: 8 }}>Collaborators</div>
+                {shareList.map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+                    <span className="ui" style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.email}</span>
+                    <span className="caps" style={{ fontSize: 8.5, color: 'var(--ink-3)', background: 'var(--surface-sunk)', borderRadius: 99, padding: '2px 7px' }}>{s.status === 'active' ? s.role : 'invited'}</span>
+                    <button onClick={() => revokeShare(s.id)} className="tap" title="Revoke" style={{ background: 'none', border: 'none', padding: 3, cursor: 'pointer' }}><X size={13} color="var(--ink-3)" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
