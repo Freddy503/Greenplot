@@ -39,6 +39,35 @@ accept/revoke/list endpoints + email invite, Studio Share button, and a
   Exa / Resend as sub-processors (the landing EU strip already notes "third-party
   providers"); confirm the legal copy matches before broad EU launch.
 
+## Improvement backlog + code review (2026-06-14)
+
+Full value/effort analysis, bugs, and the ordered "tomorrow" plan live in
+**`docs/IMPROVEMENTS.md`**. Viable, high-leverage items pulled forward:
+
+- **Fix the research-digest flywheel (#13).** `_save_papers_as_seeds` never calls
+  `auto_prd_for_paper`, so autopilot→PRD only fires from the manual endpoint
+  (`main.py:1532`). Wire it into the digest paper-save path — `auto_prd.py` is
+  fully built with its own relevance gate + daily cap. **High value / small.**
+- **Promote the MCP server.** `mcp_http.py` is already built + mounted at `/mcp`
+  (per-user keys, Streamable HTTP). Needs a Settings "Connect your garden to
+  Claude/Cursor" card + a docs page + a landing mention. **High value / small —
+  a real differentiator sitting unsurfaced.**
+- **Sentry + de-silence critical excepts.** `SENTRY_DSN` is unset and there are
+  several `except: pass` in critical paths (paper parse, auto_prd, push). Set the
+  DSN; log instead of swallow. Do before scaling users.
+- **Session `user_id` scoping.** `get_session`/`delete_session` filter `tenant_id`
+  only (not `user_id`) — harden before any team-tenant feature.
+- **PDF-drop in Studio** — already spec'd (`studio-pdf-drop.md`) and lower-effort
+  than it looks: `parse_pdf` + chunk/index + a Studio dropzone already exist;
+  needs the upload endpoint + pdf.js viewer + garden-links panel.
+- **Typed suggested-actions (chat M-B)** — fixes web/mobile button parity at the
+  root (see chat rebuild milestones below).
+
+Stretch/vision (raise the ceiling): lean into MCP as a headline feature,
+collaborative gardens (editor role → shared wikis), an explorable mind-graph as
+the hero surface, north-star/goals, capture-from-anywhere. Detail in
+`docs/IMPROVEMENTS.md §D`.
+
 ## Notifications redesign — remaining + bigger bets
 
 Shipped now: notifications shifted from *chat-prompts* to *delivered artifacts*.
