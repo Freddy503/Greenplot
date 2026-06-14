@@ -5184,8 +5184,13 @@ def _cadence_allows(job_type: str, user) -> bool:
         return freq == "twice-daily"
     if freq == "twice-daily":
         return True
-    if job_type in ("morning_spark", "reflection"):
-        return False  # extra touchpoints belong to the twice-daily rhythm only
+    # Loose Threads (evening reflection) is a twice-daily-only extra touchpoint.
+    if job_type == "reflection":
+        return False
+    # Today's Thread (morning spark) also fires on the once-daily morning rhythm,
+    # so the default cadence gets one garden touchpoint alongside the digest.
+    if job_type == "morning_spark":
+        return freq in ("once-daily", "calendar")
     if freq in ("once-daily", "calendar"):
         return True
     if freq == "bi-weekly":
