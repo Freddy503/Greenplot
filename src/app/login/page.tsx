@@ -50,9 +50,12 @@ function LoginForm() {
 
       const { access_token, tenant_id } = await res.json()
 
-      // Switching accounts on this browser — drop any cached chats from the
-      // previously signed-in user before storing the new session.
-      clearChatCache()
+      // Only drop cached chats when a DIFFERENT account signs in on this
+      // browser — re-logging into the same account keeps your chats (and they
+      // re-load from the server on open regardless).
+      if (localStorage.getItem('greenplot_tenant') !== tenant_id) {
+        clearChatCache()
+      }
       localStorage.setItem('greenplot_token', access_token)
       localStorage.setItem('greenplot_tenant', tenant_id)
 

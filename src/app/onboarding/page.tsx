@@ -929,7 +929,7 @@ function OnboardingContent() {
         @keyframes gp-tick { 0% { opacity: .2; } 100% { opacity: 1; } }
 
         .ob-page { min-height: 100dvh; width: 100%; display: flex; background: #fafaf8; color: #141413; }
-        .ob-flow { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 100dvh; }
+        .ob-flow { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .ob-side { display: none; }
         @media (min-width: 1024px) {
           .ob-side {
