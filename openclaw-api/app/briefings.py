@@ -365,57 +365,68 @@ def build_morning_spark(
     """
     Build morning spark: Weather + Deep Pattern from user's research interests.
     """
+    from app.models import Seed
+    from sqlalchemy import func
     if not city:
         city = get_user_city(user_id, db)
     if not themes:
         themes = fetch_user_themes(user_id, db)
-
-    # Generate deep pattern using LLM
     theme_str = ", ".join(themes[:2])
-    llm_prompt = f"""
-Based on these research themes: {theme_str}
 
-Generate a bold, thought-provoking "deep pattern" from recent industry developments:
-- What concept/trend is emerging?
-- What problem does it solve?
-- How does it work (briefly)?
-- A real-world production example
-- How it relates to {theme_str}
+    # "Today's thread" — pick ONE real seed from the garden and push it forward
+    # with a concrete micro-action. Grounded in the user's own thinking, not a
+    # generic industry trend.
+    seed = (db.query(Seed)
+            .filter(Seed.user_id == user_id, Seed.title != None, Seed.title != '')  # noqa: E711
+            .order_by(func.random()).first())
 
-Keep to 150 words. Be specific, not generic. Use sources if available.
-Format as: [Concept Name] / [Problem Solved] / [How it works] / [Example] / [Relevance]
-"""
+    if seed:
+        spark_prompt = f"""A thinker captured this idea in their knowledge garden:
 
+Title: {seed.title}
+Note: {(seed.content or '')[:600]}
+
+In 2-3 sentences, give a sharp provocation that pushes THIS idea forward — a tension, a missing angle, or a bold extension (second person). Then on a new line beginning with "Today: " give ONE concrete 10-minute action to develop it (e.g. add a counter-argument, find one example, connect it to another idea). Be specific to this idea — never generic."""
+        spark = _call_llm(spark_prompt, max_tokens=300, model=settings.BRIEFING_MODEL)
+        if not spark:
+            spark = (f"You haven't returned to “{seed.title}” in a while. What would change if you "
+                     f"pushed it one step further?\nToday: Add one sentence that sharpens or challenges it.")
+        lines = [ln for ln in spark.split('\n') if ln.strip()]
+        provocation = next((ln for ln in lines if not ln.lower().startswith('today:')), spark)
+        action = next((ln for ln in lines if ln.lower().startswith('today:')), "Today: Develop this idea one step further.")
+        return {
+            "type": "morning_spark",
+            "title": f"{datetime.now().strftime('%A, %B %d')} — Today's thread",
+            "subtitle": f"Revisiting: {seed.title[:60]}",
+            "sections": [
+                {"title": f"Weather — {city or 'Your Location'}", "icon": "cloud",
+                 "color": "text-blue-400", "content": weather or "Check your local weather today."},
+                {"title": f"“{seed.title[:70]}”", "icon": "psychology", "color": "text-primary",
+                 "content": provocation},
+                {"title": "One move today", "icon": "task_alt", "color": "text-green-400",
+                 "content": action},
+            ],
+            "prompt": f'Help me develop this idea from my garden — "{seed.title}". {action}',
+        }
+
+    # No seeds yet (new user) → fall back to a themed spark so they still get value
     deep_pattern = _call_llm(
-        llm_prompt,
-        max_tokens=500,
-        model=settings.BRIEFING_MODEL  # Nemotron is more reliable
-    )
+        f"Give one bold, specific provocation about {theme_str} to start the day — a tension or "
+        f"emerging idea worth thinking about (max 120 words, second person).",
+        max_tokens=320, model=settings.BRIEFING_MODEL)
     if not deep_pattern:
-        deep_pattern = f"Explore emerging patterns in {theme_str}. What new architectures or techniques are changing how we build systems in these domains?"
-
+        deep_pattern = f"What assumption in {theme_str} would change everything if it were wrong?"
     return {
         "type": "morning_spark",
-        "title": f"{datetime.now().strftime('%A, %B %d')} — Deep Pattern",
+        "title": f"{datetime.now().strftime('%A, %B %d')} — Morning Spark",
         "subtitle": f"Tailored to your interests in {theme_str}",
         "sections": [
-            {
-                "title": f"Weather — {city or 'Your Location'}",
-                "icon": "cloud",
-                "color": "text-blue-400",
-                "content": weather or "Check your local weather today."
-            },
-            {
-                "title": "Deep Pattern",
-                "icon": "architecture",
-                "color": "text-primary",
-                "content": deep_pattern,
-                "sources": [
-                    {"title": "Recent research & industry trends", "url": "https://arxiv.org"},
-                ]
-            }
+            {"title": f"Weather — {city or 'Your Location'}", "icon": "cloud",
+             "color": "text-blue-400", "content": weather or "Check your local weather today."},
+            {"title": "A thought to plant", "icon": "psychology", "color": "text-primary",
+             "content": deep_pattern},
         ],
-        "prompt": f"Weather: {weather or 'unknown'}. Deep pattern: {deep_pattern}"
+        "prompt": "Plant a first seed from today's spark — capture one idea you want to grow.",
     }
 
 
@@ -493,49 +504,71 @@ Summarize in 2-3 sentences: What's the contribution? Why should {theme_str} prac
 
 
 def build_reflection(user_id: str, db) -> Dict[str, Any]:
-    """
-    Build evening reflection: Contrarian view + Actionable move.
-    """
+    """Evening reflection → "Loose threads": surface 2-3 of the user's own seeds
+    that were captured but never developed or connected, with a concrete nudge to
+    tend one. Grounded in the garden, not a generic contrarian prompt. Falls back
+    to a contrarian reflection for users with no underdeveloped seeds yet."""
+    from app.models import Seed, SeedLink
+    from sqlalchemy import or_
+
+    recent = (db.query(Seed)
+              .filter(Seed.user_id == user_id, Seed.title != None, Seed.title != '')  # noqa: E711
+              .order_by(Seed.created_at.desc()).limit(40).all())
+    linked_ids = set()
+    if recent:
+        ids = [s.id for s in recent]
+        for lnk in db.query(SeedLink).filter(
+                or_(SeedLink.source_seed_id.in_(ids), SeedLink.target_seed_id.in_(ids))).all():
+            linked_ids.add(lnk.source_seed_id)
+            linked_ids.add(lnk.target_seed_id)
+    # "Loose" = thin note OR no connections yet
+    loose = [s for s in recent if len((s.content or '')) < 280 or s.id not in linked_ids][:3]
+
+    if loose:
+        titles = "; ".join(s.title for s in loose)
+        nudge_prompt = (
+            "These are ideas someone captured but never developed:\n"
+            + "\n".join(f"- {s.title}: {(s.content or '')[:140]}" for s in loose)
+            + "\n\nPick the ONE most worth developing and, in a single second-person sentence, say "
+              "what specific next step would unlock it (a connection to make, an example to add, a "
+              "question to answer). Be concrete and specific to that idea."
+        )
+        nudge = _call_llm(nudge_prompt, max_tokens=160, model=settings.BRIEFING_MODEL)
+        if not nudge:
+            nudge = f"Pick one of these and add a single sentence that moves it forward — start with “{loose[0].title}”."
+        return {
+            "type": "reflection",
+            "title": "🧵 Loose threads",
+            "subtitle": datetime.now().strftime('%A, %B %d'),
+            "sections": [
+                {"title": "Ideas waiting to be tended", "icon": "spa", "color": "text-amber-400",
+                 "content": "\n".join(f"- {s.title}" for s in loose)},
+                {"title": "Tend one tonight", "icon": "task_alt", "color": "text-green-400",
+                 "content": nudge},
+            ],
+            "prompt": f"Help me develop one of these loose threads from my garden: {titles}",
+        }
+
+    # No loose threads → contrarian reflection (keeps value for tidy/new gardens)
     themes = fetch_user_themes(user_id, db)
     theme_str = ", ".join(themes[:2])
-
-    contrarian_prompt = f"""
-Imagine you spent today working on {theme_str}.
-What's the most contrarian argument against your main focus?
-- Something most people would disagree with
-- But potentially true
-- In 1-2 sentences
-
-Then propose ONE concrete 15-minute action for tomorrow that tests this contrarian view.
-"""
-
     contrarian = _call_llm(
-        contrarian_prompt,
-        max_tokens=300,
-        model=settings.BRIEFING_MODEL
-    )
+        f"What's the most contrarian-but-plausible argument against a focus on {theme_str}? "
+        f"1-2 sentences, then on a new line a concrete 15-minute action tomorrow to test it.",
+        max_tokens=300, model=settings.BRIEFING_MODEL)
     if not contrarian:
         contrarian = f"Question your assumptions about {theme_str}. What would change if you were wrong?"
-
     return {
         "type": "reflection",
         "title": "Evening Reflection",
         "subtitle": datetime.now().strftime('%A, %B %d'),
         "sections": [
-            {
-                "title": "Contrarian View",
-                "icon": "psychology",
-                "color": "text-purple-400",
-                "content": contrarian.split('\n')[0] if '\n' in contrarian else contrarian
-            },
-            {
-                "title": "Actionable Move",
-                "icon": "task_alt",
-                "color": "text-green-400",
-                "content": contrarian.split('\n')[1] if '\n' in contrarian else "Tomorrow: Test one assumption from today."
-            }
+            {"title": "Contrarian View", "icon": "psychology", "color": "text-purple-400",
+             "content": contrarian.split('\n')[0] if '\n' in contrarian else contrarian},
+            {"title": "Actionable Move", "icon": "task_alt", "color": "text-green-400",
+             "content": contrarian.split('\n')[1] if '\n' in contrarian else "Tomorrow: Test one assumption from today."},
         ],
-        "prompt": contrarian
+        "prompt": contrarian,
     }
 
 
