@@ -1191,7 +1191,8 @@ ${prefill.content || ''}`.trim()
                             style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 18, boxShadow: '0 1px 2px rgba(20,19,12,0.03)' } as React.CSSProperties}
                           >
                             <div>
-                              {message.parts.map((part, i) => {
+                              {/* Render tools/reasoning first, then the text answer below them */}
+                              {[...message.parts].sort((a: any, b: any) => (a.type === 'text' ? 1 : 0) - (b.type === 'text' ? 1 : 0)).map((part, i) => {
                                 if (part.type === 'text') {
                                   return (
                                     <div key={`${message.id}-text-${i}`} className="text-on-surface-variant">
@@ -1250,7 +1251,7 @@ ${prefill.content || ''}`.trim()
                                       <Tool>
                                         <ToolHeader
                                           type={tp.type}
-                                          state={tp.state}
+                                          state={tp.output != null && tp.state !== 'output-error' ? 'output-available' : tp.state}
                                           title={isSubagent ? 'spawn_subagent' : undefined}
                                         />
                                         <ToolContent>
