@@ -1048,13 +1048,31 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
     raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
                     model=settings.BRIEFING_MODEL)
 
-    # Parse JSON, strip fences if needed
-    cleaned = _re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=_re.IGNORECASE)
-    cleaned = _re.sub(r'\s*```$', '', cleaned.strip())
-    try:
-        data = json.loads(cleaned)
-    except Exception:
-        logger.error(f"[academic_digest] JSON parse failed, using fallback. Raw: {raw[:200]}")
+    # Parse JSON robustly: strip fences, else extract the outermost {...} block,
+    # and retry once on the fallback (non-thinking) model if the briefing model
+    # rambled instead of emitting clean JSON — the usual cause of a bare digest.
+    def _parse_digest_json(text: str):
+        c = _re.sub(r'^```(?:json)?\s*', '', (text or '').strip(), flags=_re.IGNORECASE)
+        c = _re.sub(r'\s*```$', '', c.strip())
+        try:
+            return json.loads(c)
+        except Exception:
+            m = _re.search(r'\{.*\}', c, _re.DOTALL)
+            if m:
+                try:
+                    return json.loads(m.group(0))
+                except Exception:
+                    return None
+        return None
+
+    data = _parse_digest_json(raw)
+    if data is None:
+        logger.warning(f"[academic_digest] JSON parse failed, retrying on fallback model. Raw: {raw[:160]}")
+        raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
+                        model=settings.FALLBACK_MODEL)
+        data = _parse_digest_json(raw)
+    if data is None:
+        logger.error(f"[academic_digest] JSON parse failed after retry. Raw: {raw[:200]}")
         data = {}
 
     # Build standard briefing sections
@@ -1082,8 +1100,10 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
     # Academic spotlights — one section per paper
     papers = data.get("papers", [])
     if not papers and paper_texts:
-        # fallback: create stubs from raw paper data
-        papers = [{"title": p["title"], "content": p.get("snippet", ""), "url": p["url"]} for p in paper_texts]
+        # fallback: use the fetched abstract text — paper_texts entries carry
+        # 'text' (not 'snippet'), so the old key always produced empty bodies.
+        papers = [{"title": p["title"], "content": (p.get("text", "") or "")[:500], "url": p["url"]}
+                  for p in paper_texts]
     for i, paper in enumerate(papers):
         sections.append({
             "title": paper.get("title", f"Paper {i+1}"),
@@ -1131,6 +1151,19 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
             "icon": "architecture",
             "color": "text-purple-400",
             "content": data["solution_design_seed"],
+        })
+
+    # Sparse-garden nudge: when the user has almost no seeds, the digest can't
+    # yet connect to their own thinking — so explain the loop and invite them in
+    # (today's papers are auto-saved as seeds just below).
+    if len([s for s in garden_ctx if s]) < 3:
+        sections.append({
+            "title": "Grow your garden",
+            "icon": "eco",
+            "color": "text-green-400",
+            "content": ("Today's papers were planted in your garden as seeds. Open the ones that "
+                        "resonate and capture a thought — once you have a handful of seeds, each "
+                        "digest starts connecting new research to your own ideas."),
         })
 
     # Auto-save papers as Garden seeds (best-effort, never blocks delivery)
