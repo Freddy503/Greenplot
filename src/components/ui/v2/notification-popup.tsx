@@ -141,7 +141,7 @@ export default function NotificationPopup({ onClose, unreadCount = 0 }: Notifica
             </div>
           ) : notifs.length === 0 ? (
             <p className="body-text" style={{ padding: '20px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-3)', fontStyle: 'italic' }}>
-              No notifications yet — check back after your morning spark!
+              No notifications yet — check back after your morning thread!
             </p>
           ) : (
             notifs.map((n, i) => (

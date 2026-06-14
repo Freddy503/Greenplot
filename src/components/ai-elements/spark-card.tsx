@@ -48,9 +48,10 @@ const TONES: Record<ToneKey, { bg: string; fg: string; heroIcon: string }> = {
 }
 
 const TYPE_CONFIG: Record<string, { Icon: LucideIcon; tone: ToneKey; label: string }> = {
-  morning_spark: { Icon: Sun, tone: 'amber', label: 'Morning Spark' },
+  morning_spark: { Icon: Sun, tone: 'amber', label: 'Today’s Thread' },
   daily_briefing: { Icon: BookOpen, tone: 'green', label: 'Daily Briefing' },
-  reflection: { Icon: Leaf, tone: 'green', label: 'Evening Reflection' },
+  reflection: { Icon: Leaf, tone: 'green', label: 'Loose Threads' },
+  garden_story: { Icon: BookOpen, tone: 'green', label: 'Garden Story' },
   weekly_eval: { Icon: BarChart2, tone: 'green', label: 'Weekly Eval' },
   challenge: { Icon: Trophy, tone: 'green', label: 'Challenge' },
   academic_digest: { Icon: GraduationCap, tone: 'blue', label: 'Research Digest' },

@@ -7,7 +7,7 @@ import { usePushNotifications } from '@/hooks/use-push-notifications'
 import { clearAuth } from '@/lib/api'
 import { toast } from 'sonner'
 import {
-  Bell, Sun, Mail, Download, LogOut, ChevronRight, Copy, Plus, X,
+  Bell, Sun, Sparkles, Download, LogOut, ChevronRight, Copy, Plus, X,
   Plug, Calendar, Trash2, MessageSquarePlus, Send, Loader2, Leaf,
   Moon, BookOpen, BarChart2,
 } from 'lucide-react'
@@ -31,11 +31,11 @@ import SectionHeader from '@/components/ui/v2/section-header'
 const BACKEND = '/api'
 
 const PIPELINE_JOBS = [
-  { id: 'morning_spark',        label: 'Morning Spark',              Icon: Sun,       description: 'Weather + deep pattern from your interests (08:30 CET)',   configurable: true },
-  { id: 'daily_briefing',       label: 'Daily Briefing',             Icon: Mail,      description: 'Enterprise AI news + academic papers (09:30 CET)',         configurable: true },
-  { id: 'afternoon_reflection', label: 'Evening Reflection',         Icon: Moon,      description: 'Contrarian view + actionable move for tomorrow (16:00 CET)', configurable: true },
-  { id: 'academic_digest',      label: 'Academic & Research Digest', Icon: BookOpen,  description: 'ArXiv papers matched to your interests (07:00 CET)',        configurable: true },
-  { id: 'weekly_digest',        label: 'Weekly Garden Digest',       Icon: BarChart2, description: 'Sunday overview of your growing knowledge garden (10:00 CET)', configurable: false },
+  { id: 'morning_spark',        label: 'Today’s Thread',             Icon: Sun,       description: 'One idea from your garden + a 10-min move to grow it (08:30 CET)', configurable: true },
+  { id: 'afternoon_reflection', label: 'Loose Threads',              Icon: Moon,      description: 'Your captured-but-undeveloped seeds, surfaced to tend (16:00 CET)', configurable: true },
+  { id: 'academic_digest',      label: 'Research Digest',            Icon: BookOpen,  description: 'New research linked to your seeds & wiki (07:00 & 18:00 CET)', configurable: true },
+  { id: 'garden_signals',       label: 'Garden Signals',             Icon: Sparkles,  description: 'Connection alerts + emerging themes, as they form', configurable: false },
+  { id: 'garden_story',         label: 'Garden Story',               Icon: BarChart2, description: 'Your week of thinking, narrated (Sun 10:00 CET)', configurable: false },
 ]
 
 interface JobConfig {
@@ -633,7 +633,7 @@ export default function SettingsPage() {
                 <div>
                   <div className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Location</div>
                   <div className="body-text" style={{ fontSize: 13.5, color: 'var(--ink)', marginTop: 2 }}>{city || 'Not set'}</div>
-                  <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 1 }}>Used for weather in daily briefing</div>
+                  <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 1 }}>Used for weather in your morning thread</div>
                 </div>
                 <button onClick={() => { setEditCity(city); setEditingCity(true) }} className="tap" style={{ background: 'none', border: 'none', color: 'var(--green-700)', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
               </div>
