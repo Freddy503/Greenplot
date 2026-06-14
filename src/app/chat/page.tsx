@@ -340,6 +340,22 @@ export default function ChatPage() {
     return []
   }
 
+  // Convert backend session messages ({role, content:[{kind:'text',text}]}) to
+  // the UI's AI-SDK shape ({id, role, parts:[{type:'text',text}]}). Used when a
+  // conversation only exists on the server (e.g. after a cache wipe or on a new device).
+  const backendToUiMessages = (messages: any[]) =>
+    (messages || [])
+      .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+      .map((m: any) => ({
+        id: genId(),
+        role: m.role,
+        parts: (m.content || [])
+          .filter((b: any) => b.kind === 'text' && b.text)
+          .map((b: any) => ({ type: 'text' as const, text: b.text })),
+        createdAt: new Date(),
+      }))
+      .filter((m: any) => m.parts.length > 0)
+
   const saveConvMessages = (id: string, msgs: any[]) => {
     try {
       localStorage.setItem(`greenplot_conv_${id}`, JSON.stringify(msgs.slice(-50)))
@@ -699,14 +715,31 @@ ${prefill.content || ''}`.trim()
     fetchSuggestions(token)
   }
 
-  const handleSelectConversation = (id: string) => {
+  const handleSelectConversation = async (id: string) => {
     if (id === activeConversationId) return
     setActiveConversationId(id)
     localStorage.setItem('greenplot_active_conv', id)
     // Restore backend session_id for this conversation
-    sessionIdRef.current = localStorage.getItem(`greenplot_session_${id}`) || ''
-    const msgs = loadConvMessages(id)
-    setMessages(msgs)
+    const backendSessionId = localStorage.getItem(`greenplot_session_${id}`) || ''
+    sessionIdRef.current = backendSessionId
+    let msgs = loadConvMessages(id)
+    // No local copy but this conversation lives on the server → fetch its messages
+    // (covers chats opened on a new device or after a login cache-clear).
+    if (msgs.length === 0 && backendSessionId) {
+      try {
+        const token = localStorage.getItem('greenplot_token') || ''
+        const r = await fetch(`/api/sessions/${backendSessionId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: AbortSignal.timeout(8000),
+        })
+        if (r.ok) {
+          const data = await r.json()
+          const ui = backendToUiMessages(data?.messages || [])
+          if (ui.length > 0) { msgs = ui; saveConvMessages(id, ui) }
+        }
+      } catch {}
+    }
+    setMessages(msgs as any)
   }
 
   // ── Garden Enrichment ──────────────────────────────
