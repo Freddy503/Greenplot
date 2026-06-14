@@ -4,6 +4,13 @@
 **Purpose:** an actionable, value/effort-ranked list to work from. Bugs first,
 then a do-next matrix, a concrete "tomorrow" plan, and stretch/vision projects.
 
+> **Shipped in the autonomous pass (2026-06-14):** ✅ **PDF-drop in Studio**
+> (upload→parse→view→garden-links, GDPR purge); ✅ **B3** session `user_id`
+> scoping; ✅ **landing page** PDF-drop feature added. Found already-built (no
+> work needed): the **MCP "Connect your garden" Settings card** (`settings`
+> line ~251) and **per-type notification toggles**. Needs you: **Sentry DSN**
+> (B2), **deploy**, and **verify #13** end-to-end now Exa is funded.
+
 > Key context discovered during review: a lot of the ambitious stuff is **already
 > built and just not surfaced** — the MCP server (`/mcp`), the graph backend
 > (`/api/v1/graph`, `/nodes`), `tree_retrieval.py`, `auto_prd.py`, and the full
@@ -16,7 +23,7 @@ then a do-next matrix, a concrete "tomorrow" plan, and stretch/vision projects.
 
 | # | Severity | Bug | Where | Fix | Effort |
 |---|---|---|---|---|---|
-| B1 | **High** | **Research-digest flywheel is disconnected.** `_save_papers_as_seeds` saves paper seeds but never calls `auto_prd_for_paper`, so autopilot→PRD only ever fires from the manual "Draft PRD" endpoint. This *is* open issue #13. | `briefings.py` (paper save) vs `auto_prd.py:447`, wired only at `main.py:1532` | After saving paper seeds (or on parse completion), enqueue `auto_prd_for_paper(seed_id, tenant_id, db)` — it already has its own relevance gate + daily cap, so it self-limits. | **S** (~1–2 h) |
+| B1 | Med | **#13 — digest→PRD autopilot rarely fires.** Correction after deeper review: it *is* wired (`paper_pipeline.py:311` calls `auto_prd_for_paper` for `created_via=='academic_digest'` papers that parse). The real causes were (a) Exa out of credits → no papers to parse (fixed — topped up) and (b) the relevance gate (`sco<RESEND_API_KEY>` < `RELEVANCE_THRESHOLD`) scores sparse-garden papers low, so early users never get a draft. | `paper_pipeline.py:309-317`, `auto_prd.py:210/480` | **Verify** end-to-end now Exa is funded. *Optionally* relax the gate for low-seed users so the magic happens early (judgment call — risks low-quality PRDs). | **Verify (S)** |
 | B2 | **High** | **No production error visibility.** Sentry is wired (`main.py:194`) but `SENTRY_DSN` is unset, and there are 143 broad `except` blocks in `main.py` plus several `except: pass` (`enricher_v2.py:147/553`, `paper_pipeline.py:76`, `auto_prd.py:300`, `task_worker.py:87`). Errors vanish silently. | repo-wide | Set `SENTRY_DSN`; convert `except: pass` in critical paths (paper-parse enqueue, auto_prd, push send) to `logger.warning`. | **S** |
 | B3 | Med | **Session get/delete scope to `tenant_id` only, not `user_id`** — inconsistent with `list_sessions` (which also filters `user_id`). Not exploitable while tenant=user 1:1, but breaks the moment a tenant has multiple users (teams). | `main.py:3413, 3433` | Add `user_id` filter (defense in depth). | **XS** |
 | B4 | Low | **Garden Signals dedup is time-window based** (3 h lookback matching the cron). A link created on the boundary can double-notify or be skipped. | `main.py _job_garden_signals` | Stamp notified `SeedLink` ids (or a `signals_seen` set) instead of relying on the window. | **S** |

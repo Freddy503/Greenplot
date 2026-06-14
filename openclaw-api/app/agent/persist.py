@@ -124,7 +124,7 @@ class ChatSessionStore:
 
         return [Message.from_dict(m) for m in (record.messages or [])]
 
-    def load_session(self, session_id: str, tenant_id: Optional[str] = None) -> Optional[Session]:
+    def load_session(self, session_id: str, tenant_id: Optional[str] = None, user_id: Optional[str] = None) -> Optional[Session]:
         """
         Load a full Session object with metadata.
 
@@ -143,6 +143,8 @@ class ChatSessionStore:
             )
             if tenant_id:
                 query = query.filter(ChatSession.tenant_id == uuid.UUID(tenant_id))
+            if user_id:
+                query = query.filter(ChatSession.user_id == uuid.UUID(user_id))
             record = query.first()
         except (ValueError, Exception):
             return None
@@ -190,7 +192,7 @@ class ChatSessionStore:
             })
         return summaries
 
-    def delete(self, session_id: str, tenant_id: Optional[str] = None) -> bool:
+    def delete(self, session_id: str, tenant_id: Optional[str] = None, user_id: Optional[str] = None) -> bool:
         """
         Delete a chat session.
 
@@ -209,6 +211,8 @@ class ChatSessionStore:
             )
             if tenant_id:
                 query = query.filter(ChatSession.tenant_id == uuid.UUID(tenant_id))
+            if user_id:
+                query = query.filter(ChatSession.user_id == uuid.UUID(user_id))
             result = query.delete()
             self._db.flush()
             return result > 0
