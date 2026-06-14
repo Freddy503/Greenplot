@@ -4791,9 +4791,11 @@ def _job_morning_spark():
                     logger.error(f"⚠️ Weather fetch failed for {user.id}: {we}")
                     weather = None
 
+                # Weather is just one section now — "Today's thread" is grounded
+                # in the user's garden, so never skip the notification for missing
+                # weather; fall back to a neutral line instead.
                 if not weather:
-                    logger.warning(f"⏭️ Skipping morning spark for user {user.id} — no weather data")
-                    continue
+                    logger.info(f"📍 No weather for user {user.id} — sending Today's Thread without it")
 
                 briefing = briefings.build_morning_spark(
                     user_id=str(user.id),
