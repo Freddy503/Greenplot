@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, Fragment } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -1004,6 +1004,40 @@ export default function StudioPage() {
     }
   }, [])
 
+  // ── Touch drag-and-drop — native HTML5 DnD never fires from touch on mobile ──
+  const touchDrag = useRef<{ id: string; startX: number; startY: number; dragging: boolean } | null>(null)
+  const justDragged = useRef(false)
+  const colStatusFromPoint = (x: number, y: number): string | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    return (el?.closest('[data-coldrop]') as HTMLElement | null)?.getAttribute('data-coldrop') || null
+  }
+  const onCardTouchStart = (prd: PRDItem) => (e: any) => {
+    if (prd.local || selectMode) return
+    const t = e.touches[0]
+    touchDrag.current = { id: prd.id, startX: t.clientX, startY: t.clientY, dragging: false }
+  }
+  const onCardTouchMove = (e: any) => {
+    const d = touchDrag.current
+    if (!d) return
+    const t = e.touches[0]
+    if (!d.dragging) {
+      if (Math.abs(t.clientX - d.startX) < 8 && Math.abs(t.clientY - d.startY) < 8) return
+      d.dragging = true
+    }
+    const status = colStatusFromPoint(t.clientX, t.clientY)
+    setDragOverCol(BOARD_COLUMNS.find(c => c.dropStatus === status)?.key || null)
+  }
+  const onCardTouchEnd = (prd: PRDItem) => (e: any) => {
+    const d = touchDrag.current
+    touchDrag.current = null
+    setDragOverCol(null)
+    if (!d || !d.dragging) return
+    justDragged.current = true // suppress the click that follows a drag
+    const t = e.changedTouches[0]
+    const status = colStatusFromPoint(t.clientX, t.clientY)
+    if (status && !prd.local && prd.buildStatus !== status) updatePrdStatus(prd.id, status)
+  }
+
   const launchMode = useCallback((id: string) => router.push(`/chat?mode=${id}`), [router])
 
   const developSeed = useCallback((seed: RawSeed) => {
@@ -1399,6 +1433,7 @@ export default function StudioPage() {
               return (
                 <div
                   key={col.key}
+                  data-coldrop={col.dropStatus}
                   onDragOver={(e) => { e.preventDefault(); setDragOverCol(col.key) }}
                   onDragLeave={() => setDragOverCol(c => (c === col.key ? null : c))}
                   onDrop={(e) => {
@@ -1431,9 +1466,12 @@ export default function StudioPage() {
                       key={prd.id}
                       draggable={!prd.local && !selectMode}
                       onDragStart={(e) => e.dataTransfer.setData('text/prd-id', prd.id)}
-                      onClick={() => (selectMode ? toggleSel(prd.id) : setSelected(prd))}
+                      onTouchStart={onCardTouchStart(prd)}
+                      onTouchMove={onCardTouchMove}
+                      onTouchEnd={onCardTouchEnd(prd)}
+                      onClick={() => { if (justDragged.current) { justDragged.current = false; return } selectMode ? toggleSel(prd.id) : setSelected(prd) }}
                       className={'v2-card tap' + (selectMode && selectedIds.has(prd.id) ? ' sel-ring' : '')}
-                      style={{ borderRadius: 14, padding: '11px 12px', cursor: prd.local ? 'pointer' : 'grab', marginBottom: 8 }}
+                      style={{ borderRadius: 14, padding: '11px 12px', cursor: prd.local ? 'pointer' : 'grab', marginBottom: 8, touchAction: (!prd.local && !selectMode) ? 'none' : undefined }}
                     >
                       <div className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.35 }}>{prd.title}</div>
                       <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-2)', lineHeight: 1.5, marginTop: 3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
@@ -1473,9 +1511,12 @@ export default function StudioPage() {
                     key={prd.id}
                     draggable={!prd.local && !selectMode}
                     onDragStart={(e) => e.dataTransfer.setData('text/prd-id', prd.id)}
-                    onClick={() => (selectMode ? toggleSel(prd.id) : setSelected(prd))}
+                    onTouchStart={onCardTouchStart(prd)}
+                    onTouchMove={onCardTouchMove}
+                    onTouchEnd={onCardTouchEnd(prd)}
+                    onClick={() => { if (justDragged.current) { justDragged.current = false; return } selectMode ? toggleSel(prd.id) : setSelected(prd) }}
                     className={'v2-card tap' + (selectMode && selectedIds.has(prd.id) ? ' sel-ring' : '')}
-                    style={{ borderRadius: 13, padding: '10px 12px', cursor: prd.local ? 'pointer' : 'grab', display: 'flex', alignItems: 'center', gap: 9 }}
+                    style={{ borderRadius: 13, padding: '10px 12px', cursor: prd.local ? 'pointer' : 'grab', display: 'flex', alignItems: 'center', gap: 9, touchAction: (!prd.local && !selectMode) ? 'none' : undefined }}
                   >
                     <FileText size={15} color="var(--ink-3)" strokeWidth={1.75} style={{ flexShrink: 0 }} />
                     <span className="ui" style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prd.title}</span>
