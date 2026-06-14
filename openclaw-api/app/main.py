@@ -2047,6 +2047,130 @@ def attach_seed_to_product(
     return {"ok": True, "seed_id": str(seed.id), "product_id": str(product.id), "pillar_id": m.get("pillar_id")}
 
 
+# --- Canvas sharing: invite collaborators to a product canvas (docs/specs/canvas-sharing.md) ---
+
+class CanvasShareRequest(BaseModel):
+    email: EmailStr
+    role: Optional[str] = "viewer"  # 'viewer' | 'editor'
+
+
+@app.post("/api/v1/canvas/{product_id}/share")
+def share_canvas(product_id: str, req: CanvasShareRequest,
+                 current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Owner-only: invite a collaborator (by email) to a canvas. Sends an invite
+    email with a deep link; the share link itself is the gate to accept."""
+    from app.canvas_access import resolve_canvas_access
+    from app.models import CanvasShare
+    if resolve_canvas_access(db, current_user, product_id) != "owner":
+        raise HTTPException(status_code=403, detail="Only the canvas owner can share it")
+    try:
+        pid = uuid.UUID(product_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid canvas id")
+    product = db.query(Seed).filter(Seed.id == pid, Seed.seed_type == "product").first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    email = req.email.strip().lower()
+    if email == (current_user.email or "").lower():
+        raise HTTPException(status_code=400, detail="You already own this canvas")
+    role = req.role if req.role in ("viewer", "editor") else "viewer"
+    collaborator = db.query(User).filter(User.email == email).first()
+    share = db.query(CanvasShare).filter(
+        CanvasShare.product_id == pid, CanvasShare.collaborator_email == email).first()
+    if share:
+        share.role = role
+        if share.status == "revoked":
+            share.status = "pending"
+        if collaborator and not share.collaborator_user_id:
+            share.collaborator_user_id = collaborator.id
+    else:
+        share = CanvasShare(
+            product_id=pid, owner_tenant_id=current_user.tenant_id, owner_user_id=current_user.id,
+            collaborator_email=email, collaborator_user_id=(collaborator.id if collaborator else None),
+            role=role, status="pending",
+        )
+        db.add(share)
+    db.commit()
+    db.refresh(share)
+    try:
+        from app.email_sender import send_canvas_invite_email
+        accept_url = f"{settings.FRONTEND_URL}/studio?canvas={product_id}&share={share.id}"
+        send_canvas_invite_email(email, current_user.nickname or current_user.email, product.title, accept_url)
+    except Exception as e:
+        logger.error(f"[canvas] invite email failed: {e}")
+    return {"ok": True, "share_id": str(share.id), "email": email, "role": role, "status": share.status}
+
+
+@app.post("/api/v1/canvas/share/{share_id}/accept")
+def accept_canvas_share(share_id: str,
+                        current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The invited collaborator accepts — binds their user id and activates access.
+    Only the address the invite was sent to may accept."""
+    from app.models import CanvasShare
+    try:
+        sid = uuid.UUID(share_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid share id")
+    share = db.query(CanvasShare).filter(CanvasShare.id == sid).first()
+    if not share or share.status == "revoked":
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if (current_user.email or "").lower() != share.collaborator_email.lower():
+        raise HTTPException(status_code=403, detail="This invite was sent to a different email")
+    share.collaborator_user_id = current_user.id
+    share.status = "active"
+    share.accepted_at = datetime.utcnow()
+    db.commit()
+    logger.info(f"[canvas] share {sid} accepted by {current_user.email}")
+    return {"ok": True, "product_id": str(share.product_id), "role": share.role}
+
+
+@app.get("/api/v1/canvas/{product_id}/shares")
+def list_canvas_shares(product_id: str,
+                       current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Owner-only: list collaborators on a canvas."""
+    from app.canvas_access import resolve_canvas_access
+    from app.models import CanvasShare
+    if resolve_canvas_access(db, current_user, product_id) != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can view collaborators")
+    shares = db.query(CanvasShare).filter(
+        CanvasShare.product_id == uuid.UUID(product_id), CanvasShare.status != "revoked").all()
+    return {"shares": [{"id": str(s.id), "email": s.collaborator_email, "role": s.role, "status": s.status} for s in shares]}
+
+
+@app.delete("/api/v1/canvas/share/{share_id}")
+def revoke_canvas_share(share_id: str,
+                        current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Owner-only: revoke a collaborator's access (effective on their next request)."""
+    from app.models import CanvasShare
+    try:
+        sid = uuid.UUID(share_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid share id")
+    share = db.query(CanvasShare).filter(CanvasShare.id == sid).first()
+    if not share:
+        raise HTTPException(status_code=404, detail="Share not found")
+    if share.owner_user_id != current_user.id and share.owner_tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Only the owner can revoke")
+    share.status = "revoked"
+    db.commit()
+    logger.info(f"[canvas] share {sid} revoked by {current_user.email}")
+    return {"ok": True}
+
+
+@app.get("/api/v1/canvas/shared-with-me")
+def canvases_shared_with_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Canvases other people have shared with the current user."""
+    from app.models import CanvasShare
+    shares = db.query(CanvasShare).filter(
+        CanvasShare.collaborator_user_id == current_user.id, CanvasShare.status == "active").all()
+    out = []
+    for s in shares:
+        product = db.query(Seed).filter(Seed.id == s.product_id, Seed.seed_type == "product").first()
+        if product:
+            out.append({"product_id": str(product.id), "title": product.title, "role": s.role, "share_id": str(s.id)})
+    return {"canvases": out}
+
+
 def _append_product_story(db: Session, tenant_id, prd_seed: Seed, status: str):
     """Templated story-so-far update on build events — zero LLM calls (spec rule 7)."""
     pid = (prd_seed.seed_metadata or {}).get("product_id")
