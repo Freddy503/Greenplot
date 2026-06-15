@@ -62,6 +62,11 @@ _TOOL_SELECTION_CONTENT = (
     "is not time-sensitive → answer without web. Otherwise proceed to web_search. "
     "Err on the side of calling web_search — fresh information improves answers.\n\n"
 
+    "CORRECTIVE RETRIEVAL: judge each result's relevance before relying on it. Discard weak "
+    "or off-topic hits instead of padding the answer with them; if the top results are weak, "
+    "re-query ONCE with sharper terms (or a different tool) before answering. Ground claims "
+    "only on sources you would stand behind, and cite them.\n\n"
+
     "EXPLICIT USER COMMANDS:\n"
     "  • 'search my garden' / 'search seeds' → call search_seeds only\n"
     "  • 'search the web' / 'web search' / 'latest news' → call web_search (may skip internal first)\n"

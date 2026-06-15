@@ -218,7 +218,7 @@ export default function ChatPage() {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [pdfDragOver, setPdfDragOver] = useState(false)
   const chatFileInputRef = useRef<HTMLInputElement>(null)
-  const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
+  const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{id?: string; title: string; domain: string}>>([])
   // Dynamic suggestions from garden
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
   // Prevent double-firing the push notification prompt
@@ -856,7 +856,9 @@ ${prefill.content || ''}`.trim()
       const memoryData = memoryRes.status === 'fulfilled' ? memoryRes.value : null
 
       const seeds = gardenData?.seeds || []
-      setLastGardenSeeds(seeds.length > 0 ? seeds.slice(0, 3) : [])
+      setLastGardenSeeds(seeds.length > 0
+        ? seeds.slice(0, 5).map((s: any) => ({ id: s.id || s.seed_id, title: s.title || 'Untitled', domain: s.domain || '' }))
+        : [])
 
       // Build combined context
       const parts: string[] = []
@@ -1215,14 +1217,31 @@ ${prefill.content || ''}`.trim()
                         </div>
                         {/* Content column */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                        {/* "Searched your garden" chip — shown when garden seeds were used */}
+                        {/* "Searched your garden" — expandable provenance: the exact
+                            seeds that grounded this answer, each linking to the garden */}
                         {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', borderRadius: 9999, padding: '5px 10px' }}>
+                          <details style={{ marginBottom: 8 }}>
+                            <summary className="tap" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', borderRadius: 9999, padding: '5px 10px', cursor: 'pointer', listStyle: 'none' }}>
                               <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5C6 1.5 3 4 3 6.5C3 7.88 4.34 9 6 9C7.66 9 9 7.88 9 6.5C9 4 6 1.5 6 1.5Z" fill="var(--green-700)"/></svg>
-                              <span className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)' }}>Searched your garden · {lastGardenSeeds.length} seed{lastGardenSeeds.length !== 1 ? 's' : ''}</span>
+                              <span className="ui" style={{ fontSize: 11, fontWeight: 600, color: 'var(--green-700)' }}>Grounded in your garden · {lastGardenSeeds.length} seed{lastGardenSeeds.length !== 1 ? 's' : ''}</span>
+                              <ChevronRight size={12} color="var(--green-700)" strokeWidth={2} />
+                            </summary>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, paddingLeft: 2 }}>
+                              {lastGardenSeeds.map((s, i) => (
+                                s.id ? (
+                                  <a key={i} href={`/garden?seed=${s.id}`} className="tap ui" title={s.title} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', textDecoration: 'none', maxWidth: 220, overflow: 'hidden' }}>
+                                    <Leaf size={11} color="var(--green-700)" strokeWidth={1.9} />
+                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title}</span>
+                                  </a>
+                                ) : (
+                                  <span key={i} className="ui" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', maxWidth: 220, overflow: 'hidden' }}>
+                                    <Leaf size={11} color="var(--green-700)" strokeWidth={1.9} />
+                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title}</span>
+                                  </span>
+                                )
+                              ))}
                             </div>
-                          </div>
+                          </details>
                         )}
                         <Message from="assistant">
                           <MessageContent
