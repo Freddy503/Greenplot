@@ -245,6 +245,9 @@ export default function ChatPage() {
   // ── Thinking-partner modes (GStack personas via _system_override) ──
   const [selectedMode, setSelectedMode] = useState<ThinkingMode | undefined>(undefined)
   const activeModeRef = useRef<ThinkingMode | undefined>(undefined)
+  // One-shot system override (e.g. "turn this conversation into a PRD") — applied
+  // to the next send only, then cleared when the turn completes.
+  const oneShotOverrideRef = useRef<string | null>(null)
   useEffect(() => { activeModeRef.current = selectedMode }, [selectedMode])
   // Ref to the composer textarea — used to pre-fill from "Develop into a spec"
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
@@ -312,8 +315,9 @@ export default function ChatPage() {
         _auth_token: typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : '',
         // Include backend session_id so conversations persist across page loads
         session_id: sessionIdRef.current || '',
-        // Active thinking-partner persona (empty string = default assistant)
-        _system_override: activeModeRef.current?.systemPrompt || '',
+        // Active thinking-partner persona (empty string = default assistant).
+        // A one-shot override (e.g. "make a PRD") takes precedence for one turn.
+        _system_override: oneShotOverrideRef.current || (activeModeRef.current?.systemPrompt || ''),
       }),
     }),
     experimental_throttle: 50,
@@ -553,29 +557,43 @@ ${prefill.content || ''}`.trim()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored])
 
-  // Save the latest assistant message as a PRD (spec mode). localStorage is the
-  // guaranteed path; the backend write is best-effort (routes via /thoughts).
-  const handleSaveAsPRD = useCallback((text: string) => {
-    if (!text.trim()) return
-    const firstLine = text.split('\n').map(l => l.replace(/^#+\s*/, '').trim()).find(Boolean) || 'Untitled spec'
-    const title = firstLine.slice(0, 80)
-    try {
-      const raw = localStorage.getItem('greenplot_prds')
-      const list = raw ? JSON.parse(raw) : []
-      const entry = { id: `local_${Date.now()}`, title, content: text, createdAt: new Date().toISOString(), source: 'spec_mode' }
-      localStorage.setItem('greenplot_prds', JSON.stringify([entry, ...(Array.isArray(list) ? list : [])].slice(0, 100)))
-    } catch {}
-    // Best-effort backend persistence
-    const token = localStorage.getItem('greenplot_token')
-    fetch('/api/seeds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ content: text.slice(0, 8000), source: 'spec_mode', seed_type: 'spec', metadata: { tags: ['prd', 'spec'] } }),
-    }).catch(() => {})
-    toast.success('Saved as PRD — view it in Studio', {
-      action: { label: 'Studio', onClick: () => { window.location.href = '/studio' } },
-    })
-  }, [])
+  // ── Turn the current conversation into a PRD (mid-chat, any mode) ──
+  // Sends a one-shot "synthesize a PRD now" override so the agent writes a full,
+  // structured PRD from the discussion (and updates an existing one if it exists)
+  // without dropping into the question-asking Spec protocol.
+  const createPrdFromChat = useCallback((instruction?: string) => {
+    if (status !== 'ready') { toast('One sec — finishing the current response first'); return }
+    oneShotOverrideRef.current = [
+      'The user wants to turn the CURRENT conversation into a Product Requirements Document right now.',
+      'Do NOT run a discovery protocol or ask questions — work from what has already been discussed, plus at most one quick search_seeds for relevant context.',
+      'Synthesize a COMPLETE PRD using EXACTLY this structure:',
+      '# [Feature Name] — PRD',
+      '## Problem Alignment',
+      '### Why Now',
+      '### Background & Evidence',
+      '## Solution Summary',
+      '### Target Users',
+      '### Definition of Success',
+      '### UX / Design Principles',
+      '## Scope & Capabilities',
+      '### Key Capabilities',
+      '### In-Scope: Detailed User Stories',
+      '### Out-of-Scope',
+      '## Delivery, Risks & Open Questions',
+      '### Release Plan & Milestones',
+      '### Constraints & Assumptions',
+      '### Open Questions & Risks',
+      'Write 3-5 substantive sentences under every heading. State reasonable assumptions for anything not yet covered, tagged "(assumed — verify)"; never present invented metrics as derived.',
+      'Then immediately call write_spec with the complete markdown. If write_spec reports that a similar PRD already exists, call update_seed with the seed_id it returns to update that PRD in place (do not create a duplicate). Do not ask whether to save.',
+    ].join('\n')
+    sendMessage({ text: instruction || 'Turn our conversation so far into a complete PRD and save it to my Studio.' })
+    toast('Drafting a PRD from this conversation…')
+  }, [status, sendMessage])
+
+  // Clear the one-shot override once the turn finishes
+  useEffect(() => {
+    if (status === 'ready') oneShotOverrideRef.current = null
+  }, [status])
 
   // Show SparkCard from push notification click (?spark_prompt=...) — initial page load
   useEffect(() => {
@@ -919,9 +937,18 @@ ${prefill.content || ''}`.trim()
       return
     }
 
+    // Intercept /prd or /spec — synthesize a PRD from the conversation.
+    // Anything after the command becomes the focus directive.
+    const trimmed = msg.text.trim()
+    if (/^\/(prd|spec)\b/i.test(trimmed)) {
+      const focus = trimmed.replace(/^\/(prd|spec)\b/i, '').trim()
+      createPrdFromChat(focus ? `Turn our conversation into a complete PRD, focused on: ${focus}` : undefined)
+      return
+    }
+
     const enrichedText = await enrichWithGarden(msg.text.trim())
     sendMessage({ text: enrichedText })
-  }, [status, sendMessage, enrichWithGarden, handleSaveLastResponse])
+  }, [status, sendMessage, enrichWithGarden, handleSaveLastResponse, createPrdFromChat])
 
   // ── Add to garden from chat: a PDF or a link (article / paper / YouTube) ──
   // Uploads go direct to the backend (Vercel proxy caps bodies at ~4.5MB).
@@ -1596,20 +1623,15 @@ ${prefill.content || ''}`.trim()
                           {lastGardenSeeds.length > 0 && msgIdx === messages.length - 1 && (
                             <ThumbsRating messageId={message.id} />
                           )}
-                          {/* Save as PRD — spec mode */}
-                          {selectedMode?.id === 'spec' && isLastAssistant && message.parts.some(p => p.type === 'text') && (
+                          {/* Turn this conversation into a PRD — available on any answer */}
+                          {isLastAssistant && message.parts.some(p => p.type === 'text') && (
                             <button
-                              onClick={() => {
-                                const allText = message.parts
-                                  .filter(p => p.type === 'text')
-                                  .map(p => (p as any).text || '')
-                                  .join('\n')
-                                handleSaveAsPRD(allText)
-                              }}
+                              onClick={() => createPrdFromChat()}
                               className="tap"
+                              title="Synthesize a full PRD from this conversation and save it to your Studio"
                               style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-tint)', border: 'none', borderRadius: 9999, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--ui)', fontSize: 10.5, fontWeight: 700, color: 'var(--green-700)' }}
                             >
-                              Save as PRD
+                              <FileText size={12} strokeWidth={2} /> Turn into PRD
                             </button>
                           )}
                         </div>
