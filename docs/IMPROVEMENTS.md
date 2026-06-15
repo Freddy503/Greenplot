@@ -74,6 +74,29 @@ Ranked by leverage. "Viable because…" notes the existing infra that de-risks i
 
 ---
 
+## D2. Ideas mined from awesome-llm-apps (2026-06-14)
+
+Filtered against what Greenplot already has (RAG/Weaviate + tree_retrieval, MCP,
+arXiv/paper agent, chat-with-PDF, knowledge graph). Net-new and viable:
+
+- **Seed-a-link (chat-with-URL / YouTube)** — *V: High · E: Low-Med · top pick.*
+  Paste a URL or YouTube link → fetch article/transcript → run the **existing
+  PDF-drop pipeline** (`fetch_paper` already does HTML/Exa; the new garden-summary
+  step generalizes) → a connected seed. Reuses ~90% of the PDF-drop code; nails
+  the biggest PKM friction (capture-from-anywhere). Add a YouTube transcript
+  fetcher + a "paste a link" affordance in Studio/chat.
+- **RAG with citations (provenance)** — *V: High · E: Med.* Chat/specs already
+  retrieve from the garden but don't show *which* seed/paper-chunk grounded the
+  answer. Emit citations as a typed field → render as expandable source chips
+  (already a chat-rebuild milestone — fold in there).
+- **Deep Research mode** — *V: Med-High · E: Med-High.* A multi-step garden+web
+  research agent that produces a structured report seeded back into the garden
+  (extends Research Digest + the chat agent). Differentiating; gate behind a
+  "Think harder / Deep Research" toggle.
+- **Corrective / agentic RAG** — *V: Med · E: Med.* Self-check retrieved chunks
+  for relevance and re-query when weak, before answering → fewer ungrounded
+  replies. Slots into the chat retrieval layer.
+
 ## E. Already-built — surface, don't rebuild
 
 | Capability | Module | Status |
