@@ -19,12 +19,24 @@ class User(Base):
     digest_frequency = Column(String, nullable=True, default='once-daily')  # twice-daily, once-daily, bi-weekly, weekly, calendar
     consents = Column(JSON, nullable=True, default=dict)  # {enrich, web, calendar, push} from onboarding privacy step
     created_at = Column(DateTime, default=datetime.utcnow)
+    last_active_at = Column(DateTime, nullable=True)  # retention: stamped on any authed request (throttled)
     stripe_customer_id = Column(String, nullable=True)
     subscription_status = Column(String, nullable=True, default='inactive')  # active, trialing, inactive
 
     thoughts = relationship("Thought", back_populates="user", cascade="all, delete-orphan")
     seeds = relationship("Seed", back_populates="user", cascade="all, delete-orphan")
     usage = relationship("Usage", back_populates="user", cascade="all, delete-orphan")
+
+class UserEvent(Base):
+    """Lightweight product-analytics event log — EU-local, no third-party tool.
+    Used to measure the activation funnel + retention for the early beta."""
+    __tablename__ = 'user_events'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
+    event = Column(String(64), nullable=False, index=True)  # signup, chat, seed_created, digest_sent, paper_added, prd_created
+    meta = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
 
 class ApiKey(Base):
     """Per-user API keys for MCP / programmatic access (gp_live_...). Only the

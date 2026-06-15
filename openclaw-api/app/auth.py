@@ -80,6 +80,8 @@ def user_from_api_key(token: str, db: Session) -> User:
         raise HTTPException(status_code=401, detail="API key owner not found")
     key.last_used_at = datetime.utcnow()
     db.commit()
+    from app.analytics import touch_active
+    touch_active(db, user)
     return user
 
 def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
@@ -94,6 +96,8 @@ def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    from app.analytics import touch_active
+    touch_active(db, user)
     return user
 
 def get_tenant_id(current_user: User = Depends(get_current_user)) -> str:
