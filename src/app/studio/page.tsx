@@ -94,6 +94,10 @@ interface SeedMeta {
 }
 
 // Older digest papers only stored source_url — derive the PDF link from the abs page
+// Uploads + PDF streaming go straight to the backend — the Vercel proxy caps
+// request/response bodies at ~4.5 MB, which truncates real PDFs.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.greenplot.ink'
+
 function paperPdfUrl(meta: SeedMeta): string {
   if (meta.pdf_url) return meta.pdf_url
   const src = meta.paper_url || meta.source_url || ''
@@ -285,7 +289,7 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
     if (!isUpload || !seed.id) return
     let made = ''
     const token = localStorage.getItem('greenplot_token')
-    fetch(`/api/papers/${seed.id}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    fetch(`${API_BASE}/api/v1/papers/${seed.id}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => (r.ok ? r.blob() : null))
       .then(b => { if (b) { made = URL.createObjectURL(b); setBlobUrl(made) } })
       .catch(() => {})
@@ -1180,7 +1184,7 @@ export default function StudioPage() {
     form.append('file', file)
     setUploadState('uploading'); setUploadPct(0)
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/papers/upload')
+    xhr.open('POST', `${API_BASE}/api/v1/papers/upload`)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100)) }
     xhr.onload = () => {
