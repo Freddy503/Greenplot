@@ -142,12 +142,22 @@ def parse_html(html: str) -> list[dict]:
 
 
 def parse_pdf(pdf_bytes: bytes) -> list[dict]:
-    """PDF → ordered [{section, text}]. Heading detection via font-size heuristic."""
+    """PDF → ordered [{section, text}]. Heading detection via font-size heuristic.
+
+    Falls back to whole-document plain text whenever the structured pass yields
+    nothing usable (the font-size heuristic can fragment a document into tiny
+    sub-80-char sections that _drop_tail_sections discards, or the `dict` span
+    path can come back empty for some producers) — so any PDF carrying a text
+    layer still indexes instead of failing with 'no extractable content'.
+    """
     import fitz  # pymupdf
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     sections: list[dict] = []
     current = {"section": "Abstract", "text": ""}
+
+    # Plain text per page — the always-available fallback + a sanity baseline.
+    plain_text = "\n".join((page.get_text("text") or "") for page in doc).strip()
 
     # Median font size across the doc separates headings from body
     sizes: list[float] = []
@@ -182,7 +192,17 @@ def parse_pdf(pdf_bytes: bytes) -> list[dict]:
     if current["text"].strip():
         sections.append(current)
     doc.close()
-    return _drop_tail_sections(sections)
+
+    structured = _drop_tail_sections(sections)
+    # Use the structured split only if it retained most of the document's text;
+    # otherwise the heading heuristic shredded it — fall back to plain text.
+    structured_chars = sum(len(s["text"]) for s in structured)
+    if structured and structured_chars >= 0.5 * len(plain_text):
+        return structured
+    if plain_text:
+        return parse_text(plain_text)
+    # No text layer at all (scanned / image-only PDF) — caller reports clearly.
+    return structured
 
 
 def parse_text(text: str) -> list[dict]:
@@ -287,8 +307,15 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
 
         chunks = chunk_sections(sections)
         if not chunks:
-            _set_status("failed", parse_error="no extractable content")
-            return {"status": "error", "message": "No extractable content"}
+            # Empty after the plain-text fallback (parse_pdf) means there is no
+            # text layer at all — a scanned / image-only PDF that needs OCR.
+            scanned = kind == "pdf"
+            msg = ("This PDF looks scanned (image-only, no selectable text) — "
+                   "OCR isn't supported yet, so it can't be indexed."
+                   if scanned else "No extractable content")
+            _set_status("failed", parse_error=msg[:200],
+                        **({"reason": "scanned_pdf"} if scanned else {}))
+            return {"status": "error", "message": msg}
 
         # Re-parse safety: clear previous chunks first
         weaviate_client.delete_paper_chunks(seed_id)
