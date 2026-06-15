@@ -215,9 +215,7 @@ export default function ChatPage() {
   const msgTimesRef = useRef<Record<string, string>>({})
   const [gardenEnriching, setGardenEnriching] = useState(false)
   const [detectedUrls, setDetectedUrls] = useState<string[]>([])
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [pdfDragOver, setPdfDragOver] = useState(false)
-  const chatFileInputRef = useRef<HTMLInputElement>(null)
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{id?: string; title: string; domain: string}>>([])
   // Dynamic suggestions from garden
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
@@ -1762,33 +1760,6 @@ ${prefill.content || ''}`.trim()
         {/* Thinking-partner mode chips */}
         <div className="max-w-2xl lg:max-w-3xl mx-auto mb-2">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-            {/* Add to garden — discoverable PDF / link capture */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <button
-                onClick={() => setAddMenuOpen(o => !o)}
-                className="tap"
-                title="Add a PDF or a link (article, paper, or YouTube) to your garden"
-                style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '6px 11px', borderRadius: 9999, fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 700, border: '1px dashed var(--green-tint-2)', cursor: 'pointer', background: addMenuOpen ? 'var(--green-tint)' : 'transparent', color: 'var(--green-700)' }}
-              >
-                <Plus size={13} strokeWidth={2.4} /> Add
-              </button>
-              {addMenuOpen && (
-                <>
-                  <div onClick={() => setAddMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                  <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, zIndex: 50, background: 'var(--surface, #fff)', border: '1px solid var(--hairline)', borderRadius: 14, boxShadow: '0 12px 34px -10px rgba(0,0,0,0.25)', padding: 6, minWidth: 196 }}>
-                    <button onClick={() => { setAddMenuOpen(false); chatFileInputRef.current?.click() }} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', borderRadius: 9, padding: '9px 10px', cursor: 'pointer', textAlign: 'left' }}>
-                      <FileText size={15} color="var(--green-700)" strokeWidth={1.9} />
-                      <span><span className="ui" style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>Upload a PDF</span><span className="body-text" style={{ display: 'block', fontSize: 10.5, color: 'var(--ink-3)' }}>Chunked & indexed into your garden</span></span>
-                    </button>
-                    <button onClick={() => { setAddMenuOpen(false); const u = window.prompt('Paste a link — article, paper, or YouTube'); if (u) seedFromUrl(u) }} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', borderRadius: 9, padding: '9px 10px', cursor: 'pointer', textAlign: 'left' }}>
-                      <Globe size={15} color="var(--green-700)" strokeWidth={1.9} />
-                      <span><span className="ui" style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>Add a link</span><span className="body-text" style={{ display: 'block', fontSize: 10.5, color: 'var(--ink-3)' }}>Article, paper, or YouTube</span></span>
-                    </button>
-                  </div>
-                </>
-              )}
-              <input ref={chatFileInputRef} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) ingestPdfToGarden(f); e.target.value = '' }} />
-            </div>
             {THINKING_MODES.map((m) => {
               const active = selectedMode?.id === m.id
               return (
@@ -1834,6 +1805,8 @@ ${prefill.content || ''}`.trim()
             recordingDuration={voiceDuration}
             onToggleVoice={toggleRecording}
             onOpenVoice={() => setVoiceOverlayOpen(true)}
+            onAttachPdf={ingestPdfToGarden}
+            onAddLink={seedFromUrl}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
               const text = e.target.value
               const urlRegex = /https?:\/\/[^\s<>\]\)"']+/g
