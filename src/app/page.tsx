@@ -691,436 +691,25 @@ function MissingLink() {
   )
 }
 
-// ── Feature Mockups ───────────────────────────────────────────────────────
-function MockupThinkingPartner() {
-  const modes = [
-    { id: 'brainstorm', icon: 'auto_awesome' as IconName, label: 'Brainstorm' },
-    { id: 'pressure', icon: 'shield' as IconName, label: 'Pressure-test' },
-    { id: 'strategize', icon: 'trending_up' as IconName, label: 'Strategize' },
-    { id: 'spec', icon: 'file_text' as IconName, label: 'Spec' },
-  ]
-  const replies: Record<string, string> = {
-    brainstorm: 'Three angles worth pulling on — two already live in your garden.',
-    pressure: 'Here\'s where it breaks: price anchoring, churn risk, a thin moat. Let\'s harden each.',
-    strategize: 'A sequence: validate, narrow your ICP, then win one channel before widening.',
-    spec: 'I\'ve shaped it into a build-ready brief — problem, goals, requirements, open questions.',
-  }
-  const [active, setActive] = useState('pressure')
-  useEffect(() => {
-    const order = ['brainstorm', 'pressure', 'strategize', 'spec']
-    const t = setInterval(() => setActive(a => order[(order.indexOf(a) + 1) % order.length]), 1800)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-        {modes.map(m => {
-          const on = m.id === active
-          return (
-            <div key={m.id} style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 999,
-              fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-ui)', transition: 'all 0.25s',
-              border: `1px solid ${on ? T.green : T.border}`,
-              background: on ? T.container : 'transparent', color: on ? T.darkGreen : T.text2,
-            }}>
-              <Icon name={m.icon} size={12} color={on ? T.green : T.text2} />{m.label}
-            </div>
-          )
-        })}
-      </div>
-      <div key={active} style={{ display: 'flex', justifyContent: 'flex-start', animation: 'fadeUp 0.35s ease' }}>
-        <div style={{
-          maxWidth: '92%', padding: '0.7rem 0.95rem', borderRadius: '1rem 1rem 1rem 0.2rem',
-          background: T.container, color: T.darkGreen, fontSize: 12.5, lineHeight: 1.6,
-        }}>{replies[active]}</div>
-      </div>
-      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.green, animation: 'node-pulse 1s ease infinite' }} />
-        <span style={{ fontSize: 11, color: T.text2 }}>Grounded in your garden — not the open web</span>
-      </div>
-    </div>
-  )
-}
-
-function MockupSpec() {
-  const rows = ['Problem & context', 'Goals and non-goals', 'Requirements', 'Open questions']
-  const [shown, setShown] = useState(0)
-  useEffect(() => { const t = setInterval(() => setShown(s => (s + 1) % (rows.length + 2)), 650); return () => clearInterval(t) }, [])
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: T.container, borderRadius: '0.6rem', padding: '0.55rem 0.8rem' }}>
-        <Icon name="eco" size={13} color={T.green} />
-        <span style={{ fontSize: 12, color: T.darkGreen, fontWeight: 500 }}>&quot;Turn this thread into a build-ready brief&quot;</span>
-      </div>
-      <div style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: '0.75rem', padding: '0.9rem', background: T.surface }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <Icon name="file_text" size={14} color={T.green} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.darkGreen }}>Build-ready brief</span>
-          <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: T.green, background: T.container, borderRadius: 999, padding: '2px 9px', letterSpacing: '0.05em' }}>READY</span>
-        </div>
-        {rows.map((r, i) => (
-          <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', opacity: shown > i ? 1 : 0.3, transition: 'opacity 0.3s' }}>
-            <Icon name="check" size={13} color={shown > i ? T.green : T.border} />
-            <span style={{ fontSize: 12, color: T.text2 }}>{r}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="dns" size={13} color={T.green} />
-        <span style={{ fontSize: 11, color: T.text2 }}>Ready to hand to your build tools</span>
-      </div>
-    </div>
-  )
-}
-
-function MockupIdeaGarden() {
-  const seeds = ['Emergence theory', 'Second Brain', 'Flow states', 'Stoic philosophy', 'Attention restoration']
-  const [active, setActive] = useState(0)
-  useEffect(() => { const t = setInterval(() => setActive(a => (a + 1) % seeds.length), 1400); return () => clearInterval(t) }, [])
-  return (
-    <div style={{ width: '100%', height: '100%', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      {seeds.map((s, i) => (
-        <div key={s} style={{
-          display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.9rem',
-          borderRadius: '0.6rem', background: i === active ? T.container : 'transparent',
-          border: `1px solid ${i === active ? T.green : T.border}`, transition: 'all 0.4s ease',
-        }}>
-          <Icon name="eco" size={14} color={i === active ? T.green : T.text2} />
-          <span style={{ fontSize: 13, fontWeight: i === active ? 600 : 400, color: i === active ? T.darkGreen : T.text2 }}>{s}</span>
-          {i === active && <span style={{ marginLeft: 'auto', fontSize: 11, color: T.green, fontWeight: 600 }}>enriching…</span>}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function MockupAIAgent() {
-  const msgs = [
-    { role: 'user', text: 'What connects stoicism and second brain methodology?' },
-    { role: 'ai', text: 'Both emphasize intentional filtering — Stoics chose what to attend to mentally; the Second Brain system chooses what to externalize…' },
-  ]
-  const [shown, setShown] = useState(0)
-  useEffect(() => { const t = setInterval(() => setShown(s => Math.min(s + 1, msgs.length)), 1200); return () => clearInterval(t) }, [])
-  return (
-    <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', overflowY: 'hidden' }}>
-      {msgs.slice(0, shown).map((m, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', animation: 'fadeUp 0.4s ease' }}>
-          <div style={{
-            maxWidth: '82%', padding: '0.65rem 0.9rem',
-            borderRadius: m.role === 'user' ? '1rem 1rem 0.2rem 1rem' : '1rem 1rem 1rem 0.2rem',
-            background: m.role === 'user' ? T.darkGreen : T.container,
-            color: m.role === 'user' ? '#fff' : T.darkGreen, fontSize: 12, lineHeight: 1.6, fontWeight: 400,
-          }}>{m.text}</div>
-        </div>
-      ))}
-      {shown >= msgs.length && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, animation: 'fadeIn 0.5s ease' }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.green, animation: 'node-pulse 1s ease infinite' }} />
-          <span style={{ fontSize: 11, color: T.text2 }}>Searching your garden…</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function MockupCalendar() {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-  const events = [
-    { day: 1, label: 'Deep work', color: T.green, top: 20, h: 60 },
-    { day: 3, label: 'Research', color: T.teal, top: 50, h: 45 },
-    { day: 4, label: 'Writing', color: T.darkGreen, top: 25, h: 70 },
-  ]
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <div style={{ background: T.container, borderRadius: '0.6rem', padding: '0.6rem 0.9rem', fontSize: 12, color: T.darkGreen, fontWeight: 500 }}>
-        <Icon name="mic" size={12} color={T.green} style={{ marginRight: 6, display: 'inline-flex', verticalAlign: 'middle' }} />
-        &quot;Block deep work Tue morning&quot; — done ✓
-      </div>
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 4 }}>
-        {days.map((d, i) => (
-          <div key={d} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: T.text2, textAlign: 'center', paddingBottom: 2 }}>{d}</div>
-            <div style={{ flex: 1, background: '#f5f5f2', borderRadius: '0.4rem', position: 'relative', minHeight: 80 }}>
-              {events.filter(e => e.day === i).map(ev => (
-                <div key={ev.label} style={{
-                  position: 'absolute', left: 2, right: 2,
-                  top: ev.top / 2 + '%', height: ev.h / 2 + '%',
-                  background: ev.color, borderRadius: '0.3rem', opacity: 0.85,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 9, color: '#fff', fontWeight: 600, padding: '0 3px', textAlign: 'center',
-                  animation: 'fadeIn 0.6s ease',
-                }}>{ev.label}</div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function MockupKnowledgeGraph() {
-  const nodes = [
-    { x: 50, y: 50, label: 'Stoicism', r: 22, primary: true },
-    { x: 20, y: 25, label: 'Attention', r: 16, primary: false },
-    { x: 78, y: 28, label: 'Flow', r: 16, primary: false },
-    { x: 15, y: 72, label: 'Memory', r: 14, primary: false },
-    { x: 82, y: 72, label: 'Habits', r: 14, primary: false },
-    { x: 50, y: 82, label: 'Focus', r: 13, primary: false },
-  ]
-  const edges: [number, number][] = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [1, 5], [2, 4]]
-  const [active, setActive] = useState(0)
-  useEffect(() => { const t = setInterval(() => setActive(a => (a + 1) % nodes.length), 900); return () => clearInterval(t) }, [])
-  return (
-    <div style={{ padding: '1rem', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg viewBox="0 0 100 100" style={{ width: '100%', maxWidth: 240 }}>
-        {edges.map(([a, b], i) => (
-          <line key={i} x1={nodes[a].x} y1={nodes[a].y} x2={nodes[b].x} y2={nodes[b].y}
-            stroke={T.border} strokeWidth="0.8" opacity="0.8" />
-        ))}
-        {nodes.map((n, i) => (
-          <g key={i}>
-            {i === active && <circle cx={n.x} cy={n.y} r={n.r + 6} fill={T.green} opacity="0.1"
-              style={{ animation: 'pulse-ring 1.2s ease-out infinite' }} />}
-            <circle cx={n.x} cy={n.y} r={n.r} fill={i === active ? T.green : T.container}
-              stroke={i === active ? T.green : T.border} strokeWidth="0.8"
-              style={{ transition: 'fill 0.4s ease' }} />
-            <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle"
-              fontSize={n.primary ? 5 : 4} fontWeight={n.primary ? '700' : '500'}
-              fill={i === active ? '#fff' : T.darkGreen} fontFamily="Sora,sans-serif">{n.label}</text>
-          </g>
-        ))}
-      </svg>
-    </div>
-  )
-}
-
-function MockupWiki() {
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      <div style={{ height: 10, background: T.darkGreen, borderRadius: 4, width: '70%', opacity: 0.9 }} />
-      <div style={{ height: 6, background: T.border, borderRadius: 3, width: '40%' }} />
-      <div style={{ height: 1, background: T.border, margin: '0.25rem 0' }} />
-      {[85, 92, 78, 88, 65].map((w, i) => (
-        <div key={i} style={{ height: 5, background: T.border, borderRadius: 3, width: w + '%', animation: `fadeIn 0.4s ${i * 0.12}s ease both` }} />
-      ))}
-      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {['Attention', 'Memory', 'Cognition', 'Focus'].map(tag => (
-          <span key={tag} style={{ fontSize: 10, background: T.container, color: T.darkGreen, padding: '2px 8px', borderRadius: 999, fontWeight: 600, border: `1px solid ${T.border}` }}>{tag}</span>
-        ))}
-      </div>
-      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: T.container, borderRadius: '0.5rem', padding: '0.5rem 0.75rem' }}>
-        <Icon name="activity" size={12} color={T.green} />
-        <span style={{ fontSize: 11, color: T.darkGreen, fontWeight: 500 }}>Living article — 12 seeds compiled</span>
-      </div>
-    </div>
-  )
-}
-
-function MockupVoice() {
-  const [frame, setFrame] = useState(0)
-  useEffect(() => { const t = setInterval(() => setFrame(f => f + 1), 80); return () => clearInterval(t) }, [])
-  const bars = Array.from({ length: 24 }, (_, i) => {
-    const base = Math.sin(i * 0.6 + frame * 0.15) * 0.4 + 0.5
-    return Math.max(0.08, base)
-  })
-  return (
-    <div style={{ padding: '1.5rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 60 }}>
-        {bars.map((h, i) => (
-          <div key={i} style={{ width: 6, borderRadius: 3, background: `linear-gradient(to top, ${T.green}, ${T.teal})`, height: h * 60, transition: 'height 0.08s ease' }} />
-        ))}
-      </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 12, color: T.green, fontWeight: 600, marginBottom: 4 }}>Recording…</div>
-        <div style={{ fontSize: 11, color: T.text2 }}>Transcribing &amp; enriching automatically</div>
-      </div>
-      <div style={{ background: T.container, borderRadius: '0.6rem', padding: '0.6rem 1rem', width: '100%' }}>
-        <p style={{ fontSize: 11, color: T.darkGreen, lineHeight: 1.6, margin: 0 }}>
-          &quot;The concept of emergence — where complex behaviour arises from simple rules…&quot;
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function MockupAcademic() {
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-          <Icon name="search" size={13} color={T.green} />
-          <span style={{ fontSize: 11, color: T.darkGreen, fontWeight: 600 }}>Research Digest</span>
-        </div>
-        <span style={{ fontSize: 9, color: T.text2, fontWeight: 600, letterSpacing: '0.05em' }}>every morning</span>
-      </div>
-      {[
-        { title: 'Multi-Layer Memory for AI Agents', seed: 'AI Agents' },
-        { title: 'Retrieval over Knowledge Graphs', seed: 'Knowledge Graphs' },
-      ].map(p => (
-        <div key={p.title} style={{ border: `1px solid ${T.border}`, borderRadius: '0.6rem', padding: '0.6rem 0.75rem', background: T.surface }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: T.darkGreen, marginBottom: 3, lineHeight: 1.3 }}>{p.title}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: 9, color: T.text2, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Icon name="file_text" size={9} color={T.text2} />New paper · PDF attached
-            </span>
-            <span style={{ fontSize: 9, background: T.container, color: T.green, borderRadius: 999, padding: '1px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>↳ {p.seed}</span>
-          </div>
-        </div>
-      ))}
-      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', border: `1px solid ${T.green}`, borderRadius: '0.6rem', padding: '0.6rem 0.75rem', background: '#f0fdf4' }}>
-        <Icon name="auto_awesome" size={13} color={T.green} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span style={{ fontSize: 11, color: T.darkGreen, lineHeight: 1.5 }}>
-          <strong>Actionable move</strong> + solution-design seed planted in your Garden
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function MockupBriefings() {
-  const cards = [
-    { title: 'Morning Spark', body: 'Your note on stoicism connects to a new study on cognitive reappraisal…', time: '8:00 AM' },
-    { title: 'Deep Dive Reminder', body: 'You haven\'t revisited "Flow states" in 14 days — ready to grow it?', time: '2:00 PM' },
-  ]
-  return (
-    <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%' }}>
-      {cards.map((c, i) => (
-        <div key={i} style={{ border: `1px solid ${T.border}`, borderRadius: '0.75rem', padding: '0.85rem', background: T.surface, animation: `fadeUp 0.4s ${i * 0.2}s ease both` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.darkGreen }}>{c.title}</span>
-            <span style={{ fontSize: 10, color: T.text2 }}>{c.time}</span>
-          </div>
-          <p style={{ fontSize: 11, color: T.text2, lineHeight: 1.6, margin: 0 }}>{c.body}</p>
-        </div>
-      ))}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto' }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.green }} />
-        <span style={{ fontSize: 11, color: T.text2 }}>3 more sparks scheduled today</span>
-      </div>
-    </div>
-  )
-}
-
-function MockupShare() {
-  const formats = [
-    { label: 'Markdown', ext: '.md', color: T.darkGreen },
-    { label: 'PDF', ext: '.pdf', color: T.teal },
-  ]
-  const apps = ['WhatsApp', 'Telegram', 'Slack', 'Email']
-  const [sent, setSent] = useState<string | null>(null)
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.text2, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Export as</div>
-      <div style={{ display: 'flex', gap: '0.6rem' }}>
-        {formats.map(f => (
-          <div key={f.label} style={{ flex: 1, border: `1.5px solid ${T.border}`, borderRadius: '0.65rem', padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: T.surface, cursor: 'pointer' }}>
-            <Icon name="file_text" size={18} color={f.color} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.darkGreen }}>{f.label}</span>
-            <span style={{ fontSize: 10, color: T.text2 }}>{f.ext}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.text2, letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: '0.25rem' }}>Send to</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-        {apps.map(app => (
-          <button key={app} onClick={() => setSent(app)} style={{
-            padding: '0.55rem 0.75rem', borderRadius: '0.6rem', fontSize: 11, fontWeight: 600,
-            border: `1.5px solid ${sent === app ? T.green : T.border}`,
-            background: sent === app ? T.container : T.surface,
-            color: sent === app ? T.darkGreen : T.text2, cursor: 'pointer', transition: 'all 0.2s',
-            fontFamily: 'var(--font-ui)', textAlign: 'left',
-          }}>{sent === app ? '✓ ' : '→ '}{app}</button>
-        ))}
-      </div>
-      <div style={{ marginTop: 'auto', background: T.container, borderRadius: '0.6rem', padding: '0.6rem 0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="shield" size={13} color={T.green} />
-        <span style={{ fontSize: 11, color: T.darkGreen, lineHeight: 1.5 }}>You control what you share — always.</span>
-      </div>
-    </div>
-  )
-}
-
-function MockupMCP() {
-  type TokenType = 'comment' | 'key' | 'str' | 'fn' | 'normal'
-  const lines: { t: TokenType; v: string }[] = [
-    { t: 'comment', v: '// Connect your garden to your IDE' },
-    { t: 'key', v: 'import' }, { t: 'normal', v: ' { GreenplotMCP } from ' }, { t: 'str', v: '"@greenplot/mcp"' },
-    { t: 'normal', v: '' },
-    { t: 'key', v: 'const' }, { t: 'normal', v: ' garden = ' }, { t: 'key', v: 'await ' },
-    { t: 'fn', v: 'GreenplotMCP.connect' }, { t: 'normal', v: '({ token })' },
-    { t: 'normal', v: '' },
-    { t: 'comment', v: '// Query your knowledge' },
-    { t: 'key', v: 'const' }, { t: 'normal', v: ' insights = ' }, { t: 'key', v: 'await ' },
-    { t: 'fn', v: 'garden.search' }, { t: 'normal', v: '(' }, { t: 'str', v: '"emergence theory"' }, { t: 'normal', v: ')' },
-  ]
-  const colors: Record<TokenType, string> = { comment: '#6a9955', key: '#569cd6', str: '#ce9178', fn: '#dcdcaa', normal: '#d4d4d4' }
-  return (
-    <div style={{ padding: '1.25rem', height: '100%', background: '#1e1e1e', borderRadius: '0.75rem', margin: '0.5rem', overflowY: 'hidden' }}>
-      <div style={{ display: 'flex', gap: 6, marginBottom: '0.75rem' }}>
-        {['#ff5f57', '#febc2e', '#28c840'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />)}
-      </div>
-      <div style={{ fontSize: 11, lineHeight: 1.9, fontFamily: 'monospace' }}>
-        {lines.map((l, i) => (
-          <span key={i} style={{ color: colors[l.t] }}>
-            {l.v}{l.t === 'normal' && l.v === '' ? <br /> : ''}
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── Features data ─────────────────────────────────────────────────────────
-const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc: string; mockup: React.ReactNode }[] = [
-  { icon: 'smart_toy', name: 'Thinking Partner', tag: 'Think', color: T.green,
-    desc: 'A strategist, not a search box. Brainstorm to open an idea up, pressure-test its weak points, or strategize the path forward — every mode reasoning from the knowledge you already hold.',
-    mockup: <MockupThinkingPartner /> },
-  { icon: 'file_text', name: 'Spec it Out', tag: 'Build', color: T.teal,
-    desc: 'When the thinking is done, Greenplot shapes the thread into a full PRD — problem, scope, system architecture with diagram — ready to hand straight to your coding agent.',
-    mockup: <MockupSpec /> },
-  { icon: 'layers', name: 'Build Pipeline', tag: 'Ship', color: T.green,
-    desc: 'Drag your PRDs from Design to Doing to Built. Coding agents report progress back automatically — every spec tracked from first draft to merged PR.',
-    mockup: <MockupSpec /> },
-  { icon: 'eco', name: 'Idea Garden', tag: 'Capture', color: T.green,
-    desc: 'Capture fleeting thoughts as seeds. Every idea gets enriched with research and connected to your existing knowledge.',
-    mockup: <MockupIdeaGarden /> },
-  { icon: 'notifications', name: 'Smart Briefings', tag: 'Reflect', color: T.teal,
-    desc: 'Receive curated, personalised idea sparks, briefings and reflection reminders to help you be creative and build knowledge.',
-    mockup: <MockupBriefings /> },
-  { icon: 'smart_toy', name: 'AI Agent', tag: 'Chat', color: T.green,
-    desc: 'Ask Greenplot anything. It searches your garden first, then the web — combining your personal knowledge with live information.',
-    mockup: <MockupAIAgent /> },
-  { icon: 'search', name: 'Research Digest', tag: 'Research', color: T.teal,
-    desc: 'Every morning, fresh arXiv papers are matched to your Garden — then parsed in full: methods, results and limitations are indexed, not just abstracts. Your specs cite what papers actually say.',
-    mockup: <MockupAcademic /> },
-  { icon: 'file_text', name: 'Drop in Your PDFs', tag: 'Ingest', color: T.green,
-    desc: 'Drag any PDF — papers, reports, whitepapers — into your Studio. Greenplot chunks and indexes the full text, shows how it links to your garden, and makes your own library citable in chat and specs. Read it right in the app.',
-    mockup: <MockupAcademic /> },
-  { icon: 'smart_toy', name: 'Product View', tag: 'Focus', color: T.darkGreen,
-    desc: 'One screen answers "what am I building and why?" — your problem statement on top, every PRD grouped under the part of the problem it serves, gaps visible. Constantly updated as work ships. Never lose the plot.',
-    mockup: <MockupSpec /> },
-  { icon: 'auto_awesome', name: 'Autopilot PRDs', tag: 'Autopilot', color: T.green,
-    desc: 'When a relevant paper lands, a draft PRD appears in your Studio by itself — grounded in the paper’s full text and your existing seeds. You shape the vision with the thinking partner; the system does the drafting.',
-    mockup: <MockupSpec /> },
-  { icon: 'auto_stories', name: 'Wiki', tag: 'Compile', color: T.green,
-    desc: 'Your seeds compile into living wiki articles — encyclopedic summaries of everything you\'ve captured and learned.',
-    mockup: <MockupWiki /> },
-  { icon: 'layers', name: 'Share Knowledge', tag: 'Share', color: T.teal,
-    desc: 'Share your garden or wiki as Markdown, PDF, or send directly to your favourite messenger app. You control what you share.',
-    mockup: <MockupShare /> },
-  { icon: 'calendar_month', name: 'Calendar', tag: 'Organise', color: T.teal,
-    desc: 'Chat to schedule. "Block two hours for deep work tomorrow" — done. Greenplot talks directly to Google Calendar.',
-    mockup: <MockupCalendar /> },
-  { icon: 'mic', name: 'Voice Capture', tag: 'Record', color: T.green,
-    desc: 'Record a voice memo on the go. Greenplot transcribes, enriches, and plants it in your garden automatically.',
-    mockup: <MockupVoice /> },
-  { icon: 'hub', name: 'Knowledge Graph', tag: 'Connect', color: T.teal,
-    desc: 'See your ideas as an interactive network. Discover unexpected connections between everything you\'ve ever captured.',
-    mockup: <MockupKnowledgeGraph /> },
-  { icon: 'dns', name: 'MCP Server', tag: 'Build', color: T.green,
-    desc: 'Your coding agent pulls specs straight from your Studio, builds them with your garden as context, and reports the PR back. The loop closes itself.',
-    mockup: <MockupMCP /> },
+// ── Features data — the 5 killer features ────────────────────────────────────
+// Real UI lives in /public/landing/features/*.png (design them in Claude Design);
+// until a file exists, the showcase shows a branded "Product preview" placeholder.
+const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc: string; image: string }[] = [
+  { icon: 'smart_toy', name: 'A thinking partner that knows what you know', tag: 'Think', color: T.green,
+    desc: 'Not a blank-page chatbot. Brainstorm, pressure-test, or play devil’s advocate with a partner that reasons from your own notes, papers and past decisions — and cites them back to you.',
+    image: '/landing/features/thinking-partner.png' },
+  { icon: 'eco', name: 'Capture anything — it connects itself', tag: 'Capture', color: T.teal,
+    desc: 'Drop a thought, a voice memo, a PDF, or any link — even a YouTube video. It’s enriched, summarised, and woven into your garden: searchable, connected, and never lost.',
+    image: '/landing/features/garden-capture.png' },
+  { icon: 'file_text', name: 'From a thread to a shipped PRD', tag: 'Build', color: T.green,
+    desc: 'Turn any conversation into a complete PRD in one tap. Track it Design → Doing → Built, and let Claude Code or Cursor build it — your garden as context, the PR reported back.',
+    image: '/landing/features/studio-build.png' },
+  { icon: 'search', name: 'Research that comes to you', tag: 'Research', color: T.teal,
+    desc: 'Every morning, fresh papers are matched to your garden and parsed in full — then the strongest ones auto-draft a PRD in your Studio. The flywheel runs while you sleep.',
+    image: '/landing/features/research-digest.png' },
+  { icon: 'dns', name: 'Your second brain, in every AI tool', tag: 'Connect', color: T.darkGreen,
+    desc: 'A built-in MCP server puts your whole garden inside Claude Code, Cursor and Claude Desktop — search seeds, read papers and write specs without ever leaving your editor.',
+    image: '/landing/features/mcp.png' },
 ]
 
 // ── Features Showcase ─────────────────────────────────────────────────────
@@ -1178,7 +767,24 @@ function FeaturesShowcase() {
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', fontFamily: 'var(--font-ui)' }}>{feat.name}</span>
                 <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: feat.color, background: feat.color + '20', borderRadius: 999, padding: '2px 10px', fontFamily: 'var(--font-ui)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{feat.tag}</span>
               </div>
-              <div style={{ minHeight: 340, background: T.bg }}>{feat.mockup}</div>
+              <div style={{ minHeight: 340, background: T.bg, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {/* Branded placeholder — shows until the real UI export exists */}
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: `linear-gradient(160deg, ${feat.color}14, transparent 70%)` }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: feat.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name={feat.icon} size={26} color={feat.color} />
+                  </div>
+                  <span style={{ fontSize: 11, color: T.text2, fontFamily: 'var(--font-ui)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Product preview</span>
+                </div>
+                {/* Real UI — covers the placeholder once /public{feat.image} exists */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={feat.image}
+                  alt={feat.name}
+                  loading="lazy"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', maxHeight: 380, objectFit: 'cover', display: 'block' }}
+                />
+              </div>
             </div>
           </div>
         </div>
