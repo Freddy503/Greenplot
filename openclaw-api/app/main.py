@@ -90,6 +90,11 @@ with engine.connect() as conn:
     if not result2.fetchone():
         conn.execute(text("ALTER TABLE users ADD COLUMN digest_frequency VARCHAR DEFAULT 'once-daily'"))
         conn.commit()
+    # Retention: last_active_at (stamped on authed requests). UserEvent table is auto-created.
+    result_la = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='last_active_at'"))
+    if not result_la.fetchone():
+        conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at TIMESTAMP"))
+        conn.commit()
     # Create calendar_connections table if it doesn't exist
     result3 = conn.execute(text("SELECT tablename FROM pg_tables WHERE tablename='calendar_connections'"))
     if not result3.fetchone():
@@ -256,6 +261,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    from app.analytics import log_event
+    log_event(db, user.id, 'signup', {'interests': len(user.interests or []), 'cadence': user.digest_frequency})
     token = create_access_token(data={"sub": str(user.id), "tenant_id": str(user.tenant_id)})
     # Also create refresh token if needed; for MVP just return access token
     return AuthResponse(access_token=token, refresh_token=token, tenant_id=user.tenant_id)
@@ -2947,6 +2954,37 @@ def admin_invite_waitlist(
     return {"sent": sent, "failed": failed, "code": code, "count": len(sent)}
 
 
+@app.get("/api/v1/admin/activity")
+def admin_activity(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Admin: per-user activity + a tiny activation funnel — so you can actually
+    see who's active vs churned (EU-local, no third-party analytics)."""
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+    if (current_user.email or "").lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
+    from app.models import UserEvent
+    from datetime import timedelta as _td
+    now = datetime.utcnow()
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    seed_counts = dict(db.query(Seed.user_id, func.count(Seed.id)).group_by(Seed.user_id).all())
+    ev_by_user: dict = {}
+    for uid, ev, n in db.query(UserEvent.user_id, UserEvent.event, func.count(UserEvent.id)).group_by(UserEvent.user_id, UserEvent.event).all():
+        ev_by_user.setdefault(uid, {})[ev] = n
+    out, active7 = [], 0
+    for u in users:
+        la = u.last_active_at
+        is_active7 = bool(la and (now - la) < _td(days=7))
+        active7 += 1 if is_active7 else 0
+        out.append({
+            "email": u.email, "nickname": u.nickname,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "last_active_at": la.isoformat() if la else None,
+            "active_7d": is_active7,
+            "seeds": int(seed_counts.get(u.id, 0)),
+            "events": ev_by_user.get(u.id, {}),
+        })
+    return {"total_users": len(users), "active_7d": active7, "users": out}
+
+
 class WaitlistRequest(BaseModel):
     email: EmailStr
 
@@ -3260,6 +3298,10 @@ async def chat_v2_endpoint(
     messages = body.get("messages", [])
     attachments = body.get("attachments", [])
     session_id = body.get("session_id", "")
+
+    if current_user:
+        from app.analytics import log_event
+        log_event(db, current_user.id, 'chat')
 
     # Input validation
     if messages:
