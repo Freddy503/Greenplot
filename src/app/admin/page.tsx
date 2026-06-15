@@ -59,6 +59,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'denied'>('loading')
   const [inviting, setInviting] = useState<string | null>(null) // email being invited, or 'all'
+  const [activity, setActivity] = useState<{ total_users: number; active_7d: number; users: Array<{ email: string; nickname: string | null; created_at: string | null; last_active_at: string | null; active_7d: boolean; seeds: number; events: Record<string, number> }> } | null>(null)
 
   const loadStats = useCallback(async () => {
     const token = localStorage.getItem('greenplot_token') || ''
@@ -68,9 +69,20 @@ export default function AdminPage() {
       setStats(await r.json())
       setState('ok')
     } catch { setState('denied') }
+    // Activity (retention) — best-effort
+    fetch('/api/admin/activity', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d?.users) setActivity(d) }).catch(() => {})
   }, [])
 
   useEffect(() => { loadStats() }, [loadStats])
+
+  const sinceLabel = (iso: string | null) => {
+    if (!iso) return 'never'
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+    if (mins < 60) return `${mins}m ago`
+    if (mins < 1440) return `${Math.round(mins / 60)}h ago`
+    return `${Math.round(mins / 1440)}d ago`
+  }
 
   const invite = useCallback(async (emails: string[] | null, key: string, force = false) => {
     if (inviting) return
@@ -160,6 +172,30 @@ export default function AdminPage() {
             </div>
           ))}
         </div>
+
+        {/* Activity — who's actually active vs churned */}
+        {activity && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 2px 8px' }}>
+              <span className="caps" style={{ fontSize: 10, color: 'var(--ink-3)' }}>Activity</span>
+              <span className="ui" style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green-700)', background: 'var(--green-tint)', borderRadius: 99, padding: '2px 9px' }}>{activity.active_7d}/{activity.total_users} active · 7d</span>
+            </div>
+            <div className="v2-card" style={{ borderRadius: 14, overflow: 'hidden' }}>
+              {activity.users.map((u, i) => (
+                <div key={u.email} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 15px', borderBottom: i === activity.users.length - 1 ? 'none' : '1px solid var(--hairline)', opacity: u.active_7d ? 1 : 0.55 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: u.active_7d ? 'var(--green)' : 'var(--ink-3)' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="ui" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.nickname || u.email}</div>
+                    <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>
+                      active {sinceLabel(u.last_active_at)} · {u.seeds} seeds · {(u.events.chat || 0)} chats
+                    </div>
+                  </div>
+                  <span className="ui" style={{ fontSize: 9.5, fontWeight: 700, color: u.active_7d ? 'var(--green-700)' : 'var(--ink-3)', flexShrink: 0 }}>{u.active_7d ? 'ACTIVE' : 'IDLE'}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Waitlist */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '22px 2px 8px', gap: 10 }}>

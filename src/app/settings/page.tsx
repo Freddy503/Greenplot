@@ -773,6 +773,27 @@ export default function SettingsPage() {
           </div>
         </SettingsGroup>
 
+        {/* Invite a friend — self-serve growth */}
+        <SectionHeader>Invite a friend</SectionHeader>
+        <div className="v2-card" style={{ borderRadius: 18, padding: '14px 16px', marginBottom: 18 }}>
+          <p className="body-text" style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: 10 }}>
+            Greenplot is invite-only — share your link to bring someone into the garden.
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input readOnly value="https://www.greenplot.ink/onboarding?code=GARDEN" onFocus={e => e.currentTarget.select()}
+              style={{ flex: 1, minWidth: 0, background: 'var(--surface-sunk)', border: 'none', borderRadius: 12, padding: '10px 12px', fontFamily: 'var(--body)', fontSize: 12.5, color: 'var(--ink-2)', outline: 'none' }} />
+            <button onClick={async () => {
+              const link = 'https://www.greenplot.ink/onboarding?code=GARDEN'
+              try {
+                if (navigator.share) { await navigator.share({ title: 'Greenplot', text: 'Join me on Greenplot — your ideas, grown.', url: link }) }
+                else { await navigator.clipboard.writeText(link); toast.success('Invite link copied') }
+              } catch { try { await navigator.clipboard.writeText(link); toast.success('Invite link copied') } catch { /* noop */ } }
+            }} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 9999, padding: '10px 16px', fontFamily: 'var(--ui)', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+              <Copy size={14} /> Share
+            </button>
+          </div>
+        </div>
+
         {/* Feature Request */}
         <SectionHeader>Got an idea?</SectionHeader>
         <div className="v2-card" style={{ borderRadius: 18, padding: '14px 16px', marginBottom: 18 }}>
