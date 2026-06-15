@@ -213,7 +213,6 @@ function StarterCard({ onAction, onDismiss }: { onAction: (prompt: string) => vo
 export default function ChatPage() {
   const [authToken, setAuthToken] = useState('')
   const msgTimesRef = useRef<Record<string, string>>({})
-  const [gardenEnriching, setGardenEnriching] = useState(false)
   const [detectedUrls, setDetectedUrls] = useState<string[]>([])
   const [pdfDragOver, setPdfDragOver] = useState(false)
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{id?: string; title: string; domain: string}>>([])
@@ -778,126 +777,41 @@ ${prefill.content || ''}`.trim()
     }] as any)
   }, [setMessages])
 
-  const enrichWithGarden = useCallback(async (text: string): Promise<string> => {
-    try {
-      setGardenEnriching(true)
-
-      // Read token fresh at call time (not from closure)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
-
-      // ── URL Detection: auto-create Sources links ──────────
-      const urlRegex = /https?:\/\/[^\s<>\]\)"']+/g
-      const urls = text.match(urlRegex) || []
-      let linkContext = ''
-
-      if (urls.length > 0) {
-        // Fetch existing links to detect duplicates
-        let existingLinks: any[] = []
-        try {
-          const existingRes = await fetch('/api/links', {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          })
-          if (existingRes.ok) {
-            const existingData = await existingRes.json()
-            existingLinks = existingData.links || []
-          }
-        } catch {}
-
-        // Create links in background, don't block chat
-        const linkPromises = urls.slice(0, 3).map(async (url) => {
-          // Check if this URL already exists in Sources
-          const existing = existingLinks.find((l: any) => l.url === url)
-          if (existing) {
-            toast(`🔗 Already in your Sources: ${existing.title || existing.url}`, {
-              description: 'Want me to expand on it?',
-            })
-            // Still return the existing link's summary for context
-            return existing
-          }
-
-          try {
-            const res = await fetch('/api/links', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              },
-              body: JSON.stringify({ url }),
-            })
-            if (res.ok) {
-              const data = await res.json()
-              return data
-            }
-          } catch {}
-          return null
-        })
-
-        const linkResults = await Promise.all(linkPromises)
-        const created = linkResults.filter(Boolean)
-
-        if (created.length > 0) {
-          // Show toast notification
-          const titles = created.map(l => l?.title || l?.url).join(', ')
-          toast.success(`📎 Link${created.length > 1 ? 's' : ''} added to Sources: ${titles.slice(0, 80)}`)
-
-          // Build link context for the AI
-          linkContext = created
-            .filter(l => l?.summary)
-            .map(l => `\n[Linked content: ${l.title}]\n${l.summary}`)
-            .join('\n')
-        }
-      }
-
-      // ── Garden + Memory search ────────────────────────
-      const [gardenRes, memoryRes] = await Promise.allSettled([
-        fetch('/api/seeds/search', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ query: text, limit: 3 }),
-        }).then(r => r.ok ? r.json() : null),
-        fetch('/api/seeds/memory', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ query: text, user_id: token || 'default' }),
-        }).then(r => r.ok ? r.json() : null),
-      ])
-
-      const gardenData = gardenRes.status === 'fulfilled' ? gardenRes.value : null
-      const memoryData = memoryRes.status === 'fulfilled' ? memoryRes.value : null
-
-      const seeds = gardenData?.seeds || []
-      setLastGardenSeeds(seeds.length > 0
-        ? seeds.slice(0, 5).map((s: any) => ({ id: s.id || s.seed_id, title: s.title || 'Untitled', domain: s.domain || '' }))
-        : [])
-
-      // Build combined context
-      const parts: string[] = []
-      if (linkContext) {
-        parts.push(linkContext)
-      }
-      if (gardenData?.enriched && gardenData?.context) {
-        parts.push(gardenData.context)
-      }
-      if (memoryData?.context) {
-        parts.push(memoryData.context)
-      }
-
-      if (parts.length > 0) {
-        return `${text}\n\n${parts.join("\n")}`
-      }
-      return text
-    } catch {
-      return text
-    } finally {
-      setGardenEnriching(false)
-    }
+  // Ground a message in the BACKGROUND — never blocks the send. The backend
+  // agent grounds in the garden via its own search tools; this only refreshes
+  // the "Grounded in your garden" citation chip and captures pasted links into
+  // Sources. Fire-and-forget so sends are instant.
+  const groundInBackground = useCallback((text: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
+    fetch('/api/seeds/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ query: text, limit: 5 }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        const seeds = d?.seeds || []
+        setLastGardenSeeds(seeds.length
+          ? seeds.slice(0, 5).map((s: any) => ({ id: s.id || s.seed_id, title: s.title || 'Untitled', domain: s.domain || '' }))
+          : [])
+      })
+      .catch(() => {})
+    const urls = text.match(/https?:\/\/[^\s<>\]\)"']+/g) || []
+    urls.slice(0, 3).forEach(url => {
+      fetch('/api/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ url }),
+      }).catch(() => {})
+    })
   }, [])
+
+  // Same signature as before so call sites are unchanged, but it now returns the
+  // user's text immediately and grounds in the background — sends never wait.
+  const enrichWithGarden = useCallback(async (text: string): Promise<string> => {
+    groundInBackground(text)
+    return text
+  }, [groundInBackground])
 
   const handleSaveLastResponse = useCallback(() => {
     const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && m.parts.some(p => p.type === 'text'))
@@ -1058,39 +972,48 @@ ${prefill.content || ''}`.trim()
 
   const isStreaming = status === 'submitted' || status === 'streaming'
 
-  // Day name for hero eyebrow
-  const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
-
   return (
     <div style={{ background: 'var(--bg)', height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Compact dark header for chat — not a full tall hero */}
       <div style={{ background: 'var(--forest-1)', position: 'sticky', top: 0, zIndex: 40, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px' }}>
-          {/* Hamburger — opens conversation sidebar */}
-          <button onClick={() => setSidebarOpen(true)} className="glass-dark tap" style={{ width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <AlignLeft size={17} color="rgba(180,240,205,0.85)" strokeWidth={1.75} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px' }}>
+          {/* Chats switcher — shows the current chat + opens the full list. The
+              label makes "where are my chats / how do I switch" discoverable. */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            title="Browse and switch between your chats"
+            aria-label="Open your chats"
+            className="glass-dark tap"
+            style={{ display: 'flex', alignItems: 'center', gap: 9, borderRadius: 12, border: 'none', cursor: 'pointer', padding: '6px 12px 6px 10px', flex: 1, minWidth: 0 }}
+          >
+            <AlignLeft size={16} color="rgba(180,240,205,0.9)" strokeWidth={2} />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+              <span className="caps" style={{ fontSize: 8, color: 'rgba(180,240,205,0.55)', letterSpacing: '0.1em', lineHeight: 1.1 }}>CHATS</span>
+              <span className="ui" style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46vw', lineHeight: 1.2 }}>
+                {(conversations.find(c => c.id === activeConversationId)?.title) || 'New chat'}
+              </span>
+            </div>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, opacity: 0.65 }}><path d="M3 4.5L6 7.5L9 4.5" stroke="rgba(180,240,205,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
-          {/* Brand mark */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #22c55e, #15803d)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2C7 2 3 5 3 8.5C3 10.43 4.84 12 7 12C9.16 12 11 10.43 11 8.5C11 5 7 2 7 2Z" fill="#fff" opacity="0.9"/><path d="M7 2L7 12" stroke="#fff" strokeWidth="0.8" opacity="0.4"/></svg>
-            </div>
-            <div>
-              <div className="caps" style={{ fontSize: 9, color: 'rgba(180,240,205,0.7)' }}>{dayName} · LIVING LABORATORY</div>
-              {selectedMode && (
-                <div className="ui" style={{ fontSize: 11, fontWeight: 600, color: '#7ef0a8' }}>{selectedMode.label} mode</div>
-              )}
-            </div>
-          </div>
-          {/* Mode chip */}
+
+          {/* Active mode chip */}
           {selectedMode && (
-            <button onClick={() => setSelectedMode(undefined)} className="glass-dark tap" style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 9999, padding: '5px 10px', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => setSelectedMode(undefined)} className="glass-dark tap" title="Exit this mode" style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 9999, padding: '5px 10px', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
               <span className="ui" style={{ fontSize: 11, fontWeight: 600, color: '#7ef0a8' }}>{selectedMode.label}</span>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2L8 8M8 2L2 8" stroke="rgba(126,240,168,0.7)" strokeWidth="1.5"/></svg>
             </button>
           )}
-          <button onClick={handleNewChat} className="glass-dark tap" style={{ width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="rgba(180,240,205,0.85)" strokeWidth="1.75" strokeLinecap="round"/></svg>
+
+          {/* New chat — labeled + accented so it's obvious */}
+          <button
+            onClick={handleNewChat}
+            title="Start a new chat"
+            aria-label="Start a new chat"
+            className="tap"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 12, border: 'none', cursor: 'pointer', padding: '7px 13px', flexShrink: 0, background: '#7ef0a8' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="#06281a" strokeWidth="2.2" strokeLinecap="round"/></svg>
+            <span className="ui" style={{ fontSize: 12.5, fontWeight: 800, color: '#06281a' }}>New</span>
           </button>
         </div>
       </div>
@@ -1673,7 +1596,7 @@ ${prefill.content || ''}`.trim()
             })()}
 
             {/* URL detection + Link capture indicator */}
-            {detectedUrls.length > 0 && !gardenEnriching && (
+            {detectedUrls.length > 0 && (
               <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 99, padding: '6px 8px 6px 14px' }}>
                   <Globe size={13} color="var(--green-700)" strokeWidth={1.75} />
@@ -1692,20 +1615,8 @@ ${prefill.content || ''}`.trim()
               </div>
             )}
 
-            {/* Garden enrichment indicator */}
-            {gardenEnriching && (
-              <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
-                <div className="animate-pulse" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 99, padding: '8px 16px' }}>
-                  <Leaf size={15} color="var(--green-700)" strokeWidth={1.75} />
-                  <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--green-700)', letterSpacing: '0.04em' }}>
-                    Enriching from your garden…
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* Streaming indicator */}
-            {isStreaming && !gardenEnriching && (
+            {isStreaming && (
               <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
                 <div className="animate-pulse" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 99, padding: '8px 16px' }}>
                   <Leaf size={15} color="var(--ink-3)" strokeWidth={1.75} />
