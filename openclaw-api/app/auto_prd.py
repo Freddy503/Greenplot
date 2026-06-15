@@ -479,7 +479,13 @@ def auto_prd_for_paper(seed_id: str, tenant_id: str, db: Session, force: bool = 
 
     if not force:
         score = sco<RESEND_API_KEY>(seed, related, user)
-        if score < RELEVANCE_THRESHOLD:
+        # Sparse gardens can't score high — there's little to relate a paper to yet.
+        # Lower the bar for early users so the digest→PRD magic happens before the
+        # garden is dense; it tightens automatically as they accumulate seeds.
+        from app.models import Seed as _Seed
+        seed_total = db.query(_Seed.id).filter(_Seed.user_id == seed.user_id).count()
+        threshold = 5 if seed_total < 25 else RELEVANCE_THRESHOLD
+        if score < threshold:
             _mark(f"skipped_low_relevance_{score}")
             return {"status": "skipped", "reason": "low_relevance", "score": score}
 

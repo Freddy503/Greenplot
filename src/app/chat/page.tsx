@@ -72,7 +72,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer'
 import { FullScreenGraph } from '@/components/seeds/full-screen-graph'
 
 // Icons
-import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft, Sprout, Sparkles, Rocket } from 'lucide-react'
+import { Plus, ChevronRight, Leaf, Globe, Share2, FileText, AlignLeft, Sprout, Sparkles, Rocket, MessageSquarePlus } from 'lucide-react'
 
 // ── Suggestions for empty state ───────────────────────
 
@@ -1779,6 +1779,30 @@ ${prefill.content || ''}`.trim()
           />
         </div>
       </div>
+
+      {/* Persistent feedback — qualitative signal matters most in early beta */}
+      <button
+        onClick={async () => {
+          const msg = window.prompt('What would make Greenplot better? (bug, idea, anything)')
+          if (!msg || !msg.trim()) return
+          const token = localStorage.getItem('greenplot_token')
+          try {
+            await fetch('/api/feedback/feature-request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({ message: msg.trim() }),
+            })
+            toast.success('Thank you — sent to the team 🌱')
+          } catch { toast.error('Could not send — try again') }
+        }}
+        title="Send feedback"
+        aria-label="Send feedback"
+        className="tap"
+        style={{ position: 'fixed', right: 16, bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))', zIndex: 45, display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '8px 13px', boxShadow: '0 6px 18px -6px rgba(20,19,12,0.25)', cursor: 'pointer' }}
+      >
+        <MessageSquarePlus size={15} color="var(--green-700)" strokeWidth={2} />
+        <span className="ui" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)' }}>Feedback</span>
+      </button>
 
       <BottomNav />
 
