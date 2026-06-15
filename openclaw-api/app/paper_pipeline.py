@@ -257,8 +257,16 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
         m["parsed_at"] = datetime.utcnow().isoformat()
         m.update(extra)
         seed.seed_metadata = m
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            # Recover a poisoned/aborted transaction so the status write can
+            # still land — a post-step DB error must not strand the paper.
+            db.rollback()
+            seed.seed_metadata = m
+            db.commit()
 
+    indexed = 0
     try:
         _set_status("parsing")
         # Uploaded PDFs (source="upload") are already on local disk — parse them
@@ -287,7 +295,6 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
 
         from app.enricher_v2 import embed_text
         citation = meta.get("citation", "") or seed.title
-        indexed = 0
         for i, chunk in enumerate(chunks):
             try:
                 embedding = embed_text(f"{seed.title} — {chunk['section']}\n{chunk['text'][:1500]}")
@@ -416,6 +423,16 @@ Be specific and grounded in the text; never invent seeds or findings.""",
         return {"status": "ok", "seed_id": seed_id, "chunks": indexed, "source": kind}
 
     except Exception as e:
+        # If chunks already indexed, the failure was in a post-index step
+        # (summary / backlink / tree) — keep the paper "parsed" rather than
+        # stranding a successfully-indexed paper as "failed".
+        if indexed:
+            logger.warning(f"[paper_pipeline] post-index step failed for {seed_id} (kept parsed): {e}")
+            try:
+                _set_status("parsed", chunk_count=indexed, post_error=str(e)[:200])
+            except Exception:
+                db.rollback()
+            return {"status": "ok", "seed_id": seed_id, "chunks": indexed, "post_error": str(e)[:200]}
         logger.error(f"[paper_pipeline] parse failed for seed {seed_id}: {e}")
         try:
             _set_status("failed", parse_error=str(e)[:300])

@@ -100,27 +100,40 @@ def run_worker():
     log.info("🔧 Enrichment worker started")
     log.info(f"   Redis queue: enrichment:queue")
 
-    # Create a persistent DB session
-    with Session(engine) as db:
-        idle_count = 0
-        while _running:
-            try:
-                job = dequeue_enrichment(timeout=3)
+    idle_count = 0
+    while _running:
+        try:
+            job = dequeue_enrichment(timeout=3)
 
-                if job:
-                    idle_count = 0
+            if job:
+                idle_count = 0
+                # Fresh session per job: a failed job that leaves its
+                # transaction in Postgres's aborted state must never cascade
+                # into the next job (this previously made paper parsing fail
+                # whenever an earlier enrichment job errored on the shared
+                # session). The session is always rolled back + closed.
+                db = Session(engine)
+                try:
                     process_job(job, db)
-                else:
-                    idle_count += 1
-                    if idle_count == 1:
-                        log.info("⏳ Queue empty, waiting...")
-                    elif idle_count % 60 == 0:
-                        depth = get_queue_depth()
-                        log.info(f"⏳ Still idle ({idle_count}s), queue depth: {depth}")
+                except Exception as e:
+                    log.error(f"Job crashed: {e}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                finally:
+                    db.close()
+            else:
+                idle_count += 1
+                if idle_count == 1:
+                    log.info("⏳ Queue empty, waiting...")
+                elif idle_count % 60 == 0:
+                    depth = get_queue_depth()
+                    log.info(f"⏳ Still idle ({idle_count}s), queue depth: {depth}")
 
-            except Exception as e:
-                log.error(f"Worker error: {e}")
-                time.sleep(2)
+        except Exception as e:
+            log.error(f"Worker error: {e}")
+            time.sleep(2)
 
     log.info("Worker stopped.")
 
