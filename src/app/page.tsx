@@ -6,6 +6,7 @@ import {
   Share2, Server, PlusCircle, Zap, TrendingUp, ArrowUp, ArrowRight,
   Search, Mail, FileText, Layers, CheckCircle2,
   Shield, Activity, Menu, X, Star, Globe,
+  Link as LinkIcon, Edit3, Plus, Terminal, GitPullRequest,
 } from 'lucide-react'
 
 // ── Design tokens ─────────────────────────────────────────────────────────
@@ -126,6 +127,7 @@ type IconName =
   | 'hub' | 'dns' | 'add_circle' | 'auto_awesome'
   | 'trending_up' | 'arrow_upward' | 'arrow_right' | 'mail' | 'file_text'
   | 'check' | 'shield' | 'activity' | 'sparkles' | 'globe'
+  | 'link' | 'edit' | 'plus' | 'terminal' | 'pr'
 
 const ICON_MAP: Record<IconName, React.ElementType> = {
   eco: Leaf, notifications: Bell, smart_toy: Bot, search: Search,
@@ -134,6 +136,7 @@ const ICON_MAP: Record<IconName, React.ElementType> = {
   trending_up: TrendingUp, arrow_upward: ArrowUp, arrow_right: ArrowRight,
   mail: Mail, file_text: FileText, check: CheckCircle2, shield: Shield,
   activity: Activity, sparkles: Star, globe: Globe,
+  link: LinkIcon, edit: Edit3, plus: Plus, terminal: Terminal, pr: GitPullRequest,
 }
 
 function Icon({ name, size = 24, color = T.green, style = {}, strokeWidth = 1.75 }: {
@@ -234,7 +237,7 @@ function Navbar({ heroVisible }: { heroVisible: boolean }) {
 
 // ── Prompt Box ────────────────────────────────────────────────────────────
 const THOUGHTS = [
-  'Pressure-test my product idea…',
+  'Pressure-test my pricing idea…',
   'Brainstorm angles on attention restoration…',
   'Strategize a go-to-market for my app…',
   'Ground my next build in real research…',
@@ -408,9 +411,8 @@ function Hero({ onVisibilityChange }: { onVisibilityChange: (v: boolean) => void
           fontFamily: 'var(--font-body)', fontSize: 'clamp(16px,2vw,19px)',
           color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, maxWidth: 600, marginBottom: '2.75rem', fontWeight: 400,
         }}>
-          A living garden for your ideas — research flows in and is read in full, draft PRDs
-          surface on autopilot, and coding agents ship them. At the center, one plain-english
-          answer that never goes stale: what you're building, why, and what's still missing.
+          A living garden for your ideas — where every seed of thought grows into knowledge that
+          never fades, a partner helps you think it through, and the gap from idea to build finally closes.
         </p>
         <div className="fade-rise-3" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '3.5rem' }}>
           <HeroWaitlist />
@@ -691,25 +693,255 @@ function MissingLink() {
   )
 }
 
-// ── Features data — the 5 killer features ────────────────────────────────────
-// Real UI lives in /public/landing/features/*.png (design them in Claude Design);
-// until a file exists, the showcase shows a branded "Product preview" placeholder.
-const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc: string; image: string }[] = [
-  { icon: 'smart_toy', name: 'A thinking partner that knows what you know', tag: 'Think', color: T.green,
-    desc: 'Not a blank-page chatbot. Brainstorm, pressure-test, or play devil’s advocate with a partner that reasons from your own notes, papers and past decisions — and cites them back to you.',
-    image: '/landing/features/thinking-partner.png' },
-  { icon: 'eco', name: 'Capture anything — it connects itself', tag: 'Capture', color: T.teal,
-    desc: 'Drop a thought, a voice memo, a PDF, or any link — even a YouTube video. It’s enriched, summarised, and woven into your garden: searchable, connected, and never lost.',
-    image: '/landing/features/garden-capture.png' },
-  { icon: 'file_text', name: 'From a thread to a shipped PRD', tag: 'Build', color: T.green,
-    desc: 'Turn any conversation into a complete PRD in one tap. Track it Design → Doing → Built, and let Claude Code or Cursor build it — your garden as context, the PR reported back.',
-    image: '/landing/features/studio-build.png' },
-  { icon: 'search', name: 'Research that comes to you', tag: 'Research', color: T.teal,
-    desc: 'Every morning, fresh papers are matched to your garden and parsed in full — then the strongest ones auto-draft a PRD in your Studio. The flywheel runs while you sleep.',
-    image: '/landing/features/research-digest.png' },
-  { icon: 'dns', name: 'Your second brain, in every AI tool', tag: 'Connect', color: T.darkGreen,
-    desc: 'A built-in MCP server puts your whole garden inside Claude Code, Cursor and Claude Desktop — search seeds, read papers and write specs without ever leaving your editor.',
-    image: '/landing/features/mcp.png' },
+// ── Feature mockups — faithful light recreations of the real app UI ──
+const G = { bg: '#fafaf8', surface: '#ffffff', green: '#16a34a', soft: '#dcfce7',
+  deep: '#06281a', ink: '#18241d', ink2: '#667068', line: '#eceae3' }
+
+// 1 — Thinking partner that cites your garden (Chat)
+function ChatPartnerMockup() {
+  const chips = ['Brainstorm', 'Pressure-test', "Devil's advocate", 'Spec it', 'Deep Research']
+  return (
+    <div style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.7rem', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ maxWidth: '84%', padding: '0.6rem 0.85rem', borderRadius: '1rem 1rem 0.2rem 1rem', background: G.soft, color: G.deep, fontSize: 12.5, lineHeight: 1.5, fontFamily: 'var(--font-body)' }}>
+          Should policy enforcement live at the skill layer or the orchestrator?
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+        <div style={{ width: 26, height: 26, borderRadius: 8, background: G.green, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="eco" size={13} color="#fff" />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ padding: '0.7rem 0.9rem', borderRadius: '0.2rem 1rem 1rem 1rem', background: G.surface, border: '1px solid ' + G.line, color: G.ink, fontSize: 12.5, lineHeight: 1.6, fontFamily: 'var(--font-body)', boxShadow: '0 1px 3px rgba(6,40,26,0.04)' }}>
+            Put it at the orchestrator. Your own notes lean the same way — skill-level guards drift out of sync, and your failure-mode teardown traced three of four incidents to per-skill policy gaps.
+          </div>
+          <div style={{ marginTop: '0.55rem', border: '1px solid ' + G.soft, background: '#f0fdf4', borderRadius: '0.75rem', padding: '0.6rem 0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.5rem' }}>
+              <Icon name="eco" size={12} color={G.green} />
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: G.green, fontFamily: 'var(--font-ui)', letterSpacing: '0.03em' }}>Grounded in your garden · 3 seeds</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {['Policy at the orchestration layer', 'Multi-agent failure modes', 'Agent eval harness'].map(sd => (
+                <span key={sd} style={{ fontSize: 10.5, background: G.surface, border: '1px solid ' + G.line, color: G.ink, borderRadius: 999, padding: '3px 9px', fontFamily: 'var(--font-body)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="eco" size={9} color={G.green} />{sd}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 'auto' }}>
+        {chips.map(c => {
+          const on = c === 'Pressure-test'
+          return <span key={c} style={{ fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-ui)', padding: '5px 10px', borderRadius: 999, background: on ? G.green : '#f1f0ea', color: on ? '#fff' : G.ink2 }}>{c}</span>
+        })}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', border: '1px solid ' + G.line, borderRadius: '0.85rem', padding: '0.55rem 0.7rem', background: G.surface }}>
+        <Icon name="plus" size={15} color={G.ink2} />
+        <span style={{ fontSize: 12, color: G.ink2, fontFamily: 'var(--font-body)', flex: 1 }}>Nurture a new idea…</span>
+        <Icon name="mic" size={14} color={G.ink2} />
+        <div style={{ width: 26, height: 26, borderRadius: 999, background: G.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="arrow_upward" size={13} color="#fff" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 2 — Capture anything, it connects itself (Garden) — List / Graph
+function GardenGraph() {
+  const nodes: { x: number; y: number; r: number; l: string; p?: number }[] = [
+    { x: 50, y: 48, r: 16, l: 'Orchestr.', p: 1 }, { x: 22, y: 24, r: 11, l: 'Memory' },
+    { x: 80, y: 28, r: 11, l: 'Policy' }, { x: 20, y: 74, r: 10, l: 'Failures' }, { x: 82, y: 72, r: 10, l: 'Evals' }]
+  const edges = [[0, 1], [0, 2], [0, 3], [0, 4], [1, 2]]
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 190 }}>
+      <svg viewBox="0 0 100 100" style={{ width: '100%', maxWidth: 270 }}>
+        {edges.map(([a, b], i) => <line key={i} x1={nodes[a].x} y1={nodes[a].y} x2={nodes[b].x} y2={nodes[b].y} stroke="#cfe8d8" strokeWidth="0.7" />)}
+        {nodes.map((n, i) => (<g key={i}>
+          <circle cx={n.x} cy={n.y} r={n.r} fill={n.p ? G.green : G.soft} stroke={n.p ? G.green : '#bbe3c8'} strokeWidth="0.6" />
+          <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle" fontSize={n.p ? 3.8 : 3.6} fontWeight="600" fill={n.p ? '#fff' : G.deep} fontFamily="var(--font-ui)">{n.l}</text>
+        </g>))}
+      </svg>
+    </div>
+  )
+}
+function GardenCaptureMockup() {
+  const [view, setView] = useState('list')
+  const seeds = [
+    { t: 'Long-horizon agent memory', src: 'file_text' as IconName, srcLabel: 'PDF', status: 'Enriched', links: 7 },
+    { t: 'Multi-agent failure modes', src: 'mic' as IconName, srcLabel: 'Voice memo', status: 'Enriched', links: 4 },
+    { t: 'Orchestration policy patterns', src: 'link' as IconName, srcLabel: 'Link', status: 'Sprouting', links: 0 },
+    { t: 'Tool-calling reliability', src: 'edit' as IconName, srcLabel: 'Note', status: 'Enriched', links: 5 },
+  ]
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: 'linear-gradient(135deg,' + G.deep + ',#0a3d28)', padding: '1rem 1.1rem' }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-ui)', marginBottom: 4 }}>128 SEEDS · 22 DOMAINS</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 25, color: '#fff', fontStyle: 'italic', lineHeight: 1 }}>Knowledge <span style={{ color: '#4ade80' }}>Garden</span></div>
+      </div>
+      <div style={{ padding: '0.85rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', flex: 1 }}>
+        <div style={{ display: 'flex', gap: 4, background: '#f1f0ea', borderRadius: 999, padding: 3, width: 'fit-content' }}>
+          {['list', 'graph'].map(v => (
+            <button key={v} onClick={() => setView(v)} style={{ border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-ui)', padding: '4px 16px', borderRadius: 999, background: view === v ? G.surface : 'transparent', color: view === v ? G.ink : G.ink2, boxShadow: view === v ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', textTransform: 'capitalize' }}>{v}</button>
+          ))}
+        </div>
+        {view === 'list' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {seeds.map(sd => (
+              <div key={sd.t} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.6rem 0.75rem', background: G.surface, border: '1px solid ' + G.line, borderRadius: '0.7rem' }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: G.soft, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name={sd.src} size={13} color={G.green} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: G.ink, lineHeight: 1.3, fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sd.t}</div>
+                  <div style={{ fontSize: 10, color: G.ink2, fontFamily: 'var(--font-body)', marginTop: 1 }}>{sd.srcLabel}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  {sd.links > 0 && <span style={{ fontSize: 10, color: G.ink2, display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="hub" size={10} color={G.ink2} />{sd.links}</span>}
+                  <span style={{ fontSize: 9.5, fontWeight: 600, borderRadius: 999, padding: '2px 8px', background: sd.status === 'Enriched' ? G.soft : '#fef9c3', color: sd.status === 'Enriched' ? G.green : '#a16207', fontFamily: 'var(--font-ui)' }}>{sd.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (<GardenGraph />)}
+      </div>
+    </div>
+  )
+}
+
+// 3 — From a hard problem to a shipped solution (Studio build pipeline)
+function StudioBuildMockup() {
+  const cols: { name: string; cards: { t: string; doing?: boolean; chip?: string; merged?: boolean }[] }[] = [
+    { name: 'Design', cards: [{ t: 'Eval harness — spec' }] },
+    { name: 'Doing', cards: [{ t: 'Agent Governance Layer — spec', doing: true, chip: 'Turned into a spec from chat' }] },
+    { name: 'Built', cards: [{ t: 'Tool-call retry policy — spec', merged: true }] },
+  ]
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: 'linear-gradient(135deg,' + G.deep + ',#0a3d28)', padding: '1rem 1.1rem' }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-ui)', marginBottom: 4 }}>BUILD PIPELINE</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 25, color: '#fff', fontStyle: 'italic', lineHeight: 1 }}>The <span style={{ color: '#4ade80' }}>Studio</span></div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-body)', marginTop: 5 }}>Reliable autonomous agents at scale.</div>
+      </div>
+      <div style={{ padding: '0.85rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', flex: 1 }}>
+        {cols.map(col => (
+          <div key={col.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.07em', color: G.ink2, fontFamily: 'var(--font-ui)', textTransform: 'uppercase', paddingLeft: 2 }}>{col.name}</div>
+            {col.cards.map(c => (
+              <div key={c.t} style={{ background: G.surface, border: '1px solid ' + G.line, borderRadius: '0.6rem', padding: '0.6rem', boxShadow: '0 1px 3px rgba(6,40,26,0.04)' }}>
+                <Icon name="file_text" size={13} color={G.green} />
+                <div style={{ fontSize: 11, fontWeight: 600, color: G.ink, lineHeight: 1.35, marginTop: 5, fontFamily: 'var(--font-ui)' }}>{c.t}</div>
+                {c.doing && <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />
+                  <span style={{ fontSize: 9, color: G.ink2, fontFamily: 'var(--font-ui)' }}>in progress</span></div>}
+                {c.merged && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, background: G.soft, borderRadius: 999, padding: '2px 7px' }}>
+                  <Icon name="pr" size={9} color={G.green} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: G.green, fontFamily: 'var(--font-ui)' }}>merged PR</span></div>}
+                {c.chip && <div style={{ fontSize: 8.5, color: G.ink2, marginTop: 6, fontFamily: 'var(--font-body)', fontStyle: 'italic', lineHeight: 1.4 }}>↳ {c.chip}</div>}
+              </div>
+            ))}
+            {col.name !== 'Doing' && <div style={{ border: '1px dashed ' + G.line, borderRadius: '0.6rem', height: 22 }} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// 4 — Research that comes to you (Research Digest)
+function ResearchDigestMockup() {
+  return (
+    <div style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', height: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: G.soft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name="auto_stories" size={14} color={G.green} />
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', color: G.ink2, fontFamily: 'var(--font-ui)' }}>RESEARCH DIGEST</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: G.deep, fontStyle: 'italic', lineHeight: 1.05 }}>Research Digest — Monday</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, color: G.ink2, fontFamily: 'var(--font-body)' }}>Grounded in your interests: Autonomous agents · Distributed systems · ML reliability</span>
+      </div>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: G.soft, borderRadius: 999, padding: '3px 10px', width: 'fit-content' }}>
+        <Icon name="activity" size={10} color={G.green} />
+        <span style={{ fontSize: 9.5, fontWeight: 700, color: G.green, fontFamily: 'var(--font-ui)', letterSpacing: '0.03em' }}>Autopilot · new arXiv papers pulled in every morning</span>
+      </div>
+      <div style={{ height: 1, background: G.line }} />
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: G.green, fontFamily: 'var(--font-ui)', marginBottom: 5 }}>TL;DR</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {['New survey on long-horizon agent memory backs enforcing policy at the orchestration layer — supports your Policy enforcement seed.', 'Two labs report tool-calling reliability gains from constrained decoding.'].map(b => (
+            <div key={b} style={{ display: 'flex', gap: 6, fontSize: 11.5, color: G.ink, lineHeight: 1.5, fontFamily: 'var(--font-body)' }}>
+              <span style={{ color: G.green, flexShrink: 0 }}>•</span><span>{b}</span></div>
+          ))}
+        </div>
+      </div>
+      <div style={{ border: '1px solid ' + G.line, borderRadius: '0.7rem', padding: '0.6rem 0.7rem', background: G.surface }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: G.ink, fontFamily: 'var(--font-ui)', lineHeight: 1.3 }}>Memory Architectures for Long-Horizon Agents (2026)</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 6 }}>
+          <span style={{ fontSize: 9.5, background: G.soft, color: G.green, borderRadius: 999, padding: '2px 8px', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>↳ Long-horizon agent memory</span>
+          <span style={{ fontSize: 9, color: G.ink2, display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}><Icon name="file_text" size={9} color={G.ink2} />Auto-ingested from arXiv</span>
+        </div>
+      </div>
+      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', background: G.green, borderRadius: '0.7rem', padding: '0.65rem 0.8rem' }}>
+        <Icon name="auto_awesome" size={14} color="#fff" />
+        <span style={{ fontSize: 11, color: '#fff', fontWeight: 600, fontFamily: 'var(--font-ui)', lineHeight: 1.4, flex: 1 }}>Actionable move + a draft spec planted in your Studio</span>
+        <Icon name="arrow_right" size={14} color="#fff" />
+      </div>
+    </div>
+  )
+}
+
+// 5 — Your second brain, in every AI tool (Coding agents · MCP)
+function McpMockup() {
+  return (
+    <div style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.7rem', height: '100%' }}>
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', color: G.ink2, fontFamily: 'var(--font-ui)', marginBottom: 4 }}>CODING AGENTS · MCP</div>
+        <div style={{ fontSize: 12.5, color: G.ink, fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>Your whole garden, inside Claude Code, Cursor & Claude Desktop.</div>
+      </div>
+      <div style={{ background: '#0c1611', borderRadius: '0.7rem', padding: '0.75rem 0.85rem', fontFamily: 'monospace', fontSize: 10.5, lineHeight: 1.9 }}>
+        <div><span style={{ color: '#7dd3a0' }}>&quot;url&quot;</span><span style={{ color: '#8a8f8c' }}>: </span><span style={{ color: '#e0c188' }}>&quot;https://api.greenplot.ink/mcp&quot;</span></div>
+        <div><span style={{ color: '#7dd3a0' }}>&quot;Authorization&quot;</span><span style={{ color: '#8a8f8c' }}>: </span><span style={{ color: '#e0c188' }}>&quot;Bearer gp_live_••••••••&quot;</span></div>
+      </div>
+      <div style={{ border: '1px solid ' + G.line, borderRadius: '0.7rem', padding: '0.7rem 0.8rem', background: G.surface, display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {[{ c: "search_seeds('agent memory')", r: '→ 4 seeds' }, { c: 'write_spec(…)', r: '→ spec saved to Studio' }].map(l => (
+          <div key={l.c} style={{ fontFamily: 'monospace', fontSize: 10.5, lineHeight: 1.4, wordBreak: 'break-word' }}>
+            <span style={{ color: G.green }}>› </span><span style={{ color: G.ink }}>{l.c}</span> <span style={{ color: G.ink2 }}>{l.r}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {['Claude Code', 'Cursor', 'Claude Desktop'].map(t => (
+          <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 600, background: '#f1f0ea', color: G.ink, borderRadius: 999, padding: '5px 11px', fontFamily: 'var(--font-ui)' }}>
+            <Icon name="terminal" size={11} color={G.green} />{t}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Features data — the 5 killer features (real UI mockups) ──
+const FEATURES: { icon: IconName; name: string; tag: string; color: string; desc: string; mockup: React.ReactNode }[] = [
+  { icon: 'smart_toy', name: 'Thinking Partner', tag: 'Think', color: T.green,
+    desc: "A partner that knows what you know. Take a position on a hard call, pressure-test it, or play devil's advocate — every answer cites the seeds already in your garden.",
+    mockup: <ChatPartnerMockup /> },
+  { icon: 'eco', name: 'Knowledge Garden', tag: 'Capture', color: T.green,
+    desc: 'Capture anything — a paper, a voice memo, a benchmark, a link — and it connects itself. Your research enriches and links automatically as it grows.',
+    mockup: <GardenCaptureMockup /> },
+  { icon: 'file_text', name: 'The Studio', tag: 'Build', color: T.teal,
+    desc: 'From a hard problem to a shipped solution. Specs move across Design → Doing → Built, so your deepest thinking ends in real, reviewed code — right down to a merged PR.',
+    mockup: <StudioBuildMockup /> },
+  { icon: 'search', name: 'Research Digest', tag: 'Research', color: T.teal,
+    desc: 'Research on autopilot. New arXiv papers are pulled in every morning, matched to your seeds, and distilled into a TL;DR with an actionable move and a draft spec waiting in your Studio.',
+    mockup: <ResearchDigestMockup /> },
+  { icon: 'dns', name: 'Coding Agents · MCP', tag: 'Ship', color: T.green,
+    desc: 'Your second brain, in every AI tool. Mint a key and your whole garden is searchable from Claude Code, Cursor & Claude Desktop — grounding what they build in real research.',
+    mockup: <McpMockup /> },
 ]
 
 // ── Features Showcase ─────────────────────────────────────────────────────
@@ -723,10 +955,10 @@ function FeaturesShowcase() {
       <div style={{ maxWidth: 1200, margin: '0 auto', position: 'relative', zIndex: 2 }}>
         <div ref={headerRef} style={{ textAlign: 'center', marginBottom: '3rem', opacity: headerInView ? 1 : 0, transform: headerInView ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
           <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 16px', marginBottom: '1.25rem' }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.85)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Features</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.85)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>The product</span>
           </div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px,4vw,52px)', fontWeight: 400, fontStyle: 'italic', color: '#fff', letterSpacing: '-0.02em', lineHeight: 0.95 }}>
-            Everything Your Living<br />Laboratory needs
+            Inside your living<br />laboratory
           </h2>
         </div>
         <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: '2rem', alignItems: 'start' }}>
@@ -759,32 +991,19 @@ function FeaturesShowcase() {
             })}
           </div>
           <div className="features-mockup features-panel" style={{ position: 'sticky', top: '5rem', height: 'fit-content' }}>
-            <div key={active} className="liquid-glass" style={{ borderRadius: '1.5rem', minHeight: 380, overflow: 'hidden', animation: 'slide-in 0.3s ease' }}>
-              <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '0.5rem', background: feat.color + '28', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name={feat.icon} size={14} color={feat.color} />
+            <div key={active} style={{ borderRadius: '1.25rem', minHeight: 380, overflow: 'hidden', background: '#fafaf8', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 24px 60px rgba(0,0,0,0.45)', animation: 'slide-in 0.3s ease' }}>
+              {/* app chrome top bar */}
+              <div style={{ padding: '0.65rem 0.95rem', borderBottom: '1px solid #eceae3', background: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {['#ff5f57', '#febc2e', '#28c840'].map(c => <span key={c} style={{ width: 9, height: 9, borderRadius: '50%', background: c }} />)}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', fontFamily: 'var(--font-ui)' }}>{feat.name}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: feat.color, background: feat.color + '20', borderRadius: 999, padding: '2px 10px', fontFamily: 'var(--font-ui)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{feat.tag}</span>
-              </div>
-              <div style={{ minHeight: 340, background: T.bg, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {/* Branded placeholder — shows until the real UI export exists */}
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: `linear-gradient(160deg, ${feat.color}14, transparent 70%)` }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 16, background: feat.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name={feat.icon} size={26} color={feat.color} />
-                  </div>
-                  <span style={{ fontSize: 11, color: T.text2, fontFamily: 'var(--font-ui)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Product preview</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 6 }}>
+                  <Icon name={feat.icon} size={13} color="#16a34a" />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#18241d', fontFamily: 'var(--font-ui)' }}>{feat.name}</span>
                 </div>
-                {/* Real UI — covers the placeholder once /public{feat.image} exists */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={feat.image}
-                  alt={feat.name}
-                  loading="lazy"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                  style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', maxHeight: 380, objectFit: 'cover', display: 'block' }}
-                />
+                <span style={{ marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, color: '#16a34a', background: '#dcfce7', borderRadius: 999, padding: '2px 9px', fontFamily: 'var(--font-ui)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{feat.tag}</span>
               </div>
+              <div style={{ minHeight: 340 }}>{feat.mockup}</div>
             </div>
           </div>
         </div>
@@ -800,7 +1019,7 @@ const STEPS = [
   { icon: 'auto_stories' as IconName, color: T.teal, label: 'Knowledge',
     desc: 'Every exchange takes root in your garden — captured, enriched and connected into knowledge that never fades.' },
   { icon: 'dns' as IconName, color: T.darkGreen, label: 'Build',
-    desc: 'Harvest your garden: specs flow to Claude Code or Codex through MCP, move from Design to Doing to Built, and come back as merged PRs.' },
+    desc: 'Harvest your garden: hand that grounded knowledge to Claude Code or Codex and build on real research, not guesswork.' },
 ]
 
 function Flywheel() {
