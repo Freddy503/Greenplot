@@ -346,7 +346,7 @@ class SeedifyAgent:
                         if _sig in _seen_tool_calls:
                             yield AgentEvent.tool_call(tool_id, tool_name, tc["arguments"])
                             _dup = json.dumps({"status": "skipped", "message": "Skipped — an identical call was already made this turn."})
-                            yield AgentEvent.tool_result(tool_id, _dup)
+                            yield AgentEvent.tool_result(tool_id, _dup, tool_name)
                             session.add(Message.tool_result(tool_id, tool_name, _dup, False))
                             continue
                         _seen_tool_calls.add(_sig)
@@ -364,7 +364,7 @@ class SeedifyAgent:
                                     "status": "error",
                                     "message": p<RESEND_API_KEY>[0] if p<RESEND_API_KEY> else f"Tool '{tool_name}' denied by hook",
                                 })
-                                yield AgentEvent.tool_result(tool_id, result)
+                                yield AgentEvent.tool_result(tool_id, result, tool_name)
                                 session.add(Message.tool_result(tool_id, tool_name, result, True))
                                 continue
 
@@ -392,7 +392,7 @@ class SeedifyAgent:
                             if post_result.denied:
                                 is_error_for_hook = True
 
-                        yield AgentEvent.tool_result(tool_id, result)
+                        yield AgentEvent.tool_result(tool_id, result, tool_name)
 
                         # Add tool result to session
                         is_error = False

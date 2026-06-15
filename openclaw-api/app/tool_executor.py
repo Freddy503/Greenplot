@@ -2318,6 +2318,10 @@ async def write_spec(args: dict, user: User, db: Session) -> str:
     title = (args.get("title") or "").strip()
     content = (args.get("content") or "").strip()
     tags = args.get("tags", ["prd", "spec"])
+    # Safety net (chat endpoint) sets force=True when the model produced a full
+    # PRD but never persisted it — bypass the near-duplicate guard so the user's
+    # explicit "save this" request can never be silently swallowed.
+    force = bool(args.get("force"))
 
     if not title or not content:
         return json.dumps({"status": "error", "message": "title and content are required"})
@@ -2345,9 +2349,9 @@ async def write_spec(args: dict, user: User, db: Session) -> str:
         new_words = _words(title)
         from datetime import timedelta as _td
         recent_cutoff = datetime.utcnow() - _td(days=7)
-        for s in db.query(Seed).filter(
+        for s in (() if force else db.query(Seed).filter(
             Seed.user_id == user.id, Seed.created_at >= recent_cutoff,
-        ).all():
+        ).all()):
             m = s.seed_metadata or {}
             if not isinstance(m, dict) or m.get("seed_type") != "spec":
                 continue
