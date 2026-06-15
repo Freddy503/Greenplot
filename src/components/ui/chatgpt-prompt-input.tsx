@@ -112,6 +112,12 @@ const WaveformIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 )
 
+const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M12 5v14" /><path d="M5 12h14" />
+  </svg>
+)
+
 // --- Greenplot tools ---
 
 const TOOLS = [
@@ -154,13 +160,19 @@ export const PromptBox = React.forwardRef<
     onOpenVoice?: () => void
     /** Disables tools and mic while streaming */
     isDisabled?: boolean
+    /** Attach a PDF to the garden (inline "+" menu) */
+    onAttachPdf?: (file: File) => void
+    /** Add a link (article / paper / YouTube) to the garden */
+    onAddLink?: (url: string) => void
   }
->(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, onOpenVoice, isDisabled, ...props }, ref) => {
+>(({ className, onSubmit, isRecording, isProcessingVoice, recordingDuration, onToggleVoice, onOpenVoice, isDisabled, onAttachPdf, onAddLink, ...props }, ref) => {
   const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null)
   const [value, setValue] = React.useState('')
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
   const [selectedTool, setSelectedTool] = React.useState<string | null>(null)
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false)
+  const [isAttachOpen, setIsAttachOpen] = React.useState(false)
+  const attachFileRef = React.useRef<HTMLInputElement>(null)
 
   // Live transcription state
   const [listening, setListening] = React.useState(false)
@@ -328,6 +340,58 @@ export const PromptBox = React.forwardRef<
       <div className="mt-0.5 p-1 pt-0">
         <TooltipProvider delayDuration={100}>
           <div className="flex items-center gap-1.5">
+            {/* "+" attach — add a PDF or link to the garden, inline in the composer */}
+            {(onAttachPdf || onAddLink) && (
+              <>
+                <input
+                  type="file"
+                  ref={attachFileRef}
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f && onAttachPdf) onAttachPdf(f); e.target.value = '' }}
+                />
+                <Popover open={isAttachOpen} onOpenChange={setIsAttachOpen}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={isDisabled}
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container focus-visible:outline-none disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                          <PlusIcon className="h-5 w-5" />
+                          <span className="sr-only">Add a PDF or link to your garden</span>
+                        </button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" showArrow><p>Add to garden</p></TooltipContent>
+                  </Tooltip>
+                  <PopoverContent side="top" align="start">
+                    <div className="flex flex-col gap-0.5">
+                      {onAttachPdf && (
+                        <button
+                          onClick={() => { setIsAttachOpen(false); attachFileRef.current?.click() }}
+                          className="flex w-full items-center gap-2.5 rounded-md p-2 text-left text-[13px] font-medium hover:bg-surface-container"
+                        >
+                          <PaperIcon className="h-4 w-4 text-primary" />
+                          <span>Upload a PDF</span>
+                        </button>
+                      )}
+                      {onAddLink && (
+                        <button
+                          onClick={() => { setIsAttachOpen(false); const u = window.prompt('Paste a link — article, paper, or YouTube'); if (u && onAddLink) onAddLink(u) }}
+                          className="flex w-full items-center gap-2.5 rounded-md p-2 text-left text-[13px] font-medium hover:bg-surface-container"
+                        >
+                          <GlobeIcon className="h-4 w-4 text-primary" />
+                          <span>Add a link</span>
+                        </button>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
+
             {/* Tools popover */}
             <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
               <Tooltip>
