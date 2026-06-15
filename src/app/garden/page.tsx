@@ -28,6 +28,9 @@ interface Seed {
   summary?: string
   tags?: string
   energy?: string
+  isPaper?: boolean
+  parseStatus?: string
+  linkCount?: number
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -42,12 +45,16 @@ function parseSeed(raw: any): Seed {
   const tags = Array.isArray(rawTags) ? rawTags.join(', ') : rawTags
   const summary = metadata.summary || ''
   const title = raw.title || text.split('\n')[0]?.slice(0, 60) || 'Untitled'
+  const isPaper = (raw.seed_type || metadata.seed_type) === 'paper'
   return {
     id: raw.id || raw._additional?.id || raw.notion_id || '',
     title, text,
     created: raw.created_at || raw.created || '',
     source: raw.source || metadata.source || '',
     domain, status,
+    isPaper,
+    parseStatus: metadata.parse_status || '',
+    linkCount: metadata.link_count,
     ...(summary ? { summary } : {}),
     ...(tags ? { tags } : {}),
     ...(energy ? { energy } : {}),
@@ -70,6 +77,15 @@ function formatDate(iso: string): string {
 }
 
 function getStatusInfo(seed: Seed): { label: string; color: string } {
+  // Papers being indexed show live progress; once parsed, fall through to the
+  // normal enriched status (and surface how many seeds it connected to).
+  if (seed.isPaper) {
+    const ps = (seed.parseStatus || '').toLowerCase()
+    if (ps === 'queued' || ps === 'pending') return { label: 'Queued', color: '#a16207' }
+    if (ps === 'parsing') return { label: 'Indexing…', color: '#a16207' }
+    if (ps === 'failed') return { label: 'Index failed', color: 'var(--ink-3)' }
+    if (ps === 'parsed' && seed.linkCount) return { label: `Connected · ${seed.linkCount}`, color: 'var(--green)' }
+  }
   const s = (seed.status || '').toLowerCase()
   if (s.includes('enrich') || s.includes('growing')) return { label: 'Enriched', color: 'var(--green)' }
   if (s.includes('sprout') || s.includes('seedling')) return { label: 'Sprouting', color: '#7dd3a0' }
