@@ -34,6 +34,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, AsyncGenerator, Optional
 
 import httpx
@@ -42,6 +43,55 @@ from app.agent.registry import ToolRegistry
 from app.agent.session import Session, Message, ContentBlock
 from app.agent.stream import AgentEvent
 from app.agent.permissions import PermissionLevel, check_permission, get_user_permission
+
+
+# ── Inline tool-call recovery ────────────────────────────────────────────────
+# Some models (e.g. deepseek via certain providers) emit tool calls as MARKUP in
+# the text stream instead of the structured `tool_calls` field — so the calls
+# never execute and the raw markup leaks into the chat. Parse those back into
+# real calls, and strip the markup so it never reaches the UI. Handles both the
+# DSML-wrapped form (<｜DSML｜invoke name="…">) and the plain Claude-XML form.
+_PIPE = "｜"  # fullwidth vertical line used in DSML special tokens
+_INVOKE_RE = re.compile(
+    r"<[" + _PIPE + r"|]?(?:DSML[" + _PIPE + r"|])?invoke\s+name=\"([^\"]+)\"\s*>(.*?)"
+    r"</[" + _PIPE + r"|]?(?:DSML[" + _PIPE + r"|])?invoke>", re.DOTALL)
+_PARAM_RE = re.compile(
+    r"<[" + _PIPE + r"|]?(?:DSML[" + _PIPE + r"|])?parameter\s+name=\"([^\"]+)\"([^>]*)>(.*?)"
+    r"</[" + _PIPE + r"|]?(?:DSML[" + _PIPE + r"|])?parameter>", re.DOTALL)
+_TOOLCALLS_BLOCK_RE = re.compile(
+    r"<[" + _PIPE + r"|]?(?:DSML[" + _PIPE + r"|])?tool_calls>.*?"
+    r"</[" + _PIPE + r"|]?(?:DSML[" + _PIPE + r"|])?tool_calls>", re.DOTALL)
+
+
+def _has_tool_markup(text: str) -> bool:
+    return bool(text) and "invoke name=" in text
+
+
+def _parse_inline_tool_calls(text: str) -> list[dict]:
+    """Tool calls emitted as text markup → [{name, arguments(json str)}]."""
+    calls: list[dict] = []
+    for m in _INVOKE_RE.finditer(text):
+        name = m.group(1).strip()
+        params: dict = {}
+        for pm in _PARAM_RE.finditer(m.group(2)):
+            pname, attrs, val = pm.group(1).strip(), pm.group(2), pm.group(3).strip()
+            if 'string="false"' in attrs:  # the model marked this as a non-string
+                try:
+                    params[pname] = json.loads(val)
+                    continue
+                except Exception:
+                    pass
+            params[pname] = val
+        if name:
+            calls.append({"name": name, "arguments": json.dumps(params)})
+    return calls
+
+
+def _strip_tool_markup(text: str) -> str:
+    text = _TOOLCALLS_BLOCK_RE.sub("", text)
+    text = _INVOKE_RE.sub("", text)
+    text = re.sub(r"<" + _PIPE + r"[^>]*>", "", text)  # stray DSML fragments
+    return text.strip()
 
 
 class SeedifyAgent:
@@ -243,6 +293,17 @@ class SeedifyAgent:
                 except httpx.HTTPError as e:
                     yield AgentEvent.error(f"Connection error: {e}")
                     return
+
+                # Recover tool calls the model emitted as text markup (no
+                # structured tool_calls) so they actually run, and clean the
+                # buffer so the markup never lands in the saved/streamed answer.
+                if not tool_calls_acc and not is_final and _has_tool_markup(content_buffer):
+                    for _i, _call in enumerate(_parse_inline_tool_calls(content_buffer)):
+                        tool_calls_acc[_i] = {
+                            "id": f"inline_{_i}_{int(_time.monotonic() * 1000)}",
+                            "name": _call["name"], "arguments": _call["arguments"],
+                        }
+                    content_buffer = _strip_tool_markup(content_buffer)
 
                 # ── Handle tool calls or finish ────────────────────
                 # Some providers report finish_reason "stop" even when tool

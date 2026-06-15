@@ -135,8 +135,13 @@ function ThumbsRating({ messageId }: { messageId: string }) {
 // ── Dynamic suggested actions — the model appends <sugg>Label</sugg> lines ──
 const SUGG_RE = /<sugg>([\s\S]*?)<\/sugg>/g
 
+// Safety net: hide any tool-call markup a model leaks into the text stream
+// (deepseek's DSML form <｜DSML｜invoke …> or plain <invoke>…</invoke>). The
+// backend parses + strips these too; this keeps the live stream clean as it types.
+const TOOL_MARKUP_RE = /<[｜|]?(?:DSML[｜|])?tool_calls>[\s\S]*?(?:<\/[｜|]?(?:DSML[｜|])?tool_calls>|$)|<[｜|]?(?:DSML[｜|])?invoke\s+name=[\s\S]*?(?:<\/[｜|]?(?:DSML[｜|])?invoke>|$)|<｜[^>]*>/g
+
 function stripSuggTags(text: string): string {
-  return text.replace(SUGG_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
+  return text.replace(SUGG_RE, '').replace(TOOL_MARKUP_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
 }
 
 function collectSuggTags(text: string): string[] {
