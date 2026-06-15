@@ -382,6 +382,34 @@ Be specific and grounded in the text; never invent seeds or findings.""",
             except Exception as e:
                 logger.warning(f"[auto_prd] failed for {seed_id}: {e}")
 
+        # Connect the paper into the garden — create backlinks so it's woven in,
+        # not an island (indexing chunks alone doesn't create SeedLinks).
+        link_count = 0
+        if indexed:
+            try:
+                from app.backlinker import find_and_create_links
+                links = find_and_create_links(
+                    seed_id=seed_id, tenant_id=tenant_id,
+                    seed_title=seed.title, seed_content=(seed.content or "")[:2000],
+                )
+                link_count = len(links or [])
+            except Exception as e:
+                logger.warning(f"[paper_pipeline] backlinking failed for {seed_id}: {e}")
+            _set_status("parsed", link_count=link_count, connected=True)
+
+            # Tell the user it's done — bell + best-effort push (worker-safe).
+            try:
+                from app.notify import notify_user
+                conn_txt = f" · connected to {link_count} seed{'s' if link_count != 1 else ''}" if link_count else ""
+                notify_user(
+                    seed.user_id,
+                    f"📄 {seed.title[:48]} is in your garden",
+                    f"Indexed {indexed} section{'s' if indexed != 1 else ''}{conn_txt} — ready to explore.",
+                    f"/garden?seed={seed_id}",
+                )
+            except Exception as e:
+                logger.warning(f"[paper_pipeline] notify failed for {seed_id}: {e}")
+
         return {"status": "ok", "seed_id": seed_id, "chunks": indexed, "source": kind}
 
     except Exception as e:

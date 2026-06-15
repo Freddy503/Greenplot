@@ -857,8 +857,12 @@ def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set =
         # paper to the user's garden — keep it as the seed body so the link to
         # existing seeds/wiki stays visible in the app.
         content = (paper.get("content", "") or paper.get("snippet", "")).strip()
-        if not title or len(content) < 50:
+        if not title:
             continue
+        if len(content) < 50:
+            # Thin synthesis must NOT drop the paper from the garden — keep it with
+            # a minimal body; full text is indexed by the parse job regardless.
+            content = content or f"Research paper from your digest on {digest_date}."
         # Deduplicate: skip if a seed with this source_url already exists
         if url in seen_paper_urls:
             continue
