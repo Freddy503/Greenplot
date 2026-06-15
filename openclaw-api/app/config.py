@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     NVIDIA_API_KEY: Optional[str] = None
     # Each tier is its own OpenRouter slug, overridable via the matching env var.
     # Interactive chat / agent — fast, low-latency, non-reasoning responses.
-    CHAT_MODEL: str = "deepseek/deepseek-v4-flash"
+    # A/B: trying tencent/hy3-preview for cleaner structured tool-calling. Watch
+    # `docker logs api | grep recovered` — zero recoveries = native tool-calling.
+    CHAT_MODEL: str = "tencent/hy3-preview"
     # Briefings, Research Digest, reflections, weekly eval — long-context synthesis.
     BRIEFING_MODEL: str = "xiaomi/mimo-v2.5"
     # Premium one-off generation (strategy / solution-design papers).
