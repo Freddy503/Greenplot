@@ -1,8 +1,10 @@
-# Seedify — The Living Laboratory
+# Greenplot — Your Living Laboratory
 
-Your AI-powered second brain. Capture ideas through chat, voice, or notes — enriched with web research, your personal memory, semantic connections, and a living wiki. Delivers personalized daily email digests connecting new research to your existing knowledge.
+> Product: **Greenplot** ([greenplot.ink](https://www.greenplot.ink)) · Codebase: **Seedify**
 
-> **Vision:** The Seedify architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
+Greenplot is an AI-powered second brain that closes the loop from *thought* to *shipped*. Capture ideas through chat, voice, notes, **PDFs, or any link** — they're enriched, connected, and indexed into your **Garden**. A **thinking partner** chat (Brainstorm · Pressure-test · Devil's advocate · Spec · **Deep Research**) reasons from what you already know — grounded, with **citations** back to your own seeds. The **Studio** turns threads into structured **PRDs** you can hand to a coding agent and track from Design → Doing → Built. A daily **Research Digest** connects fresh arXiv papers to your Garden and can auto-draft PRDs. And the whole garden is available to **Claude Code / Cursor / Claude Desktop via an MCP server**.
+
+> **Vision:** The Greenplot architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
 
 ## Architecture
 
@@ -118,8 +120,14 @@ relevance = e^(-0.05 × age_days) × (1 + visit_count × 0.5)
 
 ## Features
 
-### 💬 Chat (15 tools)
-The chat is the primary interface to the entire knowledge base:
+### 💬 Chat — thinking partner
+The chat is the primary interface to the entire knowledge base. It runs as a tool-calling agent grounded in your Garden, with **corrective retrieval** (it judges each result's relevance and re-queries before answering) and **citations** — the "Grounded in your garden" chip expands to the exact seeds that shaped the answer, each linking back.
+
+**Thinking-partner modes** (chips above the composer): **Brainstorm**, **Pressure-test**, **Devil's advocate**, **Spec it** (→ writes a full PRD to the Studio), and **Deep Research** (multi-step Garden + web investigation → a cited Research Brief).
+
+**Capture from anywhere — in the composer:** the **"+"** button adds a **PDF** or any **link** (article, paper, or **YouTube**) straight to your Garden; drop a PDF onto the input, or paste a URL and hit *Add to garden*. Each is fetched, chunked, indexed, and given an executive summary connected to your existing seeds.
+
+Core tools:
 
 | Tool | Description |
 |------|------------|
@@ -148,6 +156,21 @@ The chat is the primary interface to the entire knowledge base:
 🔍 Connections you missed:
   • "AI Agents" ↔ "MCP Protocol" (shared: architecture)
 ```
+
+### 🎨 Studio — think → spec → ship
+The Studio turns thinking into shippable specs:
+- **Thinking partner modes** drive a thread, then **Spec it** synthesizes a complete **PRD** (gstack structure) saved to the Studio.
+- **Build pipeline:** drag PRDs across **Design → Doing → Built**; connected coding agents (via the MCP server / GitHub sync) report progress and PRs back.
+- **Product view:** one screen anchoring every PRD to the problem it serves, with an auto-refreshed **Design Vision** when canvas PRDs change.
+- **Drop a PDF** onto the canvas to ingest it; **PRD comments**; and **Canvas sharing** — invite collaborators by email (view-only in v1) with a cross-tenant access gate (`resolve_canvas_access`).
+
+### 🔬 Research Digest & Paper Pipeline
+- **Daily Research Digest** (07:00 & 18:00 CET): fresh arXiv/web research matched to your Garden + Wiki → TL;DR, per-paper synthesis, a challenging take, an actionable move, and a solution-design seed. English-enforced, with a garden-tailored summary.
+- **Full-text paper pipeline:** papers (and your uploaded PDFs / links) are fetched → section-aware chunked → embedded into a `PaperChunk` index → reasoning-friendly doc tree (tree retrieval). Specs cite what papers actually *say*, not just abstracts.
+- **Autopilot PRDs:** a relevance-gated, daily-capped pass drafts a PRD from a strongly-relevant digest paper on its own — you shape the vision, the system drafts.
+
+### 🔌 MCP Server (connect your garden to coding agents)
+A built-in **MCP server** (`/mcp`, Streamable HTTP, per-user API keys) makes your Garden available to **Claude Code, Claude Desktop, and Cursor** — search seeds, read papers, write specs, all from your editor. Mint a key in **Settings → Coding agents · MCP** and paste the config.
 
 ### 📖 Wiki (Wikipedia/GrokPedia-style)
 Auto-generated articles that synthesize your sources and seeds into encyclopedic entries:
@@ -265,7 +288,7 @@ WEAVIATE_URL=http://weaviate:8080
 REDIS_URL=redis://redis:6379/0
 VAPID_PRIVATE_KEY_PATH=/app/.vapid_private.pem
 RESEND_API_KEY=re_...              # Email digests (optional — disables email if unset)
-EMAIL_FROM=Seedify <digest@...>    # Verified Resend sender domain
+EMAIL_FROM=Greenplot <digest@greenplot.ink>   # Verified Resend sender (SPF/DKIM/DMARC)
 
 # Frontend (.env.local)
 NEXT_PUBLIC_VAPID_KEY=BMvL3eG7...
@@ -335,30 +358,33 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 ```
 
 ## Cron Jobs
+Notifications are **artifacts, not prompts** — each delivers something you can read or act on, grounded in your Garden. Delivery is per-user and gated by the onboarding cadence (`digest_frequency`).
+
 | Job | Schedule | Push | Email | Description |
 |---|---|---|---|---|
-| Weaviate Watchdog | Every 30 min | — | — | Health check, alerts on failure |
-| Auto-seed Harvest | Every 30 min | — | — | Scan chat sessions → Redis queue → enrichment |
-| Morning Idea Spark | 08:30 CET | ✓ | — | Creative prompt from latest seed |
-| Daily Briefing | 09:30 CET | ✓ | ✓ | Weather + seeds to review + sources + missed connections |
-| Academic + Research Digest | 07:00 CET | ✓ | ✓ + PDFs | arXiv papers × your Garden + Wiki → actionable move + solution design |
-| Daily Reflection | 16:00 CET | ✓ | — | Reflection prompt |
-| Weekly Garden Digest | Sunday 10:00 CET | ✓ | — | Research top themes, Exa search, synthesize digest article |
+| **Research Digest** | 07:00 & 18:00 CET | ✓ | ✓ + PDFs | arXiv/web research × your Garden + Wiki → TL;DR, synthesis, actionable move, solution-design seed (evening edition = twice-daily tier) |
+| **Today's Thread** | 08:30 CET | ✓ | — | One real seed from your Garden + a provocation + a concrete 10-min move (fires on once-daily too) |
+| **Loose Threads** | 16:00 CET | ✓ | — | Your captured-but-undeveloped seeds, surfaced to tend (twice-daily tier) |
+| **Garden Signals** | Every 3h | ✓ | — | Connection alerts on strong new SeedLinks + theme-emergence when a seed becomes a hub |
+| **Garden Story** | Sunday 10:00 CET | ✓ | — | A narrated weekly recap: what grew, the strongest new connection, the emerging theme |
 | Weekly Content Eval | Sunday 18:00 CET | ✓ | ✓ | Review rated seeds, enrichment quality |
-| FDE Interview Prep | 1st & 15th 10:00 CET | ✓ | — | Personalized interview prep challenges |
-| Wiki Auto-Compile | Every 6h | — | — | Compile new seeds/links into wiki articles |
-| Auto-seed Enrichment | Every 5 min | — | — | Enrich new seeds with tags, domain, energy, connections |
-| Pending Link Enrichment | 07:00 & 19:00 CET | — | — | Enrich unprocessed source links |
+| Biweekly Challenge | 1st & 15th 10:00 CET | ✓ | — | Cross-domain synthesis prompt |
+| Coherence Report | Weekly | ✓ | — | Generates a Library article on contradictions/gaps across your Garden |
+| Design Vision Refresh | Every 5 min | — | — | Debounced regen of a product's Design Vision after its PRDs change |
+| Wiki Auto-Compile | Every 3h | — | — | Compile new seeds/links into wiki articles |
+| Auto-seed Enrichment | Every 30 min | — | — | Enrich new seeds with tags, domain, energy, connections + backlinks |
+
+> Killed/merged in the notifications redesign: **Daily Briefing** (merged into the Research Digest) and **Weekly Garden Digest** (replaced by Garden Story).
 
 ## Tech Stack
-- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK v5, D3.js
-- **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT auth, pywebpush, APScheduler
-- **Database:** PostgreSQL 15, Weaviate 1.36 (BM25 + vector), Redis 7
-- **AI:** OpenRouter (deepseek/deepseek-v3.2), OpenAI Whisper, BFL FLUX, Exa Search
-- **Email:** Resend API (transactional email + arXiv PDF attachments)
-- **Memory:** Multi-Layer Memory Architecture + MemFactory pipeline
-- **Push:** Web Push via VAPID (pywebpush + Service Worker)
-- **Infra:** Docker Compose, Vercel Pro, OpenClaw (agent orchestration)
+- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK v5, D3.js
+- **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT + per-user API keys, pywebpush, APScheduler; **MCP** server (Streamable HTTP)
+- **Database:** PostgreSQL 15, Weaviate 1.36 (BM25 + vector; `PaperChunk` full-text index), Redis 7
+- **AI:** OpenRouter (tiered — chat `deepseek/deepseek-v4-flash`, briefings/wiki `xiaomi/mimo-v2.5`, premium `mimo-v2.5-pro`, fallback `minimax-m2.7`), OpenAI Whisper, `gpt-4o-mini` image ingest, Exa Search
+- **Ingestion:** `pymupdf` (PDF parse), `youtube-transcript-api`, Exa contents — upload a PDF or paste any link → chunk → index → garden-tailored summary
+- **Email:** Resend API (transactional email + arXiv PDF attachments; SPF/DKIM/DMARC)
+- **Push:** Web Push via VAPID (pywebpush + Service Worker), auto-prunes dead subscriptions on 404/410
+- **Hosting:** Hetzner (Frankfurt, EU) via Cloudflare named tunnel; Docker Compose; Vercel (frontend)
 
 ## Design System
 - **Colors:** Warm off-white `#fafaf8` background, green `#16a34a` primary, gold `#d97706` secondary, white cards with subtle borders
@@ -368,7 +394,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 - **Dark mode:** opt-in toggle via `.dark` class
 
 ## Status
-🟢 **Working:** Chat (15 tools + persistent history), Garden + Intelligence + Decay + Visualization, Sources + Bridge, Wiki (auto-compile, BFL images, D3 maps, UI compile button), Web Push notifications, Email digests (Resend), Academic + Research Digest with arXiv PDFs, Enrichment worker (URL detection + Exa fetch + domain/energy inference), Redis queue/cache, Activity feed, Activity Summary on login, Knowledge graph, Visit tracking, Image generation, Calendar integration, Profile API, D3 concept maps, Solution design export
-🟡 **Partial:** Email digests (requires RESEND_API_KEY on server), Push notifications (requires home-screen install on iOS Safari)
-🔴 **Pending:** App Store (Capacitor), Figma MCP, Wiki Index page, Wiki Lint, Incremental per-source updates, "New sources" UI badge
+🟢 **Working:** Chat thinking partner (modes, corrective retrieval, citations, persistent history), Capture from anywhere (PDF drop + link/YouTube ingest in chat & Studio), Studio (Spec → PRD → Build pipeline, Product view, Design Vision, PRD comments), Canvas sharing (view-only), Research Digest + full-text paper pipeline + Autopilot PRDs, MCP server (per-user keys), Garden + Intelligence + Knowledge graph + Visualization, Notifications suite (Today's Thread, Loose Threads, Garden Signals, Garden Story), Wiki (auto-compile, D3 maps), Web Push (+ auto-prune), Email (Resend, DMARC), password reset, GitHub repo sync, Calendar, Voice memos
+🟡 **Partial:** Canvas **editor** role (write access) — view-only shipped; Deep Research mode (runs more tool calls, slower by design); YouTube without captions falls back to thin Exa text
+🔴 **Pending:** Sentry DSN (error monitoring wired, DSN unset), off-site backups (rclone), Impressum legal address; see `docs/IMPROVEMENTS.md` + `docs/POST-LAUNCH.md` for the full backlog
 
