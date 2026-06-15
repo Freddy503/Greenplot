@@ -304,6 +304,10 @@ class SeedifyAgent:
                             "name": _call["name"], "arguments": _call["arguments"],
                         }
                     content_buffer = _strip_tool_markup(content_buffer)
+                    # Measurable A/B signal: this only fires when the model failed to
+                    # use the structured tool API. A reliable tool-caller never hits it.
+                    print(f"[agent] ⚠ recovered {len(tool_calls_acc)} inline tool call(s) "
+                          f"from text — model leaked tool_calls (weak tool-caller)", flush=True)
 
                 # ── Handle tool calls or finish ────────────────────
                 # Some providers report finish_reason "stop" even when tool
