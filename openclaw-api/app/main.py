@@ -745,6 +745,54 @@ def paper_garden_links(seed_id: str, current_user: User = Depends(get_current_us
     return {"related_seeds": related_seeds[:6], "papers": papers[:6], "wiki_articles": []}
 
 
+class SeedFromUrlRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/v1/seeds/from-url")
+def seed_from_url(req: SeedFromUrlRequest, current_user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    """Ingest a URL (article / paper / YouTube) into the garden — create a seed,
+    then fetch→parse→chunk→index→garden-tailored summary via the paper pipeline."""
+    url = (req.url or "").strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="Please provide a valid http(s) link")
+    is_youtube = any(x in url for x in ("youtube.com/watch", "youtu.be/", "youtube.com/shorts/"))
+    host = url.split("//", 1)[-1].split("/", 1)[0]
+    seed_id = uuid.uuid4()
+    title = (f"YouTube — {host}" if is_youtube else f"Link — {host}")
+    seed = Seed(
+        id=seed_id,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        title=title[:200],
+        content=f"**Source:** {url}\n\nFetching and indexing this into your garden…",
+        seed_type="paper",
+        created_by="user_upload",
+        created_via="link_ingest",
+        embedding_ref="",
+        seed_metadata={
+            "tags": ["paper", "link"] + (["youtube"] if is_youtube else ["web"]),
+            "seed_type": "paper",
+            "domain": "Research",
+            "source": "link",
+            "source_url": url,
+            "paper_url": url,
+            "parse_status": "queued",
+            "chunk_count": 0,
+            "energy": "HIGH",
+        },
+    )
+    db.add(seed)
+    db.commit()
+    try:
+        from app.paper_pipeline import enqueue_or_run_parse
+        enqueue_or_run_parse(str(seed_id), str(current_user.tenant_id), db)
+    except Exception as e:
+        logger.warning(f"[seeds] from-url enqueue failed for {seed_id}: {e}")
+    return {"seed_id": str(seed_id), "title": title, "is_youtube": is_youtube, "parse_status": "queued"}
+
+
 @app.post("/api/v1/seeds/bulk-delete")
 def bulk_delete_seeds(body: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     seed_ids: list = body.get("seed_ids", [])

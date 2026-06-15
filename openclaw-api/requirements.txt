@@ -24,3 +24,4 @@ resend>=2.0.0
 sentry-sdk[fastapi]>=2.0.0
 tenacity>=8.2.0
 pymupdf
+youtube-transcript-api>=0.6.0
