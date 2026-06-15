@@ -43,11 +43,29 @@ def _arxiv_id_from_url(url: str) -> str:
     return m.group(1) if m else ""
 
 
+def _youtube_id(url: str) -> str:
+    m = re.search(r'(?:v=|youtu\.be/|/embed/|/shorts/)([A-Za-z0-9_-]{11})', url or "")
+    return m.group(1) if m else ""
+
+
 def fetch_paper(source_url: str, pdf_url: str = "") -> tuple[str, str]:
     """Fetch paper content. Returns (kind, payload) where kind is 'html' | 'pdf' | 'text'.
 
-    Preference order: arXiv HTML (cleanest structure) → PDF bytes → Exa text.
+    Preference order: YouTube transcript → arXiv HTML → PDF bytes → Exa text.
     """
+    # YouTube: pull the transcript directly (Exa rarely returns it well).
+    yt = _youtube_id(source_url)
+    if yt:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            segs = YouTubeTranscriptApi.get_transcript(yt)
+            text = " ".join(s.get("text", "") for s in segs).strip()
+            if text:
+                return "text", text[:60000]
+        except Exception as e:
+            logger.info(f"[paper_pipeline] YouTube transcript unavailable for {yt}: {e}")
+        # fall through to Exa on the page (gets title/description at least)
+
     arxiv_id = _arxiv_id_from_url(source_url) or _arxiv_id_from_url(pdf_url)
     headers = {"User-Agent": "Greenplot/1.0 (research paper indexing; contact: contact@example.com)"}
 
@@ -316,10 +334,10 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
         _set_status("parsed" if indexed else "failed", **extra)
         logger.info(f"[paper_pipeline] {seed.title[:50]}: {indexed} chunks indexed ({kind}), tree: {len(doc_tree) if doc_tree else 0} nodes")
 
-        # Uploaded PDFs arrive with placeholder content. Once indexed, synthesize
-        # an executive summary connected to the user's garden so the seed reads
-        # like a Research-Digest paper instead of a raw file.
-        if indexed and seed.created_via == "pdf_upload":
+        # Uploaded PDFs and ingested links arrive with placeholder content. Once
+        # indexed, synthesize an executive summary connected to the user's garden
+        # so the seed reads like a Research-Digest paper instead of a raw file.
+        if indexed and seed.created_via in ("pdf_upload", "link_ingest"):
             try:
                 from app.briefings import _call_llm, fetch_garden_context, fetch_user_themes
                 themes = fetch_user_themes(str(seed.user_id), db)
@@ -343,9 +361,12 @@ Produce markdown with exactly these sections:
 Be specific and grounded in the text; never invent seeds or findings.""",
                     max_tokens=750, model=settings.BRIEFING_MODEL)
                 if summary and len(summary.strip()) > 40:
-                    fname = (meta.get("original_filename") or "").strip()
-                    seed.content = (f"**Source:** Uploaded PDF{f' — {fname}' if fname else ''} · "
-                                    f"{indexed} sections indexed\n\n{summary.strip()}")
+                    if seed.created_via == "pdf_upload":
+                        label = (meta.get("original_filename") or "").strip()
+                        src = f"Uploaded PDF{f' — {label}' if label else ''}"
+                    else:
+                        src = meta.get("source_url") or "Link"
+                    seed.content = (f"**Source:** {src} · {indexed} sections indexed\n\n{summary.strip()}")
                     db.commit()
                     logger.info(f"[paper_pipeline] upload summary written for {seed_id}")
             except Exception as e:

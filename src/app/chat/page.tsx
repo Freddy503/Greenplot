@@ -215,6 +215,9 @@ export default function ChatPage() {
   const msgTimesRef = useRef<Record<string, string>>({})
   const [gardenEnriching, setGardenEnriching] = useState(false)
   const [detectedUrls, setDetectedUrls] = useState<string[]>([])
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [pdfDragOver, setPdfDragOver] = useState(false)
+  const chatFileInputRef = useRef<HTMLInputElement>(null)
   const [lastGardenSeeds, setLastGardenSeeds] = useState<Array<{title: string; domain: string}>>([])
   // Dynamic suggestions from garden
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
@@ -920,6 +923,42 @@ ${prefill.content || ''}`.trim()
     sendMessage({ text: enrichedText })
   }, [status, sendMessage, enrichWithGarden, handleSaveLastResponse])
 
+  // ── Add to garden from chat: a PDF or a link (article / paper / YouTube) ──
+  // Uploads go direct to the backend (Vercel proxy caps bodies at ~4.5MB).
+  const ingestPdfToGarden = useCallback((file: File) => {
+    if (!file) return
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Please choose a PDF'); return
+    }
+    if (file.size > 25 * 1024 * 1024) { toast.error('PDF exceeds the 25 MB limit'); return }
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.greenplot.ink'
+    const token = localStorage.getItem('greenplot_token')
+    const form = new FormData(); form.append('file', file)
+    const tid = toast.loading(`Adding “${file.name}” to your garden…`)
+    fetch(`${API_BASE}/api/v1/papers/upload`, {
+      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form,
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(r)))
+      .then(d => toast.success(`📄 Added “${d.title}” — indexing the full text into your garden`, { id: tid }))
+      .catch(() => toast.error('Upload failed', { id: tid }))
+  }, [])
+
+  const seedFromUrl = useCallback((rawUrl: string) => {
+    const url = (rawUrl || '').trim()
+    if (!/^https?:\/\//i.test(url)) { toast.error('Enter a valid link (http/https)'); return }
+    const token = localStorage.getItem('greenplot_token')
+    const yt = /youtu\.?be/i.test(url)
+    const tid = toast.loading(`Adding ${yt ? 'this video' : 'this link'} to your garden…`)
+    fetch('/api/seeds/from-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ url }),
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(r)))
+      .then(() => toast.success(`${yt ? '🎬' : '🔗'} Added to your garden — fetching & indexing now`, { id: tid }))
+      .catch(() => toast.error('Could not add that link', { id: tid }))
+  }, [])
+
   const handleSuggestion = useCallback(async (suggestion: string) => {
     if (status !== 'ready') return
     const enrichedText = await enrichWithGarden(suggestion)
@@ -1597,11 +1636,19 @@ ${prefill.content || ''}`.trim()
             {/* URL detection + Link capture indicator */}
             {detectedUrls.length > 0 && !gardenEnriching && (
               <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 99, padding: '7px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: 'var(--green-tint)', border: '1px solid var(--green-tint-2)', borderRadius: 99, padding: '6px 8px 6px 14px' }}>
                   <Globe size={13} color="var(--green-700)" strokeWidth={1.75} />
                   <span className="ui" style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green-700)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    {detectedUrls.length === 1 ? 'Link detected — will add to Sources' : `${detectedUrls.length} links detected`}
+                    {detectedUrls.length === 1 ? 'Link detected' : `${detectedUrls.length} links detected`}
                   </span>
+                  <button
+                    onClick={() => seedFromUrl(detectedUrls[0])}
+                    className="tap ui"
+                    title="Fetch this page (or video transcript) and save it to your garden"
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 99, padding: '5px 11px', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    <Sprout size={12} strokeWidth={2.2} /> Add to garden
+                  </button>
                 </div>
               </div>
             )}
@@ -1696,6 +1743,33 @@ ${prefill.content || ''}`.trim()
         {/* Thinking-partner mode chips */}
         <div className="max-w-2xl lg:max-w-3xl mx-auto mb-2">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+            {/* Add to garden — discoverable PDF / link capture */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                onClick={() => setAddMenuOpen(o => !o)}
+                className="tap"
+                title="Add a PDF or a link (article, paper, or YouTube) to your garden"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '6px 11px', borderRadius: 9999, fontFamily: 'var(--ui)', fontSize: 11.5, fontWeight: 700, border: '1px dashed var(--green-tint-2)', cursor: 'pointer', background: addMenuOpen ? 'var(--green-tint)' : 'transparent', color: 'var(--green-700)' }}
+              >
+                <Plus size={13} strokeWidth={2.4} /> Add
+              </button>
+              {addMenuOpen && (
+                <>
+                  <div onClick={() => setAddMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                  <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, zIndex: 50, background: 'var(--surface, #fff)', border: '1px solid var(--hairline)', borderRadius: 14, boxShadow: '0 12px 34px -10px rgba(0,0,0,0.25)', padding: 6, minWidth: 196 }}>
+                    <button onClick={() => { setAddMenuOpen(false); chatFileInputRef.current?.click() }} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', borderRadius: 9, padding: '9px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                      <FileText size={15} color="var(--green-700)" strokeWidth={1.9} />
+                      <span><span className="ui" style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>Upload a PDF</span><span className="body-text" style={{ display: 'block', fontSize: 10.5, color: 'var(--ink-3)' }}>Chunked & indexed into your garden</span></span>
+                    </button>
+                    <button onClick={() => { setAddMenuOpen(false); const u = window.prompt('Paste a link — article, paper, or YouTube'); if (u) seedFromUrl(u) }} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', borderRadius: 9, padding: '9px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                      <Globe size={15} color="var(--green-700)" strokeWidth={1.9} />
+                      <span><span className="ui" style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>Add a link</span><span className="body-text" style={{ display: 'block', fontSize: 10.5, color: 'var(--ink-3)' }}>Article, paper, or YouTube</span></span>
+                    </button>
+                  </div>
+                </>
+              )}
+              <input ref={chatFileInputRef} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) ingestPdfToGarden(f); e.target.value = '' }} />
+            </div>
             {THINKING_MODES.map((m) => {
               const active = selectedMode?.id === m.id
               return (
@@ -1719,7 +1793,18 @@ ${prefill.content || ''}`.trim()
             })}
           </div>
         </div>
-        <div className="max-w-2xl lg:max-w-3xl mx-auto">
+        <div
+          className="max-w-2xl lg:max-w-3xl mx-auto"
+          onDragOver={(e) => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setPdfDragOver(true) } }}
+          onDragLeave={() => setPdfDragOver(false)}
+          onDrop={(e) => { setPdfDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); ingestPdfToGarden(f) } }}
+          style={{ position: 'relative', borderRadius: 18, outline: pdfDragOver ? '2px dashed var(--green-700)' : 'none', outlineOffset: 4 }}
+        >
+          {pdfDragOver && (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--green-tint)', borderRadius: 18, pointerEvents: 'none' }}>
+              <span className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green-700)' }}>Drop a PDF to add it to your garden</span>
+            </div>
+          )}
           <PromptBox
             ref={promptRef}
             name="message"
