@@ -316,6 +316,41 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
         _set_status("parsed" if indexed else "failed", **extra)
         logger.info(f"[paper_pipeline] {seed.title[:50]}: {indexed} chunks indexed ({kind}), tree: {len(doc_tree) if doc_tree else 0} nodes")
 
+        # Uploaded PDFs arrive with placeholder content. Once indexed, synthesize
+        # an executive summary connected to the user's garden so the seed reads
+        # like a Research-Digest paper instead of a raw file.
+        if indexed and seed.created_via == "pdf_upload":
+            try:
+                from app.briefings import _call_llm, fetch_garden_context, fetch_user_themes
+                themes = fetch_user_themes(str(seed.user_id), db)
+                garden = fetch_garden_context(str(seed.user_id), themes, db)
+                garden_block = "\n".join(f"- {g['title']}: {g['snippet']}" for g in garden[:6]) or "No closely related seeds yet."
+                paper_text = "\n\n".join(f"{s.get('section', '')}: {(s.get('text') or '')[:800]}" for s in sections[:6])[:4500]
+                summary = _call_llm(
+                    f"""Write a concise executive summary of this paper for the reader's personal knowledge garden.
+
+PAPER: {seed.title}
+{paper_text}
+
+READER'S RELATED GARDEN SEEDS:
+{garden_block}
+
+Produce markdown with exactly these sections:
+**TL;DR** — 2-3 sentences: what it is and the single most important finding.
+**Why it matters to you** — connect it specifically to the related seeds above (name them); if none are close, say what direction it opens.
+**Key points** — 3-4 tight bullets of the core contributions or results.
+
+Be specific and grounded in the text; never invent seeds or findings.""",
+                    max_tokens=750, model=settings.BRIEFING_MODEL)
+                if summary and len(summary.strip()) > 40:
+                    fname = (meta.get("original_filename") or "").strip()
+                    seed.content = (f"**Source:** Uploaded PDF{f' — {fname}' if fname else ''} · "
+                                    f"{indexed} sections indexed\n\n{summary.strip()}")
+                    db.commit()
+                    logger.info(f"[paper_pipeline] upload summary written for {seed_id}")
+            except Exception as e:
+                logger.warning(f"[paper_pipeline] upload summary failed for {seed_id}: {e}")
+
         # Autopilot: digest papers that parsed successfully may earn a draft PRD
         # (relevance-gated + daily-capped inside auto_prd_for_paper).
         if indexed and seed.created_via == "academic_digest":
