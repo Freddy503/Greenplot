@@ -75,9 +75,10 @@ class AgentEvent:
         })
 
     @classmethod
-    def tool_result(cls, tool_id: str, result: str) -> AgentEvent:
+    def tool_result(cls, tool_id: str, result: str, name: str = "") -> AgentEvent:
         return cls(type=AgentEventType.TOOL_RESULT, data={
             "id": tool_id,
+            "name": name,
             "result": result[:8000],
         })
 

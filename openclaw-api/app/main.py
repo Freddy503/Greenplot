@@ -3263,6 +3263,46 @@ async def ingest_image_endpoint(
 
 # --- Chat v2 (refactored agent architecture) ---
 
+# PRD safety net: chat models reliably *write* a full PRD as prose but often
+# narrate "saved to your Studio" without actually calling write_spec (or
+# write_spec hits the near-duplicate guard and they claim success anyway). These
+# helpers let the endpoint detect a PRD-shaped answer that was never persisted
+# and save it itself, so a user "save this" request can never be silently lost.
+
+def _looks_like_prd(text: str) -> bool:
+    if not text or len(text) < 600:
+        return False
+    low = text.lower()
+    sections = ("problem", "solution", "scope", "success metric", "requirement",
+                "milestone", "user stor", "acceptance", "non-goal", "open question",
+                "objective", "deliverable")
+    hits = sum(1 for s in sections if s in low)
+    headers = text.count("\n## ") + text.count("\n# ")
+    mentions_prd = "prd" in low or "product requirement" in low
+    return hits >= 4 and headers >= 3 and (mentions_prd or headers >= 5)
+
+
+def _clean_prd_text(text: str) -> str:
+    """Strip suggested-action tags and any leaked tool markup the model appended."""
+    import re as _re
+    t = _re.sub(r'<sugg>.*?</sugg>', '', text or '', flags=_re.DOTALL)
+    t = _re.sub(r'<[｜|]?(?:DSML[｜|])?(?:tool_calls|invoke|parameter)[\s\S]*?(?:>|$)', '', t)
+    t = _re.sub(r'<[／/][｜|]?(?:DSML[｜|])?(?:tool_calls|invoke|parameter)>', '', t)
+    return t.strip()
+
+
+def _extract_prd_title(text: str, fallback: str = "") -> str:
+    import re as _re
+    title = ""
+    m = _re.search(r'^#{1,3}\s+(.+)', text or "", _re.MULTILINE)
+    if m:
+        title = m.group(1)
+    if not title and fallback:
+        title = fallback
+    title = (title or "").strip().strip("#*`").strip()
+    return (title or "Untitled PRD")[:120]
+
+
 @app.post("/api/v1/chat/v2")
 async def chat_v2_endpoint(
     request: Request,
@@ -3530,16 +3570,29 @@ async def chat_v2_endpoint(
         # Send session_id as first event
         yield f"data: {_json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
+        # PRD safety-net bookkeeping (see _looks_like_prd above)
+        _content_parts: list[str] = []
+        _spec_persisted = False
+
         async for event in agent.run(messages, current_user, db, attachments=attachments, should_cancel=request.is_disconnected):
             d = event.to_dict()
 
             # Record events
             if event.type.value == "content":
                 recorder.event("content", "assistant", d.get("text", "")[:100])
+                _content_parts.append(d.get("text", "") or "")
             elif event.type.value == "tool_call":
                 recorder.event("tool_call", d.get("name", ""), d.get("input", "")[:200])
             elif event.type.value == "tool_result":
                 recorder.event("tool_result", d.get("id", ""), d.get("result", "")[:200])
+                # Did the model already persist a spec this turn?
+                if d.get("name") in ("write_spec", "update_seed"):
+                    try:
+                        _r = _json.loads(d.get("result") or "{}")
+                        if _r.get("status") in ("ok", "partial") and _r.get("seed_id"):
+                            _spec_persisted = True
+                    except Exception:
+                        pass
 
             # SSE format
             # SSE format
@@ -3580,6 +3633,34 @@ async def chat_v2_endpoint(
                         logger.warning(f"Session {session_id}: no session to save")
                 except Exception as e:
                     logger.error(f"Session persistence error for {session_id}: {e}")
+
+                # ── PRD safety net ────────────────────────────────────
+                # The model wrote a full PRD as prose but never persisted it
+                # (didn't call write_spec, or the near-dup guard blocked it and
+                # it claimed success anyway). Save it ourselves with force=True
+                # and emit a write_spec tool_result so the UI shows the card.
+                try:
+                    _full = _clean_prd_text("".join(_content_parts))
+                    if not _spec_persisted and _looks_like_prd(_full):
+                        from app.database import SessionLocal as _SL
+                        from app.tool_executor import write_spec as _write_spec
+                        _net_db = _SL()
+                        try:
+                            _title = _extract_prd_title(_full, last_prompt)
+                            _res = await _write_spec(
+                                {"title": _title, "content": _full, "force": True},
+                                current_user, _net_db,
+                            )
+                            _net_db.commit()
+                            logger.info(f"[prd-safety-net] auto-saved PRD '{_title}' for user {current_user.id}")
+                            yield f"data: {_json.dumps({'type': 'tool_result', 'name': 'write_spec', 'id': 'prd_safety_net', 'result': _res}, ensure_ascii=False)}\n\n"
+                        except Exception as _e:
+                            logger.error(f"[prd-safety-net] save failed: {_e}")
+                            _net_db.rollback()
+                        finally:
+                            _net_db.close()
+                except Exception as _e:
+                    logger.error(f"[prd-safety-net] error: {_e}")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
