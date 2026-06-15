@@ -118,3 +118,40 @@ arXiv/paper agent, chat-with-PDF, knowledge graph). Net-new and viable:
 | Auto-PRD pipeline | `auto_prd.py` | Built — **disconnected from digest (B1)** |
 | Paper parse/chunk/index incl. PDF | `paper_pipeline.py` (`parse_pdf`) | Built — PDF-drop only needs the upload+viewer shell |
 | Canvas sharing (view-only) | `canvas_access.py` + endpoints | Shipped; editor role is M5 |
+
+---
+
+## What's next — at 6 users (2026-06-15)
+
+At 6 users the job isn't features — it's **don't lose these 6, learn from them,
+get them to the aha, and let them pull in the next 6.** Critical finding: there's
+**no analytics and no `last_active` on `User`** — you can't tell if your 6 are
+active or already churned. Fix the blindness first.
+
+### Tier 0 — See & survive (small, do first)
+1. **Activity + event tracking.** Add `last_active_at` to `User` (stamp on any
+   authed request) + a tiny event log (signup · first_seed · first_chat ·
+   digest_opened · returned_day2/7). EU-friendly, no external dep needed; add
+   PostHog-EU/Plausible later for the funnel. *This makes every future "what
+   next?" answerable instead of a guess.*
+2. **Sentry DSN + off-site backups.** Errors are invisible; data is on one box.
+   Non-negotiable now that real people depend on it. (Already flagged: B2 + §1.3.)
+
+### Tier 1 — Make the 6 love it (retention + the aha)
+3. **First-session aha.** Audit signup → first "wow" (a grounded chat citing
+   their seeds / their first Research Digest / a seed visibly connecting). A new
+   user must hit magic in < 5 min.
+4. **Verify + harden the Research Digest flywheel (#13).** It's the daily-return
+   hook — confirm it fires, lands in inbox (DMARC ✓), and connects a paper to a
+   seed. A reliably magical digest is the best retention lever you have.
+5. **Surface feedback + talk to all 6.** The "Got an idea?" box is buried in
+   Settings — add a persistent Feedback affordance, and DM every one of the 6
+   this week. Qualitative > quantitative at this size.
+
+### Tier 2 — Grow 6 → 60
+6. **Self-serve "invite a friend"** (you have admin invite; let users share the
+   code). 7. **Canvas editor role** (collaboration is view-only) — working *with*
+   someone is both a retention and a growth loop.
+
+**Single highest-leverage pick:** Tier 0 #1 — activity/event tracking. Small, and
+it turns "what to build next" from intuition into data.
