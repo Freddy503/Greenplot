@@ -11,7 +11,7 @@
  * full access to its tools, so these prompts shape *how* it thinks.
  */
 
-export type ThinkingModeId = 'brainstorm' | 'challenge' | 'strategize' | 'spec' | 'product' | 'vision'
+export type ThinkingModeId = 'brainstorm' | 'challenge' | 'strategize' | 'spec' | 'research' | 'product' | 'vision'
 
 export interface ThinkingMode {
   id: ThinkingModeId
@@ -122,6 +122,31 @@ export const THINKING_MODES: ThinkingMode[] = [
       '### Open Questions & Risks',
       'Write 3-5 substantive sentences of plain prose under EVERY heading — no YAML, no bullet-only sections. Problem Alignment should read like a founder\'s memo. Risks must name specific, concrete failure modes.',
       'After generating the full PRD, you MUST immediately call write_spec with the complete markdown content. Do not ask whether to save — save unconditionally, then confirm it is in the Studio.',
+    ].join('\n'),
+  },
+  {
+    id: 'research',
+    label: 'Deep Research',
+    icon: 'travel_explore',
+    blurb: 'Multi-step research across your garden and the web, synthesised into a cited brief.',
+    accentText: 'text-tertiary',
+    accentBg: 'bg-tertiary/10',
+    systemPrompt: [
+      ADAPTIVE_PROTOCOL('research'),
+      '',
+      "You are running a DEEP RESEARCH session: a multi-step investigation that combines the user's garden with live web research into a rigorous, cited synthesis. Do NOT one-shot it — iterate.",
+      'METHOD:',
+      '1. Decompose the question into 3-5 sharp sub-questions and state them up front.',
+      '2. For EACH sub-question: call search_seeds (the user\'s own knowledge first), web_search for live sources, and search_paper_content when a parsed paper is relevant. After each retrieval, JUDGE relevance — discard weak or off-topic results and re-query with sharper terms instead of padding the answer with them (corrective retrieval). Never cite a source you wouldn\'t stand behind.',
+      '3. Track where sources agree, disagree, or leave gaps. Surface contradictions explicitly rather than averaging them away.',
+      'DELIVERABLE — a structured brief in EXACTLY this markdown shape:',
+      '# [Question] — Research Brief',
+      '## TL;DR',
+      '## What your garden already knows',
+      '## What the research says',
+      '## Gaps & open questions',
+      '## Recommended next steps',
+      'Cite every non-obvious claim with its source — a seed title or a URL. Tag uncertainty explicitly ("(unverified)"); never present a guess as a finding. When the brief is done, offer to save it to the garden as a seed so it compounds.',
     ].join('\n'),
   },
 ]

@@ -76,6 +76,17 @@ Ranked by leverage. "Viable because…" notes the existing infra that de-risks i
 
 ## D2. Ideas mined from awesome-llm-apps (2026-06-14)
 
+> **All four shipped (2026-06-14, autonomous pass 2):** ✅ **Seed-a-link** (URL/
+> YouTube → garden, via the PDF pipeline + youtube-transcript-api) **and PDF**,
+> both **discoverable in chat** (a "＋ Add" menu, an "Add to garden" button on
+> detected links, and PDF drag-drop) — PDF drop also stays in Studio. ✅
+> **Citations** — the "Grounded in your garden" chip is now expandable with the
+> exact seeds, each linking to the garden (web Sources already existed). ✅
+> **Deep Research** — a new thinking mode (multi-step garden+web → cited brief).
+> ✅ **Corrective RAG** — a relevance-judge/re-query rule added to the base agent
+> prompt (applies to all chat) + baked into Deep Research. Needs you: backend
+> rebuild (installs youtube-transcript-api) + Vercel redeploy.
+
 Filtered against what Greenplot already has (RAG/Weaviate + tree_retrieval, MCP,
 arXiv/paper agent, chat-with-PDF, knowledge graph). Net-new and viable:
 
