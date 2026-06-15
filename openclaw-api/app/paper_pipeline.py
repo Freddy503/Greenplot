@@ -397,18 +397,21 @@ Be specific and grounded in the text; never invent seeds or findings.""",
                 logger.warning(f"[paper_pipeline] backlinking failed for {seed_id}: {e}")
             _set_status("parsed", link_count=link_count, connected=True)
 
-            # Tell the user it's done — bell + best-effort push (worker-safe).
-            try:
-                from app.notify import notify_user
-                conn_txt = f" · connected to {link_count} seed{'s' if link_count != 1 else ''}" if link_count else ""
-                notify_user(
-                    seed.user_id,
-                    f"📄 {seed.title[:48]} is in your garden",
-                    f"Indexed {indexed} section{'s' if indexed != 1 else ''}{conn_txt} — ready to explore.",
-                    f"/garden?seed={seed_id}",
-                )
-            except Exception as e:
-                logger.warning(f"[paper_pipeline] notify failed for {seed_id}: {e}")
+            # Notify only for user-initiated adds (upload / link) — digest papers
+            # arrive in a batch the digest already notified about, so per-paper
+            # pings there would be noise.
+            if seed.created_via in ("pdf_upload", "link_ingest"):
+                try:
+                    from app.notify import notify_user
+                    conn_txt = f" · connected to {link_count} seed{'s' if link_count != 1 else ''}" if link_count else ""
+                    notify_user(
+                        seed.user_id,
+                        f"📄 {seed.title[:48]} is in your garden",
+                        f"Indexed {indexed} section{'s' if indexed != 1 else ''}{conn_txt} — ready to explore.",
+                        f"/garden?seed={seed_id}",
+                    )
+                except Exception as e:
+                    logger.warning(f"[paper_pipeline] notify failed for {seed_id}: {e}")
 
         return {"status": "ok", "seed_id": seed_id, "chunks": indexed, "source": kind}
 
