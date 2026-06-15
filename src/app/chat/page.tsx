@@ -49,13 +49,6 @@ import {
   MessageContent,
   MessageResponse,
 } from '@/components/ai-elements/message'
-import {
-  Tool,
-  ToolHeader,
-  ToolContent,
-  ToolInput,
-  ToolOutput,
-} from '@/components/ai-elements/tool'
 import { SubagentStatus, type SubagentData } from '@/components/ai-elements/subagent'
 import {
   Sources,
@@ -173,6 +166,52 @@ const STARTER_ACTIONS = [
     prompt: 'I have a rough idea I want to develop into a buildable spec. Interrogate me.',
   },
 ]
+
+// Friendly, human labels for tool calls — [while running, when done].
+const TOOL_LABELS: Record<string, [string, string]> = {
+  search_seeds: ['Searching your garden', 'Searched your garden'],
+  search_seeds_filtered: ['Searching your garden', 'Searched your garden'],
+  search_wiki: ['Checking your wiki', 'Checked your wiki'],
+  web_search: ['Searching the web', 'Searched the web'],
+  search_paper_content: ['Reading your papers', 'Read your papers'],
+  read_source: ['Reading a source', 'Read a source'],
+  get_seed_detail: ['Opening a seed', 'Opened a seed'],
+  list_recent_seeds: ['Browsing your garden', 'Browsed your garden'],
+  rate_seed: ['Rating a seed', 'Rated a seed'],
+  build_ledger: ['Reviewing what you know', 'Reviewed what you know'],
+  write_spec: ['Writing a PRD', 'Wrote a PRD'],
+  write_product: ['Defining the product', 'Defined the product'],
+  update_seed: ['Updating a seed', 'Updated a seed'],
+  create_seed: ['Planting a seed', 'Planted a seed'],
+  ingest_paper: ['Ingesting a paper', 'Ingested a paper'],
+  visualize_garden: ['Mapping your garden', 'Mapped your garden'],
+  generate_image: ['Generating an image', 'Generated an image'],
+}
+
+function toolLabels(type: string): [string, string] {
+  const key = type.replace(/^tool-/, '')
+  if (TOOL_LABELS[key]) return TOOL_LABELS[key]
+  const words = key.replace(/_/g, ' ')
+  return [`Working: ${words}`, words.charAt(0).toUpperCase() + words.slice(1)]
+}
+
+// A quiet, single-line status for tool calls that don't produce a result card —
+// replaces the bulky raw "tool chip" so a multi-tool turn stays tidy.
+function ToolStatusRow({ type, done, errored }: { type: string; done: boolean; errored: boolean }) {
+  const [running, finished] = toolLabels(type)
+  return (
+    <div className="flex items-center gap-2" style={{ margin: '4px 0', fontFamily: 'var(--ui)', fontSize: 12 }}>
+      {errored ? (
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#c9881b" strokeWidth="1.3"/><path d="M7 4v3.5M7 9.7v.3" stroke="#c9881b" strokeWidth="1.3" strokeLinecap="round"/></svg>
+      ) : done ? (
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="var(--green-tint)"/><path d="M4.4 7.2l1.7 1.7 3.5-3.8" stroke="var(--green-700)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      ) : (
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" className="animate-spin"><circle cx="7" cy="7" r="5.5" stroke="var(--green-tint-2)" strokeWidth="1.5"/><path d="M7 1.5a5.5 5.5 0 0 1 5.5 5.5" stroke="var(--green-700)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      )}
+      <span style={{ color: errored ? '#c9881b' : 'var(--ink-3)' }}>{(done || errored) ? finished : `${running}…`}</span>
+    </div>
+  )
+}
 
 function StarterCard({ onAction, onDismiss }: { onAction: (prompt: string) => void; onDismiss: () => void }) {
   return (
@@ -1249,20 +1288,9 @@ ${prefill.content || ''}`.trim()
                                     } catch {}
                                   }
 
-                                  return (
-                                    <div key={`${message.id}-tool-${i}`} className="mt-3">
-                                      {isSubagent && subagentData && (
-                                        <SubagentStatus data={subagentData} className="mb-2" />
-                                      )}
-                                      <Tool>
-                                        <ToolHeader
-                                          type={tp.type}
-                                          state={tp.output != null && tp.state !== 'output-error' ? 'output-available' : tp.state}
-                                          title={isSubagent ? 'spawn_subagent' : undefined}
-                                        />
-                                        <ToolContent>
-                                          {tp.input != null && <ToolInput input={tp.input} />}
-                                          {(() => {
+                                  const toolDone = tp.output != null && tp.state !== 'output-error'
+                                  const toolErrored = tp.state === 'output-error' || tp.errorText != null
+                                  const richCard = (() => {
                                             // Parse tool output for rich rendering
                                             let parsedOutput: any = null
                                             try {
@@ -1426,18 +1454,14 @@ ${prefill.content || ''}`.trim()
                                               )
                                             }
 
-                                            if (tp.output != null || tp.errorText != null) {
-                                              return (
-                                                <ToolOutput
-                                                  output={tp.output != null ? JSON.stringify(tp.output) : undefined}
-                                                  errorText={tp.errorText}
-                                                />
-                                              )
-                                            }
                                             return null
-                                          })()}
-                                        </ToolContent>
-                                      </Tool>
+                                          })()
+                                  return (
+                                    <div key={`${message.id}-tool-${i}`} className="mt-2">
+                                      {isSubagent && subagentData && (
+                                        <SubagentStatus data={subagentData} className="mb-2" />
+                                      )}
+                                      {richCard || <ToolStatusRow type={tp.type} done={toolDone} errored={toolErrored} />}
                                     </div>
                                   )
                                 }
