@@ -225,7 +225,10 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
           <div style={{ position: 'relative' }}>
             <DetailHeroBtn name="more" onClick={() => setShowActions(p => !p)} />
             {showActions && (
-              <div className="glass" style={{ position: 'absolute', top: 44, right: 0, borderRadius: 14, overflow: 'hidden', minWidth: 160, boxShadow: '0 8px 24px rgba(8,22,14,0.18)', background: 'rgba(255,255,255,0.96)', zIndex: 10 }}>
+              <>
+                {/* Click-away backdrop — also guarantees the menu paints above the sheet body */}
+                <div onClick={() => { setShowActions(false); setConfirmDelete(false) }} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'transparent' }} />
+              <div className="glass" style={{ position: 'fixed', top: 'max(96px, calc(env(safe-area-inset-top, 0px) + 62px))', right: 16, borderRadius: 14, overflow: 'hidden', minWidth: 184, boxShadow: '0 8px 24px rgba(8,22,14,0.18)', background: 'rgba(255,255,255,0.96)', zIndex: 71 }}>
                 <button onClick={() => { shareSeed(seed); setShowActions(false) }} className="tap" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--hairline)', textAlign: 'left' }}>
                   <Share2 size={16} color="var(--ink-2)" strokeWidth={1.75} />
                   <span className="ui" style={{ fontSize: 13.5, color: 'var(--ink)' }}>Share</span>
@@ -243,6 +246,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
                   <span className="ui" style={{ fontSize: 13.5, color: 'rgba(212,80,62,0.9)' }}>{confirmDelete ? 'Confirm delete?' : 'Delete'}</span>
                 </button>
               </div>
+              </>
             )}
           </div>
         }

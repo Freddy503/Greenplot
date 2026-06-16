@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
-import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink, X, Share2 } from 'lucide-react'
+import { Sparkles, Target, Swords, FileText, Leaf, Pencil, ArrowLeft, Download, Copy, BookOpen, Trash2, Network, Loader2, Check, LayoutGrid, List, Printer, ExternalLink, X, Share2, MoreHorizontal } from 'lucide-react'
 import Segmented from '@/components/ui/v2/segmented'
 import MermaidDiagram from '@/components/ui/mermaid-diagram'
 import { readCache, writeCache } from '@/lib/swr-cache'
@@ -149,6 +149,14 @@ const BOARD_COLUMNS = [
 ]
 
 const isDraft = (p: PRDItem) => !p.buildStatus || p.buildStatus === 'draft'
+
+// Shared style for the PRDDetail … overflow menu rows (keeps the toolbar from
+// overflowing and gives Studio the same action menu as the garden seed sheet).
+const STUDIO_MENU_ITEM: CSSProperties = {
+  width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+  border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--hairline)', textAlign: 'left',
+}
+const STUDIO_MENU_LABEL: CSSProperties = { fontSize: 13.5, color: 'var(--ink)' }
 
 // ── Build pipeline timeline (PRD detail) ─────────────
 
@@ -579,6 +587,58 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
   const [title, setTitle] = useState(prd.title)
   const [content, setContent] = useState(prd.content)
   const [saving, setSaving] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+
+  const handleDeletePrd = async () => {
+    if (prd.local) { deleteLocal(); return }
+    if (!window.confirm(`Delete "${title}"? This removes the PRD seed permanently.`)) return
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/seeds/${prd.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      if (!res.ok) throw new Error()
+      toast.success('PRD deleted')
+      onDeleted(prd.id)
+    } catch { toast.error('Could not delete') }
+  }
+
+  const improveV2 = async () => {
+    const token = localStorage.getItem('greenplot_token')
+    const url = prd.sourcePaperId
+      ? `/api/papers/${prd.sourcePaperId}/draft-prd?replace=${encodeURIComponent(prd.id)}`
+      : `/api/specs/${prd.id}/improve`
+    const res = await fetch(url, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} }).catch(() => null)
+    if (res?.ok) toast.success(prd.sourcePaperId
+      ? 'Regenerating from the paper with the v2 rubric — reopen this PRD in ~2 min'
+      : 'Improving with the v2 rubric — reopen this PRD in ~2 min', { duration: 7000 })
+    else toast.error('Could not start — backend update pending')
+  }
+
+  const shipToGitHub = async () => {
+    const token = localStorage.getItem('greenplot_token')
+    const toastId = toast.loading('Shipping to GitHub — branch, PR and issue…')
+    try {
+      const res = await fetch(`/api/specs/${prd.id}/ship`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      const data = await res.json()
+      if (res.ok && data.pr_url) {
+        toast.success('Shipped — PR and issue are open', {
+          id: toastId, duration: 9000,
+          action: { label: 'Open PR', onClick: () => window.open(data.pr_url, '_blank') },
+        })
+        setBuildStatus('ready')
+        onUpdated?.(prd.id, { buildStatus: 'ready', prUrl: data.pr_url })
+      } else if (res.status === 422) {
+        toast.error('No GitHub repo connected yet', {
+          id: toastId, duration: 9000,
+          description: 'Connect a repo once in Settings — then Ship opens a PR + issue.',
+          action: { label: 'Open Settings', onClick: () => { window.location.href = '/settings' } },
+        })
+      } else {
+        toast.error(data.detail || data.error || 'Ship failed', { id: toastId })
+      }
+    } catch {
+      toast.error('Ship failed', { id: toastId })
+    }
+  }
 
   const generateDiagram = async () => {
     if (generating) return
@@ -716,102 +776,50 @@ function PRDDetail({ prd, onBack, onDeleted, onStatusChanged, onUpdated }: { prd
             </>
           ) : (
             <>
-              {!prd.local && (
-                <button onClick={() => shapeVision({ ...prd, title, content }, router)} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '7px 15px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  <Sparkles size={13} strokeWidth={2} /> Shape the vision
+              {/* Primary action stays inline; everything else lives in the … menu
+                  so the toolbar never overflows (and Delete is always reachable). */}
+              <button onClick={copyForAgent} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                <Copy size={13} strokeWidth={2} /> <span className="hidden sm:inline">Copy for Claude Code</span><span className="sm:hidden">Copy</span>
+              </button>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <button onClick={() => setShowMenu(p => !p)} className="tap" title="More actions" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <MoreHorizontal size={18} strokeWidth={1.75} color="var(--ink-2)" />
                 </button>
-              )}
-              {!prd.local && (
-                <button
-                  onClick={async () => {
-                    const token = localStorage.getItem('greenplot_token')
-                    const url = prd.sourcePaperId
-                      ? `/api/papers/${prd.sourcePaperId}/draft-prd?replace=${encodeURIComponent(prd.id)}`
-                      : `/api/specs/${prd.id}/improve`
-                    const res = await fetch(url, {
-                      method: 'POST',
-                      headers: token ? { Authorization: `Bearer ${token}` } : {},
-                    }).catch(() => null)
-                    if (res?.ok) toast.success(prd.sourcePaperId
-                      ? 'Regenerating from the paper with the v2 rubric — reopen this PRD in ~2 min'
-                      : 'Improving with the v2 rubric — reopen this PRD in ~2 min', { duration: 7000 })
-                    else toast.error('Could not start — backend update pending')
-                  }}
-                  className="tap"
-                  title={prd.sourcePaperId ? 'Regenerate from the source paper with the engineering-grade rubric' : 'Critique-and-revise this PRD against the engineering-grade rubric'}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-sunk)', color: 'var(--ink-2)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  <Loader2 size={13} strokeWidth={2} /> {prd.sourcePaperId ? 'Regenerate v2' : 'Improve v2'}
-                </button>
-              )}
-              {!prd.local && (
-                <button
-                  onClick={async () => {
-                    const token = localStorage.getItem('greenplot_token')
-                    const toastId = toast.loading('Shipping to GitHub — branch, PR and issue…')
-                    try {
-                      const res = await fetch(`/api/specs/${prd.id}/ship`, {
-                        method: 'POST',
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
-                      })
-                      const data = await res.json()
-                      if (res.ok && data.pr_url) {
-                        toast.success('Shipped — PR and issue are open', {
-                          id: toastId, duration: 9000,
-                          action: { label: 'Open PR', onClick: () => window.open(data.pr_url, '_blank') },
-                        })
-                        setBuildStatus('ready')
-                        onUpdated?.(prd.id, { buildStatus: 'ready', prUrl: data.pr_url })
-                      } else if (res.status === 422) {
-                        toast.error('No GitHub repo connected yet', {
-                          id: toastId, duration: 9000,
-                          description: 'Connect a repo once in Settings — then Ship opens a PR + issue.',
-                          action: { label: 'Open Settings', onClick: () => { window.location.href = '/settings' } },
-                        })
-                      } else {
-                        toast.error(data.detail || data.error || 'Ship failed', { id: toastId })
-                      }
-                    } catch {
-                      toast.error('Ship failed', { id: toastId })
-                    }
-                  }}
-                  className="tap"
-                  title="Open a PR with this spec + an implementation issue"
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-sunk)', color: 'var(--ink-2)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  <ExternalLink size={13} strokeWidth={2} /> Ship to GitHub
-                </button>
-              )}
-              <button onClick={copyForAgent} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', color: 'var(--green-700)', border: 'none', borderRadius: 9999, padding: '7px 13px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                <Copy size={13} strokeWidth={2} /> Copy for Claude Code
-              </button>
-              <button onClick={() => setEditing(true)} className="tap" title="Edit PRD" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
-                <Pencil size={16} strokeWidth={1.75} color="var(--ink-2)" />
-              </button>
-              <button onClick={exportPdf} className="tap" title="Export as PDF" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
-                <Printer size={16} strokeWidth={1.75} color="var(--ink-2)" />
-              </button>
-              <button onClick={downloadMd} className="tap" title="Download markdown" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>
-                <Download size={16} strokeWidth={1.75} color="var(--ink-2)" />
-              </button>
-              <button
-                onClick={async () => {
-                  if (prd.local) { deleteLocal(); return }
-                  if (!window.confirm(`Delete "${title}"? This removes the PRD seed permanently.`)) return
-                  try {
-                    const token = localStorage.getItem('greenplot_token')
-                    const res = await fetch(`/api/seeds/${prd.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} })
-                    if (!res.ok) throw new Error()
-                    toast.success('PRD deleted')
-                    onDeleted(prd.id)
-                  } catch { toast.error('Could not delete') }
-                }}
-                className="tap"
-                title="Delete PRD"
-                style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}
-              >
-                <Trash2 size={16} strokeWidth={1.75} color="var(--red)" />
-              </button>
+                {showMenu && (
+                  <>
+                    <div onClick={() => setShowMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'transparent' }} />
+                    <div className="glass" style={{ position: 'fixed', top: 'max(60px, calc(env(safe-area-inset-top, 0px) + 60px))', right: 14, borderRadius: 14, overflow: 'hidden', minWidth: 196, boxShadow: '0 8px 24px rgba(8,22,14,0.18)', background: 'rgba(255,255,255,0.97)', zIndex: 71 }}>
+                      {!prd.local && (
+                        <button onClick={() => { setShowMenu(false); shapeVision({ ...prd, title, content }, router) }} className="tap" style={STUDIO_MENU_ITEM}>
+                          <Sparkles size={16} color="var(--green-700)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>Shape the vision</span>
+                        </button>
+                      )}
+                      {!prd.local && (
+                        <button onClick={() => { setShowMenu(false); improveV2() }} className="tap" style={STUDIO_MENU_ITEM}>
+                          <Loader2 size={16} color="var(--ink-2)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>{prd.sourcePaperId ? 'Regenerate v2' : 'Improve v2'}</span>
+                        </button>
+                      )}
+                      {!prd.local && (
+                        <button onClick={() => { setShowMenu(false); shipToGitHub() }} className="tap" style={STUDIO_MENU_ITEM}>
+                          <ExternalLink size={16} color="var(--ink-2)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>Ship to GitHub</span>
+                        </button>
+                      )}
+                      <button onClick={() => { setShowMenu(false); setEditing(true) }} className="tap" style={STUDIO_MENU_ITEM}>
+                        <Pencil size={16} color="var(--ink-2)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>Edit</span>
+                      </button>
+                      <button onClick={() => { setShowMenu(false); exportPdf() }} className="tap" style={STUDIO_MENU_ITEM}>
+                        <Printer size={16} color="var(--ink-2)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>Export PDF</span>
+                      </button>
+                      <button onClick={() => { setShowMenu(false); downloadMd() }} className="tap" style={STUDIO_MENU_ITEM}>
+                        <Download size={16} color="var(--ink-2)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>Download .md</span>
+                      </button>
+                      <button onClick={() => { setShowMenu(false); handleDeletePrd() }} className="tap" style={{ ...STUDIO_MENU_ITEM, borderBottom: 'none' }}>
+                        <Trash2 size={16} color="rgba(212,80,62,0.9)" strokeWidth={1.75} /> <span className="ui" style={{ ...STUDIO_MENU_LABEL, color: 'rgba(212,80,62,0.9)' }}>Delete</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </>
           )}
         </div>
