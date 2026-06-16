@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Leaf, Globe, Share2, Bookmark, Sparkles, ChevronRight, Link2, Clock, Trash2, Archive, Search, FileText, Plus, MoreHorizontal } from 'lucide-react'
 import DetailHero, { DetailHeroBtn } from '@/components/ui/v2/detail-hero'
@@ -224,11 +225,12 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
         right={
           <div style={{ position: 'relative' }}>
             <DetailHeroBtn name="more" onClick={() => setShowActions(p => !p)} />
-            {showActions && (
+            {showActions && createPortal(
               <>
-                {/* Click-away backdrop — also guarantees the menu paints above the sheet body */}
-                <div onClick={() => { setShowActions(false); setConfirmDelete(false) }} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'transparent' }} />
-              <div className="glass" style={{ position: 'fixed', top: 'max(96px, calc(env(safe-area-inset-top, 0px) + 62px))', right: 16, borderRadius: 14, overflow: 'hidden', minWidth: 184, boxShadow: '0 8px 24px rgba(8,22,14,0.18)', background: 'rgba(255,255,255,0.96)', zIndex: 71 }}>
+                {/* Portal to <body> so the menu escapes the hero's zIndex:2 stacking
+                    context (the sheet body sits at zIndex:3 and otherwise paints over it) */}
+                <div onClick={() => { setShowActions(false); setConfirmDelete(false) }} style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'transparent' }} />
+              <div className="glass" style={{ position: 'fixed', top: 'max(96px, calc(env(safe-area-inset-top, 0px) + 62px))', right: 16, borderRadius: 14, overflow: 'hidden', minWidth: 184, boxShadow: '0 8px 24px rgba(8,22,14,0.18)', background: 'rgba(255,255,255,0.96)', zIndex: 9999 }}>
                 <button onClick={() => { shareSeed(seed); setShowActions(false) }} className="tap" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--hairline)', textAlign: 'left' }}>
                   <Share2 size={16} color="var(--ink-2)" strokeWidth={1.75} />
                   <span className="ui" style={{ fontSize: 13.5, color: 'var(--ink)' }}>Share</span>
@@ -246,7 +248,8 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
                   <span className="ui" style={{ fontSize: 13.5, color: 'rgba(212,80,62,0.9)' }}>{confirmDelete ? 'Confirm delete?' : 'Delete'}</span>
                 </button>
               </div>
-              </>
+              </>,
+              document.body
             )}
           </div>
         }
