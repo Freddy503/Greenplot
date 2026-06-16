@@ -282,9 +282,24 @@ const MODE_ICONS: Record<string, React.ComponentType<any>> = {
 
 // ── Idea / Paper Detail ───────────────────────────────
 
-function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack: () => void; onSpec: () => void; onDrafted?: () => void }) {
+function IdeaDetail({ seed, onBack, onSpec, onDrafted, onDeleted }: { seed: RawSeed; onBack: () => void; onSpec: () => void; onDrafted?: () => void; onDeleted?: (id: string) => void }) {
   const meta = seed.seed_metadata || seed.metadata || {}
   const paper = isPaperSeed(seed)
+  const [showMenu, setShowMenu] = useState(false)
+
+  const handleDeleteIdea = async () => {
+    if (!seed.id) return
+    const label = paper ? 'paper' : 'idea'
+    if (!window.confirm(`Delete this ${label}? This removes it from your garden permanently.`)) return
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const res = await fetch(`/api/seeds/${seed.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      if (!res.ok) throw new Error()
+      toast.success(`${label.charAt(0).toUpperCase()}${label.slice(1)} deleted`)
+      onDeleted?.(seed.id)
+      onBack()
+    } catch { toast.error('Could not delete') }
+  }
   const isUpload = meta.source === 'upload' || !!meta.file_path
   const pdfUrl = isUpload ? '' : paperPdfUrl(meta)
   const paperUrl = meta.paper_url || ''
@@ -424,9 +439,29 @@ function IdeaDetail({ seed, onBack, onSpec, onDrafted }: { seed: RawSeed; onBack
               {drafting ? <Loader2 size={13} strokeWidth={2} className="animate-spin" /> : <FileText size={13} strokeWidth={2} />} Draft PRD
             </button>
           )}
-          <button onClick={onSpec} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '7px 15px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={onSpec} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '7px 15px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
             <Pencil size={13} strokeWidth={2} /> Spec it
           </button>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => setShowMenu(p => !p)} className="tap" title="More actions" style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <MoreHorizontal size={18} strokeWidth={1.75} color="var(--ink-2)" />
+            </button>
+            {showMenu && (
+              <>
+                <div onClick={() => setShowMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'transparent' }} />
+                <div className="glass" style={{ position: 'fixed', top: 'max(60px, calc(env(safe-area-inset-top, 0px) + 60px))', right: 14, borderRadius: 14, overflow: 'hidden', minWidth: 188, boxShadow: '0 8px 24px rgba(8,22,14,0.18)', background: 'rgba(255,255,255,0.97)', zIndex: 71 }}>
+                  {paper && (
+                    <button onClick={() => { setShowMenu(false); indexFullText() }} disabled={indexing} className="tap" style={STUDIO_MENU_ITEM}>
+                      <Loader2 size={16} color="var(--ink-2)" strokeWidth={1.75} /> <span className="ui" style={STUDIO_MENU_LABEL}>{indexing ? 'Indexing…' : 'Re-index full text'}</span>
+                    </button>
+                  )}
+                  <button onClick={() => { setShowMenu(false); handleDeleteIdea() }} className="tap" style={{ ...STUDIO_MENU_ITEM, borderBottom: 'none' }}>
+                    <Trash2 size={16} color="rgba(212,80,62,0.9)" strokeWidth={1.75} /> <span className="ui" style={{ ...STUDIO_MENU_LABEL, color: 'rgba(212,80,62,0.9)' }}>Delete</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1263,6 +1298,7 @@ export default function StudioPage() {
         onBack={() => setSelectedIdea(null)}
         onSpec={() => developSeed(selectedIdea)}
         onDrafted={() => setRefreshKey(k => k + 1)}
+        onDeleted={(id) => setIdeas(prev => prev.filter(s => (s.id || s.notion_id) !== id))}
       />
     )
   }
