@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Leaf, Share2, Filter, Link2 } from 'lucide-react'
+import { Leaf, Share2, Filter, Link2, Telescope, Loader2, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 
 import Hero from '@/components/layout/hero'
@@ -142,6 +142,131 @@ function SeedRow({ seed, allSeeds, onClick }: { seed: Seed; allSeeds: Seed[]; on
 }
 
 // ── Page ──────────────────────────────────────────────
+
+type ResearchRun = {
+  run_id: string
+  status: string
+  theme: string | null
+  finding_count: number
+  result_seed_id: string | null
+  created_at: string | null
+}
+
+const RUN_ACTIVE = new Set(['queued', 'scoping', 'scouting', 'synthesizing', 'reporting'])
+
+function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => void }) {
+  const [theme, setTheme] = useState('')
+  const [launching, setLaunching] = useState(false)
+  const [runs, setRuns] = useState<ResearchRun[]>([])
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const authHeader = (): Record<string, string> => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
+    return t ? { Authorization: `Bearer ${t}` } : {}
+  }
+
+  const loadRuns = useCallback(async () => {
+    try {
+      const r = await fetch('/api/research/runs', { headers: authHeader() })
+      if (!r.ok) return
+      const d = await r.json()
+      setRuns(Array.isArray(d.runs) ? d.runs : [])
+    } catch { /* offline ok */ }
+  }, [])
+
+  // Poll while any run is active (push handles the off-page notification).
+  useEffect(() => {
+    loadRuns()
+    return () => { if (pollRef.current) clearTimeout(pollRef.current) }
+  }, [loadRuns])
+
+  useEffect(() => {
+    const active = runs.some(r => RUN_ACTIVE.has(r.status))
+    if (pollRef.current) clearTimeout(pollRef.current)
+    if (active) pollRef.current = setTimeout(loadRuns, 8000)
+    return () => { if (pollRef.current) clearTimeout(pollRef.current) }
+  }, [runs, loadRuns])
+
+  const launch = async () => {
+    if (launching) return
+    setLaunching(true)
+    try {
+      const r = await fetch('/api/research/deep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify(theme.trim() ? { theme: theme.trim() } : {}),
+      })
+      if (!r.ok) throw new Error()
+      setTheme('')
+      toast.success('Deep research started — I\'ll push + email you when the report\'s ready.', { duration: 6000 })
+      loadRuns()
+    } catch {
+      toast.error('Could not start the run — backend update pending')
+    } finally {
+      setLaunching(false)
+    }
+  }
+
+  const activeRun = runs.find(r => RUN_ACTIVE.has(r.status))
+  const lastDone = runs.find(r => r.status === 'done' && r.result_seed_id)
+
+  return (
+    <div className="v2-card" style={{ borderRadius: 20, padding: 16, marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+        <span style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Telescope size={16} color="var(--green-700)" strokeWidth={1.75} />
+        </span>
+        <div>
+          <div className="ui" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>Deep Research</div>
+          <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)' }}>Send agents across your garden + the latest sources to find a gap.</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          value={theme}
+          onChange={(e) => setTheme(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') launch() }}
+          placeholder="Focus (optional) — e.g. small language model deployment"
+          className="ui"
+          style={{ flex: 1, minWidth: 0, fontSize: 13, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '10px 13px', color: 'var(--ink)', outline: 'none' }}
+        />
+        <button
+          onClick={launch}
+          disabled={launching || !!activeRun}
+          className="tap ui"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 9999, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: (launching || activeRun) ? 'default' : 'pointer', opacity: (launching || activeRun) ? 0.6 : 1, flexShrink: 0 }}
+        >
+          {launching ? <Loader2 size={14} strokeWidth={2} className="animate-spin" /> : <Telescope size={14} strokeWidth={2} />}
+          {launching ? 'Starting…' : 'Go deep'}
+        </button>
+      </div>
+
+      {activeRun && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, background: 'var(--green-tint)', borderRadius: 12, padding: '9px 12px' }}>
+          <Loader2 size={13} strokeWidth={2} className="animate-spin" color="var(--green-700)" />
+          <span className="ui" style={{ fontSize: 12, fontWeight: 600, color: 'var(--green-deep)' }}>
+            {activeRun.theme || 'Research'} — {activeRun.status}…
+          </span>
+        </div>
+      )}
+
+      {!activeRun && lastDone && (
+        <button
+          onClick={() => lastDone.result_seed_id && onOpenSeed(lastDone.result_seed_id)}
+          className="tap"
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '10px 13px', cursor: 'pointer', textAlign: 'left' }}
+        >
+          <Leaf size={15} color="var(--green-700)" strokeWidth={1.75} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ui" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lastDone.theme || 'Deep Research'}</div>
+            <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>Latest report · {lastDone.finding_count} sources</div>
+          </div>
+          <ArrowRight size={15} color="var(--ink-3)" strokeWidth={1.75} />
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function GardenPage() {
   const router = useRouter()
@@ -285,6 +410,13 @@ export default function GardenPage() {
             {sortDir === 'desc' ? '↓ Newest' : '↑ Oldest'}
           </button>
         </div>
+
+        {/* Deep Research launcher */}
+        <DeepResearchLauncher onOpenSeed={(seedId) => {
+          const s = seeds.find(x => x.id === seedId)
+          if (s) { setSelectedSeed(s); setDetailOpen(true) }
+          else router.push(`/garden?seed=${seedId}`)
+        }} />
 
         {/* Focus Seed */}
         {!loading && focusSeed && (

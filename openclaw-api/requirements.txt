@@ -30,5 +30,5 @@ youtube-transcript-api>=0.6.0
 feedparser
 
 # Phase 2 Deep Research harness (docs/specs/deep-research-agents.md).
-# Optional — only needed when RESEARCH_ENGINE=temporal. Uncomment + rebuild.
-# temporalio
+# Needed only when RESEARCH_ENGINE=temporal (Phase 2). Safe to keep installed.
+temporalio>=1.7
