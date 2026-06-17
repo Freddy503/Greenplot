@@ -398,3 +398,36 @@ def send_briefing_email(to: str, briefing: dict, attachments: list = None) -> bo
     except Exception as e:
         print(f"[email_sender] Failed to send to {to}: {e}")
         return False
+
+
+def send_research_report_email(to: str, theme: str, gap: str, report_md: str,
+                               finding_count: int, seed_url: str) -> bool:
+    """Email the Deep Research brief (spec: docs/specs/deep-research-agents.md)."""
+    if not settings.RESEND_API_KEY or _resend is None:
+        print("[email_sender] cannot send research report (Resend not configured)")
+        return False
+    _resend.api_key = settings.RESEND_API_KEY
+    body_html = _md_to_html(report_md, base_color="#5f5f5a")
+    gap_line = (gap or "").strip()
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#141413">
+      <div style="font-size:22px;font-weight:700;color:#15803d;margin-bottom:6px">🌱 Greenplot · Deep Research</div>
+      <p style="font-size:12px;color:#a3a29c;margin:0 0 18px">Connected the dots across {finding_count} sources on <b>{theme}</b></p>
+      {f'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:18px"><div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">The gap</div><div style="font-size:14px;line-height:1.55;color:#141413">{gap_line}</div></div>' if gap_line else ''}
+      <div style="font-size:14.5px;line-height:1.7;color:#5f5f5a">{body_html}</div>
+      <a href="{seed_url}" style="display:inline-block;margin:22px 0 4px;background:#22c55e;color:#fff;text-decoration:none;font-weight:600;border-radius:9999px;padding:12px 26px;font-size:14px">Open in your garden →</a>
+      <p style="font-size:11px;color:#a3a29c;margin-top:18px">A long-running research agent assembled this from your garden + the latest literature and industry signal. Reply with a direction and it'll dig deeper next time.</p>
+    </div>
+    """
+    try:
+        _resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": to,
+            "subject": f"🔬 Deep Research: {theme[:60]}",
+            "html": html,
+        })
+        print(f"[email_sender] Sent research report to {to}")
+        return True
+    except Exception as e:
+        print(f"[email_sender] Failed to send research report to {to}: {e}")
+        return False

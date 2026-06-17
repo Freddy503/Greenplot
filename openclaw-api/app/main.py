@@ -773,6 +773,87 @@ def paper_fulltext(seed_id: str, current_user: User = Depends(get_current_user),
                         detail="No full text available yet — index the paper first (POST /papers/{id}/parse).")
 
 
+# ── Deep Research runs (spec: docs/specs/deep-research-agents.md) ──────────────
+
+class DeepResearchRequest(BaseModel):
+    theme: Optional[str] = None  # focus; omitted → orchestrator picks from themes
+
+
+@app.post("/api/v1/research/deep", status_code=202)
+def start_deep_research(req: DeepResearchRequest,
+                        current_user: User = Depends(get_current_user),
+                        db: Session = Depends(get_db)):
+    """Kick off a long-running, multi-source research run that connects the dots
+    in the garden, names a gap, and emails a report. Returns the run id; poll
+    GET /research/runs/{id}."""
+    from app.models import ResearchRun
+    run = ResearchRun(
+        id=uuid.uuid4(), tenant_id=current_user.tenant_id, user_id=current_user.id,
+        theme=(req.theme or None), status="queued", engine="worker",
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    # Phase 2: when RESEARCH_ENGINE=temporal, launch on the self-hosted Temporal
+    # cluster (durable retries/replay). Falls back to the Redis worker on any error.
+    if getattr(settings, "RESEARCH_ENGINE", "worker") == "temporal":
+        try:
+            from app.deep_research.temporal_worker import start_workflow
+            start_workflow(str(run.id))
+            run.engine = "temporal"
+            db.commit()
+            return {"run_id": str(run.id), "status": run.status, "engine": "temporal"}
+        except Exception as e:
+            logger.warning(f"[research] Temporal start failed ({e}) — falling back to worker")
+
+    try:
+        from app.task_broker import enqueue_deep_research
+        enqueue_deep_research(str(run.id), str(current_user.tenant_id))
+    except Exception as e:
+        # Queue down — run inline so the feature degrades gracefully.
+        logger.warning(f"[research] enqueue failed ({e}) — running inline")
+        try:
+            from app.deep_research.orchestrator import run_deep_research
+            run_deep_research(str(run.id), db)
+        except Exception as e2:
+            logger.error(f"[research] inline run failed: {e2}")
+    return {"run_id": str(run.id), "status": run.status}
+
+
+@app.get("/api/v1/research/runs/{run_id}")
+def get_research_run(run_id: str, current_user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db)):
+    from app.models import ResearchRun
+    run = db.query(ResearchRun).filter(
+        ResearchRun.id == run_id, ResearchRun.tenant_id == current_user.tenant_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {
+        "run_id": str(run.id), "status": run.status, "theme": run.theme,
+        "gap": run.gap, "finding_count": run.finding_count,
+        "email_sent": run.email_sent,
+        "result_seed_id": str(run.result_seed_id) if run.result_seed_id else None,
+        "report_md": run.report_md, "error": run.error,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+    }
+
+
+@app.get("/api/v1/research/runs")
+def list_research_runs(current_user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    from app.models import ResearchRun
+    runs = db.query(ResearchRun).filter(
+        ResearchRun.tenant_id == current_user.tenant_id
+    ).order_by(ResearchRun.created_at.desc()).limit(20).all()
+    return {"runs": [{
+        "run_id": str(r.id), "status": r.status, "theme": r.theme,
+        "finding_count": r.finding_count, "email_sent": r.email_sent,
+        "result_seed_id": str(r.result_seed_id) if r.result_seed_id else None,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in runs]}
+
+
 @app.get("/api/v1/papers/{seed_id}/links")
 def paper_garden_links(seed_id: str, current_user: User = Depends(get_current_user),
                        db: Session = Depends(get_db)):

@@ -1,0 +1,66 @@
+# Self-hosted Temporal (Phase 2 of docs/specs/deep-research-agents.md).
+# Runs entirely on your Hetzner box → EU data residency, no US-cloud orchestration.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.temporal.yml up -d
+#
+# Then point the app at it: RESEARCH_ENGINE=temporal, TEMPORAL_HOST=temporal:7233.
+# Temporal Web UI: http://<host>:8233  (lock this down / put behind your proxy).
+#
+# Images are the official temporalio ones (https://github.com/temporalio).
+services:
+  temporal-postgres:
+    image: postgres:16
+    container_name: temporal-postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - temporal_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    container_name: temporal
+    depends_on:
+      - temporal-postgres
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-postgres
+    ports:
+      - "7233:7233"   # gRPC — the SDK/worker connects here
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:2.32.0
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "8233:8080"   # Web UI — restrict to your IP / proxy in prod
+    restart: unless-stopped
+
+  # The Greenplot Temporal worker (same image as the API; runs the workflow +
+  # activities defined in app/deep_research/temporal_worker.py).
+  research-worker:
+    build: .
+    container_name: greenplot-research-worker
+    command: python -m app.deep_research.temporal_worker
+    depends_on:
+      - temporal
+    env_file: [.env]
+    environment:
+      - RESEARCH_ENGINE=temporal
+      - TEMPORAL_HOST=temporal:7233
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+volumes:
+  temporal_pgdata:
+    name: greenplot_temporal_pgdata

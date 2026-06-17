@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Integer, Float, JSON, Boolean, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, Integer, Float, JSON, Boolean, ForeignKey, Index, UniqueConstraint, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, declarative_base
 import uuid
@@ -342,3 +342,44 @@ class CalendarConnection(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User")
+
+
+class ResearchRun(Base):
+    """A long-running Deep Research job (docs/specs/deep-research-agents.md).
+
+    Durable state for the orchestrator: survives worker restarts and is the
+    resume point. Phase 2 (Temporal) reuses this table as the run-of-record.
+    """
+    __tablename__ = 'research_runs'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
+    theme = Column(String(300), nullable=True)            # focus (explicit or auto-picked)
+    status = Column(String(32), nullable=False, default='queued', index=True)
+    # queued → scoping → scouting → synthesizing → reporting → done | error
+    gap = Column(Text, nullable=True)                     # the named gap
+    report_md = Column(Text, nullable=True)               # final synthesized report
+    finding_count = Column(Integer, default=0)
+    email_sent = Column(Boolean, default=False)
+    result_seed_id = Column(UUID(as_uuid=True), nullable=True)  # garden seed of the report
+    error = Column(String(500), nullable=True)
+    engine = Column(String(16), default='worker')         # 'worker' (P1) | 'temporal' (P2)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    findings = relationship("ResearchFinding", back_populates="run", cascade="all, delete-orphan")
+
+
+class ResearchFinding(Base):
+    """One scout's hit for a run — durable so a re-run skips completed scouts."""
+    __tablename__ = 'research_findings'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey('research_runs.id'), nullable=False, index=True)
+    source = Column(String(32), nullable=False)           # garden|arxiv|openalex|hackernews|rss
+    title = Column(String(400), nullable=True)
+    url = Column(String(800), nullable=True)
+    snippet = Column(Text, nullable=True)
+    relevance = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    run = relationship("ResearchRun", back_populates="findings")
