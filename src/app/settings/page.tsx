@@ -371,6 +371,7 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [scheduleConfig, setScheduleConfig] = useState<Record<string, JobConfig>>({})
+  const [weeklyResearch, setWeeklyResearch] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
   const [editNickname, setEditNickname] = useState('')
   const [editingCity, setEditingCity] = useState(false)
@@ -406,6 +407,7 @@ export default function SettingsPage() {
           if (data.nickname) { setNickname(data.nickname); localStorage.setItem('greenplot_nickname', data.nickname) }
           if (data.email) setUserEmail(data.email)
           if (data.interests) setInterests(data.interests)
+          if (data.consents) setWeeklyResearch(!!data.consents.weekly_research)
         })
         .catch(() => {})
     }
@@ -474,6 +476,15 @@ export default function SettingsPage() {
       await unsubscribe()
       toast.success('Notifications disabled')
     }
+  }
+
+  const handleToggleWeeklyResearch = async (on: boolean) => {
+    setWeeklyResearch(on)
+    try {
+      await fetch(`${BACKEND}/profile`, { method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ consents: { weekly_research: on } }) })
+      toast.success(on ? 'Weekly Deep Research on — a brief every Monday' : 'Weekly Deep Research off')
+    } catch { toast.error('Could not save'); setWeeklyResearch(!on) }
   }
 
   const handleScheduleToggle = async (jobId: string, enabled: boolean) => {
@@ -674,6 +685,12 @@ export default function SettingsPage() {
             title="Push Notifications"
             sub="Daily briefings and reminders"
             right={<Toggle on={notificationsEnabled} onChange={handleToggleNotifications} />}
+          />
+          <SettingsRow
+            Icon={Sparkles}
+            title="Weekly Deep Research"
+            sub="Every Monday, agents research your top theme and email you a cited brief"
+            right={<Toggle on={weeklyResearch} onChange={handleToggleWeeklyResearch} />}
           />
           {PIPELINE_JOBS.map((job, idx) => {
             const cfg = scheduleConfig[job.id]

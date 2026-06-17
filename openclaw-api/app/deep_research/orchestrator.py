@@ -152,6 +152,7 @@ def synthesize_and_report(run_id: str, db) -> dict:
     if not run:
         return {"status": "error", "message": "run not found"}
     user = db.query(User).filter(User.id == run.user_id).first()
+    mode = (run.mode or "deep")
     themes = _themes_for(run, db)
     theme_str = ", ".join(themes[:3])
     focus = run.theme or theme_str
@@ -163,6 +164,15 @@ def synthesize_and_report(run_id: str, db) -> dict:
 
     garden_ctx = fetch_garden_context(str(run.user_id), themes, db) or []
     garden_block = "\n".join(f"- {g.get('title','')}: {g.get('snippet','')}" for g in garden_ctx[:12]) or "No garden seeds yet."
+
+    # Research memory (P1): prior gaps so this run builds on, not repeats, them.
+    prior = (db.query(ResearchRun)
+             .filter(ResearchRun.user_id == run.user_id, ResearchRun.status == "done",
+                     ResearchRun.id != run.id)
+             .order_by(ResearchRun.created_at.desc()).limit(5).all())
+    prior_block = "\n".join(
+        f"- {p.theme or 'general'}: {((p.gap or '').splitlines() or [''])[0][:160]}"
+        for p in prior if p.gap) or "Nothing explored yet."
 
     # ── Pass 1: decompose into sharp sub-questions (cheap model) ──────────────
     titles_block = "\n".join(f"- [{f.source}] {f.title}" for f in findings if f.source != "garden")[:4000]
@@ -176,8 +186,14 @@ def synthesize_and_report(run_id: str, db) -> dict:
         max_tokens=400, model=settings.BRIEFING_MODEL) or ""
     sub_questions = plan.strip() or "1. What's new? 2. How does it connect to the garden? 3. What's the gap?"
 
-    # ── Read FULL machine-readable text of the top sources ────────────────────
-    read = _read_fulltexts(findings)
+    # ── Read source text — full text in deep mode, snippets in lite mode ──────
+    if mode == "deep":
+        read = _read_fulltexts(findings)
+    else:
+        ext = sorted([f for f in findings if f.source != "garden" and f.url],
+                     key=lambda f: READ_PRIORITY.get(f.source, 9))[:14]
+        read = [(f, (f.snippet or "")[:1500]) for f in ext]
+    synth_model = settings.DEEP_RESEARCH_MODEL if mode == "deep" else settings.BRIEFING_MODEL
     sources_full = ""
     cited = []
     for i, (f, text) in enumerate(read, 1):
@@ -199,6 +215,9 @@ SUB-QUESTIONS TO ANSWER:
 
 THE USER'S GARDEN (their existing thinking):
 {garden_block}
+
+PREVIOUSLY EXPLORED (build on these — do NOT repeat the same gaps):
+{prior_block}
 
 FULL SOURCE TEXTS (read these closely; cite as [S#]):
 {sources_full or "No external full text available."}
@@ -224,10 +243,31 @@ A numbered list matching the [S#] citations: [S#] Title — url.
 Be specific, rigorous, and grounded. Markdown only."""
 
     report = _call_llm(prompt, system="You produce rigorous, deeply-cited research briefs. Markdown only.",
-                       max_tokens=4000, model=settings.DEEP_RESEARCH_MODEL)
+                       max_tokens=4000, model=synth_model)
     if not report or len(report.strip()) < 120:
-        logger.warning(f"[deep_research] 1M model thin/empty for {run.id} — falling back")
+        logger.warning(f"[deep_research] synth model thin/empty for {run.id} — falling back")
         report = _call_llm(prompt, max_tokens=4000, model=settings.PREMIUM_MODEL)
+    report = (report or "").strip()
+
+    # ── Critique-and-revise (P2, deep mode) — tighten claims + the gap ────────
+    if mode == "deep" and getattr(settings, "RESEARCH_CRITIQUE", False) and len(report) > 200:
+        try:
+            revised = _call_llm(
+                f"""Here is a research brief. Critique it hard, then return an improved version.
+Check: is every [S#] claim actually supported by that source's text above? Is "The Gap"
+genuinely specific and non-obvious (not a platitude)? Are the next moves concrete? Remove
+unsupported claims, sharpen the gap, keep the exact same markdown section structure.
+
+BRIEF:
+{report}
+
+Return ONLY the improved brief (same markdown shape).""",
+                system="You are a demanding research editor. Markdown only.",
+                max_tokens=4000, model=synth_model)
+            if revised and len(revised.strip()) > 200:
+                report = revised.strip()
+        except Exception as e:
+            logger.warning(f"[deep_research] critique pass failed for {run.id}: {e}")
     report = (report or "").strip() or "_No synthesis produced._"
 
     # Append a sources appendix if the model omitted it (every run is traceable).

@@ -156,6 +156,7 @@ const RUN_ACTIVE = new Set(['queued', 'scoping', 'scouting', 'synthesizing', 're
 
 function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => void }) {
   const [theme, setTheme] = useState('')
+  const [mode, setMode] = useState<'deep' | 'lite'>('deep')
   const [launching, setLaunching] = useState(false)
   const [runs, setRuns] = useState<ResearchRun[]>([])
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -194,11 +195,14 @@ function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => 
       const r = await fetch('/api/research/deep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
-        body: JSON.stringify(theme.trim() ? { theme: theme.trim() } : {}),
+        body: JSON.stringify({ ...(theme.trim() ? { theme: theme.trim() } : {}), mode }),
       })
+      if (r.status === 429) { const d = await r.json().catch(() => ({})); toast.error(d.detail || d.error || 'Daily deep-research limit reached — try Lite mode.'); return }
       if (!r.ok) throw new Error()
       setTheme('')
-      toast.success('Deep research started — reading sources in full across the web + literature. A few minutes; I\'ll push + email you the brief.', { duration: 7000 })
+      toast.success(mode === 'deep'
+        ? 'Deep research started — reading sources in full across the web + literature. A few minutes; I\'ll push + email you the brief.'
+        : 'Lite research started — a fast scan of your sources. I\'ll push + email you the brief shortly.', { duration: 7000 })
       loadRuns()
     } catch {
       toast.error('Could not start the run — backend update pending')
@@ -239,6 +243,18 @@ function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => 
           {launching ? <Loader2 size={14} strokeWidth={2} className="animate-spin" /> : <Telescope size={14} strokeWidth={2} />}
           {launching ? 'Starting…' : 'Go deep'}
         </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        {(['deep', 'lite'] as const).map(m => (
+          <button key={m} onClick={() => setMode(m)} className="tap ui"
+            style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 9999, cursor: 'pointer',
+              background: mode === m ? 'var(--green-tint)' : 'transparent',
+              color: mode === m ? 'var(--green-700)' : 'var(--ink-3)',
+              border: `1px solid ${mode === m ? 'var(--green-700)' : 'var(--hairline)'}` }}>
+            {m === 'deep' ? 'Deep · reads in full' : 'Lite · fast scan'}
+          </button>
+        ))}
       </div>
 
       {activeRun && (

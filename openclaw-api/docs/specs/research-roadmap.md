@@ -81,6 +81,32 @@ glue layer over systems that already exist.
   and open a background brief *into* chat to interrogate it. Find the gap
   autonomously, then discuss it interactively.
 
+## Implemented (P0–P2, 2026-06-18)
+
+**P0 — brief → action (loop closed):**
+- `app/deep_research/actions.py`: `brief_to_prd` (gap + brief → PRD via `write_spec`)
+  and `brief_deeper` (follow-up run scoped to the gap, with `parent_run_id`).
+- Endpoints `POST /research/brief/{seed_id}/to-prd` + `/deeper`; proxy routes
+  `/api/research/brief/[seedId]/{to-prd,deeper}`.
+- Seed sheet shows **"Draft PRD from gap"** + **"Go deeper"** on a brief.
+
+**P1 — proactive + compounding:**
+- `_job_weekly_research` (APScheduler, Mon 07:30 CET): one autonomous run for each
+  user with `consents.weekly_research`. Settings toggle **"Weekly Deep Research"**.
+- **Research memory:** synthesis now feeds the last 5 runs' gaps into the prompt
+  ("build on these, don't repeat").
+
+**P2 — quality, cost, breadth:**
+- **Critique-and-revise** (`RESEARCH_CRITIQUE`): a second editor pass checks every
+  [S#] claim + sharpens the gap (deep mode).
+- **Cost guard:** `RESEARCH_DAILY_CAP` (per-user deep runs/day → 429); **Lite/Deep
+  mode** (`run.mode`) — lite skips full-text reads + uses the cheap model. Garden
+  launcher has a Deep/Lite toggle.
+- New columns `research_runs.mode` + `parent_run_id` (model + defensive startup ALTER).
+
+Verified: backend syntax + import clean (actions, model columns); tsc clean;
+garden/settings compile 200; brief proxy routes resolve + forward to the backend.
+
 ## Recommendation
 
 **Do P0 next.** The inbound pipeline is strong; the missing magic is the

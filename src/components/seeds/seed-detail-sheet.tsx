@@ -109,6 +109,7 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
   const [archiving, setArchiving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showActions, setShowActions] = useState(false)
+  const [briefBusy, setBriefBusy] = useState<string | null>(null)
 
   const tags = seed?.tags ? seed.tags.split(',').map(t => t.trim()).filter(Boolean) : []
   const domain = seed?.domain || ''
@@ -145,6 +146,27 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
   const plantedAgo = timeAgo(seed.created_at || seed.created)
   const connectionCount = relatedLinks.length + searchResults.length
   const eyebrow = [seed.summary ? 'Sprouting' : 'Seed', domain].filter(Boolean).join(' · ')
+  const isResearchBrief = tags.includes('deep-research') || /##\s*The Gap/.test(bodyText)
+
+  const _auth = (): Record<string, string> => { const t = localStorage.getItem('greenplot_token'); return t ? { Authorization: `Bearer ${t}` } : {} }
+  const draftPrdFromBrief = async () => {
+    setBriefBusy('prd')
+    try {
+      const r = await fetch(`/api/research/brief/${seed.id}/to-prd`, { method: 'POST', headers: _auth() })
+      const d = await r.json()
+      if (r.ok && d.seed_id) { toast.success('PRD drafted from the gap — opening Studio'); router.push('/studio') }
+      else toast.error(d.detail || d.error || 'Could not draft a PRD')
+    } catch { toast.error('Could not reach the backend') } finally { setBriefBusy(null) }
+  }
+  const goDeeperFromBrief = async () => {
+    setBriefBusy('deeper')
+    try {
+      const r = await fetch(`/api/research/brief/${seed.id}/deeper`, { method: 'POST', headers: _auth() })
+      const d = await r.json()
+      if (r.ok && d.run_id) toast.success(`Going deeper on "${d.focus || 'the gap'}" — I'll push + email the follow-up.`, { duration: 6000 })
+      else toast.error(d.detail || d.error || 'Could not start a follow-up')
+    } catch { toast.error('Could not reach the backend') } finally { setBriefBusy(null) }
+  }
 
   const handleDelete = async () => {
     if (!confirmDelete) { setConfirmDelete(true); return }
@@ -336,6 +358,20 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
             )
           )}
         </div>
+
+        {/* Deep Research brief → action (close the research→build loop) */}
+        {isResearchBrief && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+            <button onClick={draftPrdFromBrief} disabled={!!briefBusy} className="tap ui"
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--green)', color: '#06281a', border: 'none', borderRadius: 13, padding: '12px 10px', fontSize: 12.5, fontWeight: 700, cursor: briefBusy ? 'default' : 'pointer', opacity: briefBusy ? 0.6 : 1 }}>
+              <FileText size={15} strokeWidth={2} /> {briefBusy === 'prd' ? 'Drafting…' : 'Draft PRD from gap'}
+            </button>
+            <button onClick={goDeeperFromBrief} disabled={!!briefBusy} className="tap ui"
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--surface-sunk)', color: 'var(--ink)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '12px 10px', fontSize: 12.5, fontWeight: 700, cursor: briefBusy ? 'default' : 'pointer', opacity: briefBusy ? 0.6 : 1 }}>
+              <Search size={15} strokeWidth={2} color="var(--green-700)" /> {briefBusy === 'deeper' ? 'Starting…' : 'Go deeper'}
+            </button>
+          </div>
+        )}
 
         {/* Tags & entities */}
         {(tags.length > 0 || entities.length > 0) && (
