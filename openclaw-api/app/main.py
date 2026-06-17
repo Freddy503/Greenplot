@@ -279,6 +279,27 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(user)
     from app.analytics import log_event
     log_event(db, user.id, 'signup', {'interests': len(user.interests or []), 'cadence': user.digest_frequency})
+
+    # Onboarding cold-start: fire ONE Deep Research run on the new user's
+    # interests so their garden fills with relevant papers + a cited brief
+    # (emailed + pushed) — a real basis to build on, not an empty garden.
+    # theme=None → the orchestrator scouts across the interests we just saved.
+    # Non-blocking: just enqueues; the worker runs it async. Fail-soft.
+    if user.interests:
+        try:
+            from app.models import ResearchRun
+            run = ResearchRun(id=uuid.uuid4(), tenant_id=user.tenant_id, user_id=user.id,
+                              theme=None, status="queued", engine="worker", mode="deep")
+            db.add(run)
+            db.commit()
+            db.refresh(run)
+            from app.task_broker import enqueue_deep_research
+            enqueue_deep_research(str(run.id), str(user.tenant_id))
+            log_event(db, user.id, 'onboarding_research', {'run_id': str(run.id)})
+            logger.info(f"[register] onboarding deep-research queued for {user.id} ({run.id})")
+        except Exception as e:
+            logger.warning(f"[register] onboarding research kick failed: {e}")
+
     token = create_access_token(data={"sub": str(user.id), "tenant_id": str(user.tenant_id)})
     # Also create refresh token if needed; for MVP just return access token
     return AuthResponse(access_token=token, refresh_token=token, tenant_id=user.tenant_id)
