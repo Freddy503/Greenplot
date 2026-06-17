@@ -133,6 +133,12 @@ the interactive chat `research` thinking-mode):
 - **Two passes:** (1) decompose the focus into 3-5 sharp sub-questions; (2) a
   **1M-context model** (`DEEP_RESEARCH_MODEL`, default `google/gemini-2.5-pro`)
   reasons over *all* the full texts at once and writes an inline-cited [S#] brief.
+- **Relevant papers embedded + attached:** the papers the synthesis actually
+  cited (arXiv/OpenAlex, cited [S#] first) are appended to the brief as a
+  "Relevant papers" section, saved as full-text-indexed garden seeds, and
+  backlinked to the brief (first-class linked seeds, not just URLs). The email
+  lists them and **attaches their PDFs** (up to 3, ≤6 MB each; arXiv derives the
+  PDF from the abs URL).
 - **Proper Greenplot artifact:** saved as a `research_brief` seed with the same
   rigorous shape as the chat mode (TL;DR · what your garden knows · what the
   research says, per sub-question · The Gap · next moves · Sources), so it reads
