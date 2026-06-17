@@ -115,6 +115,57 @@ async def _get_repo_map(args: dict, user: User, db: Session) -> str:
     return repo_map or "No GitHub repo connected (Settings → Integrations)."
 
 
+def _resolve_paper_fulltext(seed, db, max_chars: int = 200000) -> str:
+    """Whole-paper markdown: compiled file → ordered Weaviate chunks → summary.
+    The single source of truth for both the paper resource and the
+    get_paper_fulltext tool, so agents can read papers end-to-end."""
+    import os
+    from app.paper_pipeline import fulltext_path
+    md = ""
+    fp = fulltext_path(str(seed.id))
+    if os.path.exists(fp):
+        try:
+            with open(fp, encoding="utf-8") as fh:
+                md = fh.read()
+        except Exception:
+            md = ""
+    if not md:
+        try:
+            from app.weaviate_client import weaviate_client
+            chunks = sorted(weaviate_client.get_paper_chunks(str(seed.id), limit=200),
+                            key=lambda c: c.get("chunk_index", 0))
+            if chunks:
+                parts, last = [f"# {seed.title}"], None
+                for c in chunks:
+                    sec = (c.get("section") or "").strip()
+                    if sec and sec != last:
+                        parts.append(f"\n## {sec}\n")
+                        last = sec
+                    parts.append((c.get("text") or "").strip())
+                md = "\n".join(parts).strip()
+        except Exception:
+            pass
+    if not md:
+        md = f"# {seed.title}\n\n{seed.content or ''}".strip()
+    if max_chars and len(md) > max_chars:
+        md = md[:max_chars] + f"\n\n…[truncated at {max_chars:,} chars — use search_paper_content for specific passages]"
+    return md
+
+
+async def _get_paper_fulltext(args: dict, user: User, db: Session) -> str:
+    rid = (args.get("seed_id") or "").strip()
+    if not rid:
+        return "Provide a seed_id (browse the greenplot://papers/* resources, or use search_paper_content)."
+    try:
+        seed = db.query(Seed).filter(
+            Seed.id == uuidlib.UUID(rid), Seed.tenant_id == user.tenant_id).first()
+    except Exception:
+        seed = None
+    if not seed:
+        return "Paper not found."
+    return _resolve_paper_fulltext(seed, db, int(args.get("max_chars", 200000)))
+
+
 def get_mcp_registry():
     """Chat tool registry + MCP-only tools, built once per process."""
     global _registry
@@ -155,6 +206,15 @@ def get_mcp_registry():
         description="Get the cached file map of the user's connected GitHub repo — orient yourself before implementing a spec.",
         input_schema={"type": "object", "properties": {}},
         handler=_get_repo_map,
+    ))
+    reg.replace(ToolSpec(
+        name="get_paper_fulltext",
+        description="Read a research paper IN FULL — the complete machine-readable text (every section, in order), not vector chunks. Use this to reason over a whole paper; use search_paper_content only to locate a specific passage. Find seed_ids via the greenplot://papers/* resources or search_paper_content.",
+        input_schema={"type": "object", "properties": {
+            "seed_id": {"type": "string", "description": "Paper seed id."},
+            "max_chars": {"type": "integer", "description": "Safety cap on returned characters (default 200000)."}},
+            "required": ["seed_id"]},
+        handler=_get_paper_fulltext,
     ))
     _registry = reg
     return _registry
@@ -210,12 +270,10 @@ def _read_resource(uri: str, user: User, db: Session) -> str:
             Seed.id == uuidlib.UUID(rid), Seed.tenant_id == user.tenant_id).first()
         if not seed:
             raise ValueError("Resource not found")
-        m = seed.seed_metadata or {}
-        body = f"# {seed.title}\n\n{seed.content}"
-        if kind == "papers" and isinstance(m.get("doc_tree"), (list, dict)):
-            body += "\n\n## Document outline\n```json\n" + json.dumps(m["doc_tree"])[:6000] + "\n```"
-            body += "\n\n(Use the search_paper_content tool to pull full sections.)"
-        return body
+        if kind == "papers":
+            # Serve the whole machine-readable paper, not just the summary.
+            return _resolve_paper_fulltext(seed, db)
+        return f"# {seed.title}\n\n{seed.content}"
     if kind == "wiki":
         from app.weaviate_client import weaviate_client
         for a in (weaviate_client.get_wiki_articles(str(user.tenant_id), limit=100) or []):

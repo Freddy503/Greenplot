@@ -35,6 +35,45 @@ MAX_CHUNKS = 60
 
 SECTION_STOP = {"references", "bibliography", "acknowledgments", "acknowledgements", "appendix"}
 
+# Compiled full-text lives next to the uploaded PDF in the shared data volume
+# (api + worker both mount .:/app), so any process can serve it.
+PAPERS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "papers")
+
+
+def compile_fulltext(title: str, sections: list[dict]) -> str:
+    """Section-ordered, machine-readable markdown of the whole paper — the
+    artifact agents read end-to-end instead of stitching vector chunks."""
+    parts = [f"# {title}".rstrip()]
+    for s in sections:
+        sec = (s.get("section") or "").strip()
+        txt = (s.get("text") or "").strip()
+        if not txt:
+            continue
+        if sec and sec.lower() not in ("abstract", "content"):
+            parts.append(f"\n## {sec}\n\n{txt}")
+        else:
+            parts.append(f"\n{txt}")
+    return "\n".join(parts).strip()
+
+
+def fulltext_path(seed_id: str) -> str:
+    return os.path.join(PAPERS_DIR, f"{seed_id}.fulltext.md")
+
+
+def save_fulltext(seed_id: str, title: str, sections: list[dict]) -> int:
+    """Write compiled full text to disk; returns char count (0 on failure)."""
+    md = compile_fulltext(title, sections)
+    if not md:
+        return 0
+    try:
+        os.makedirs(PAPERS_DIR, exist_ok=True)
+        with open(fulltext_path(seed_id), "w", encoding="utf-8") as fh:
+            fh.write(md)
+        return len(md)
+    except Exception as e:
+        logger.warning(f"[paper_pipeline] fulltext write failed for {seed_id}: {e}")
+        return 0
+
 
 # ── Fetch ─────────────────────────────────────────────────────────────────────
 
@@ -317,6 +356,11 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
                         **({"reason": "scanned_pdf"} if scanned else {}))
             return {"status": "error", "message": msg}
 
+        # Compile the whole paper to machine-readable markdown so agents (MCP,
+        # spec drafting) can read it in full — not just the vector chunks, which
+        # are capped at MAX_CHUNKS and lossy across section boundaries.
+        fulltext_chars = save_fulltext(seed_id, seed.title, sections)
+
         # Re-parse safety: clear previous chunks first
         weaviate_client.delete_paper_chunks(seed_id)
 
@@ -361,7 +405,7 @@ def parse_paper_for_seed(seed_id: str, tenant_id: str, db: Session) -> dict:
         except Exception as e:
             logger.warning(f"[paper_pipeline] tree build failed for {seed_id}: {e}")
 
-        extra = {"chunk_count": indexed, "parse_source": kind}
+        extra = {"chunk_count": indexed, "parse_source": kind, "fulltext_chars": fulltext_chars}
         if doc_tree:
             extra["doc_tree"] = doc_tree
             extra["tree_built_at"] = datetime.utcnow().isoformat()

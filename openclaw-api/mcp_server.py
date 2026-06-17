@@ -308,11 +308,64 @@ async def search_paper_content(query: str, seed_id: str = "", limit: int = 5) ->
             return data.get("message", "No parsed paper content matched.")
         lines = []
         for r in results:
+            sid = r.get("seed_id", "")
             lines.append(
-                f"**{r.get('paper', '')}** — {r.get('section', '')} (relevance {r.get('relevance', 0)})\n"
-                f"{(r.get('text') or '')[:800]}\n— {r.get('citation', '')}"
+                f"**{r.get('paper', '')}** — {r.get('section', '')} (relevance {r.get('relevance', 0)})"
+                + (f" [seed_id={sid}]" if sid else "")
+                + f"\n{(r.get('text') or '')[:800]}\n— {r.get('citation', '')}"
             )
-        return "\n\n".join(lines)
+        hint = "\n\nTip: call get_paper_fulltext(seed_id) to read any of these papers end-to-end."
+        return "\n\n".join(lines) + hint
+
+
+def _is_paper(seed: dict) -> bool:
+    meta = seed.get("metadata") or seed.get("seed_metadata") or {}
+    tags = meta.get("tags") or []
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",")]
+    return (meta.get("seed_type") == "paper" or seed.get("seed_type") == "paper"
+            or "paper" in tags or "research-paper" in tags)
+
+
+async def list_papers(limit: int = 30) -> str:
+    """List research-paper seeds with parse status + whether full text is ready."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(f"{API_URL}/api/v1/seeds", params={"limit": 200}, headers=_headers())
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        papers = [s for s in resp.json().get("seeds", []) if _is_paper(s)][:limit]
+        if not papers:
+            return "No research papers in the garden yet. Use ingest_paper to add one."
+        lines = []
+        for s in papers:
+            meta = s.get("metadata") or s.get("seed_metadata") or {}
+            status = meta.get("parse_status", "—")
+            chars = meta.get("fulltext_chars") or 0
+            ready = (f"full text {chars:,} chars" if chars
+                     else (f"{meta.get('chunk_count', 0)} chunks" if meta.get("chunk_count") else "not indexed"))
+            lines.append(f"- **{s.get('title', 'Untitled')}** (id={s.get('id')}) — {status}, {ready}")
+        return "\n".join(lines)
+
+
+async def get_paper_fulltext(seed_id: str, max_chars: int = 200000) -> str:
+    """Read a research paper end-to-end — the whole machine-readable text, not chunks."""
+    if not seed_id:
+        return "Provide a seed_id (use list_papers or search_paper_content to find one)."
+    async with httpx.AsyncClient(timeout=40) as client:
+        resp = await client.get(f"{API_URL}/api/v1/papers/{seed_id}/fulltext", headers=_headers())
+        if resp.status_code == 404:
+            try:
+                return f"No full text for {seed_id}: {resp.json().get('detail', 'not found')}"
+            except Exception:
+                return f"No full text for {seed_id}."
+        if not resp.is_success:
+            return f"Error {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        md = data.get("markdown", "") or ""
+        chars = data.get("chars", len(md))
+        if max_chars and len(md) > max_chars:
+            md = md[:max_chars] + f"\n\n…[truncated at {max_chars:,} of {chars:,} chars — use search_paper_content for specific passages]"
+        return md or "Paper has no readable text yet — index it first."
 
 
 # ── MCP stdio transport ───────────────────────────────────────────────────────
@@ -464,6 +517,28 @@ TOOLS_SCHEMA = [
         },
     },
     {
+        "name": "list_papers",
+        "description": "List research papers in the garden with their parse status and whether full machine-readable text is ready. Start here to find a paper's seed_id, then read it with get_paper_fulltext.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max papers (default 30)", "default": 30},
+            },
+        },
+    },
+    {
+        "name": "get_paper_fulltext",
+        "description": "Read a research paper IN FULL — the complete machine-readable text (every section, in order), not vector chunks. Use this when you need to reason over the whole paper; use search_paper_content only to locate a specific passage.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "seed_id": {"type": "string", "description": "Paper seed id (from list_papers or search_paper_content)"},
+                "max_chars": {"type": "integer", "description": "Safety cap on returned characters (default 200000)", "default": 200000},
+            },
+            "required": ["seed_id"],
+        },
+    },
+    {
         "name": "get_repo_map",
         "description": "Map of the user's connected GitHub repo (file tree, README, manifest, hub-file heads) — orient yourself before implementing a spec.",
         "inputSchema": {"type": "object", "properties": {}},
@@ -535,6 +610,10 @@ async def handle_message(msg: dict) -> dict | None:
                 result = await search_paper_content(
                     args["query"], args.get("seed_id", ""), int(args.get("limit", 5)),
                 )
+            elif tool_name == "list_papers":
+                result = await list_papers(int(args.get("limit", 30)))
+            elif tool_name == "get_paper_fulltext":
+                result = await get_paper_fulltext(args["seed_id"], int(args.get("max_chars", 200000)))
             else:
                 result = f"Unknown tool: {tool_name}"
         except Exception as e:
