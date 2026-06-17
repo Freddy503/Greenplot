@@ -146,6 +146,16 @@ the interactive chat `research` thinking-mode):
 - Naturally takes minutes (full-text reads + big synthesis) — which is exactly
   why it belongs on the long-running harness, and what Phase 2/Temporal is for.
 
+### Onboarding cold-start (core to the first run)
+Registration fires ONE Deep Research run on the new user's interests (`register`
+endpoint → `enqueue_deep_research`, theme=None so the orchestrator scouts across
+the interests just saved via `fetch_user_themes`). The run fills the empty garden
+with the relevant-paper seeds + the brief seed, and emails/pushes the brief — so
+a new user lands with a populated garden and a basis to build on instead of a
+blank slate. Non-blocking (just enqueues); fail-soft if Redis is down. Onboarding
+copy sets the expectation ("a research agent is reading the latest on your
+interests… your garden fills in a few minutes").
+
 ### Phase 1 orchestrator is now composable
 `scope_run` → `scout_one(source)` (idempotent per source) → `synthesize_and_report`
 (LLM + seed + email + push). The Redis worker calls them sequentially; Temporal

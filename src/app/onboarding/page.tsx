@@ -842,7 +842,7 @@ function OnboardingContent() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%', maxWidth: 250, textAlign: 'left' }}>
                 {[
                   { text: 'Planting your topics', delay: '.1s' },
-                  { text: 'Tuning your briefings', delay: '.9s' },
+                  { text: 'Sending agents to research them', delay: '.9s' },
                   { text: 'Securing your plot', delay: '1.7s' },
                 ].map((t) => (
                   <div key={t.text} style={{ display: 'flex', alignItems: 'center', gap: 10, animation: 'gp-tick .4s ease both', animationDelay: t.delay }}>
@@ -870,8 +870,10 @@ function OnboardingContent() {
 
               <span style={{ fontFamily: UI, fontSize: 11, fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#16a34a', marginBottom: 12 }}>Your garden is ready</span>
               <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: 40, lineHeight: 1.06, letterSpacing: '-0.02em', margin: '0 0 14px', maxWidth: 320, color: '#141413', textWrap: 'balance' } as React.CSSProperties}>Welcome, {displayName}</h2>
-              <p style={{ fontFamily: BODY, fontSize: 15, lineHeight: 1.6, color: '#5f5f5a', maxWidth: 290, margin: '0 0 30px', textWrap: 'pretty' } as React.CSSProperties}>
-                Everything&rsquo;s planted. Capture your first thought and watch it grow.
+              <p style={{ fontFamily: BODY, fontSize: 15, lineHeight: 1.6, color: '#5f5f5a', maxWidth: 300, margin: '0 0 30px', textWrap: 'pretty' } as React.CSSProperties}>
+                A research agent is reading the latest on your interests right now — in a few
+                minutes your garden fills with papers and a cited brief lands in your inbox.
+                Capture your first thought while it grows.
               </p>
 
               <button onClick={() => router.push('/chat')} className="ob-cta" style={{ maxWidth: 290 }}>
