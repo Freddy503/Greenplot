@@ -6,7 +6,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Users, Sprout, FileText, Cpu, Send } from 'lucide-react'
+import { Users, Sprout, FileText, Cpu, Send, Link2, Copy, Check } from 'lucide-react'
 
 interface AdminUser {
   email: string
@@ -28,6 +28,8 @@ interface AdminStats {
   daily_token_limit: number
   waitlist?: Array<{ email: string; joined_at: string | null; invited_at: string | null }>
   waitlist_count?: number
+  invite_code?: string
+  app_url?: string
 }
 
 // Rough blended $/M tokens for the configured chat model — an estimate for
@@ -51,6 +53,54 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: React.ComponentType
       </div>
       <div className="serif" style={{ fontSize: 30, lineHeight: 1, color: 'var(--ink)' }}>{value}</div>
       {sub && <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function InviteLinkCard({ code, appUrl }: { code?: string; appUrl?: string }) {
+  const [copied, setCopied] = useState(false)
+  // Prefer the live app origin (works on any domain); fall back to the API's
+  // configured APP_URL. The code comes from the backend's INVITE_CODES.
+  const base = (typeof window !== 'undefined' ? window.location.origin : (appUrl || '')).replace(/\/$/, '')
+  const inviteCode = (code || 'GARDEN').toUpperCase()
+  const link = `${base}/onboarding?code=${inviteCode}`
+
+  const copy = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Greenplot invite', text: 'Join my Greenplot beta — your ideas, grown.', url: link })
+      } else {
+        await navigator.clipboard.writeText(link)
+        setCopied(true); setTimeout(() => setCopied(false), 1800)
+      }
+    } catch {
+      try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch { /* noop */ }
+    }
+  }
+
+  return (
+    <div className="v2-card" style={{ borderRadius: 18, padding: '16px', marginTop: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Link2 size={15} color="var(--green-700)" strokeWidth={1.75} />
+        </span>
+        <div>
+          <div className="caps" style={{ fontSize: 9.5, color: 'var(--ink-3)' }}>Invite a tester</div>
+          <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)' }}>Send this link — they skip the code step and sign up in one screen.</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          readOnly value={link}
+          onFocus={(e) => e.currentTarget.select()}
+          className="ui"
+          style={{ flex: 1, minWidth: 0, fontSize: 12, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 10, padding: '9px 12px', color: 'var(--ink)' }}
+        />
+        <button onClick={copy} className="tap ui" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--green-tint)', border: '1px solid var(--green-700)', borderRadius: 9999, padding: '9px 15px', fontSize: 12, fontWeight: 700, color: 'var(--green-700)', cursor: 'pointer', flexShrink: 0 }}>
+          {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
+          {copied ? 'Copied' : 'Copy link'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -196,6 +246,9 @@ export default function AdminPage() {
             </div>
           </>
         )}
+
+        {/* Direct invite link — copy & send to a tester */}
+        <InviteLinkCard code={stats.invite_code} appUrl={stats.app_url} />
 
         {/* Waitlist */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '22px 2px 8px', gap: 10 }}>

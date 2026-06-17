@@ -3194,6 +3194,10 @@ def admin_stats(current_user: User = Depends(get_current_user), db: Session = De
         "daily_token_limit": settings.DAILY_TOKEN_LIMIT,
         "waitlist": waitlist,
         "waitlist_count": len(waitlist),
+        # First active invite code + app URL, so the admin UI can build a direct
+        # invite link to copy and send to testers.
+        "invite_code": (settings.INVITE_CODES.split(",")[0].strip().upper() if settings.INVITE_CODES else ""),
+        "app_url": settings.APP_URL,
     }
 
 # --- Attachments helper ---

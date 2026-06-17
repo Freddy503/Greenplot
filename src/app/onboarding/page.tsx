@@ -164,6 +164,9 @@ function OnboardingContent() {
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
   const tokenSeq = useRef(0)
+  // Set when the user arrives via a direct invite link (?code=…): once the code
+  // validates we skip Welcome + Invite so testers go straight into the flow.
+  const fromInviteLink = useRef(false)
 
   // Restore progress + magic-link invite prefill
   useEffect(() => {
@@ -190,7 +193,9 @@ function OnboardingContent() {
     if (inviteEmail) setEmail(inviteEmail)
     const codeParam = (searchParams.get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
     if (codeParam.length === 6) {
-      // Invite email deep link — code arrives prefilled, still validated for real
+      // Invite email/link deep link — code arrives prefilled, still validated for
+      // real; once valid we fast-path past Welcome + Invite (see effect below).
+      fromInviteLink.current = true
       setToken(codeParam)
       setTokenState('checking')
       validateCode(codeParam)
@@ -215,6 +220,16 @@ function OnboardingContent() {
 
   const go = (next: number, d: number) => { setStep(next); setDir(d); persist({ step: next }) }
   const back = () => { if (step > 0) go(step - 1, -1) }
+
+  // Direct invite link: when the prefilled code validates, skip Welcome + Invite
+  // (steps 0–1) so an invited tester lands straight in the value-first flow.
+  useEffect(() => {
+    if (fromInviteLink.current && tokenState === 'valid') {
+      setStep(s => (s < 2 ? 2 : s))
+      setDir(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenState])
 
   // ── Invite code — real validation against the backend ──
   const validateCode = (v: string) => {
