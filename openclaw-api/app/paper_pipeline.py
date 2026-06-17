@@ -450,9 +450,11 @@ Be specific and grounded in the text; never invent seeds or findings.""",
             except Exception as e:
                 logger.warning(f"[paper_pipeline] upload summary failed for {seed_id}: {e}")
 
-        # Autopilot: digest papers that parsed successfully may earn a draft PRD
-        # (relevance-gated + daily-capped inside auto_prd_for_paper).
-        if indexed and seed.created_via == "academic_digest":
+        # Autopilot: digest *papers* that parsed successfully may earn a draft PRD
+        # (relevance-gated + daily-capped inside auto_prd_for_paper). Skip the
+        # industry pulse (Hacker News / news RSS) — those are readings, not specs.
+        _is_industry = "industry" in (meta.get("tags") or []) or meta.get("domain") == "Industry"
+        if indexed and seed.created_via == "academic_digest" and not _is_industry:
             try:
                 from app.auto_prd import auto_prd_for_paper
                 auto_result = auto_prd_for_paper(seed_id, tenant_id, db)

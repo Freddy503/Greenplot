@@ -127,3 +127,39 @@ pulse + curated feeds" — the spread a serious research companion needs.
 Suggested next step: a small `app/sources/` package with one module per source
 exposing `discover(themes, since) -> list[Candidate]`, fanned-in by the digest
 and de-duped by URL/DOI before hitting `parse_paper_for_seed`.
+
+---
+
+## Implemented (2026-06-16) — Tier 1 shipped
+
+`app/sources/` package, one async `discover(themes, …)` per source, fanned in by
+`discover_all()` (concurrent, fail-soft, de-duped by normalized URL + title):
+- **openalex.py** — published research incl. journals; reconstructs the inverted
+  abstract; exposes `pdf_url` for OA works. `kind="paper"`.
+- **hackernews.py** — Algolia search; filters recency server-side, gates on
+  `points` client-side (the index doesn't allow numeric filtering on points).
+  `kind="news"`.
+- **rss.py** — `feedparser` over a curated, theme-filtered feed list (Nature
+  feeds, MIT TR, Quanta, DeepMind/OpenAI/Anthropic, Papers-with-Code). Default
+  list in-module; override via `settings.RSS_FEEDS` ("Name|url" comma list).
+
+### How it changes the digest (`build_academic_digest`)
+- **Candidate pool:** arXiv (as before) **+** OpenAlex papers merged into the
+  paper pool; HN + news-RSS become the "industry pulse" merged into the news
+  pool. Each candidate carries `source` / `kind` / `pdf_url`.
+- **Seeds:** `_save_papers_as_seeds` now records `source` + source-tag + sets
+  `domain="Industry"` for HN/news (vs `Research`). Industry items are saved too
+  (so they're in the garden + full-text-indexed for agents/MCP) but are
+  **excluded from the auto-PRD autopilot** (`paper_pipeline`) — they're readings,
+  not specs.
+- **LLM context:** paper/news blocks are source-attributed (`PAPER [openalex]:`,
+  `- [hackernews] …`) so the digest can say "per Nature" / "trending on HN".
+- **Full text:** OA/arXiv → real full text via the existing pipeline; paywalled
+  journal items (Nature/Science) → title + abstract seed, linked out.
+- **Config:** `RESEARCH_SOURCES_ENABLED` (default on), `OPENALEX_MAILTO`,
+  `RSS_FEEDS`. Requires `feedparser` (added to requirements).
+
+**Live-verified:** OpenAlex returns recent OA works w/ venue+PDF; HN returns
+high-signal recent stories; Nature/OpenAI/Quanta feeds parse. Net effect: the
+digest goes from "arXiv + open web" to "preprints + peer-reviewed + industry
+pulse + curated feeds," all flowing into the same seed → full-text → MCP path.

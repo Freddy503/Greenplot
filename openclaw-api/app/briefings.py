@@ -866,11 +866,19 @@ def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set =
         # Deduplicate: skip if a seed with this source_url already exists
         if url in seen_paper_urls:
             continue
-        pdf_url = url.replace("/abs/", "/pdf/") if "arxiv.org/abs/" in url else ""
+        # Source attribution (arXiv | openalex | hackernews | rss:<feed>); the
+        # multi-source digest carries these through so each seed is traceable and
+        # the garden can distinguish papers from the industry pulse.
+        source = (paper.get("source") or "arxiv").strip()
+        source_tag = source.split(":")[0]  # "rss:Nature" → "rss"
+        kind = paper.get("kind") or "paper"
+        pdf_url = paper.get("pdf_url") or (url.replace("/abs/", "/pdf/") if "arxiv.org/abs/" in url else "")
+        is_industry = kind == "news" or source_tag == "hackernews"
+        tags = ["paper", "research-paper", source_tag] + (["industry"] if is_industry else [])
         body = (
             f"**Source:** {url}\n"
             + (f"**PDF:** {pdf_url}\n" if pdf_url else "")
-            + f"**From your Research Digest** — {digest_date}\n\n"
+            + f"**Via:** {source} · **From your Research Digest** — {digest_date}\n\n"
             + content[:2800]
         )
         seed = Seed(
@@ -883,9 +891,10 @@ def _save_papers_as_seeds(papers: list, user_id: str, db, seen_paper_urls: set =
             created_by="agent_research",
             created_via="academic_digest",
             seed_metadata={
-                "tags": ["paper", "research-paper", "arxiv"],
+                "tags": tags,
                 "seed_type": "paper",
-                "domain": "Research",
+                "domain": "Industry" if is_industry else "Research",
+                "source": source,
                 "source_url": url,
                 "paper_url": url,
                 "pdf_url": pdf_url,
@@ -951,10 +960,25 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
 
     # Fetch arXiv papers (abs/ pages only) + topic news
     paper_results = await _fetch_arxiv_papers(themes, limit=12)
+    for _p in paper_results:
+        _p.setdefault("source", "arxiv")
+        _p.setdefault("kind", "paper")
     news_results = await fetch_web_search(f"{theme_str} news {today}", limit=3)
 
     # Deduplicate: remove papers already saved to this user's Garden
     seen_urls = _get_seen_paper_urls(user_id, db)
+
+    # Multi-source discovery: OpenAlex (published research incl. journals),
+    # Hacker News (industry pulse), curated RSS (Nature feeds, lab blogs). Adds
+    # to the candidate pool without disturbing storage — same paper-seed pipeline.
+    extra_news: list = []
+    try:
+        from app.sources import discover_all
+        bundle = await discover_all(themes, seen_urls=seen_urls)
+        paper_results = paper_results + bundle.get("papers", [])
+        extra_news = bundle.get("news", [])
+    except Exception as e:
+        logger.warning(f"[academic_digest] multi-source discovery failed: {e}")
 
     def _deduplicate(papers: list, seen: set) -> list:
         result, visited = [], set()
@@ -975,6 +999,10 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
         if not unique_papers:
             all_papers_seen = True
 
+    # URL → candidate map so the saved seeds recover source/pdf after the LLM
+    # round-trip (the model only echoes title/content/url).
+    cand_by_url = {p.get("url", ""): p for p in unique_papers}
+
     # Fetch full text for top 4 papers
     from app.enricher_v2 import fetch_url_content
     paper_texts = []
@@ -983,6 +1011,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
         paper_texts.append({
             "title": paper["title"],
             "url": paper["url"],
+            "source": paper.get("source", "arxiv"),
             "text": full[:3000] if full else paper.get("snippet", ""),
         })
 
@@ -997,13 +1026,13 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
         papers_block = "All recent papers matching these themes have already been shown in prior briefings. Focus the Academic Spotlight on synthesizing the user's existing wiki knowledge instead, and note that no new papers were found."
     else:
         papers_block = "\n\n".join(
-            f"PAPER: {p['title']}\nURL: {p['url']}\n{p['text']}"
+            f"PAPER [{p.get('source', 'arxiv')}]: {p['title']}\nURL: {p['url']}\n{p['text']}"
             for p in paper_texts
         ) or "No papers found."
-    news_block = "\n".join(
-        f"- {n['title']} ({n['url']}): {n['snippet']}"
-        for n in news_results[:3]
-    ) or "No news results."
+    # News = Exa topic news + the industry pulse (Hacker News, RSS) from sources.
+    news_lines = [f"- {n['title']} ({n['url']}): {n['snippet']}" for n in news_results[:3]]
+    news_lines += [f"- [{n.get('source', 'news')}] {n['title']} ({n['url']}): {n.get('snippet', '')}" for n in extra_news]
+    news_block = "\n".join(news_lines) or "No news results."
 
     user_context = f"The user's interests are: {theme_str}. Relate all findings to these interests and how they apply in practice."
     system_prompt = (
@@ -1170,9 +1199,24 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
                         "digest starts connecting new research to your own ideas."),
         })
 
-    # Auto-save papers as Garden seeds (best-effort, never blocks delivery)
+    # Auto-save papers as Garden seeds (best-effort, never blocks delivery).
+    # Recover source/pdf/kind from the candidate map (the LLM only echoed the
+    # url), then also persist the industry-pulse candidates (HN/RSS) so they're
+    # in the garden + full-text indexed for agents/MCP — not just shown once.
     try:
-        _save_papers_as_seeds(papers, user_id, db, seen_paper_urls=seen_urls)
+        for p in papers:
+            cand = cand_by_url.get(p.get("url", ""))
+            if cand:
+                p.setdefault("source", cand.get("source", "arxiv"))
+                p.setdefault("kind", cand.get("kind", "paper"))
+                p.setdefault("pdf_url", cand.get("pdf_url", ""))
+        to_save = list(papers) + [
+            {"title": n.get("title", ""), "url": n.get("url", ""),
+             "content": n.get("snippet", ""), "source": n.get("source", "news"),
+             "kind": n.get("kind", "news"), "pdf_url": n.get("pdf_url", "")}
+            for n in extra_news
+        ]
+        _save_papers_as_seeds(to_save, user_id, db, seen_paper_urls=seen_urls)
     except Exception as e:
         logger.warning(f"[academic_digest] Failed to save papers as seeds: {e}")
 
