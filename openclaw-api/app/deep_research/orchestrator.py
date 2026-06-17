@@ -24,9 +24,14 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Garden = the user's own seeds; the rest are external.
-EXTERNAL_SCOUTS = ["arxiv", "openalex", "hackernews", "rss"]
+# Garden = the user's own seeds; the rest are external. Exa = live web search
+# (its full page contents are read during synthesis).
+EXTERNAL_SCOUTS = ["exa", "arxiv", "openalex", "hackernews", "rss"]
 SCOUTS = ["garden"] + EXTERNAL_SCOUTS
+
+# Sources whose full machine-readable text we pull for the 1M-context synthesis,
+# in priority order (most signal-dense first).
+READ_PRIORITY = {"exa": 0, "openalex": 1, "arxiv": 2, "rss": 3, "hackernews": 4}
 
 
 def _set(db, run, status: str, **fields):
@@ -66,6 +71,10 @@ async def _fetch_source(source: str, themes: list[str], user_id: str, db) -> lis
         from app.briefings import fetch_garden_context
         g = fetch_garden_context(user_id, themes, db) or []
         return [{"title": s.get("title", ""), "url": s.get("url", ""), "snippet": s.get("snippet", "")} for s in g[:12]]
+    if source == "exa":
+        from app.briefings import fetch_web_search
+        hits = await fetch_web_search(" ".join(themes[:3]), limit=8)
+        return [{"title": h.get("title", ""), "url": h.get("url", ""), "snippet": h.get("snippet", "")} for h in hits]
     if source == "arxiv":
         from app.briefings import _fetch_arxiv_papers
         return await _fetch_arxiv_papers(themes, limit=8)
@@ -105,6 +114,32 @@ def scout_one(run_id: str, source: str, themes: list[str], db) -> int:
 
 # ── Step 3: synthesize + deliver ──────────────────────────────────────────────
 
+def _read_fulltexts(findings: list, limit: int = 14, per_chars: int = 6000) -> list[tuple]:
+    """Pull the FULL machine-readable text of the top external findings (Exa
+    contents handles arbitrary pages incl. arXiv/journal HTML). Concurrent;
+    falls back to the stored snippet when a page can't be fetched."""
+    from app.enricher_v2 import fetch_url_content
+    ext = [f for f in findings if f.source != "garden" and f.url]
+    ext.sort(key=lambda f: READ_PRIORITY.get(f.source, 9))
+    picks = ext[:limit]
+
+    async def _gather():
+        async def _one(f):
+            txt = None
+            try:
+                txt = await asyncio.to_thread(fetch_url_content, f.url)
+            except Exception:
+                txt = None
+            return (f, (txt or f.snippet or "")[:per_chars])
+        return await asyncio.gather(*[_one(f) for f in picks]) if picks else []
+
+    try:
+        return asyncio.run(_gather())
+    except Exception as e:
+        logger.warning(f"[deep_research] full-text read failed: {e}")
+        return [(f, (f.snippet or "")[:per_chars]) for f in picks]
+
+
 def synthesize_and_report(run_id: str, db) -> dict:
     from app.models import ResearchRun, ResearchFinding, Seed, User
     from app.briefings import fetch_garden_context, _call_llm
@@ -116,6 +151,7 @@ def synthesize_and_report(run_id: str, db) -> dict:
     user = db.query(User).filter(User.id == run.user_id).first()
     themes = _themes_for(run, db)
     theme_str = ", ".join(themes[:3])
+    focus = run.theme or theme_str
     _set(db, run, "synthesizing")
 
     findings = db.query(ResearchFinding).filter(ResearchFinding.run_id == run.id).all()
@@ -123,49 +159,77 @@ def synthesize_and_report(run_id: str, db) -> dict:
     db.commit()
 
     garden_ctx = fetch_garden_context(str(run.user_id), themes, db) or []
-    garden_block = "\n".join(f"- {g.get('title','')}: {g.get('snippet','')}" for g in garden_ctx[:10]) or "No garden seeds yet."
-    by_source: dict = {}
-    for f in findings:
-        by_source.setdefault(f.source, []).append(f)
-    sources_block = ""
-    for src, fs in by_source.items():
-        if src == "garden":
-            continue
-        sources_block += f"\n### {src.upper()}\n" + "\n".join(
-            f"- {f.title} ({f.url}) — {(f.snippet or '')[:240]}" for f in fs[:8])
+    garden_block = "\n".join(f"- {g.get('title','')}: {g.get('snippet','')}" for g in garden_ctx[:12]) or "No garden seeds yet."
 
-    prompt = f"""You are a deep-research analyst connecting the dots across a person's
-knowledge garden and the latest literature + industry signal.
+    # ── Pass 1: decompose into sharp sub-questions (cheap model) ──────────────
+    titles_block = "\n".join(f"- [{f.source}] {f.title}" for f in findings if f.source != "garden")[:4000]
+    plan = _call_llm(
+        f"""Focus: {focus}\nThemes: {theme_str}\n\nThe user's garden:\n{garden_block}\n\n"""
+        f"""Candidate sources gathered:\n{titles_block}\n\n"""
+        "Decompose this into 3-5 sharp, non-overlapping sub-questions that a rigorous "
+        "research brief must answer to close a real gap for this person. Output a plain "
+        "numbered list, nothing else.",
+        system="You are a research lead scoping an investigation.",
+        max_tokens=400, model=settings.BRIEFING_MODEL) or ""
+    sub_questions = plan.strip() or "1. What's new? 2. How does it connect to the garden? 3. What's the gap?"
 
+    # ── Read FULL machine-readable text of the top sources ────────────────────
+    read = _read_fulltexts(findings)
+    sources_full = ""
+    cited = []
+    for i, (f, text) in enumerate(read, 1):
+        cited.append((i, f.source, f.title, f.url))
+        sources_full += f"\n\n[S{i}] ({f.source}) {f.title}\nURL: {f.url}\n{text}"
+    sources_full = sources_full[:700000]  # headroom under a 1M-context window
+
+    # ── Pass 2: deep synthesis over full texts (1M-context model) ─────────────
+    prompt = f"""You are running a DEEP RESEARCH investigation for someone's knowledge garden.
+Do NOT one-shot or hand-wave — reason over the FULL source texts below and cite
+them inline as [S#]. Surface where sources agree, disagree, or leave gaps; never
+cite a source you wouldn't stand behind.
+
+FOCUS: {focus}
 THEMES: {theme_str}
 
-THEIR GARDEN (what they already think about):
+SUB-QUESTIONS TO ANSWER:
+{sub_questions}
+
+THE USER'S GARDEN (their existing thinking):
 {garden_block}
 
-NEW EVIDENCE GATHERED ACROSS SOURCES:
-{sources_block or "No external findings."}
+FULL SOURCE TEXTS (read these closely; cite as [S#]):
+{sources_full or "No external full text available."}
 
-Write a focused research brief in markdown with EXACTLY these sections:
+Produce a rigorous, well-formatted research brief in EXACTLY this markdown shape:
+
+# {focus} — Research Brief
+## TL;DR
+3-4 bullets: the sharpest takeaways and why they matter to this person.
+## What your garden already knows
+Ground this in their seeds (name them).
+## What the research says
+Answer each sub-question in its own short subsection (### …), citing [S#] for
+every non-obvious claim. Note agreements and contradictions explicitly.
 ## The Gap
-Name ONE specific, non-obvious gap or unexplored connection — something their
-garden circles but hasn't closed, that the new evidence makes addressable. Be
-concrete; cite the seeds + sources (by title) that point to it.
-## Connecting the Dots
-3-5 sentences linking their existing thinking to the new findings — what lines
-up, what's in tension, what's newly possible.
-## What the Sources Say
-3-5 bullets, each grounding a claim in a specific source above (name it).
-## Next Moves
-3 concrete actions to close the gap (an experiment, a paper to read in full, a
-spec to draft). Tie each to their garden.
+ONE specific, non-obvious gap the evidence makes addressable — the throughline.
+## Recommended next moves
+3 concrete actions (an experiment to run, a paper to read in full, a PRD/spec to
+draft), each tied to their garden.
+## Sources
+A numbered list matching the [S#] citations: [S#] Title — url.
 
-Be specific and grounded — never invent sources or seeds."""
+Be specific, rigorous, and grounded. Markdown only."""
 
-    report = _call_llm(prompt, system="You produce rigorous, grounded research briefs. Markdown only.",
-                       max_tokens=1600, model=settings.BRIEFING_MODEL)
-    if not report or len(report.strip()) < 80:
-        report = _call_llm(prompt, max_tokens=1600, model=settings.FALLBACK_MODEL)
+    report = _call_llm(prompt, system="You produce rigorous, deeply-cited research briefs. Markdown only.",
+                       max_tokens=4000, model=settings.DEEP_RESEARCH_MODEL)
+    if not report or len(report.strip()) < 120:
+        logger.warning(f"[deep_research] 1M model thin/empty for {run.id} — falling back")
+        report = _call_llm(prompt, max_tokens=4000, model=settings.PREMIUM_MODEL)
     report = (report or "").strip() or "_No synthesis produced._"
+
+    # Append a sources appendix if the model omitted it (every run is traceable).
+    if "## Sources" not in report and cited:
+        report += "\n\n## Sources\n" + "\n".join(f"[S{i}] ({src}) {ttl} — {url}" for i, src, ttl, url in cited)
 
     gap = ""
     m = _re.search(r"##\s*The Gap\s*\n+(.+?)(?:\n##|\Z)", report, _re.DOTALL)
@@ -174,14 +238,17 @@ Be specific and grounded — never invent sources or seeds."""
 
     _set(db, run, "reporting", gap=gap, report_md=report)
 
-    # Plant in the garden (full-text + MCP-readable).
-    title = f"Deep Research — {theme_str[:60]} — {datetime.utcnow():%b %d}"
+    # Plant as a properly-formatted research artifact (full-text + MCP-readable).
+    title = f"Research Brief — {focus[:70]}"
+    header = (f"> **Deep Research** · {run.finding_count} sources gathered, "
+              f"{len(read)} read in full · {datetime.utcnow():%b %d, %Y}\n\n")
     seed = Seed(
         id=_uuid.uuid4(), tenant_id=run.tenant_id, user_id=run.user_id, title=title[:200],
-        content=f"**Deep Research run** across {run.finding_count} sources on _{theme_str}_.\n\n{report}",
-        seed_type="note", created_by="agent_research", created_via="deep_research",
-        seed_metadata={"tags": ["research", "deep-research"], "seed_type": "note",
-                       "domain": "Research", "run_id": str(run.id), "energy": "HIGH"},
+        content=header + report,
+        seed_type="research_brief", created_by="agent_research", created_via="deep_research",
+        seed_metadata={"tags": ["research", "deep-research", "brief"], "seed_type": "research_brief",
+                       "domain": "Research", "run_id": str(run.id), "focus": focus[:120],
+                       "sources_read": len(read), "energy": "HIGH"},
         created_at=datetime.utcnow(),
     )
     db.add(seed)

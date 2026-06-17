@@ -198,7 +198,7 @@ function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => 
       })
       if (!r.ok) throw new Error()
       setTheme('')
-      toast.success('Deep research started — I\'ll push + email you when the report\'s ready.', { duration: 6000 })
+      toast.success('Deep research started — reading sources in full across the web + literature. A few minutes; I\'ll push + email you the brief.', { duration: 7000 })
       loadRuns()
     } catch {
       toast.error('Could not start the run — backend update pending')
@@ -218,7 +218,7 @@ function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => 
         </span>
         <div>
           <div className="ui" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>Deep Research</div>
-          <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)' }}>Send agents across your garden + the latest sources to find a gap.</div>
+          <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)' }}>Long-running agents read your garden + web + papers in full, then synthesize a cited brief.</div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

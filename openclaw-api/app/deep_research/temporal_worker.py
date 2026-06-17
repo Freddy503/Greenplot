@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 TASK_QUEUE = "greenplot-research"
 WORKFLOW_PREFIX = "deep-research"
-SCOUTS = ["garden", "arxiv", "openalex", "hackernews", "rss"]
+SCOUTS = ["garden", "exa", "arxiv", "openalex", "hackernews", "rss"]
 
 try:
     from temporalio import workflow, activity
