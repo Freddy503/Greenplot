@@ -15,7 +15,7 @@ import logging
 import re
 
 from app.config import settings
-from . import openalex, hackernews, rss
+from . import openalex, hackernews, rss, github
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ async def discover_all(themes: list[str], seen_urls: set[str] | None = None,
         openalex.discover(themes),
         hackernews.discover(themes),
         rss.discover(themes),
+        github.discover(themes),
         return_exceptions=True,
     )
     cands: list[dict] = []

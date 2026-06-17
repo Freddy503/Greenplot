@@ -142,6 +142,9 @@ and de-duped by URL/DOI before hitting `parse_paper_for_seed`.
 - **rss.py** — `feedparser` over a curated, theme-filtered feed list (Nature
   feeds, MIT TR, Quanta, DeepMind/OpenAI/Anthropic, Papers-with-Code). Default
   list in-module; override via `settings.RSS_FEEDS` ("Name|url" comma list).
+- **github.py** — GitHub Search API (repositories): active, well-starred repos
+  on a theme (the "what's being built" pulse). Auth via `GITHUB_TOKEN` when set
+  (5000 req/hr). `kind="news"`; READMEs are read in full during Deep Research.
 
 ### How it changes the digest (`build_academic_digest`)
 - **Candidate pool:** arXiv (as before) **+** OpenAlex papers merged into the
