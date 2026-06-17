@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 
 # Garden = the user's own seeds; the rest are external. Exa = live web search
 # (its full page contents are read during synthesis).
-EXTERNAL_SCOUTS = ["exa", "arxiv", "openalex", "hackernews", "rss"]
+EXTERNAL_SCOUTS = ["exa", "arxiv", "openalex", "github", "hackernews", "rss"]
 SCOUTS = ["garden"] + EXTERNAL_SCOUTS
 
 # Sources whose full machine-readable text we pull for the 1M-context synthesis,
-# in priority order (most signal-dense first).
-READ_PRIORITY = {"exa": 0, "openalex": 1, "arxiv": 2, "rss": 3, "hackernews": 4}
+# in priority order (most signal-dense first). GitHub READMEs read well via Exa.
+READ_PRIORITY = {"exa": 0, "openalex": 1, "arxiv": 2, "github": 3, "rss": 4, "hackernews": 5}
 
 
 def _set(db, run, status: str, **fields):
@@ -81,9 +81,9 @@ async def _fetch_source(source: str, themes: list[str], user_id: str, db) -> lis
     if source == "arxiv":
         from app.briefings import _fetch_arxiv_papers
         return await _fetch_arxiv_papers(themes, limit=8)
-    # openalex | hackernews | rss → the dedicated generators
-    from app.sources import openalex, hackernews, rss
-    gen = {"openalex": openalex, "hackernews": hackernews, "rss": rss}.get(source)
+    # openalex | hackernews | rss | github → the dedicated generators
+    from app.sources import openalex, hackernews, rss, github
+    gen = {"openalex": openalex, "hackernews": hackernews, "rss": rss, "github": github}.get(source)
     return await gen.discover(themes) if gen else []
 
 
