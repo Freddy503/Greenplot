@@ -721,6 +721,58 @@ def serve_paper_file(seed_id: str, current_user: User = Depends(get_current_user
                         filename=(seed.seed_metadata or {}).get("original_filename") or f"{seed_id}.pdf")
 
 
+@app.get("/api/v1/papers/{seed_id}/fulltext")
+def paper_fulltext(seed_id: str, current_user: User = Depends(get_current_user),
+                   db: Session = Depends(get_db)):
+    """Whole-paper machine-readable markdown for agents (MCP, spec drafting).
+
+    Prefers the compiled full text saved at parse time; for papers parsed before
+    full-text compilation existed, reconstructs from the ordered Weaviate chunks
+    so nothing has to be re-parsed. Tenant-scoped.
+    """
+    seed = db.query(Seed).filter(Seed.id == seed_id,
+                                 Seed.tenant_id == current_user.tenant_id).first()
+    if not seed:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    from app.paper_pipeline import fulltext_path
+    fp = fulltext_path(seed_id)
+    if os.path.exists(fp):
+        try:
+            with open(fp, encoding="utf-8") as fh:
+                md = fh.read()
+            return {"seed_id": seed_id, "title": seed.title, "chars": len(md),
+                    "source": "compiled", "markdown": md}
+        except Exception as e:
+            logger.warning(f"[papers] fulltext read failed for {seed_id}: {e}")
+
+    # Fallback: stitch the ordered chunks back together.
+    try:
+        chunks = sorted(weaviate_client.get_paper_chunks(seed_id, limit=200),
+                        key=lambda c: c.get("chunk_index", 0))
+        if chunks:
+            parts, last_section = [f"# {seed.title}"], None
+            for c in chunks:
+                sec = (c.get("section") or "").strip()
+                if sec and sec != last_section:
+                    parts.append(f"\n## {sec}\n")
+                    last_section = sec
+                parts.append((c.get("text") or "").strip())
+            md = "\n".join(parts).strip()
+            return {"seed_id": seed_id, "title": seed.title, "chars": len(md),
+                    "source": "chunks", "markdown": md}
+    except Exception as e:
+        logger.warning(f"[papers] fulltext chunk-fallback failed for {seed_id}: {e}")
+
+    # Last resort: the seed's own summary/content.
+    body = seed.content or ""
+    if body.strip():
+        return {"seed_id": seed_id, "title": seed.title, "chars": len(body),
+                "source": "summary", "markdown": f"# {seed.title}\n\n{body}"}
+    raise HTTPException(status_code=404,
+                        detail="No full text available yet — index the paper first (POST /papers/{id}/parse).")
+
+
 @app.get("/api/v1/papers/{seed_id}/links")
 def paper_garden_links(seed_id: str, current_user: User = Depends(get_current_user),
                        db: Session = Depends(get_db)):
