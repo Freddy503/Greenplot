@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     EXA_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None  # for Whisper + vision
 
+    # Research Digest sources (docs/specs/research-sources.md). When enabled, the
+    # academic digest also pulls OpenAlex (published research incl. journals),
+    # Hacker News (industry pulse) and curated RSS feeds — all keyless.
+    RESEARCH_SOURCES_ENABLED: bool = True
+    OPENALEX_MAILTO: str = "contact@example.com"  # polite-pool contact
+    # Override the default RSS feed list: comma-separated "Name|url" entries.
+    RSS_FEEDS: str = ""
+
     # Redis (for queue)
     REDIS_URL: str = "redis://redis:6379/0"
 
