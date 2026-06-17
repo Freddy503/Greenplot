@@ -138,6 +138,22 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE seeds ADD COLUMN seed_type VARCHAR(32) DEFAULT 'idea'"))
         conn.commit()
 
+    # Deep Research P0–P2 columns on research_runs (create_all won't alter an
+    # existing table) — add defensively so existing installs pick them up.
+    try:
+        has_rr = conn.execute(text("SELECT to_regclass('public.research_runs')")).scalar()
+        if has_rr:
+            for col, ddl in (("mode", "ALTER TABLE research_runs ADD COLUMN mode VARCHAR(8) DEFAULT 'deep'"),
+                             ("parent_run_id", "ALTER TABLE research_runs ADD COLUMN parent_run_id UUID")):
+                ex = conn.execute(text(
+                    "SELECT 1 FROM information_schema.columns WHERE table_name='research_runs' AND column_name=:c"),
+                    {"c": col}).fetchone()
+                if not ex:
+                    conn.execute(text(ddl))
+            conn.commit()
+    except Exception as _e:
+        logger.warning(f"[startup] research_runs column check skipped: {_e}")
+
     # Backfill paper metadata on research-paper seeds saved before the digest
     # started writing pdf_url/paper_url/seed_type — makes existing digest
     # papers viewable (embedded PDF) in Studio's "Ideas ready to develop".
@@ -777,6 +793,7 @@ def paper_fulltext(seed_id: str, current_user: User = Depends(get_current_user),
 
 class DeepResearchRequest(BaseModel):
     theme: Optional[str] = None  # focus; omitted → orchestrator picks from themes
+    mode: Optional[str] = "deep"  # 'deep' (full-text + 1M) | 'lite' (snippets, cheap)
 
 
 @app.post("/api/v1/research/deep", status_code=202)
@@ -787,9 +804,23 @@ def start_deep_research(req: DeepResearchRequest,
     in the garden, names a gap, and emails a report. Returns the run id; poll
     GET /research/runs/{id}."""
     from app.models import ResearchRun
+    # Cost guard (P2): cap deep runs per user per day.
+    cap = getattr(settings, "RESEARCH_DAILY_CAP", 5)
+    mode = "lite" if (req.mode or "deep").lower() == "lite" else "deep"
+    if mode == "deep" and cap > 0:
+        from datetime import timedelta as _td
+        since = datetime.utcnow() - _td(days=1)
+        todays = db.query(func.count(ResearchRun.id)).filter(
+            ResearchRun.user_id == current_user.id,
+            ResearchRun.mode == "deep",
+            ResearchRun.created_at >= since,
+        ).scalar() or 0
+        if todays >= cap:
+            raise HTTPException(status_code=429,
+                                detail=f"Daily deep-research limit reached ({cap}/day). Try 'lite' mode or tomorrow.")
     run = ResearchRun(
         id=uuid.uuid4(), tenant_id=current_user.tenant_id, user_id=current_user.id,
-        theme=(req.theme or None), status="queued", engine="worker",
+        theme=(req.theme or None), status="queued", engine="worker", mode=mode,
     )
     db.add(run)
     db.commit()
@@ -852,6 +883,32 @@ def list_research_runs(current_user: User = Depends(get_current_user),
         "result_seed_id": str(r.result_seed_id) if r.result_seed_id else None,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     } for r in runs]}
+
+
+# ── Brief → action (P0, docs/specs/research-roadmap.md) ───────────────────────
+
+@app.post("/api/v1/research/brief/{seed_id}/to-prd", status_code=201)
+async def research_brief_to_prd(seed_id: str,
+                                current_user: User = Depends(get_current_user),
+                                db: Session = Depends(get_db)):
+    """Turn a Deep Research brief's gap into a Studio PRD (research → build)."""
+    from app.deep_research.actions import brief_to_prd
+    result = await brief_to_prd(seed_id, current_user, db)
+    if result.get("status") not in ("ok", "partial"):
+        raise HTTPException(status_code=422, detail=result.get("message", "Could not draft a PRD"))
+    return result
+
+
+@app.post("/api/v1/research/brief/{seed_id}/deeper", status_code=202)
+def research_brief_deeper(seed_id: str,
+                          current_user: User = Depends(get_current_user),
+                          db: Session = Depends(get_db)):
+    """Spawn a follow-up Deep Research run scoped to this brief's gap."""
+    from app.deep_research.actions import brief_deeper
+    result = brief_deeper(seed_id, current_user, db)
+    if result.get("status") != "ok":
+        raise HTTPException(status_code=422, detail=result.get("message", "Could not start a follow-up"))
+    return result
 
 
 @app.get("/api/v1/papers/{seed_id}/links")
@@ -5958,6 +6015,40 @@ def _job_wiki_compile():
 
 scheduler = None  # global reference for dynamic rescheduling
 
+def _job_weekly_research():
+    """P1: Monday autonomous Deep Research for users who opted in
+    (consents.weekly_research). One run each on their top theme — the second
+    brain works while they sleep. Cost-bounded by RESEARCH_DAILY_CAP downstream."""
+    if not getattr(settings, "WEEKLY_RESEARCH_ENABLED", True):
+        return
+    from app.database import SessionLocal
+    from app.models import User, ResearchRun
+    db = SessionLocal()
+    try:
+        queued = 0
+        for u in db.query(User).all():
+            if _is_test_account(u):
+                continue
+            if not (u.consents or {}).get("weekly_research"):
+                continue
+            run = ResearchRun(id=uuid.uuid4(), tenant_id=u.tenant_id, user_id=u.id,
+                              theme=None, status="queued", engine="worker", mode="deep")
+            db.add(run)
+            db.commit()
+            db.refresh(run)
+            try:
+                from app.task_broker import enqueue_deep_research
+                enqueue_deep_research(str(run.id), str(u.tenant_id))
+                queued += 1
+            except Exception as e:
+                logger.warning(f"[weekly_research] enqueue failed for {u.id}: {e}")
+        logger.info(f"[weekly_research] queued {queued} autonomous runs")
+    except Exception as e:
+        logger.error(f"[weekly_research] job failed: {e}")
+    finally:
+        db.close()
+
+
 def _start_scheduler():
     global scheduler
     # Load saved schedule config
@@ -6056,8 +6147,14 @@ def _start_scheduler():
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        _job_weekly_research,
+        CronTrigger(day_of_week="mon", hour=7, minute=30, timezone=_CET),
+        id="weekly_research", replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("✅ APScheduler started — spark 08:30, briefing 09:30, reflection 16:00, weekly eval Sun 18:00, challenge 1st/15th 10:00, enrich */30min, wiki compile */6h, wiki lint Sun 08:00 CET")
+    logger.info("✅ APScheduler started — spark 08:30, briefing 09:30, reflection 16:00, weekly eval Sun 18:00, challenge 1st/15th 10:00, enrich */30min, wiki compile */6h, wiki lint Sun 08:00, deep research Mon 07:30 CET")
     return scheduler
 
 

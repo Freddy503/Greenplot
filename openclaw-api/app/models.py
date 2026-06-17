@@ -364,6 +364,8 @@ class ResearchRun(Base):
     result_seed_id = Column(UUID(as_uuid=True), nullable=True)  # garden seed of the report
     error = Column(String(500), nullable=True)
     engine = Column(String(16), default='worker')         # 'worker' (P1) | 'temporal' (P2)
+    mode = Column(String(8), default='deep')              # 'deep' (full-text + 1M) | 'lite'
+    parent_run_id = Column(UUID(as_uuid=True), nullable=True)  # set when "go deeper" spawns a follow-up
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

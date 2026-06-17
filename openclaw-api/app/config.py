@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     #              requires `pip install temporalio` + a reachable cluster.
     RESEARCH_ENGINE: str = "worker"
     TEMPORAL_HOST: str = "temporal:7233"
+    # Deep Research P0–P2 controls (docs/specs/research-roadmap.md)
+    RESEARCH_DAILY_CAP: int = 5           # max deep runs per user per day (cost guard)
+    RESEARCH_CRITIQUE: bool = True        # P2: critique-and-revise the brief (deep mode)
+    WEEKLY_RESEARCH_ENABLED: bool = True  # P1: Monday autonomous run for opted-in users
 
     # Redis (for queue)
     REDIS_URL: str = "redis://redis:6379/0"
