@@ -43,11 +43,14 @@ def _set(db, run, status: str, **fields):
 
 
 def _themes_for(run, db) -> list[str]:
+    """Query terms for the scouts. An explicit topic (run.theme) is used ALONE so
+    the wired APIs are queried directly with it — even if it's brand new to the
+    garden — instead of being diluted by unrelated garden themes. With no topic,
+    fall back to the user's garden themes."""
+    if run.theme and run.theme.strip():
+        return [run.theme.strip()]
     from app.briefings import fetch_user_themes
-    themes = fetch_user_themes(str(run.user_id), db)
-    if run.theme:
-        themes = [run.theme] + [t for t in themes if t.lower() != run.theme.lower()]
-    return themes
+    return fetch_user_themes(str(run.user_id), db)
 
 
 # ── Step 1: scope ─────────────────────────────────────────────────────────────
