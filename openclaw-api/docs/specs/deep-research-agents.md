@@ -123,6 +123,23 @@ agent + sources + email code is unchanged — only the conductor swaps.
   `/api/research/runs`, an in-progress status chip (polls while active), and a
   one-tap link to the latest report.
 
+### Depth upgrade — full-text + 1M context (not a fast snippet pass)
+The background run is now the *deepest* of the two Deep Researches (the other is
+the interactive chat `research` thinking-mode):
+- **Scouts include Exa** web search alongside garden + arXiv + OpenAlex + HN + RSS.
+- **Reads sources in full:** the top ~14 external findings are pulled as full
+  machine-readable text (Exa `/contents`, handles arXiv/journal/article pages),
+  not snippets.
+- **Two passes:** (1) decompose the focus into 3-5 sharp sub-questions; (2) a
+  **1M-context model** (`DEEP_RESEARCH_MODEL`, default `google/gemini-2.5-pro`)
+  reasons over *all* the full texts at once and writes an inline-cited [S#] brief.
+- **Proper Greenplot artifact:** saved as a `research_brief` seed with the same
+  rigorous shape as the chat mode (TL;DR · what your garden knows · what the
+  research says, per sub-question · The Gap · next moves · Sources), so it reads
+  like a real brief — not a dump — and is full-text + MCP-readable.
+- Naturally takes minutes (full-text reads + big synthesis) — which is exactly
+  why it belongs on the long-running harness, and what Phase 2/Temporal is for.
+
 ### Phase 1 orchestrator is now composable
 `scope_run` → `scout_one(source)` (idempotent per source) → `synthesize_and_report`
 (LLM + seed + email + push). The Redis worker calls them sequentially; Temporal
