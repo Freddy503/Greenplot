@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Leaf, Globe, Share2, Bookmark, Sparkles, ChevronRight, Link2, Clock, Trash2, Archive, Search, FileText, Plus, MoreHorizontal } from 'lucide-react'
 import DetailHero, { DetailHeroBtn } from '@/components/ui/v2/detail-hero'
 import { toast } from 'sonner'
@@ -321,9 +323,17 @@ export function SeedDetailSheet({ seed, open, onOpenChange, onDeleted }: SeedDet
             "{seed.title}"
           </p>
           {bodyText && (
-            <p className="body-text" style={{ fontSize: 14.5, lineHeight: 1.7, color: 'var(--ink-2)', marginTop: 16 }}>
-              {bodyText}
-            </p>
+            /(^|\n)#{1,3}\s|\n[-*]\s|\[S\d/.test(bodyText) ? (
+              // Markdown-rich body (e.g. a Deep Research brief) — render it
+              // formatted so the in-app view matches the emailed report.
+              <div className="prose prose-sm max-w-none" style={{ fontFamily: 'var(--body)', fontSize: 14.5, lineHeight: 1.7, color: 'var(--ink-2)', marginTop: 16 }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{bodyText}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="body-text" style={{ fontSize: 14.5, lineHeight: 1.7, color: 'var(--ink-2)', marginTop: 16 }}>
+                {bodyText}
+              </p>
+            )
           )}
         </div>
 

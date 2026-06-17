@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Deep Research synthesis — must be a 1M-context model: it ingests the FULL
     # machine-readable text of every source at once (papers, Exa contents, etc.).
     # Any ≥1M-context OpenRouter slug works; override via DEEP_RESEARCH_MODEL.
-    DEEP_RESEARCH_MODEL: str = "google/gemini-2.5-pro"
+    DEEP_RESEARCH_MODEL: str = "minimax/minimax-m3"
     # Bulk structured background work — enrichment, extraction, backlinking, insight mining.
     ENRICH_MODEL: str = "deepseek/deepseek-v4-flash"
     # Reliable non-thinking safety net for briefing retries.
