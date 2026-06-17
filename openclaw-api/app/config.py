@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     # Override the default RSS feed list: comma-separated "Name|url" entries.
     RSS_FEEDS: str = ""
 
+    # Deep Research harness (docs/specs/deep-research-agents.md).
+    # "worker"   = Phase 1: runs on the existing Redis worker (default).
+    # "temporal" = Phase 2: self-hosted Temporal (docker-compose.temporal.yml);
+    #              requires `pip install temporalio` + a reachable cluster.
+    RESEARCH_ENGINE: str = "worker"
+    TEMPORAL_HOST: str = "temporal:7233"
+
     # Redis (for queue)
     REDIS_URL: str = "redis://redis:6379/0"
 

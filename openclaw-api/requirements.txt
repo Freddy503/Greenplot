@@ -28,3 +28,7 @@ youtube-transcript-api>=0.6.0
 
 # Research Digest RSS source (docs/specs/research-sources.md)
 feedparser
+
+# Phase 2 Deep Research harness (docs/specs/deep-research-agents.md).
+# Optional — only needed when RESEARCH_ENGINE=temporal. Uncomment + rebuild.
+# temporalio

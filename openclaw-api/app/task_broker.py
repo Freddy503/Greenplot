@@ -47,6 +47,26 @@ def enqueue_paper_parse(seed_id: str, tenant_id: str, priority: int = 5) -> str:
     return task_id
 
 
+def enqueue_deep_research(run_id: str, tenant_id: str, priority: int = 8) -> str:
+    """Push a Deep Research run (spec: docs/specs/deep-research-agents.md). Lowest
+    priority — long, multi-source jobs that must never starve enrichment or
+    paper parsing."""
+    r = get_redis()
+    task_id = str(uuid.uuid4())
+    job = {
+        "task_id": task_id,
+        "type": "deep_research",
+        "run_id": run_id,
+        "tenant_id": tenant_id,
+        "enqueued_at": datetime.utcnow().isoformat() + "Z",
+        "status": "queued",
+        "priority": priority,
+    }
+    r.hset(STATUS_KEY, task_id, json.dumps(job))
+    r.zadd(QUEUE_KEY, {json.dumps(job): priority})
+    return task_id
+
+
 def enqueue_enrichment(thought_id: str, tenant_id: str, priority: int = 0) -> str:
     """
     Push an enrichment job onto the Redis queue.

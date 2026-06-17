@@ -65,6 +65,25 @@ def process_job(job: dict, db: Session):
             log.error(f"❌ Paper parse crashed: {e}")
         return
 
+    # Deep Research run (spec: docs/specs/deep-research-agents.md) — long,
+    # multi-source, durable via the research_runs table (resumable on restart).
+    if job.get("type") == "deep_research":
+        run_id = job["run_id"]
+        log.info(f"Processing deep_research {task_id[:8]}... run={run_id[:8]}...")
+        try:
+            from app.deep_research.orchestrator import run_deep_research
+            result = run_deep_research(run_id, db)
+            if result.get("status") == "ok":
+                update_task_status(task_id, "completed", result=result)
+                log.info(f"✅ Deep research done: {result.get('findings')} findings")
+            else:
+                update_task_status(task_id, "error", error=result.get("message", "run failed"))
+                log.error(f"❌ Deep research failed: {result.get('message')}")
+        except Exception as e:
+            update_task_status(task_id, "error", error=str(e))
+            log.error(f"❌ Deep research crashed: {e}")
+        return
+
     thought_id = job["thought_id"]
 
     log.info(f"Processing task {task_id[:8]}... thought={thought_id[:8]}...")

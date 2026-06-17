@@ -94,3 +94,43 @@ agent + sources + email code is unchanged — only the conductor swaps.
   becomes the bottleneck.
 - **Don't:** adopt LangGraph/CrewAI/etc. as the harness — wrong layer, discards
   working code, and the hosted parts break EU data residency.
+
+---
+
+## Implemented
+
+### Phase 1 — build-on-stack (shipped)
+- **Models** (`models.py`): `ResearchRun` (durable run-of-record: status, theme,
+  gap, report_md, finding_count, result_seed_id, engine) + `ResearchFinding`
+  (per-scout hit). Auto-created via `create_all`.
+- **Orchestrator** (`deep_research/orchestrator.py`): `run_deep_research(run_id,
+  db)` — scope (themes + garden slice) → scout (garden + arXiv + OpenAlex + HN +
+  RSS, concurrent, every finding persisted) → synthesize (gap-finder LLM names
+  the gap, connects the dots, cites sources, proposes moves) → report (planted as
+  a garden seed + emailed). **Idempotent per scout** (skips sources that already
+  have findings) so a restarted worker resumes.
+- **Worker** (`task_worker.py` + `task_broker.py`): new `deep_research` job type
+  (lowest priority, never starves enrichment/parsing); `enqueue_deep_research`.
+- **Email** (`email_sender.py`): `send_research_report_email` (branded brief with
+  the gap callout + "open in garden").
+- **API**: `POST /research/deep` (kick off; inline fallback if the queue is
+  down), `GET /research/runs/{id}` (status/report), `GET /research/runs` (list).
+- **Trigger**: call it from a button, a schedule, or chat. Output lands in the
+  garden (so it's full-text + MCP-readable) and in the user's inbox.
+
+### Phase 2 — self-hosted Temporal (scaffolded; flip a flag to adopt)
+- **`docker-compose.temporal.yml`**: official `temporalio` images (auto-setup +
+  UI + its Postgres) + a `research-worker` service — all on Hetzner (EU-resident).
+- **`deep_research/temporal_worker.py`**: `DeepResearchWorkflow` + a durable
+  `run_deep_research` activity (retries w/ backoff, 30-min timeout, heartbeats)
+  that reuses the **same Phase 1 orchestrator** — idempotency makes retries
+  resume, not duplicate. `start_workflow()` is the sync entrypoint the API uses.
+  `temporalio` is an **optional** dep (gated import) — Phase 1 never needs it.
+- **Switch**: `RESEARCH_ENGINE=temporal` + `TEMPORAL_HOST` route `POST
+  /research/deep` to Temporal (falls back to the Redis worker on any error).
+  Phase 2b (later): split the single activity into parallel per-scout activities
+  for step-level recovery — the workflow already has the comment showing how.
+
+**To turn on Phase 2:** uncomment `temporalio` in requirements, rebuild, bring up
+`docker-compose.temporal.yml`, set `RESEARCH_ENGINE=temporal`. No agent-code
+changes — only the conductor swaps.
