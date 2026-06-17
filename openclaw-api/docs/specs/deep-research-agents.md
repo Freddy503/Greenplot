@@ -115,10 +115,20 @@ agent + sources + email code is unchanged — only the conductor swaps.
   the gap callout + "open in garden").
 - **API**: `POST /research/deep` (kick off; inline fallback if the queue is
   down), `GET /research/runs/{id}` (status/report), `GET /research/runs` (list).
-- **Trigger**: call it from a button, a schedule, or chat. Output lands in the
-  garden (so it's full-text + MCP-readable) and in the user's inbox.
+- **Delivery**: planted as a garden seed (full-text + MCP-readable) **+ email**
+  (`send_research_report_email`) **+ push/bell** (`notify.notify_user`, worker-safe)
+  deep-linking to the report.
+- **Frontend trigger**: a "Deep Research" launcher on the garden page (optional
+  theme input + "Go deep"), Next proxy routes `/api/research/deep` +
+  `/api/research/runs`, an in-progress status chip (polls while active), and a
+  one-tap link to the latest report.
 
-### Phase 2 — self-hosted Temporal (scaffolded; flip a flag to adopt)
+### Phase 1 orchestrator is now composable
+`scope_run` → `scout_one(source)` (idempotent per source) → `synthesize_and_report`
+(LLM + seed + email + push). The Redis worker calls them sequentially; Temporal
+runs the scouts as parallel durable activities — same functions, two harnesses.
+
+### Phase 2 — self-hosted Temporal (built; flip a flag to adopt)
 - **`docker-compose.temporal.yml`**: official `temporalio` images (auto-setup +
   UI + its Postgres) + a `research-worker` service — all on Hetzner (EU-resident).
 - **`deep_research/temporal_worker.py`**: `DeepResearchWorkflow` + a durable

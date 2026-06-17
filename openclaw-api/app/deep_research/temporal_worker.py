@@ -2,18 +2,17 @@
 
 Spec: docs/specs/deep-research-agents.md · Temporal: https://github.com/temporalio
 
-The Phase 1 orchestrator (orchestrator.run_deep_research) already does the
-scope → scout → synthesize → report work and is durable via the research_runs
-table. Temporal adds the *execution* guarantees: automatic retries with backoff,
-crash-replay, timeouts, heartbeats and a Web UI — without changing the agent
-code. The orchestrator runs inside a single durable activity here; decompose
-into per-scout activities later for step-level recovery (see the comment below).
+The workflow drives the *same* composable steps as the Phase 1 orchestrator, but
+each becomes a durable Temporal activity: scope → N parallel scout activities →
+synthesize. Temporal adds automatic retries with backoff, crash-replay, timeouts,
+heartbeats and a Web UI — no changes to the agent/source/email code. Scouts are
+idempotent (skip already-persisted findings) so a retry resumes, not duplicates.
 
 Run as its own process (see docker-compose.temporal.yml):
     python -m app.deep_research.temporal_worker
 
-`temporalio` is an optional dependency — Phase 1 (RESEARCH_ENGINE=worker) does
-not import it. Install only when you turn Phase 2 on: pip install temporalio
+`temporalio` is imported lazily — the Phase 1 worker (RESEARCH_ENGINE=worker)
+never touches this module.
 """
 import asyncio
 import logging
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 TASK_QUEUE = "greenplot-research"
 WORKFLOW_PREFIX = "deep-research"
+SCOUTS = ["garden", "arxiv", "openalex", "hackernews", "rss"]
 
 try:
     from temporalio import workflow, activity
@@ -41,18 +41,36 @@ def _temporal_host() -> str:
 
 if _HAVE_TEMPORAL:
 
-    @activity.defn(name="run_deep_research")
-    async def run_research_activity(run_id: str) -> dict:
-        """Durable activity wrapping the Phase 1 orchestrator. Heartbeats so a
-        long run isn't declared dead; retried by the workflow's RetryPolicy.
-        The orchestrator is idempotent per-scout (skips persisted findings), so
-        a retry resumes rather than duplicating."""
+    # Activities wrap the sync orchestrator steps; each gets its own DB session.
+    @activity.defn(name="scope")
+    async def scope_activity(run_id: str) -> list[str]:
         from app.database import SessionLocal
-        from app.deep_research.orchestrator import run_deep_research
-        activity.heartbeat("started")
+        from app.deep_research.orchestrator import scope_run
         db = SessionLocal()
         try:
-            return await asyncio.to_thread(run_deep_research, run_id, db)
+            return await asyncio.to_thread(scope_run, run_id, db)
+        finally:
+            db.close()
+
+    @activity.defn(name="scout")
+    async def scout_activity(run_id: str, source: str, themes: list[str]) -> int:
+        from app.database import SessionLocal
+        from app.deep_research.orchestrator import scout_one
+        activity.heartbeat(source)
+        db = SessionLocal()
+        try:
+            return await asyncio.to_thread(scout_one, run_id, source, themes, db)
+        finally:
+            db.close()
+
+    @activity.defn(name="synthesize")
+    async def synthesize_activity(run_id: str) -> dict:
+        from app.database import SessionLocal
+        from app.deep_research.orchestrator import synthesize_and_report
+        activity.heartbeat("synthesizing")
+        db = SessionLocal()
+        try:
+            return await asyncio.to_thread(synthesize_and_report, run_id, db)
         finally:
             db.close()
 
@@ -60,35 +78,37 @@ if _HAVE_TEMPORAL:
     class DeepResearchWorkflow:
         @workflow.run
         async def run(self, run_id: str) -> dict:
-            # Phase 2a: one durable activity = the whole orchestrator.
-            # Phase 2b (later): replace with parallel per-scout activities +
-            # a synthesize activity, e.g.
-            #   scouts = [workflow.execute_activity(scout, (run_id, s), ...)
-            #             for s in ("garden","arxiv","openalex","hackernews","rss")]
-            #   await asyncio.gather(*scouts)
-            #   await workflow.execute_activity(synthesize_and_report, run_id, ...)
+            retry = RetryPolicy(initial_interval=timedelta(seconds=10),
+                                backoff_coefficient=2.0, maximum_attempts=3)
+            themes = await workflow.execute_activity(
+                scope_activity, run_id,
+                start_to_close_timeout=timedelta(minutes=5), retry_policy=retry,
+            )
+            # Fan out scouts in parallel — durable, each retried independently.
+            await asyncio.gather(*[
+                workflow.execute_activity(
+                    scout_activity, args=[run_id, source, themes],
+                    start_to_close_timeout=timedelta(minutes=10),
+                    heartbeat_timeout=timedelta(minutes=2), retry_policy=retry,
+                )
+                for source in SCOUTS
+            ])
             return await workflow.execute_activity(
-                run_research_activity,
-                run_id,
-                start_to_close_timeout=timedelta(minutes=30),
-                heartbeat_timeout=timedelta(minutes=3),
-                retry_policy=RetryPolicy(
-                    initial_interval=timedelta(seconds=10),
-                    backoff_coefficient=2.0,
-                    maximum_attempts=3,
-                ),
+                synthesize_activity, run_id,
+                start_to_close_timeout=timedelta(minutes=10),
+                heartbeat_timeout=timedelta(minutes=3), retry_policy=retry,
             )
 
 
 async def _run_worker() -> None:
     if not _HAVE_TEMPORAL:
-        logger.error("temporalio not installed — `pip install temporalio` to run the Phase 2 worker. "
-                     "Phase 1 (RESEARCH_ENGINE=worker) needs nothing here.")
+        logger.error("temporalio not installed — `pip install temporalio` to run the Phase 2 worker.")
         return
     client = await Client.connect(_temporal_host())
     worker = Worker(
         client, task_queue=TASK_QUEUE,
-        workflows=[DeepResearchWorkflow], activities=[run_research_activity],
+        workflows=[DeepResearchWorkflow],
+        activities=[scope_activity, scout_activity, synthesize_activity],
     )
     logger.info(f"[temporal] research worker up — host={_temporal_host()} queue={TASK_QUEUE}")
     await worker.run()
