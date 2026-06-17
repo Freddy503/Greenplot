@@ -234,6 +234,27 @@ Be specific, rigorous, and grounded. Markdown only."""
     if "## Sources" not in report and cited:
         report += "\n\n## Sources\n" + "\n".join(f"[S{i}] ({src}) {ttl} — {url}" for i, src, ttl, url in cited)
 
+    # ── Most relevant papers — embed into the brief + attach to the email ─────
+    # Prefer papers the synthesis actually cited ([S#]); arXiv/OpenAlex only.
+    def _pdf(url: str) -> str:
+        if "arxiv.org/abs/" in (url or ""):
+            return url.replace("/abs/", "/pdf/")
+        return url if (url or "").lower().endswith(".pdf") else ""
+    relevant_papers = []
+    for i, (f, txt) in enumerate(read, 1):
+        if f.source in ("arxiv", "openalex") and f.url:
+            relevant_papers.append({
+                "title": f.title or "Untitled", "url": f.url, "source": f.source,
+                "snippet": (f.snippet or (txt or "")[:300]), "pdf_url": _pdf(f.url),
+                "cited": f"[S{i}]" in report,
+            })
+    relevant_papers.sort(key=lambda p: not p["cited"])  # cited first
+    relevant_papers = relevant_papers[:5]
+    if relevant_papers:
+        report += "\n\n## Relevant papers\n" + "\n".join(
+            f"- [{p['title']}]({p['url']})" + (f" · [PDF]({p['pdf_url']})" if p["pdf_url"] else "")
+            for p in relevant_papers)
+
     gap = ""
     m = _re.search(r"##\s*The Gap\s*\n+(.+?)(?:\n##|\Z)", report, _re.DOTALL)
     if m:
@@ -260,15 +281,35 @@ Be specific, rigorous, and grounded. Markdown only."""
     run.result_seed_id = seed.id
     db.commit()
 
+    # Embed the relevant papers into the garden (full-text indexed) and connect
+    # them to the brief so they're first-class, linked seeds — not just links.
+    if relevant_papers:
+        try:
+            from app.briefings import _save_papers_as_seeds, _get_seen_paper_urls
+            _save_papers_as_seeds(
+                [{"title": p["title"], "url": p["url"], "content": p["snippet"],
+                  "source": p["source"], "kind": "paper", "pdf_url": p["pdf_url"]}
+                 for p in relevant_papers],
+                str(run.user_id), db, seen_paper_urls=_get_seen_paper_urls(str(run.user_id), db))
+        except Exception as e:
+            logger.warning(f"[deep_research] embedding papers failed for {run.id}: {e}")
+        try:
+            from app.backlinker import find_and_create_links
+            find_and_create_links(seed_id=str(seed.id), tenant_id=str(run.tenant_id),
+                                  seed_title=seed.title, seed_content=(seed.content or "")[:2000])
+        except Exception as e:
+            logger.warning(f"[deep_research] backlink brief failed for {run.id}: {e}")
+
     app_url = settings.APP_URL.rstrip("/")
     seed_path = f"/garden?seed={seed.id}"
 
-    # Email
+    # Email — brief body + the relevant papers (PDFs attached where available)
     try:
         from app.email_sender import send_research_report_email
         if user and send_research_report_email(
             to=user.email, theme=theme_str, gap=gap, report_md=report,
-            finding_count=run.finding_count, seed_url=f"{app_url}{seed_path}"):
+            finding_count=run.finding_count, seed_url=f"{app_url}{seed_path}",
+            papers=relevant_papers):
             run.email_sent = True
             db.commit()
     except Exception as e:
