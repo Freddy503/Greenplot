@@ -346,20 +346,35 @@ export default function GardenPage() {
 
   const handleSeedDeleted = (id: string) => setSeeds(prev => prev.filter(s => s.id !== id))
 
+  // Open a seed by id — from the recent list, or fetched directly when it isn't
+  // there (e.g. a brief just created by a research run, or any non-recent seed).
+  const openSeedById = useCallback(async (id: string) => {
+    if (!id) return
+    const match = seeds.find(s => s.id === id)
+    if (match) { setSelectedSeed(match); setDetailOpen(true); return }
+    try {
+      const token = localStorage.getItem('greenplot_token')
+      const r = await fetch(`/api/seeds/${id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      if (r.ok) {
+        const raw = await r.json()
+        if (raw && (raw.id || raw.title)) { setSelectedSeed(parseSeed(raw)); setDetailOpen(true) }
+      }
+    } catch { /* offline — ignore */ }
+  }, [seeds])
+
   // Deep link: /garden?seed=<id> opens that seed's detail directly
-  // (used by chat result cards and Library source/seed chips)
+  // (used by chat result cards, Library chips, and research-brief cards)
   const deepLinkHandled = useRef(false)
   useEffect(() => {
-    if (deepLinkHandled.current || seeds.length === 0) return
+    if (deepLinkHandled.current) return
     const id = new URLSearchParams(window.location.search).get('seed')
     if (!id) { deepLinkHandled.current = true; return }
-    const match = seeds.find(s => s.id === id)
-    if (match) {
+    // Wait for the list to load, then open from it or fetch the seed by id.
+    if (seeds.length > 0 || loading === false) {
       deepLinkHandled.current = true
-      setSelectedSeed(match)
-      setDetailOpen(true)
+      openSeedById(id)
     }
-  }, [seeds])
+  }, [seeds, loading, openSeedById])
 
   // Stat chips: Seeds count + unique non-generic domains
   const _GENERIC_DOMAINS = new Set(['', 'general', 'none', 'untagged', 'idea', 'note', 'misc'])
@@ -426,11 +441,7 @@ export default function GardenPage() {
         </div>
 
         {/* Deep Research launcher */}
-        <DeepResearchLauncher onOpenSeed={(seedId) => {
-          const s = seeds.find(x => x.id === seedId)
-          if (s) { setSelectedSeed(s); setDetailOpen(true) }
-          else router.push(`/garden?seed=${seedId}`)
-        }} />
+        <DeepResearchLauncher onOpenSeed={openSeedById} />
 
         {/* Focus Seed */}
         {!loading && focusSeed && (

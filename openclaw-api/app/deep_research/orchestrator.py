@@ -156,6 +156,12 @@ def synthesize_and_report(run_id: str, db) -> dict:
     run = db.query(ResearchRun).filter(ResearchRun.id == _uuid.UUID(str(run_id))).first()
     if not run:
         return {"status": "error", "message": "run not found"}
+    # Idempotency: if the brief was already planted, finalize and return — never
+    # duplicate the seed / email / push on a retry (Temporal) or accidental re-run.
+    if run.result_seed_id:
+        if run.status != "done":
+            _set(db, run, "done")
+        return {"status": "ok", "run_id": str(run.id), "findings": run.finding_count or 0}
     user = db.query(User).filter(User.id == run.user_id).first()
     mode = (run.mode or "deep")
     themes = _themes_for(run, db)

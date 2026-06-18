@@ -54,9 +54,15 @@ export default function ResearchActivity({ runId, onOpen, onDone }: {
   const [run, setRun] = useState<RunStatus | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notified = useRef(false)
+  // Keep callbacks in a ref so the polling effect depends ONLY on runId — an
+  // inline onDone (e.g. () => loadRuns()) would otherwise restart polling on
+  // every parent re-render.
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
 
   useEffect(() => {
     let alive = true
+    notified.current = false  // fresh run id → allow the done callback again
     const tick = async () => {
       try {
         const t = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
@@ -64,7 +70,7 @@ export default function ResearchActivity({ runId, onOpen, onDone }: {
         if (r.ok && alive) {
           const d = await r.json()
           setRun(d)
-          if (d.status === 'done' && !notified.current) { notified.current = true; onDone?.(d.result_seed_id || null) }
+          if (d.status === 'done' && !notified.current) { notified.current = true; onDoneRef.current?.(d.result_seed_id || null) }
           if (ACTIVE.has(d.status)) timer.current = setTimeout(tick, 2500)
         } else if (alive) {
           timer.current = setTimeout(tick, 4000)
@@ -75,7 +81,7 @@ export default function ResearchActivity({ runId, onOpen, onDone }: {
     }
     tick()
     return () => { alive = false; if (timer.current) clearTimeout(timer.current) }
-  }, [runId, onDone])
+  }, [runId])
 
   const status = run?.status || 'queued'
   const bySource = run?.findings_by_source || {}
