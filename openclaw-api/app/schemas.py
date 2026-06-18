@@ -10,6 +10,7 @@ class RegisterRequest(BaseModel):
     city: Optional[str] = None
     nickname: Optional[str] = None
     interests: Optional[List[str]] = None
+    focus: Optional[str] = None  # "what's on your mind" — sharpens the onboarding research run
     digest_frequency: Optional[str] = 'once-daily'
     invite_code: Optional[str] = None
     consents: Optional[Dict[str, Any]] = None  # {enrich, web, calendar, push}

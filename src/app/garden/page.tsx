@@ -14,6 +14,7 @@ import SectionHeader from '@/components/ui/v2/section-header'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
 import KnowledgeGraph from '@/components/focus/knowledge-graph'
 import { readCache, writeCache } from '@/lib/swr-cache'
+import ResearchActivity from '@/components/research/research-activity'
 
 // ── Types ─────────────────────────────────────────────
 
@@ -258,11 +259,8 @@ function DeepResearchLauncher({ onOpenSeed }: { onOpenSeed: (seedId: string) => 
       </div>
 
       {activeRun && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, background: 'var(--green-tint)', borderRadius: 12, padding: '9px 12px' }}>
-          <Loader2 size={13} strokeWidth={2} className="animate-spin" color="var(--green-700)" />
-          <span className="ui" style={{ fontSize: 12, fontWeight: 600, color: 'var(--green-deep)' }}>
-            {activeRun.theme || 'Research'} — {activeRun.status}…
-          </span>
+        <div style={{ marginTop: 12 }}>
+          <ResearchActivity runId={activeRun.run_id} onOpen={onOpenSeed} onDone={() => loadRuns()} />
         </div>
       )}
 
