@@ -892,11 +892,22 @@ def get_research_run(run_id: str, current_user: User = Depends(get_current_user)
             by_source[src] = int(cnt)
     except Exception:
         pass
+    # Recent discoveries (real titles) so the UI can stream them live — the wow.
+    recent: list = []
+    try:
+        for f in (db.query(ResearchFinding)
+                  .filter(ResearchFinding.run_id == run.id)
+                  .order_by(ResearchFinding.created_at.desc(), ResearchFinding.id.desc())
+                  .limit(18).all()):
+            recent.append({"source": f.source, "title": (f.title or "")[:140], "url": f.url or ""})
+    except Exception:
+        pass
     return {
         "run_id": str(run.id), "status": run.status, "theme": run.theme,
         "gap": run.gap, "finding_count": run.finding_count,
         "email_sent": run.email_sent, "mode": run.mode,
         "findings_by_source": by_source,
+        "recent_findings": recent,
         "result_seed_id": str(run.result_seed_id) if run.result_seed_id else None,
         "report_md": run.report_md, "error": run.error,
         "created_at": run.created_at.isoformat() if run.created_at else None,

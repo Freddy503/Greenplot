@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 
 // The agents, in the order they fan out. label + icon for the live feed.
-const AGENTS: { key: string; label: string; Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }> }[] = [
+type IconCmp = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
+const AGENTS: { key: string; label: string; Icon: IconCmp }[] = [
   { key: 'garden', label: 'Your garden', Icon: Sprout },
   { key: 'exa', label: 'Web search', Icon: Globe },
   { key: 'arxiv', label: 'arXiv papers', Icon: FileText },
@@ -16,6 +17,11 @@ const AGENTS: { key: string; label: string; Icon: React.ComponentType<{ size?: n
   { key: 'hackernews', label: 'Hacker News', Icon: Flame },
   { key: 'rss', label: 'Feeds · Nature, labs', Icon: Rss },
 ]
+const SOURCE_ICON: Record<string, IconCmp> = Object.fromEntries(AGENTS.map(a => [a.key, a.Icon]))
+const SOURCE_VERB: Record<string, string> = {
+  garden: 'Connected', exa: 'Found on the web', arxiv: 'Found on arXiv',
+  openalex: 'Found in journals', github: 'Found on GitHub', hackernews: 'Spotted on HN', rss: 'Picked up',
+}
 
 const PHASE: Record<string, string> = {
   queued: 'Waking the agents…',
@@ -27,11 +33,13 @@ const PHASE: Record<string, string> = {
   error: 'Hit a snag — you can retry from the garden',
 }
 
+type Finding = { source: string; title: string; url: string }
 type RunStatus = {
   status: string
   theme: string | null
   finding_count: number
   findings_by_source: Record<string, number>
+  recent_findings?: Finding[]
   result_seed_id: string | null
 }
 
@@ -79,6 +87,25 @@ export default function ResearchActivity({ runId, onOpen, onDone }: {
     if (status === 'scouting' || status === 'scoping') return 'active'
     return 'pending'
   }
+
+  const findings = run?.recent_findings || []
+
+  // While synthesizing (no new findings stream in), rotate live narration —
+  // including the real titles being read — so the wait never feels stuck.
+  const [narrIdx, setNarrIdx] = useState(0)
+  useEffect(() => {
+    if (status !== 'synthesizing' && status !== 'reporting') return
+    const id = setInterval(() => setNarrIdx(i => i + 1), 2600)
+    return () => clearInterval(id)
+  }, [status])
+  const synthLines = [
+    ...findings.slice(0, 8).map(f => `Reading “${f.title}” in full…`),
+    'Connecting the dots across your sources…',
+    'Comparing where the sources agree and disagree…',
+    'Finding the gap your garden hasn’t closed yet…',
+    'Writing your cited brief…',
+  ]
+  const narr = synthLines[narrIdx % synthLines.length] || 'Synthesizing…'
 
   return (
     <div className="v2-card" style={{ borderRadius: 20, padding: 16, width: '100%' }}>
@@ -135,15 +162,40 @@ export default function ResearchActivity({ runId, onOpen, onDone }: {
         })}
       </div>
 
-      {/* Synthesis shimmer */}
+      {/* Live discoveries — real titles streaming in (the wow) */}
+      {findings.length > 0 && status !== 'done' && (
+        <div style={{ marginTop: 12 }}>
+          <div className="caps" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: '0.08em', margin: '0 2px 7px' }}>Latest discoveries</div>
+          <div style={{ display: 'grid', gap: 5 }}>
+            {findings.slice(0, 6).map((f) => {
+              const Icon = SOURCE_ICON[f.source] || Globe
+              return (
+                <div key={f.url || f.title} style={{
+                  display: 'flex', alignItems: 'center', gap: 9, padding: '7px 10px', borderRadius: 10,
+                  background: 'var(--surface-sunk)', border: '1px solid var(--hairline)',
+                  animation: 'gp-discover .45s cubic-bezier(.2,.8,.2,1) both',
+                }}>
+                  <Icon size={13} strokeWidth={1.9} color="var(--green-700)" />
+                  <span className="ui" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.title || f.url}</span>
+                  <span className="ui" style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--ink-3)', flexShrink: 0 }}>{SOURCE_VERB[f.source] || 'Found'}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Synthesis narration — rotates through the real titles being read */}
       {(status === 'synthesizing' || status === 'reporting') && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, padding: '9px 12px', borderRadius: 12, background: 'var(--green-tint)' }}>
           <Loader2 size={13} strokeWidth={2} className="animate-spin" color="var(--green-700)" />
-          <span className="ui" style={{ fontSize: 12, fontWeight: 600, color: 'var(--green-deep)' }}>
-            {status === 'synthesizing' ? 'Reading the best sources in full + finding your gap…' : 'Writing your cited brief…'}
+          <span key={narrIdx} className="ui" style={{ fontSize: 12, fontWeight: 600, color: 'var(--green-deep)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', animation: 'gp-discover .4s ease both' }}>
+            {narr}
           </span>
         </div>
       )}
+
+      <style>{`@keyframes gp-discover { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }`}</style>
 
       {/* Done → the payoff card */}
       {status === 'done' && (
