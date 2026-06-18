@@ -999,20 +999,37 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
         if not unique_papers:
             all_papers_seen = True
 
+    # Interleave the pool across sources (round-robin) so the spotlight isn't all
+    # arXiv. Bug: multi-source papers were appended after arXiv, so unique_papers[:N]
+    # silently dropped OpenAlex/journal papers from the synthesis entirely.
+    def _interleave_by_source(papers: list) -> list:
+        from collections import OrderedDict
+        buckets: "OrderedDict[str, list]" = OrderedDict()
+        for p in papers:
+            buckets.setdefault(p.get("source", "arxiv"), []).append(p)
+        lists = [list(v) for v in buckets.values()]
+        out: list = []
+        while any(lists):
+            for lst in lists:
+                if lst:
+                    out.append(lst.pop(0))
+        return out
+    unique_papers = _interleave_by_source(unique_papers)
+
     # URL → candidate map so the saved seeds recover source/pdf after the LLM
     # round-trip (the model only echoes title/content/url).
     cand_by_url = {p.get("url", ""): p for p in unique_papers}
 
-    # Fetch full text for top 4 papers
+    # Fetch text for the top spotlight papers (diverse across sources now).
     from app.enricher_v2 import fetch_url_content
     paper_texts = []
-    for paper in unique_papers[:4]:
+    for paper in unique_papers[:6]:
         full = fetch_url_content(paper["url"])
         paper_texts.append({
             "title": paper["title"],
             "url": paper["url"],
             "source": paper.get("source", "arxiv"),
-            "text": full[:3000] if full else paper.get("snippet", ""),
+            "text": (full[:4500] if full else paper.get("snippet", "")),
         })
 
     # Build the LLM context block
@@ -1063,7 +1080,7 @@ Produce a JSON object with this exact structure:
   "papers": [
     {{
       "title": "Paper title + authors + year",
-      "content": "3-4 sentences: what problem it solves, key finding, why it matters for the user's interests. Connect to user's existing seeds/wiki where relevant.",
+      "content": "4-5 substantive sentences: the problem it tackles, the key method, the specific finding (name the concrete result/number — don't hand-wave), why it matters for the user's interests, and how it connects to their seeds/wiki. Be rigorous and specific to THIS paper.",
       "url": "arxiv_url"
     }}
   ],
@@ -1078,7 +1095,7 @@ Produce a JSON object with this exact structure:
 
 Include all {len(paper_texts)} papers in the "papers" array. Synthesize each independently."""
 
-    raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
+    raw = _call_llm(user_prompt, system=system_prompt, max_tokens=3500,
                     model=settings.BRIEFING_MODEL)
 
     # Parse JSON robustly: strip fences, else extract the outermost {...} block,
@@ -1101,7 +1118,7 @@ Include all {len(paper_texts)} papers in the "papers" array. Synthesize each ind
     data = _parse_digest_json(raw)
     if data is None:
         logger.warning(f"[academic_digest] JSON parse failed, retrying on fallback model. Raw: {raw[:160]}")
-        raw = _call_llm(user_prompt, system=system_prompt, max_tokens=2500,
+        raw = _call_llm(user_prompt, system=system_prompt, max_tokens=3500,
                         model=settings.FALLBACK_MODEL)
         data = _parse_digest_json(raw)
     if data is None:
