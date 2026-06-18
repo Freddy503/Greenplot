@@ -2,7 +2,7 @@
 
 > Product: **Greenplot** ([greenplot.ink](https://www.greenplot.ink)) · Codebase: **Seedify**
 
-Greenplot is an AI-powered second brain that closes the loop from *thought* to *shipped*. Capture ideas through chat, voice, notes, **PDFs, or any link** — they're enriched, connected, and indexed into your **Garden**. A **thinking partner** chat (Brainstorm · Pressure-test · Devil's advocate · Spec · **Deep Research**) reasons from what you already know — grounded, with **citations** back to your own seeds. The **Studio** turns threads into structured **PRDs** you can hand to a coding agent and track from Design → Doing → Built. A daily **Research Digest** connects fresh arXiv papers to your Garden and can auto-draft PRDs. And the whole garden is available to **Claude Code / Cursor / Claude Desktop via an MCP server**.
+Greenplot is an AI-powered second brain that closes the loop from *thought* to *shipped*. Capture ideas through chat, voice, notes, **PDFs, or any link** — they're enriched, connected, and indexed into your **Garden**. A **thinking partner** chat (Brainstorm · Pressure-test · Devil's advocate · Spec · **Deep Research**) reasons from what you already know — grounded, with **citations** back to your own seeds. Long-running **Deep Research agents** fan out across your garden + arXiv, OpenAlex, Hacker News, GitHub, RSS and Exa, **read the best sources in full** through a 1M-context model, and email you a **cited brief with the relevant papers attached** — fired automatically the moment you finish onboarding, so your garden is alive on day one. The **Studio** turns threads (or a research gap) into structured **PRDs** you can hand to a coding agent and track from Design → Doing → Built. A daily **Research Digest** connects fresh multi-source research to your Garden and can auto-draft PRDs. And the whole garden — including the **full machine-readable text** of every paper — is available to **Claude Code / Cursor / Claude Desktop via an MCP server**.
 
 > **Vision:** The Greenplot architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
 
@@ -164,13 +164,27 @@ The Studio turns thinking into shippable specs:
 - **Product view:** one screen anchoring every PRD to the problem it serves, with an auto-refreshed **Design Vision** when canvas PRDs change.
 - **Drop a PDF** onto the canvas to ingest it; **PRD comments**; and **Canvas sharing** — invite collaborators by email (view-only in v1) with a cross-tenant access gate (`resolve_canvas_access`).
 
+### 🔭 Deep Research agents (long-running, multi-source, durable)
+A background research system that connects the dots across your garden and the live literature, then hands you a cited brief — spec: [`docs/specs/deep-research-agents.md`](openclaw-api/docs/specs/deep-research-agents.md).
+
+- **Fan-out scouts** across 7 sources — **your garden · Exa web · arXiv · OpenAlex (journals incl. Nature/Science) · GitHub · Hacker News · RSS (Nature feeds, lab blogs)** — each finding persisted (durable + resumable).
+- **Reads sources in full:** the top findings are pulled as full machine-readable text (Exa `/contents`, arXiv/journal HTML, GitHub READMEs) and reasoned over together by a **1M-context model** (`DEEP_RESEARCH_MODEL`, default `minimax/minimax-m3`) — a two-pass *decompose → synthesize* flow with a **critique-and-revise** edit.
+- **Output:** a structured, inline-cited (`[S#]`) **Research Brief** seed (renders like the email), with the **most relevant papers embedded** (saved as connected garden seeds) and **emailed with their PDFs attached** + a push notification.
+- **Trigger it anywhere:** a "Go deep" launcher in the Garden (Deep / Lite mode), a follow-up **"Go deeper on this gap"** from any brief, a **"Draft a PRD from this gap"** button that closes the research→build loop, an autonomous **weekly run** (opt-in), and the **onboarding kick-off** (see below).
+- **Live agent feed:** a real-time view of the agents lighting up across sources with per-source counts → synthesis shimmer → the brief card — the onboarding "wow".
+- **Harness:** Phase 1 runs on the Redis worker; Phase 2 is **self-hosted Temporal** (`docker-compose.temporal.yml`, EU-resident) with parallel per-scout durable activities — flip `RESEARCH_ENGINE=temporal`. Cost-guarded by `RESEARCH_DAILY_CAP`.
+
+### 🚀 Onboarding cold-start
+Finishing onboarding (interests + a free-text **"what's on your mind?"** focus) fires **one Deep Research run automatically** — so a brand-new user lands with a garden already filling with relevant-paper seeds and a brief in their inbox, instead of a blank slate. The done screen shows the agents working **live**.
+
 ### 🔬 Research Digest & Paper Pipeline
-- **Daily Research Digest** (07:00 & 18:00 CET): fresh arXiv/web research matched to your Garden + Wiki → TL;DR, per-paper synthesis, a challenging take, an actionable move, and a solution-design seed. English-enforced, with a garden-tailored summary.
-- **Full-text paper pipeline:** papers (and your uploaded PDFs / links) are fetched → section-aware chunked → embedded into a `PaperChunk` index → reasoning-friendly doc tree (tree retrieval). Specs cite what papers actually *say*, not just abstracts.
+- **Daily Research Digest** (07:00 & 18:00 CET): fresh research matched to your Garden + Wiki → TL;DR, per-paper synthesis, a challenging take, an actionable move, and a solution-design seed. English-enforced, with a garden-tailored summary.
+- **Multi-source discovery** ([`docs/specs/research-sources.md`](openclaw-api/docs/specs/research-sources.md)): beyond arXiv, the digest pulls **OpenAlex** (published research incl. journals), **Hacker News** (industry pulse), **GitHub** (what's being built) and curated **RSS** feeds — all keyless candidate generators feeding the same pipeline.
+- **Full-text paper pipeline:** papers (and your uploaded PDFs / links) are fetched → section-aware chunked → embedded into a `PaperChunk` index → reasoning-friendly doc tree (tree retrieval), and **compiled to whole machine-readable markdown** so agents read them end-to-end. Specs cite what papers actually *say*, not just abstracts.
 - **Autopilot PRDs:** a relevance-gated, daily-capped pass drafts a PRD from a strongly-relevant digest paper on its own — you shape the vision, the system drafts.
 
 ### 🔌 MCP Server (connect your garden to coding agents)
-A built-in **MCP server** (`/mcp`, Streamable HTTP, per-user API keys) makes your Garden available to **Claude Code, Claude Desktop, and Cursor** — search seeds, read papers, write specs, all from your editor. Mint a key in **Settings → Coding agents · MCP** and paste the config.
+A built-in **MCP server** (`/mcp`, Streamable HTTP, per-user API keys — plus a stdio server) makes your Garden available to **Claude Code, Claude Desktop, and Cursor** — search seeds, **list & read research papers in full** (`list_papers`, `get_paper_fulltext`), search paper content, write specs, all from your editor. Mint a key in **Settings → Coding agents · MCP** and paste the config.
 
 ### 📖 Wiki (Wikipedia/GrokPedia-style)
 Auto-generated articles that synthesize your sources and seeds into encyclopedic entries:
@@ -289,6 +303,11 @@ REDIS_URL=redis://redis:6379/0
 VAPID_PRIVATE_KEY_PATH=/app/.vapid_private.pem
 RESEND_API_KEY=re_...              # Email digests (optional — disables email if unset)
 EMAIL_FROM=Greenplot <digest@greenplot.ink>   # Verified Resend sender (SPF/DKIM/DMARC)
+EXA_API_KEY=...                    # Web search + full-page contents (Deep Research / digest)
+GITHUB_TOKEN=ghp_...               # GitHub research source (higher rate limit; also Spec→Issue)
+DEEP_RESEARCH_MODEL=minimax/minimax-m3   # ≥1M-context synthesis model (override as needed)
+RESEARCH_DAILY_CAP=5               # Per-user deep-research runs/day (cost guard)
+RESEARCH_ENGINE=worker             # 'worker' (Redis) | 'temporal' (self-hosted, Phase 2)
 
 # Frontend (.env.local)
 NEXT_PUBLIC_VAPID_KEY=BMvL3eG7...
@@ -304,7 +323,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   │   ├── links/              # Sources page + create seed bridge
 │   │   ├── settings/           # Push notifications, calendar, profile
 │   │   ├── wiki/               # Wiki browser + article view + concept maps
-│   │   ├── onboarding/         # 5-step onboarding flow
+│   │   ├── onboarding/         # 8-step onboarding (interests + focus → fires a Deep Research run)
 │   │   └── api/
 │   │       ├── chat/           # AI streaming proxy (v1/v2)
 │   │       ├── seeds/          # Seed CRUD + search + graph + garden intel
@@ -326,7 +345,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   ├── app/
 │   │   ├── main.py             # API routes (50+), Web Push, migrations, cron jobs
 │   │   ├── weaviate_client.py  # Weaviate client (IdeaSeed + Link + WikiArticle)
-│   │   ├── tool_executor.py    # 15 LLM tool handlers + decay scoring + visualize_garden
+│   │   ├── tool_executor.py    # 25+ LLM tool handlers + decay scoring + write_spec + visualize_garden
 │   │   ├── tools.py            # Tool definitions (OpenAI format)
 │   │   ├── enricher.py         # URL detection + Exa full-page fetch + LLM seed gen
 │   │   ├── enricher_v2.py      # Seed enrichment pipeline (URL-aware)
@@ -343,6 +362,9 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   │   ├── database.py         # SQLAlchemy + PostgreSQL
 │   │   ├── models.py           # Seed, User, ChatSession, etc.
 │   │   ├── garden_health.py    # Decay scoring + health monitoring
+│   │   ├── deep_research/       # Deep Research agents: orchestrator (scope→scout→synthesize),
+│   │   │                        #   brief→PRD actions, self-hosted Temporal worker (Phase 2)
+│   │   ├── sources/             # Research source generators (openalex, hackernews, rss, github)
 │   │   └── agent/              # Chat agent architecture
 │   ├── .vapid_private.pem      # VAPID private key for Web Push
 │   └── docker-compose.yml      # Full stack orchestration
@@ -362,7 +384,8 @@ Notifications are **artifacts, not prompts** — each delivers something you can
 
 | Job | Schedule | Push | Email | Description |
 |---|---|---|---|---|
-| **Research Digest** | 07:00 & 18:00 CET | ✓ | ✓ + PDFs | arXiv/web research × your Garden + Wiki → TL;DR, synthesis, actionable move, solution-design seed (evening edition = twice-daily tier) |
+| **Research Digest** | 07:00 & 18:00 CET | ✓ | ✓ + PDFs | Multi-source research (arXiv · OpenAlex · HN · GitHub · RSS) × your Garden + Wiki → TL;DR, synthesis, actionable move, solution-design seed (evening edition = twice-daily tier) |
+| **Weekly Deep Research** | Monday 07:30 CET | ✓ | ✓ + PDFs | Opt-in (Settings): one autonomous Deep Research run on your top theme → a cited brief with relevant papers, in your inbox |
 | **Today's Thread** | 08:30 CET | ✓ | — | One real seed from your Garden + a provocation + a concrete 10-min move (fires on once-daily too) |
 | **Loose Threads** | 16:00 CET | ✓ | — | Your captured-but-undeveloped seeds, surfaced to tend (twice-daily tier) |
 | **Garden Signals** | Every 3h | ✓ | — | Connection alerts on strong new SeedLinks + theme-emergence when a seed becomes a hub |
@@ -380,7 +403,9 @@ Notifications are **artifacts, not prompts** — each delivers something you can
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, AI SDK v5, D3.js
 - **Backend:** FastAPI, Python 3.12, SQLAlchemy, JWT + per-user API keys, pywebpush, APScheduler; **MCP** server (Streamable HTTP)
 - **Database:** PostgreSQL 15, Weaviate 1.36 (BM25 + vector; `PaperChunk` full-text index), Redis 7
-- **AI:** OpenRouter (tiered — chat `deepseek/deepseek-v4-flash`, briefings/wiki `xiaomi/mimo-v2.5`, premium `mimo-v2.5-pro`, fallback `minimax-m2.7`), OpenAI Whisper, `gpt-4o-mini` image ingest, Exa Search
+- **AI:** OpenRouter (tiered — chat `tencent/hy3-preview`, briefings/wiki `xiaomi/mimo-v2.5`, premium `mimo-v2.5-pro`, **deep research 1M-context `minimax/minimax-m3`**, fallback `minimax-m2.7`), OpenAI Whisper, image ingest, Exa Search
+- **Research sources (keyless candidate generators):** arXiv, **OpenAlex**, **Hacker News** (Algolia), **GitHub** Search, **RSS** (`feedparser`), Exa — see [`docs/specs/research-sources.md`](openclaw-api/docs/specs/research-sources.md)
+- **Background harness:** Redis worker (Phase 1) + optional **self-hosted Temporal** (Phase 2, EU-resident) for durable, long-running, parallel research agents
 - **Ingestion:** `pymupdf` (PDF parse), `youtube-transcript-api`, Exa contents — upload a PDF or paste any link → chunk → index → garden-tailored summary
 - **Email:** Resend API (transactional email + arXiv PDF attachments; SPF/DKIM/DMARC)
 - **Push:** Web Push via VAPID (pywebpush + Service Worker), auto-prunes dead subscriptions on 404/410
@@ -394,7 +419,7 @@ Notifications are **artifacts, not prompts** — each delivers something you can
 - **Dark mode:** opt-in toggle via `.dark` class
 
 ## Status
-🟢 **Working:** Chat thinking partner (modes, corrective retrieval, citations, persistent history), Capture from anywhere (PDF drop + link/YouTube ingest in chat & Studio), Studio (Spec → PRD → Build pipeline, Product view, Design Vision, PRD comments), Canvas sharing (view-only), Research Digest + full-text paper pipeline + Autopilot PRDs, MCP server (per-user keys), Garden + Intelligence + Knowledge graph + Visualization, Notifications suite (Today's Thread, Loose Threads, Garden Signals, Garden Story), Wiki (auto-compile, D3 maps), Web Push (+ auto-prune), Email (Resend, DMARC), password reset, GitHub repo sync, Calendar, Voice memos
-🟡 **Partial:** Canvas **editor** role (write access) — view-only shipped; Deep Research mode (runs more tool calls, slower by design); YouTube without captions falls back to thin Exa text
+🟢 **Working:** Chat thinking partner (modes, corrective retrieval, citations, persistent history), **Deep Research agents** (7-source fan-out, full-text reading, 1M-context synthesis, cited briefs with embedded + PDF-attached papers, Garden launcher + Deep/Lite modes + brief→PRD + go-deeper + weekly opt-in + onboarding kick-off + live agent feed), Capture from anywhere (PDF drop + link/YouTube ingest in chat & Studio), Studio (Spec → PRD → Build pipeline, Product view, Design Vision, PRD comments), Canvas sharing (view-only), Multi-source Research Digest + full-text paper pipeline + Autopilot PRDs, MCP server (per-user keys, full-text paper reads), Garden + Intelligence + Knowledge graph + Visualization, Notifications suite (Today's Thread, Loose Threads, Garden Signals, Garden Story), Wiki (auto-compile, D3 maps), Web Push (+ auto-prune), Email (Resend, DMARC), invite links, password reset, GitHub repo sync, Calendar, Voice memos
+🟡 **Partial:** Canvas **editor** role (write access) — view-only shipped; **Deep Research Phase 2** (self-hosted Temporal) scaffolded + built behind `RESEARCH_ENGINE=temporal`, Phase 1 (Redis worker) is the default; YouTube without captions falls back to thin Exa text
 🔴 **Pending:** Sentry DSN (error monitoring wired, DSN unset), off-site backups (rclone), Impressum legal address; see `docs/IMPROVEMENTS.md` + `docs/POST-LAUNCH.md` for the full backlog
 
