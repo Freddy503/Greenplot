@@ -288,8 +288,9 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if user.interests:
         try:
             from app.models import ResearchRun
+            focus = (req.focus or "").strip()[:300] or None  # what's on their mind → sharper run
             run = ResearchRun(id=uuid.uuid4(), tenant_id=user.tenant_id, user_id=user.id,
-                              theme=None, status="queued", engine="worker", mode="deep")
+                              theme=focus, status="queued", engine="worker", mode="deep")
             db.add(run)
             db.commit()
             db.refresh(run)
@@ -881,10 +882,21 @@ def get_research_run(run_id: str, current_user: User = Depends(get_current_user)
         ResearchRun.id == run_id, ResearchRun.tenant_id == current_user.tenant_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    # Live per-source progress so the UI can show the agents lighting up.
+    from app.models import ResearchFinding
+    by_source: dict = {}
+    try:
+        for src, cnt in (db.query(ResearchFinding.source, func.count(ResearchFinding.id))
+                         .filter(ResearchFinding.run_id == run.id)
+                         .group_by(ResearchFinding.source).all()):
+            by_source[src] = int(cnt)
+    except Exception:
+        pass
     return {
         "run_id": str(run.id), "status": run.status, "theme": run.theme,
         "gap": run.gap, "finding_count": run.finding_count,
-        "email_sent": run.email_sent,
+        "email_sent": run.email_sent, "mode": run.mode,
+        "findings_by_source": by_source,
         "result_seed_id": str(run.result_seed_id) if run.result_seed_id else None,
         "report_md": run.report_md, "error": run.error,
         "created_at": run.created_at.isoformat() if run.created_at else None,

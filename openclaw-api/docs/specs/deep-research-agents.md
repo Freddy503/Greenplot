@@ -146,6 +146,16 @@ the interactive chat `research` thinking-mode):
 - Naturally takes minutes (full-text reads + big synthesis) — which is exactly
   why it belongs on the long-running harness, and what Phase 2/Temporal is for.
 
+### Onboarding "wow" — focus prompt + live agent feed
+- **"What's on your mind?"** textarea on the Interests step → sent as `focus` to
+  `register` → becomes the run's `theme`, so the first run is specific, not generic.
+- **Live agent feed** (`components/research/research-activity.tsx`): polls
+  `GET /research/runs/{id}` (now returns `findings_by_source`) and shows the 7
+  agents (garden·web·arXiv·OpenAlex·GitHub·HN·RSS) lighting up with counts as
+  each scout commits, then a synthesis shimmer, then the **"Read your first
+  research brief"** payoff card. Shown on the onboarding done screen and reused
+  in the garden launcher for any active run.
+
 ### Onboarding cold-start (core to the first run)
 Registration fires ONE Deep Research run on the new user's interests (`register`
 endpoint → `enqueue_deep_research`, theme=None so the orchestrator scouts across

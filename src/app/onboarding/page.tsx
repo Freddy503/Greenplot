@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
 import { GP_ICONS } from '@/components/onboarding/gp-icons'
 import { clearChatCache } from '@/lib/api'
+import ResearchActivity from '@/components/research/research-activity'
 
 // ── Onboarding v2 — value-first 8-step flow (design: Seedify Onboarding v2) ──
 // Welcome → Invite → Interests → Rhythm → Weather → Push → Privacy → Account
@@ -152,6 +153,8 @@ function OnboardingContent() {
   const [tokenState, setTokenState] = useState<TokenState>('idle')
   const [interests, setInterests] = useState<string[]>([])
   const [custom, setCustom] = useState('')
+  const [focus, setFocus] = useState('')          // "what's on your mind" — sharpens the first run
+  const [researchRunId, setResearchRunId] = useState('')
   const [frequency, setFrequency] = useState<Frequency>('once-daily')
   const [city, setCity] = useState('')
   const [pushChoice, setPushChoice] = useState<string | null>(null)
@@ -178,6 +181,7 @@ function OnboardingContent() {
           if (typeof s.step === 'number') setStep(Math.min(Math.max(s.step, 0), 7))
           if (Array.isArray(s.interests)) setInterests(s.interests)
           if (typeof s.custom === 'string') setCustom(s.custom)
+          if (typeof s.focus === 'string') setFocus(s.focus)
           if (typeof s.frequency === 'string') setFrequency(s.frequency)
           if (typeof s.city === 'string') setCity(s.city)
           if (typeof s.pushChoice === 'string') setPushChoice(s.pushChoice)
@@ -210,7 +214,7 @@ function OnboardingContent() {
   const persist = (extra: Record<string, unknown>) => {
     try {
       const base = {
-        step, interests, custom, frequency, city, pushChoice, consent, email, nickname, token,
+        step, interests, custom, focus, frequency, city, pushChoice, consent, email, nickname, token,
         tokenOk: tokenState === 'valid',
         ...extra,
       }
@@ -286,6 +290,7 @@ function OnboardingContent() {
           city: city.trim() || undefined,
           nickname: nickname.trim() || undefined,
           interests: allInterests.length > 0 ? allInterests : undefined,
+          focus: focus.trim() || undefined,
           digest_frequency: frequency,
           invite_code: token !== 'INVITE' ? token : undefined,
           consents: consent,
@@ -320,6 +325,12 @@ function OnboardingContent() {
         }),
       }).catch(() => {})
       if (pushChoice === 'yes') requestPermission().catch(() => {})
+      // Grab the onboarding research run so the done screen can show the agents
+      // working live (the wow moment).
+      fetch('/api/research/runs', { headers: { Authorization: `Bearer ${access_token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { const id = d?.runs?.[0]?.run_id; if (id) setResearchRunId(id) })
+        .catch(() => {})
       // First visit: walkthrough tour, then the getting-started card
       localStorage.setItem('greenplot_tour_pending', '1')
       localStorage.setItem('greenplot_show_start_card', '1')
@@ -554,6 +565,24 @@ function OnboardingContent() {
                   />
                 </div>
                 <p style={{ fontFamily: BODY, fontSize: 13, color: '#a3a29c', margin: '12px 0 0 4px' }}>{selectedHint}</p>
+
+                {/* What's on your mind — sharpens the first research run */}
+                <div style={{ marginTop: 22 }}>
+                  <label style={{ display: 'block', fontFamily: UI, fontSize: 13, fontWeight: 600, color: '#141413', margin: '0 0 7px 4px' }}>
+                    What&rsquo;s on your mind right now? <span style={{ color: '#a3a29c', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <textarea
+                    value={focus}
+                    onChange={(e) => { setFocus(e.target.value); persist({ focus: e.target.value }) }}
+                    placeholder={`A question or angle you're chewing on${count ? ` in ${(interests[0] || 'your topics')}` : ''} — we'll point the research agents right at it.`}
+                    rows={3}
+                    className="ob-input"
+                    style={{ width: '100%', minHeight: 76, padding: '12px 14px', resize: 'none', lineHeight: 1.5 }}
+                  />
+                  <p style={{ fontFamily: BODY, fontSize: 12, color: '#a3a29c', margin: '8px 0 0 4px' }}>
+                    The sharper the question, the sharper your first brief.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -870,15 +899,21 @@ function OnboardingContent() {
 
               <span style={{ fontFamily: UI, fontSize: 11, fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#16a34a', marginBottom: 12 }}>Your garden is ready</span>
               <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: 40, lineHeight: 1.06, letterSpacing: '-0.02em', margin: '0 0 14px', maxWidth: 320, color: '#141413', textWrap: 'balance' } as React.CSSProperties}>Welcome, {displayName}</h2>
-              <p style={{ fontFamily: BODY, fontSize: 15, lineHeight: 1.6, color: '#5f5f5a', maxWidth: 300, margin: '0 0 30px', textWrap: 'pretty' } as React.CSSProperties}>
-                A research agent is reading the latest on your interests right now — in a few
-                minutes your garden fills with papers and a cited brief lands in your inbox.
-                Capture your first thought while it grows.
+              <p style={{ fontFamily: BODY, fontSize: 15, lineHeight: 1.6, color: '#5f5f5a', maxWidth: 300, margin: '0 0 18px', textWrap: 'pretty' } as React.CSSProperties}>
+                Watch your agents work — they&rsquo;re reading the latest on your interests right
+                now. Your garden fills as they report back, and a cited brief lands in your inbox.
               </p>
 
-              <button onClick={() => router.push('/chat')} className="ob-cta" style={{ maxWidth: 290 }}>
+              {/* The wow: agents firing across sources, live */}
+              {researchRunId && (
+                <div style={{ width: '100%', maxWidth: 340, margin: '0 0 22px' }}>
+                  <ResearchActivity runId={researchRunId} onOpen={(seedId) => router.push(`/garden?seed=${seedId}`)} />
+                </div>
+              )}
+
+              <button onClick={() => router.push('/garden')} className="ob-cta" style={{ maxWidth: 290 }}>
                 <span className="ob-sheen" />
-                <span style={{ position: 'relative' }}>Open Greenplot</span>
+                <span style={{ position: 'relative' }}>Enter your garden</span>
                 <Ic name="arrow-right" size={18} color="#ffffff" style={{ position: 'relative' }} />
               </button>
 
