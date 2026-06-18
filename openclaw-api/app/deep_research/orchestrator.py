@@ -43,14 +43,19 @@ def _set(db, run, status: str, **fields):
 
 
 def _themes_for(run, db) -> list[str]:
-    """Query terms for the scouts. An explicit topic (run.theme) is used ALONE so
-    the wired APIs are queried directly with it — even if it's brand new to the
-    garden — instead of being diluted by unrelated garden themes. With no topic,
-    fall back to the user's garden themes."""
-    if run.theme and run.theme.strip():
-        return [run.theme.strip()]
+    """Connect the focus prompt with the user's interests so a run reflects BOTH.
+
+    Onboarding (and the launcher) capture two things: the picked *interests* and a
+    "what's on your mind" *focus*. These must not be separate — the focus LEADS
+    the scout queries (keeps them sharp) and the interests broaden + ground it.
+    With no focus, fall back to the interests alone."""
     from app.briefings import fetch_user_themes
-    return fetch_user_themes(str(run.user_id), db)
+    interests = fetch_user_themes(str(run.user_id), db) or []
+    focus = (run.theme or "").strip()
+    if not focus:
+        return interests
+    extra = [t for t in interests if t and t.strip() and t.lower() not in focus.lower()]
+    return [focus] + extra[:3]
 
 
 # ── Step 1: scope ─────────────────────────────────────────────────────────────
@@ -155,7 +160,10 @@ def synthesize_and_report(run_id: str, db) -> dict:
     mode = (run.mode or "deep")
     themes = _themes_for(run, db)
     theme_str = ", ".join(themes[:3])
-    focus = run.theme or theme_str
+    focus = (run.theme or "").strip() or theme_str
+    # Interest areas = the themes that aren't the focus prompt — used to frame
+    # the focus within what the user actually cares about (connected, not separate).
+    interest_areas = [t for t in themes if t.strip().lower() != focus.strip().lower()]
     _set(db, run, "synthesizing")
 
     findings = db.query(ResearchFinding).filter(ResearchFinding.run_id == run.id).all()
@@ -207,8 +215,8 @@ Do NOT one-shot or hand-wave — reason over the FULL source texts below and cit
 them inline as [S#]. Surface where sources agree, disagree, or leave gaps; never
 cite a source you wouldn't stand behind.
 
-FOCUS: {focus}
-THEMES: {theme_str}
+FOCUS (what's on their mind): {focus}
+THEIR INTEREST AREAS (frame the focus within these — connect them, don't treat separately): {', '.join(interest_areas) or 'general'}
 
 SUB-QUESTIONS TO ANSWER:
 {sub_questions}
