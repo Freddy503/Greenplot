@@ -283,12 +283,12 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # Onboarding cold-start: fire ONE Deep Research run on the new user's
     # interests so their garden fills with relevant papers + a cited brief
     # (emailed + pushed) — a real basis to build on, not an empty garden.
-    # theme=None → the orchestrator scouts across the interests we just saved.
-    # Non-blocking: just enqueues; the worker runs it async. Fail-soft.
-    if user.interests:
+    # The orchestrator connects the focus prompt with the interests (focus leads,
+    # interests ground it). Fire on either signal. Non-blocking enqueue; fail-soft.
+    focus = (req.focus or "").strip()[:300] or None  # what's on their mind → sharper run
+    if user.interests or focus:
         try:
             from app.models import ResearchRun
-            focus = (req.focus or "").strip()[:300] or None  # what's on their mind → sharper run
             run = ResearchRun(id=uuid.uuid4(), tenant_id=user.tenant_id, user_id=user.id,
                               theme=focus, status="queued", engine="worker", mode="deep")
             db.add(run)

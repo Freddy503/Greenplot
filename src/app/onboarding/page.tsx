@@ -348,7 +348,9 @@ function OnboardingContent() {
   const next = () => { if (step < 7) go(step + 1, 1); else enter() }
 
   // ── Derived UI state ──
-  const ctaDisabled = (step === 1 && tokenState !== 'valid') || (step === 7 && !accountValid)
+  // Step 2 requires ≥1 interest — the whole garden + first research run are built
+  // on it, so we never let someone finish with nothing to research.
+  const ctaDisabled = (step === 1 && tokenState !== 'valid') || (step === 2 && (interests.length + (custom.trim() ? 1 : 0)) === 0) || (step === 7 && !accountValid)
   const ctaLabel = ['Get started', 'Continue', 'Continue', 'Continue', 'Continue', 'Continue', 'Continue', 'Enter the garden'][step]
   const showChrome = !planting && !done
   const stepAnimStyle: React.CSSProperties = {
