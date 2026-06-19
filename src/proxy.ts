@@ -2,16 +2,15 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 /**
- * Lightweight auth middleware.
+ * Lightweight auth proxy.
  *
  * - Public routes: pass through (login, register, health checks)
  * - Protected routes: require a valid JWT Bearer token
  *
- * Actual JWT validation happens on the backend; this middleware provides
- * a first line of defense by rejecting obviously unauthenticated requests.
+ * Actual JWT validation happens on the backend; this proxy provides a first
+ * line of defense by rejecting obviously unauthenticated requests.
  */
 
-// Routes that require auth
 const PROTECTED_PREFIXES = [
   '/api/seeds',
   '/api/thoughts',
@@ -25,22 +24,20 @@ const PROTECTED_PREFIXES = [
   '/settings',
 ]
 
-// Routes that are always public
 const PUBLIC_PREFIXES = [
   '/api/login',
   '/api/register',
-  '/api/push/notifications',  // GET is called by PWA before auth
-  '/api/push/subscribe',  // POST is called before auth in subscription flow
+  '/api/push/notifications',
+  '/api/push/subscribe',
   '/login',
   '/onboarding',
   '/setup',
   '/',
 ]
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Always allow static assets and Next.js internals
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
@@ -52,15 +49,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check if route needs auth
-  const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
-  const isPublic = PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p))
+  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
+  const isPublic = PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))
 
   if (!isProtected || isPublic) {
     return NextResponse.next()
   }
 
-  // For protected API routes, check for Authorization header
   if (pathname.startsWith('/api/')) {
     const authHeader = request.headers.get('authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -69,12 +64,9 @@ export function middleware(request: NextRequest) {
         { status: 401 }
       )
     }
-    // Token present — let it through (backend validates the JWT)
     return NextResponse.next()
   }
 
-  // For protected page routes, we can't check localStorage from middleware
-  // (it's client-side only), so just pass through — the client handles redirects
   return NextResponse.next()
 }
 
