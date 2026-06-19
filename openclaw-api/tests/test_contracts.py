@@ -45,3 +45,18 @@ def test_universal_add_does_not_return_before_hooks():
     return_index = component.index(return_line)
     for hook in hooks:
         assert component.index(hook) < return_index
+
+
+def test_link_metadata_fetchers_validate_public_urls_and_redirects():
+    backend = read("openclaw-api/app/links.py")
+    frontend = read("src/app/api/links/fetch/route.ts")
+
+    assert "def _assert_public_http_url" in backend
+    assert "follow_redirects=False" in backend
+    assert "urljoin(str(resp.url), location)" in backend
+    assert "private or reserved network targets are not allowed" in backend
+
+    assert "async function assertPublicHttpUrl" in frontend
+    assert "redirect: 'manual'" in frontend
+    assert "new URL(location, current)" in frontend
+    assert "Private network URLs are not supported" in frontend
