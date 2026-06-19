@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const filePath = process.env.WAITLIST_FILE || path.join(process.cwd(), 'data', 'waitlist.json')
+    const filePath = process.env.WAITLIST_FILE || path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'waitlist.json')
     if (!fs.existsSync(filePath)) {
       return new NextResponse('email,joinedAt\n', {
         headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="waitlist.csv"' },
