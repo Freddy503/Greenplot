@@ -33,7 +33,7 @@ RESET  = "\033[0m"
 BOLD   = "\033[1m"
 
 
-class TestRunner:
+class E2ERunner:
     def __init__(self, base_url: str, email: str, password: str):
         self.base = base_url.rstrip("/")
         self.email = email
@@ -431,7 +431,7 @@ def main():
     parser.add_argument("--password", required=True, help="Login password")
     args = parser.parse_args()
 
-    runner = TestRunner(args.url, args.email, args.password)
+    runner = E2ERunner(args.url, args.email, args.password)
     runner.run_all()
     sys.exit(0 if runner.failed == 0 else 1)
 
