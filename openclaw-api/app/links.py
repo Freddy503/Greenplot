@@ -5,7 +5,9 @@ from app.auth import get_current_user
 from app.models import User, LinkCache
 from app.weaviate_client import weaviate_client
 import httpx
-from urllib.parse import urlparse
+import ipaddress
+import socket
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 import uuid as _uuid
 
@@ -57,11 +59,60 @@ def get_favicon(domain: str) -> str:
     return f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
 
 
+def _is_public_ip(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _assert_public_http_url(url: str) -> str:
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("url must be a valid public http or https URL")
+    if parsed.username or parsed.password:
+        raise ValueError("url must not include credentials")
+
+    host = parsed.hostname or ""
+    if host.lower() in {"localhost", "0.0.0.0"} or host.lower().endswith(".localhost"):
+        raise ValueError("localhost URLs are not allowed")
+
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError("host could not be resolved") from exc
+
+    addresses = {info[4][0] for info in infos}
+    if not addresses or any(not _is_public_ip(address) for address in addresses):
+        raise ValueError("private or reserved network targets are not allowed")
+
+    return parsed.geturl()
+
+
 async def fetch_page_metadata(url: str) -> dict:
     """Fetch page and extract title, description, keywords, OG image."""
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
-            resp = await client.get(url, headers={"User-Agent": "GreenPlot Bot/1.0"})
+        current_url = _assert_public_http_url(url)
+        async with httpx.AsyncClient(follow_redirects=False, timeout=10) as client:
+            for _ in range(5):
+                resp = await client.get(current_url, headers={"User-Agent": "GreenPlot Bot/1.0"})
+                if resp.status_code not in (301, 302, 303, 307, 308):
+                    break
+                location = resp.headers.get("location")
+                if not location:
+                    return {}
+                current_url = _assert_public_http_url(urljoin(str(resp.url), location))
+            else:
+                return {}
+
             if resp.status_code != 200:
                 return {}
 
