@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 120 // seconds — Vercel function timeout
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: false,
-  },
-}
 
 const BACKEND = process.env.BACKEND_URL || 'https://api.greenplot.ink'
 

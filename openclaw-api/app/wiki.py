@@ -652,14 +652,13 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
 
     Supports both JWT Bearer auth (from UI) and X-API-Key (for cron jobs).
     """
-    import os
     from app.database import get_db
     from app.models import User
 
-    harvest_key = os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")
+    harvest_key = settings.HARVEST_API_KEY
 
     force_recompile = False  # Set True to recompile domains that already have articles
-    if x_api_key == harvest_key:
+    if harvest_key and x_api_key == harvest_key:
         # Cron / admin path — look up Freddy's account; always force recompile
         force_recompile = True
         try:
