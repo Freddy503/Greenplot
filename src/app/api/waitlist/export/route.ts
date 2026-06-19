@@ -6,7 +6,11 @@ export async function GET(req: NextRequest) {
   const secret = process.env.WAITLIST_EXPORT_SECRET
   const provided = req.headers.get('x-export-secret')
 
-  if (secret && provided !== secret) {
+  if (!secret) {
+    return NextResponse.json({ error: 'Waitlist export is not configured' }, { status: 503 })
+  }
+
+  if (provided !== secret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

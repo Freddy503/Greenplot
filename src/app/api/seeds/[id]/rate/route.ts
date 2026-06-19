@@ -9,15 +9,24 @@ export async function POST(
   const { id } = await params
   const token = req.headers.get('authorization') || ''
   const body = await req.json()
+  const score = Number(body.score ?? body.rating)
 
   try {
-    const res = await fetch(`${BACKEND}/api/v1/seeds/${id}/rate`, {
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+      return NextResponse.json({ error: 'score must be an integer from 1 to 5' }, { status: 400 })
+    }
+
+    const res = await fetch(`${BACKEND}/api/v1/ratings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: token } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        message_id: id,
+        score,
+        consent: body.consent ?? true,
+      }),
       signal: AbortSignal.timeout(8000),
     })
 

@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { useRouter } from 'next/navigation'
 
 type DetectedType = 'link' | 'seed' | 'unknown'
 
@@ -41,18 +40,17 @@ function getTypeInfo(type: DetectedType) {
 }
 
 export default function UniversalAdd() {
-  const router = useRouter()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-
-  // Hide on the landing page
-  if (pathname === '/') return null
   const [text, setText] = useState('')
   const [adding, setAdding] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const detectedType = detectContentType(text)
   const typeInfo = getTypeInfo(detectedType)
+
+  // Hide on the landing page after hooks have been initialized.
+  if (pathname === '/') return null
 
   const handleAdd = async () => {
     if (!text.trim()) return
