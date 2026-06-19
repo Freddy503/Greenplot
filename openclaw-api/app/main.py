@@ -3265,7 +3265,11 @@ def validate_invite(token: str):
 # --- Admin (protected by is_admin check; for MVP we'll skip and use direct DB)
 
 @app.get("/api/v1/admin/health")
-def admin_health():
+def admin_health(current_user: User = Depends(get_current_user)):
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+    if (current_user.email or "").lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
+
     # Check Weaviate, Postgres, LLM APIs, Redis
     status = {"weaviate": "unknown", "postgres": "unknown", "openrouter": "unknown", "redis": "unknown"}
     try:
