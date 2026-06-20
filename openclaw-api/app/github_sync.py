@@ -139,7 +139,7 @@ def connect_repo(tenant_id: str, repo_full_name: str, token: str, db: Session) -
             "webhook_secret": webhook_secret, "webhook_auto": webhook_auto}
 
 
-def sto<RESEND_API_KEY>(tenant_id: str, token: str, db: Session):
+def store_pending_oauth_token(tenant_id: str, token: str, db: Session):
     """OAuth callback landed but no repo picked yet — park the token in a
     connection row with an empty repo name."""
     db.execute(text("DELETE FROM github_connections WHERE tenant_id = :t"), {"t": tenant_id})

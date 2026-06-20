@@ -514,7 +514,7 @@ TOOLS.append({
 TOOLS.append({
     "type": "function",
     "function": {
-        "name": "captu<RESEND_API_KEY>",
+        "name": "capture_learnings",
         "description": (
             "Save a learning, decision, or insight from this conversation as a learning-type seed. "
             "Use after a key decision is made or a pattern is discovered. "

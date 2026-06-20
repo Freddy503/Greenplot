@@ -92,7 +92,7 @@ def test_frontend_backend_proxy_paths_match_declared_backend_routes():
     assert missing == []
 
 
-def test_garden_review_exposes_co<RESEND_API_KEY>():
+def test_garden_review_exposes_core_operating_buckets():
     backend = read("openclaw-api/app/garden_health.py")
     frontend = read("src/app/garden/page.tsx")
     proxy = read("src/app/api/garden/review/route.ts")

@@ -30,7 +30,7 @@ Usage:
     runner.register_pre(validate_input)
 
     # Run hooks
-    result = runner.run_p<RESEND_API_KEY>("search_seeds", {"query": "AI"})
+    result = runner.run_pre_tool_use("search_seeds", {"query": "AI"})
     if result.denied:
         return {"error": result.messages[0]}
 """
@@ -169,7 +169,7 @@ class HookRunner:
         runner.register_post("https://hooks.example.com/tool-used")
 
         # Run
-        result = runner.run_p<RESEND_API_KEY>("bash", {"command": "ls"})
+        result = runner.run_pre_tool_use("bash", {"command": "ls"})
     """
 
     def __init__(self) -> None:
@@ -180,7 +180,7 @@ class HookRunner:
 
     def register_pre(self, hook: Hook) -> None:
         """Register a PreToolUse hook."""
-        self._p<RESEND_API_KEY>(hook)
+        self._pre_hooks.append(hook)
 
     def register_post(self, hook: Hook) -> None:
         """Register a PostToolUse hook."""
@@ -189,7 +189,7 @@ class HookRunner:
     def register(self, event: HookEvent, hook: Hook) -> None:
         """Register a hook for a specific event."""
         if event == HookEvent.PRE_TOOL_USE:
-            self._p<RESEND_API_KEY>(hook)
+            self._pre_hooks.append(hook)
         else:
             self._post_hooks.append(hook)
 
@@ -203,7 +203,7 @@ class HookRunner:
 
     # ── Execution ─────────────────────────────────────────────────
 
-    async def run_p<RESEND_API_KEY>(
+    async def run_pre_tool_use(
         self,
         tool_name: str,
         tool_input: dict[str, Any],
