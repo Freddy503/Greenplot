@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_KEY || 'BPOHbjQ0psiNlYXXp8TSNNpixK4PvQXtRu3NRjuuQzvLh8muSA9P3BLO-JKCj9fRSiTaVSNjf4B2RptObfRxYW4'
-
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -106,10 +104,21 @@ export function usePushNotifications() {
         return false
       }
 
+      const keyRes = await fetch('/api/push/subscribe')
+      if (!keyRes.ok) {
+        setStatus('error')
+        return false
+      }
+      const { publicKey } = await keyRes.json()
+      if (!publicKey || typeof publicKey !== 'string') {
+        setStatus('error')
+        return false
+      }
+
       // Subscribe to push
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
       })
 
       setSubscription(sub)
