@@ -17,6 +17,58 @@ class AskRequest(BaseModel):
     limit: int = 8
 
 
+def _iso(dt):
+    return dt.isoformat() if dt else None
+
+
+def _seed_summary(seed) -> dict:
+    metadata = seed.seed_metadata or {}
+    content = seed.content or ""
+    raw_tags = metadata.get("tags", "")
+    tags = raw_tags if isinstance(raw_tags, list) else [t.strip() for t in str(raw_tags or "").split(",") if t.strip()]
+    return {
+        "id": str(seed.id),
+        "title": seed.title,
+        "summary": metadata.get("summary") or content[:180],
+        "domain": metadata.get("domain") or "",
+        "tags": tags[:6],
+        "seed_type": seed.seed_type or metadata.get("seed_type") or "idea",
+        "created_at": _iso(seed.created_at),
+        "last_interacted_at": _iso(seed.last_interacted_at),
+        "quality_score": seed.quality_score,
+        "metadata": metadata,
+    }
+
+
+def _link_summary(link: dict) -> dict:
+    return {
+        "id": link.get("id") or link.get("uuid") or "",
+        "title": link.get("title") or link.get("url") or "Untitled link",
+        "summary": link.get("summary") or "",
+        "domain": link.get("domain") or "",
+        "status": link.get("status") or "",
+        "url": link.get("url") or "",
+        "created_at": link.get("addedAt") or link.get("created_at") or link.get("createdAt") or "",
+    }
+
+
+def _days_since(value) -> int:
+    if not value:
+        return 999
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return 999
+    return max(0, (datetime.utcnow() - dt).days)
+
+
+def _admin_email_set() -> set[str]:
+    return {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+
+
 # ── P1.2: Garden Health Dashboard ─────────────────────
 
 @router.get("/health")
@@ -135,6 +187,303 @@ def garden_health(token: str = Depends(oauth2_scheme), db: Session = Depends(get
         "top_domains": [{"domain": d, "count": c} for d, c in top_domains],
         "wiki_categories": wiki_categories,
         "suggestions": suggestions,
+    }
+
+
+@router.get("/review")
+def garden_review(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Daily operating surface for the garden.
+
+    This intentionally assembles existing Greenplot systems instead of creating
+    new storage: seeds/thoughts/products/events from Postgres, source/wiki
+    coverage from Weaviate, and relationship hints from SeedLink metadata.
+    """
+    user = get_current_user(token=token, db=db)
+    tenant_id = str(user.tenant_id)
+
+    from app.models import Seed, Thought, SeedLink, UserEvent, WaitlistEntry
+
+    seeds = db.query(Seed).filter(
+        Seed.tenant_id == user.tenant_id,
+        (Seed.archived == False) | (Seed.archived == None),
+    ).order_by(Seed.created_at.desc()).limit(500).all()
+    thoughts = db.query(Thought).filter(
+        Thought.tenant_id == user.tenant_id,
+    ).order_by(Thought.created_at.desc()).limit(50).all()
+    seed_ids = [s.id for s in seeds]
+
+    links = weaviate_client.get_links(tenant_id=tenant_id, limit=500)
+    articles = weaviate_client.get_wiki_articles(tenant_id=tenant_id, limit=200)
+
+    seed_by_id = {str(seed.id): seed for seed in seeds}
+    products = [s for s in seeds if (s.seed_type == "product" or (s.seed_metadata or {}).get("seed_type") == "product")]
+    specs = [s for s in seeds if (s.seed_type == "spec" or (s.seed_metadata or {}).get("seed_type") in {"spec", "prd"})]
+    papers = [s for s in seeds if ((s.seed_metadata or {}).get("seed_type") == "paper" or s.seed_type == "paper")]
+
+    now = datetime.utcnow()
+    raw_seeds = [
+        s for s in seeds
+        if not (s.seed_metadata or {}).get("summary")
+        and (s.seed_type or "idea") not in {"product", "spec"}
+    ]
+    stale_seeds = sorted(
+        [
+            s for s in seeds
+            if _days_since(s.last_interacted_at or s.created_at) >= 7
+            and (s.seed_type or "idea") not in {"product"}
+        ],
+        key=lambda s: (_days_since(s.last_interacted_at or s.created_at), s.created_at or now),
+        reverse=True,
+    )
+    pending_thoughts = [t for t in thoughts if t.status in {"pending", "processing", "error"}]
+    pending_links = [l for l in links if l.get("status") in {"pending", "processing", "error"}]
+    enriched_links = [l for l in links if l.get("status") == "enriched"]
+
+    tending = []
+    for seed in stale_seeds[:3]:
+        age_days = _days_since(seed.last_interacted_at or seed.created_at)
+        tending.append({
+            "kind": "review_seed",
+            "priority": "high" if age_days >= 21 else "medium",
+            "title": seed.title,
+            "body": f"Untouched for {age_days} days",
+            "seed_id": str(seed.id),
+            "action_label": "Review",
+        })
+    for seed in raw_seeds[:2]:
+        tending.append({
+            "kind": "enrich_seed",
+            "priority": "medium",
+            "title": seed.title,
+            "body": "No summary or domain yet",
+            "seed_id": str(seed.id),
+            "action_label": "Open",
+        })
+    for thought in pending_thoughts[:2]:
+        tending.append({
+            "kind": "triage_thought",
+            "priority": "high" if thought.status == "error" else "medium",
+            "title": thought.content[:80] or "Pending thought",
+            "body": f"Thought is {thought.status}",
+            "thought_id": str(thought.id),
+            "action_label": "Check",
+        })
+
+    inbox = {
+        "pending_links": [_link_summary(l) for l in pending_links[:8]],
+        "raw_seeds": [_seed_summary(s) for s in raw_seeds[:8]],
+        "pending_thoughts": [{
+            "id": str(t.id),
+            "title": t.content[:90] or "Untitled thought",
+            "status": t.status,
+            "created_at": _iso(t.created_at),
+            "error": t.error_message,
+        } for t in pending_thoughts[:8]],
+    }
+
+    relationships = []
+    if seed_ids:
+        rows = db.query(SeedLink).filter(
+            SeedLink.source_seed_id.in_(seed_ids),
+            SeedLink.target_seed_id.in_(seed_ids),
+        ).order_by(SeedLink.created_at.desc()).limit(50).all()
+        seen_pairs = set()
+        for row in rows:
+            source = seed_by_id.get(str(row.source_seed_id))
+            target = seed_by_id.get(str(row.target_seed_id))
+            if not source or not target:
+                continue
+            pair_key = tuple(sorted([str(source.id), str(target.id)]))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            relationships.append({
+                "source": _seed_summary(source),
+                "target": _seed_summary(target),
+                "relationship": row.link_type,
+                "confidence": round((row.confidence or 0) / 1000, 2) if row.confidence else None,
+                "created_at": _iso(row.created_at),
+                "suggestion": "Open both and decide whether this should become a stronger link, a merged idea, or a PRD input.",
+            })
+            if len(relationships) >= 6:
+                break
+
+    if len(relationships) < 6:
+        domain_buckets: dict[str, list] = {}
+        for seed in seeds:
+            domain = ((seed.seed_metadata or {}).get("domain") or "").split(",")[0].strip().lower()
+            if domain and domain not in {"general", "none", "untagged"}:
+                domain_buckets.setdefault(domain, []).append(seed)
+        for domain, grouped in sorted(domain_buckets.items(), key=lambda kv: len(kv[1]), reverse=True):
+            if len(grouped) < 2:
+                continue
+            source, target = grouped[0], grouped[1]
+            if str(source.id) == str(target.id):
+                continue
+            relationships.append({
+                "source": _seed_summary(source),
+                "target": _seed_summary(target),
+                "relationship": "shared_domain",
+                "confidence": None,
+                "created_at": None,
+                "suggestion": f"Both sit in {domain}; consider linking, merging, or using them as evidence for the same outcome.",
+            })
+            if len(relationships) >= 6:
+                break
+
+    def _stage_for(seed) -> str:
+        metadata = seed.seed_metadata or {}
+        if metadata.get("build_status") in {"built", "shipped", "merged"}:
+            return "shipped"
+        if metadata.get("build_status") in {"building", "in_progress"}:
+            return "building"
+        if seed.seed_type == "spec" or metadata.get("seed_type") in {"spec", "prd"}:
+            return "spec"
+        if metadata.get("seed_type") == "paper" or seed.seed_type == "paper" or metadata.get("research_run_id"):
+            return "research"
+        return "seed"
+
+    stage_labels = {
+        "seed": "Seed",
+        "research": "Research",
+        "spec": "Spec",
+        "building": "Build",
+        "shipped": "Shipped",
+    }
+    pipeline = []
+    for stage in ["seed", "research", "spec", "building", "shipped"]:
+        items = [_seed_summary(s) for s in seeds if _stage_for(s) == stage][:6]
+        pipeline.append({"stage": stage, "label": stage_labels[stage], "count": len([s for s in seeds if _stage_for(s) == stage]), "items": items})
+
+    wiki_source_ids = set()
+    for article in articles:
+        for link_id in article.get("sourceLinkIds", []):
+            wiki_source_ids.add(link_id)
+
+    domain_counts: dict[str, int] = {}
+    for seed in seeds:
+        domain = ((seed.seed_metadata or {}).get("domain") or "").split(",")[0].strip()
+        if domain and domain.lower() not in {"general", "none", "untagged"}:
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+    wiki_categories = {(a.get("category") or a.get("title") or "").lower() for a in articles}
+    wiki_candidates = []
+    for domain, count in sorted(domain_counts.items(), key=lambda kv: kv[1], reverse=True):
+        if count >= 3 and domain.lower() not in wiki_categories:
+            wiki_candidates.append({
+                "kind": "domain_gap",
+                "title": domain,
+                "body": f"{count} seeds, no obvious wiki article",
+                "count": count,
+                "action_label": "Draft wiki",
+            })
+        if len(wiki_candidates) >= 4:
+            break
+    for link in enriched_links:
+        link_id = link.get("id")
+        if link_id and link_id not in wiki_source_ids and _days_since(link.get("addedAt")) >= 7:
+            wiki_candidates.append({
+                "kind": "source_ready",
+                "title": link.get("title") or link.get("url") or "Enriched source",
+                "body": "Enriched source has not been folded into the wiki",
+                "link": _link_summary(link),
+                "action_label": "Use as source",
+            })
+        if len(wiki_candidates) >= 6:
+            break
+
+    spaces = []
+    for product in products:
+        meta = product.seed_metadata or {}
+        attached = [
+            spec for spec in specs
+            if (spec.seed_metadata or {}).get("product_id") == str(product.id)
+        ]
+        activity_dates = [dt for dt in [product.created_at] + [s.created_at for s in attached] if dt]
+        spaces.append({
+            "id": str(product.id),
+            "title": product.title,
+            "rank": meta.get("rank") or "backlog",
+            "summary": meta.get("problem") or product.content[:180],
+            "prd_count": len(attached),
+            "open_prds": len([s for s in attached if (s.seed_metadata or {}).get("build_status") not in {"built", "shipped", "merged"}]),
+            "last_activity_at": max(activity_dates).isoformat() if activity_dates else None,
+        })
+    orphan_specs = [spec for spec in specs if not (spec.seed_metadata or {}).get("product_id")]
+
+    timeline_rows = []
+    for seed in seeds[:20]:
+        timeline_rows.append({
+            "type": "seed_created",
+            "title": seed.title,
+            "body": (seed.seed_metadata or {}).get("summary") or seed.content[:120],
+            "created_at": _iso(seed.created_at),
+            "seed_id": str(seed.id),
+        })
+    events = db.query(UserEvent).filter(UserEvent.user_id == user.id).order_by(UserEvent.created_at.desc()).limit(20).all()
+    for event in events:
+        timeline_rows.append({
+            "type": event.event,
+            "title": event.event.replace("_", " ").title(),
+            "body": (event.meta or {}).get("title") or (event.meta or {}).get("source") or "",
+            "created_at": _iso(event.created_at),
+        })
+    timeline_rows.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+
+    admin_nudges = []
+    if (user.email or "").lower() in _admin_email_set():
+        waiting_count = db.query(WaitlistEntry).filter(WaitlistEntry.invited_at.is_(None)).count()
+        error_thoughts = len([t for t in pending_thoughts if t.status == "error"])
+        admin_nudges = [
+            {
+                "kind": "waitlist",
+                "title": "Waitlist",
+                "body": f"{waiting_count} people waiting for an invite",
+                "href": "/admin",
+            },
+            {
+                "kind": "processing",
+                "title": "Processing health",
+                "body": f"{error_thoughts} thought processing errors in the recent queue",
+                "href": "/admin",
+            },
+        ]
+
+    next_actions = []
+    if pending_links:
+        next_actions.append({"label": "Clear research inbox", "href": "/links", "reason": f"{len(pending_links)} links need processing"})
+    if orphan_specs:
+        next_actions.append({"label": "Attach orphan specs", "href": "/studio", "reason": f"{len(orphan_specs)} specs serve no product"})
+    if wiki_candidates:
+        next_actions.append({"label": "Draft a wiki article", "href": "/wiki", "reason": wiki_candidates[0]["body"]})
+    if relationships:
+        next_actions.append({"label": "Review relationships", "href": "/garden", "reason": relationships[0]["suggestion"]})
+
+    return {
+        "generated_at": _iso(now),
+        "summary": {
+            "seeds": len(seeds),
+            "links": len(links),
+            "wiki_articles": len(articles),
+            "products": len(products),
+            "specs": len(specs),
+            "papers": len(papers),
+            "pending_items": len(pending_links) + len(raw_seeds) + len(pending_thoughts),
+            "relationship_suggestions": len(relationships),
+            "wiki_candidates": len(wiki_candidates),
+        },
+        "daily_tending": tending[:8],
+        "inbox": inbox,
+        "relationships": relationships,
+        "pipeline": pipeline,
+        "wiki_candidates": wiki_candidates[:6],
+        "spaces": {
+            "products": spaces,
+            "orphan_specs": [_seed_summary(s) for s in orphan_specs[:8]],
+        },
+        "timeline": timeline_rows[:12],
+        "admin_nudges": admin_nudges,
+        "next_actions": next_actions[:4],
     }
 
 
