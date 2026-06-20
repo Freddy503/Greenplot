@@ -67,7 +67,7 @@ class E2ERunner:
     def test_health(self):
         self.section("0. Health")
         try:
-            r = self.client.get(f"{self.base}/api/v1/admin/health")
+            r = self.client.get(f"{self.base}/api/v1/health")
             if r.status_code == 200:
                 checks = r.json().get("checks", {})
                 summary = "  ".join(f"{k}={v}" for k, v in checks.items())
