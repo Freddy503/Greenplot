@@ -15,6 +15,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 import base64
+import csv
+import io
 import mimetypes
 from app.database import engine, get_db
 from app.models import Base, User, Thought, Seed, Usage, CalendarConnection, ChatSession, Rating, WikiArticle
@@ -3186,6 +3188,35 @@ def admin_invite_waitlist(
             failed.append(entry.email)
 
     return {"sent": sent, "failed": failed, "code": code, "count": len(sent)}
+
+
+@app.get("/api/v1/admin/waitlist/export")
+def admin_export_waitlist(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export the durable waitlist as CSV for operators."""
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+    if (current_user.email or "").lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    from app.models import WaitlistEntry
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["email", "joined_at", "invited_at"])
+    for entry in db.query(WaitlistEntry).order_by(WaitlistEntry.joined_at.desc()).all():
+        writer.writerow([
+            entry.email,
+            entry.joined_at.isoformat() if entry.joined_at else "",
+            entry.invited_at.isoformat() if entry.invited_at else "",
+        ])
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="waitlist.csv"'},
+    )
 
 
 @app.get("/api/v1/admin/activity")

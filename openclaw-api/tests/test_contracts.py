@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +31,9 @@ def test_waitlist_export_fails_closed_without_secret():
     assert "if (!secret)" in route
     assert "Waitlist export is not configured" in route
     assert "provided !== secret" in route
+    assert "/api/v1/admin/waitlist/export" in route
+    assert "Authorization: authHeader" in route
+    assert "fs.readFileSync" not in route
 
 
 def test_universal_add_does_not_return_before_hooks():
@@ -73,3 +77,110 @@ def test_admin_health_requires_admin_user():
     assert "current_user: User = Depends(get_current_user)" in block
     assert "settings.ADMIN_EMAILS" in block
     assert 'raise HTTPException(status_code=404, detail="Not found")' in block
+
+
+def test_frontend_backend_proxy_paths_match_declared_backend_routes():
+    backend_routes = _extract_backend_routes()
+    frontend_paths = _extract_frontend_backend_paths()
+
+    missing = []
+    for source, frontend_path in frontend_paths:
+        if not any(_route_matches(frontend_path, backend_path) for backend_path in backend_routes):
+            missing.append(f"{source}: {frontend_path}")
+
+    assert missing == []
+
+
+def _extract_backend_routes() -> set[str]:
+    routes = set()
+    route_re = re.compile(
+        r"@(?P<target>app|router)\.(?:get|post|put|patch|delete)\(\s*"
+        r"['\"](?P<path>[^'\"]*)['\"]"
+    )
+    prefix_re = re.compile(
+        r"APIRouter\([^)]*prefix\s*=\s*['\"](?P<prefix>[^'\"]*)['\"]",
+        re.S,
+    )
+
+    for path in (ROOT / "openclaw-api/app").rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        prefix_match = prefix_re.search(source)
+        router_prefix = prefix_match.group("prefix") if prefix_match else ""
+
+        for route_match in route_re.finditer(source):
+            route_path = route_match.group("path")
+            if route_match.group("target") == "router":
+                full_path = f"{router_prefix.rstrip('/')}/{route_path.lstrip('/')}"
+            else:
+                full_path = route_path
+
+            normalized_path = _normalize_route_path(full_path)
+            if normalized_path.startswith("/api/v1"):
+                routes.add(normalized_path)
+
+    return routes
+
+
+def _extract_frontend_backend_paths() -> list[tuple[str, str]]:
+    paths = []
+    allowed_dynamic_proxies = {
+        "src/app/api/canvas/[...path]/route.ts": "${BACKEND}/api/v1/canvas/${path.join('/')}${req.nextUrl.search}",
+    }
+
+    for path in (ROOT / "src/app/api").rglob("route.ts"):
+        source = path.read_text(encoding="utf-8")
+        if "fetch(" not in source:
+            continue
+
+        relative_path = path.relative_to(ROOT).as_posix()
+        for template_match in re.finditer(r"`([^`]+)`", source):
+            template = template_match.group(1)
+            if "/api/v1/" not in template:
+                continue
+            if "${BACKEND}" not in template and "${API_URL}" not in template:
+                continue
+            if allowed_dynamic_proxies.get(relative_path) == template:
+                continue
+
+            api_path = template[template.index("/api/v1/") :]
+            paths.append((relative_path, _normalize_route_path(api_path)))
+
+    return paths
+
+
+def _normalize_route_path(path: str) -> str:
+    path = re.sub(r"\$\{encodeURIComponent\(([^)]+)\)\}", r"${\1}", path)
+    path = path.split("?", 1)[0]
+
+    for marker in (
+        "${params",
+        "${qs",
+        "${req.nextUrl.search}",
+        "${searchParams",
+        "${url.search}",
+    ):
+        if marker in path:
+            path = path.split(marker, 1)[0]
+
+    path = (path.rstrip("/") or "/").strip()
+    path = re.sub(r"\$\{[^}]+\}", "{}", path)
+    path = re.sub(r"\{[^}]+\}", "{}", path)
+    return path
+
+
+def _route_matches(frontend_path: str, backend_path: str) -> bool:
+    frontend_parts = _route_parts(frontend_path)
+    backend_parts = _route_parts(backend_path)
+    if len(frontend_parts) != len(backend_parts):
+        return False
+
+    return all(
+        frontend_part == backend_part
+        or frontend_part == "{}"
+        or backend_part == "{}"
+        for frontend_part, backend_part in zip(frontend_parts, backend_parts)
+    )
+
+
+def _route_parts(path: str) -> list[str]:
+    return [part for part in path.strip("/").split("/") if part]
