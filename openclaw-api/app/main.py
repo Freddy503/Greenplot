@@ -47,7 +47,7 @@ import asyncio
 
 # --- Web Push (VAPID) ---
 VAPID_PRIVATE_KEY = None
-VAPID_CLAIMS = {"sub": "mailto:contact@example.com"}
+VAPID_CLAIMS = {"sub": f"mailto:{settings.CONTACT_EMAIL}"} if settings.CONTACT_EMAIL else {}
 
 # Priority: 1) VAPID_PRIVATE_KEY_BASE64 env var (cleanest for Docker/CI)
 #           2) VAPID_PRIVATE_KEY_PATH env var pointing to a PEM file
@@ -5324,12 +5324,14 @@ def _get_user_city() -> str:
     """Get city from the primary user account."""
     try:
         db = next(get_db())
-        user = db.query(User).filter(User.email == "contact@example.com").first()
-        city = (user.city or "Munich") if user else "Munich"
+        user = db.query(User).filter(User.email.in_([email.strip() for email in settings.ADMIN_EMAILS.split(",") if email.strip()])).first() if settings.ADMIN_EMAILS else None
+        if not user:
+            user = db.query(User).first()
+        city = (user.city or settings.DEFAULT_CITY) if user else settings.DEFAULT_CITY
         db.close()
         return city
     except Exception:
-        return "Munich"
+        return settings.DEFAULT_CITY
 
 
 def _job_morning_spark():

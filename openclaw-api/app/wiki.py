@@ -659,11 +659,12 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
 
     force_recompile = False  # Set True to recompile domains that already have articles
     if harvest_key and x_api_key == harvest_key:
-        # Cron / admin path — look up Freddy's account; always force recompile
+        # Cron / admin path — look up a configured admin account; always force recompile
         force_recompile = True
         try:
             db = next(get_db())
-            user = db.query(User).filter(User.email == "contact@example.com").first()
+            admin_emails = [email.strip() for email in settings.ADMIN_EMAILS.split(",") if email.strip()]
+            user = db.query(User).filter(User.email.in_(admin_emails)).first() if admin_emails else None
             if not user:
                 user = db.query(User).filter(User.email.like("%@greenplot.%")).first()
             if not user:

@@ -1,4 +1,6 @@
 export default function PrivacyPage() {
+  const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'privacy@example.com'
+
   return (
     <main className="min-h-screen bg-background px-6 py-16 max-w-2xl mx-auto">
       <h1 className="text-3xl font-normal tracking-tight text-on-surface mb-2">Privacy Policy</h1>
@@ -87,8 +89,8 @@ export default function PrivacyPage() {
         <h2 className="text-lg font-semibold text-on-surface mb-3">Contact</h2>
         <p className="text-sm text-on-surface-variant leading-relaxed">
           For privacy questions or data requests, email{' '}
-          <a href="mailto:contact@example.com" className="text-primary underline underline-offset-2">
-            contact@example.com
+          <a href={`mailto:${contactEmail}`} className="text-primary underline underline-offset-2">
+            {contactEmail}
           </a>
           .
         </p>

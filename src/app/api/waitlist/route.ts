@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const FROM = 'Greenplot <digest@greenplot.ink>'
-const NOTIFY_TO = 'contact@example.com'
+const NOTIFY_TO = process.env.WAITLIST_NOTIFY_TO || ''
 const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 
 const recentEmails = new Set<string>()
@@ -114,18 +114,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Notify operator (non-critical)
-    sendEmail(
-      apiKey,
-      NOTIFY_TO,
-      `🌱 New Greenplot waitlist signup — ${normalized}`,
-      `
-      <div style="font-family:sans-serif;max-width:500px;background:#111;color:#f9fafb;padding:32px;border-radius:12px;">
-        <h2 style="margin:0 0 16px;font-size:18px;">🌱 New waitlist signup</h2>
-        <p style="margin:0;font-size:16px;color:#22c55e;font-weight:700;">${normalized}</p>
-        <p style="margin-top:16px;font-size:12px;color:#6b7280;">greenplot.ink</p>
-      </div>
-      `
-    ).catch(() => {})
+    if (NOTIFY_TO) {
+      sendEmail(
+        apiKey,
+        NOTIFY_TO,
+        `New Greenplot waitlist signup - ${normalized}`,
+        `
+        <div style="font-family:sans-serif;max-width:500px;background:#111;color:#f9fafb;padding:32px;border-radius:12px;">
+          <h2 style="margin:0 0 16px;font-size:18px;">New waitlist signup</h2>
+          <p style="margin:0;font-size:16px;color:#22c55e;font-weight:700;">${normalized}</p>
+          <p style="margin-top:16px;font-size:12px;color:#6b7280;">greenplot.ink</p>
+        </div>
+        `
+      ).catch(() => {})
+    }
 
     recentEmails.add(normalized)
     setTimeout(() => recentEmails.delete(normalized), 10 * 60 * 1000)

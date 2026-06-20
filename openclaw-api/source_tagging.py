@@ -17,7 +17,7 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 WEAVIATE_URL = os.environ.get("WEAVIATE_URL", "http://localhost:8080")
 import psycopg2
 
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432/openclaw")
+DB_URL = os.environ.get("DATABASE_URL", "")
 
 
 def fetch_page_content(url: str) -> dict:
@@ -209,6 +209,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tenant-id", default="87959b2e-5443-4c50-9336-2da01af82c14")
     args = parser.parse_args()
+
+    if not DB_URL:
+        print("DATABASE_URL must be set", file=sys.stderr)
+        sys.exit(1)
 
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()

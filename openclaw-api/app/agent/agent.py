@@ -103,7 +103,7 @@ class SeedifyAgent:
     Usage:
         agent = SeedifyAgent(
             registry=my_registry,
-            api_key="sk-...",
+            api_key="test-api-key",
             model="anthropic/claude-sonnet-4",
         )
         async for event in agent.run(messages, user, db):

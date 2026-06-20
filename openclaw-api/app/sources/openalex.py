@@ -31,13 +31,14 @@ def _reconstruct_abstract(inv: dict | None) -> str:
 async def discover(themes: list[str], since_days: int = 14, limit: int = 8) -> list[dict]:
     query = " ".join((themes or [])[:3]).strip() or "artificial intelligence"
     frm = (date.today() - timedelta(days=since_days)).isoformat()
-    mailto = (getattr(settings, "OPENALEX_MAILTO", "") or "contact@example.com")
     params = {
         "search": query,
         "filter": f"from_publication_date:{frm}",
         "per_page": str(limit),
-        "mailto": mailto,
     }
+    mailto = getattr(settings, "OPENALEX_MAILTO", "") or getattr(settings, "CONTACT_EMAIL", "")
+    if mailto:
+        params["mailto"] = mailto
     try:
         async with httpx.AsyncClient(timeout=12) as client:
             resp = await client.get(_API, params=params)

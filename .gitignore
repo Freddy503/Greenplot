@@ -54,3 +54,13 @@ openclaw-api/data/push_subscriptions.json
 .superset/
 logs/
 outputs/
+AGENTS.md
+
+# Generated/private knowledge base content. Keep these in runtime storage or a
+# private backup, not in the public application repository.
+wiki/
+openclaw-api/wiki/
+public/wiki-images/
+openclaw-api/public/wiki-images/
+data/
+openclaw-api/data/

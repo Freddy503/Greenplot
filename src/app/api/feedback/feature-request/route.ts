@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM = 'Greenplot <digest@greenplot.ink>'
-const TO = 'contact@example.com'
+const TO = process.env.FEEDBACK_NOTIFY_TO || ''
 
 // Simple in-process rate limit: max 3 requests per IP per hour
 const ipTimestamps = new Map<string, number[]>()
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No message provided' }, { status: 400 })
     }
 
-    if (!RESEND_API_KEY) {
+    if (!RESEND_API_KEY || !TO) {
       return NextResponse.json({ error: 'Email not configured' }, { status: 503 })
     }
 
