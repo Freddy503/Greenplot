@@ -3,18 +3,19 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { MessageCircle, Sprout, FlaskConical, BookOpen, Settings, Bell, Leaf, Plus } from 'lucide-react'
+import { MessageCircle, Sprout, FlaskConical, BookOpen, Settings, Bell, Leaf, Plus, GitBranch } from 'lucide-react'
 
 const NAV = [
   { key: 'chat',     href: '/chat',     Icon: MessageCircle, label: 'Chat'    },
   { key: 'garden',   href: '/garden',   Icon: Sprout,        label: 'Garden'  },
+  { key: 'workflows', href: '/workflows', Icon: GitBranch,    label: 'Workflows' },
   { key: 'studio',   href: '/studio',   Icon: FlaskConical,  label: 'Studio'  },
   { key: 'library',  href: '/library',  Icon: BookOpen,      label: 'Library' },
   { key: 'settings', href: '/settings', Icon: Settings,      label: 'Settings'},
 ]
 
 // Routes that get the desktop app shell. Landing, login, onboarding etc. stay full-bleed.
-const APP_PREFIXES = ['/chat', '/garden', '/studio', '/library', '/settings', '/wiki', '/links', '/notifications', '/explain']
+const APP_PREFIXES = ['/chat', '/garden', '/workflows', '/studio', '/library', '/settings', '/wiki', '/links', '/notifications', '/explain']
 
 export default function SideNav() {
   const pathname = usePathname()

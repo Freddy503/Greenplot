@@ -113,6 +113,43 @@ def test_garden_review_exposes_co<RESEND_API_KEY>():
     assert "/api/v1/garden/review" in proxy
 
 
+def test_workflows_expose_ordered_product_surfaces():
+    backend = read("openclaw-api/app/workflows.py")
+    frontend = read("src/app/workflows/page.tsx")
+
+    for route in [
+        '@router.get("/outcomes")',
+        '@router.get("/relationships/suggestions")',
+        '@router.get("/research/inbox")',
+        '@router.get("/wiki/from-garden")',
+        '@router.post("/wiki/from-garden/preview")',
+        '@router.post("/wiki/from-garden/approve")',
+        '@router.get("/spaces")',
+        '@router.get("/insights/timeline")',
+    ]:
+        assert route in backend
+
+    for label in [
+        "Seed To Outcome Pipeline",
+        "Relationship Suggestions",
+        "Research Inbox",
+        "Wiki From Garden",
+        "Product/Project Spaces",
+        "Insight Timeline",
+    ]:
+        assert label in frontend
+
+    for proxy in [
+        "src/app/api/outcomes/route.ts",
+        "src/app/api/relationships/suggestions/route.ts",
+        "src/app/api/research/inbox/route.ts",
+        "src/app/api/wiki/from-garden/route.ts",
+        "src/app/api/spaces/route.ts",
+        "src/app/api/insights/timeline/route.ts",
+    ]:
+        assert "/api/v1/" in read(proxy)
+
+
 def _extract_backend_routes() -> set[str]:
     routes = set()
     route_re = re.compile(

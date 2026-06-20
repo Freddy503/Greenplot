@@ -36,6 +36,7 @@ from app.garden_insights import router as garden_insights_router
 from app.garden_skimmer import router as garden_skimmer_router
 from app.wiki_lint import router as wiki_lint_router
 from app.wiki_pipeline import router as wiki_pipeline_router
+from app.workflows import router as workflows_router
 from app import briefings
 from app import email_sender
 import httpx
@@ -5284,6 +5285,7 @@ app.include_router(garden_insights_router)
 app.include_router(garden_skimmer_router)
 app.include_router(wiki_lint_router)
 app.include_router(wiki_pipeline_router)
+app.include_router(workflows_router)
 
 
 # ── Scheduled Push Notifications (APScheduler) ───────────────────────────────
