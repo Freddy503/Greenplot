@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
+
+const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 
 export async function GET(req: NextRequest) {
   const secret = process.env.WAITLIST_EXPORT_SECRET
   const provided = req.headers.get('x-export-secret')
+  const authHeader = req.headers.get('authorization') || ''
 
   if (!secret) {
     return NextResponse.json({ error: 'Waitlist export is not configured' }, { status: 503 })
@@ -15,22 +16,20 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const filePath = process.env.WAITLIST_FILE || path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'waitlist.json')
-    if (!fs.existsSync(filePath)) {
-      return new NextResponse('email,joinedAt\n', {
-        headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="waitlist.csv"' },
-      })
-    }
-    const entries: { email: string; joinedAt: string }[] = JSON.parse(fs.readFileSync(filePath, 'utf8'))
-    const csv = ['email,joinedAt', ...entries.map(e => `${e.email},${e.joinedAt}`)].join('\n')
+    const res = await fetch(`${BACKEND}/api/v1/admin/waitlist/export`, {
+      headers: authHeader ? { Authorization: authHeader } : {},
+      signal: AbortSignal.timeout(15000),
+    })
+    const csv = await res.text()
     return new NextResponse(csv, {
+      status: res.status,
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type': res.headers.get('content-type') || 'text/csv',
         'Content-Disposition': 'attachment; filename="waitlist.csv"',
       },
     })
   } catch (err) {
-    console.error('[waitlist/export] Read failed:', err)
-    return NextResponse.json({ error: 'Could not read waitlist' }, { status: 500 })
+    console.error('[waitlist/export] Backend export failed:', err)
+    return NextResponse.json({ error: 'Backend unreachable' }, { status: 502 })
   }
 }
