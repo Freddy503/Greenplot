@@ -154,7 +154,11 @@ function authHeader(): Record<string, string> {
 async function getJson<T>(url: string, fallback: T): Promise<T> {
   try {
     const res = await fetch(url, { headers: authHeader() })
-    return await res.json()
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data) {
+      return fallback
+    }
+    return data
   } catch {
     return fallback
   }
@@ -230,8 +234,9 @@ export default function WorkflowsPage() {
   async function previewWiki(topic: WikiTopic) {
     setDraftingTopic(topic.topic)
     setDraft(null)
-    const sourceSeedIds = topic.sources.filter(source => source.kind === 'seed').map(source => source.id)
-    const sourceLinkIds = topic.sources.filter(source => source.kind === 'link').map(source => source.id)
+    const sources = arrayOrEmpty(topic.sources)
+    const sourceSeedIds = sources.filter(source => source.kind === 'seed').map(source => source.id)
+    const sourceLinkIds = sources.filter(source => source.kind === 'link').map(source => source.id)
     try {
       const res = await fetch('/api/wiki/from-garden', {
         method: 'POST',
@@ -425,7 +430,10 @@ function StageButton({ active, label, count, onClick }: { active: boolean; label
 }
 
 function OutcomeCard({ workflow, onOpen }: { workflow: OutcomeWorkflow; onOpen: (href: string) => void }) {
-  const relatedCount = Object.values(workflow.related).reduce((sum, items) => sum + items.length, 0)
+  const relatedCount = Object.values(workflow.related || {}).reduce((sum, items) => sum + arrayOrEmpty(items).length, 0)
+  const suggestions = arrayOrEmpty(workflow.suggestions)
+  const history = arrayOrEmpty(workflow.history)
+  const nextAction = workflow.next_action || { label: 'Open', href: '/garden', kind: 'open' }
   return (
     <div className="v2-card tap" style={{ borderRadius: 18, padding: 15 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -440,15 +448,15 @@ function OutcomeCard({ workflow, onOpen }: { workflow: OutcomeWorkflow; onOpen: 
         </div>
       </div>
 
-      <button onClick={() => onOpen(workflow.next_action.href)} className="tap" style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--hairline)', background: 'var(--green-tint)', borderRadius: 12, padding: '10px 11px', cursor: 'pointer', textAlign: 'left' }}>
+      <button onClick={() => onOpen(nextAction.href)} className="tap" style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--hairline)', background: 'var(--green-tint)', borderRadius: 12, padding: '10px 11px', cursor: 'pointer', textAlign: 'left' }}>
         <CheckCircle2 size={15} color="var(--green-700)" strokeWidth={1.9} />
-        <span className="ui" style={{ flex: 1, fontSize: 12.5, fontWeight: 800, color: 'var(--ink)' }}>{workflow.next_action.label}</span>
+        <span className="ui" style={{ flex: 1, fontSize: 12.5, fontWeight: 800, color: 'var(--ink)' }}>{nextAction.label}</span>
         <ArrowRight size={14} color="var(--ink-3)" />
       </button>
 
-      {workflow.suggestions.length > 0 && (
+      {suggestions.length > 0 && (
         <div style={{ display: 'grid', gap: 5, marginTop: 12 }}>
-          {workflow.suggestions.map(suggestion => (
+          {suggestions.map(suggestion => (
             <div key={`${workflow.id}-${suggestion.kind}`} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <Sparkles size={12} color="var(--green-700)" strokeWidth={1.8} />
               <span className="body-text" style={{ fontSize: 11, color: 'var(--ink-2)' }}>{suggestion.label}</span>
@@ -457,9 +465,9 @@ function OutcomeCard({ workflow, onOpen }: { workflow: OutcomeWorkflow; onOpen: 
         </div>
       )}
 
-      {workflow.history.length > 0 && (
+      {history.length > 0 && (
         <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 12, paddingTop: 10, display: 'grid', gap: 6 }}>
-          {workflow.history.slice(-3).map((event, index) => (
+          {history.slice(-3).map((event, index) => (
             <div key={`${workflow.id}-history-${index}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <History size={12} color="var(--ink-3)" strokeWidth={1.75} />
               <span className="ui" style={{ fontSize: 10.5, fontWeight: 750, color: 'var(--ink)' }}>{event.title}</span>
@@ -473,6 +481,7 @@ function OutcomeCard({ workflow, onOpen }: { workflow: OutcomeWorkflow; onOpen: 
 }
 
 function SuggestionCard({ suggestion }: { suggestion: RelationshipSuggestion }) {
+  const evidence = arrayOrEmpty(suggestion.evidence)
   return (
     <div className="v2-card" style={{ borderRadius: 18, padding: 14 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -482,14 +491,14 @@ function SuggestionCard({ suggestion }: { suggestion: RelationshipSuggestion }) 
             <Pill tone="green" size="xs">{suggestion.action}</Pill>
             <Pill tone="neutral" size="xs">{suggestion.confidence}%</Pill>
           </div>
-          <h3 className="ui" style={{ margin: 0, fontSize: 13.5, fontWeight: 850, color: 'var(--ink)', lineHeight: 1.25 }}>{suggestion.source.title}</h3>
+          <h3 className="ui" style={{ margin: 0, fontSize: 13.5, fontWeight: 850, color: 'var(--ink)', lineHeight: 1.25 }}>{suggestion.source?.title || 'Untitled source'}</h3>
           {suggestion.target && <p className="body-text" style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--ink-2)' }}>With {suggestion.target.title}</p>}
           <p className="body-text" style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>{suggestion.reason}</p>
         </div>
       </div>
-      {suggestion.evidence.length > 0 && (
+      {evidence.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          {suggestion.evidence.slice(0, 5).map(word => <Pill key={word} tone="ghost" size="xs">{word}</Pill>)}
+          {evidence.slice(0, 5).map(word => <Pill key={word} tone="ghost" size="xs">{word}</Pill>)}
         </div>
       )}
     </div>
@@ -517,6 +526,7 @@ function InboxRow({ item }: { item: InboxItem }) {
 
 function SpaceCard({ space }: { space: ProjectSpace }) {
   const counts = Object.entries(space.counts || {}).filter(([, count]) => count > 0)
+  const members = arrayOrEmpty(space.members)
   return (
     <div className="v2-card" style={{ borderRadius: 18, padding: 14 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -528,7 +538,7 @@ function SpaceCard({ space }: { space: ProjectSpace }) {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 11 }}>
         {counts.map(([label, count]) => <Pill key={label} tone="soft" size="xs">{label} {count}</Pill>)}
-        <Pill tone="neutral" size="xs">{space.members.length} members</Pill>
+        <Pill tone="neutral" size="xs">{members.length} members</Pill>
       </div>
       <div className="ui" style={{ marginTop: 12, fontSize: 12, fontWeight: 800, color: 'var(--green-700)' }}>{space.next_action}</div>
     </div>
