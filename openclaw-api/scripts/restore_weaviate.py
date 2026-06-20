@@ -1,20 +1,20 @@
 """
-resto<RESEND_API_KEY> — Restore Weaviate data from a JSON backup.
+restore_weaviate.py — Restore Weaviate data from a JSON backup.
 
 Usage:
-    docker exec openclaw-api python3 /app/scripts/resto<RESEND_API_KEY> /path/to/weaviate-YYYY-MM-DD.json
+    docker exec openclaw-api python3 /app/scripts/restore_weaviate.py /path/to/weaviate-YYYY-MM-DD.json
 
 If restoring a .json.gz, decompress first:
     gunzip weaviate-2026-06-04.json.gz
     docker cp weaviate-2026-06-04.json openclaw-api:/tmp/
-    docker exec openclaw-api python3 /app/scripts/resto<RESEND_API_KEY> /tmp/weaviate-2026-06-04.json
+    docker exec openclaw-api python3 /app/scripts/restore_weaviate.py /tmp/weaviate-2026-06-04.json
 """
 import sys
 import json
 from app.weaviate_client import weaviate_client
 
 if len(sys.argv) < 2:
-    print("Usage: resto<RESEND_API_KEY> <backup.json>")
+    print("Usage: restore_weaviate.py <backup.json>")
     sys.exit(1)
 
 with open(sys.argv[1]) as f:

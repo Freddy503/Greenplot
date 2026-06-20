@@ -1319,7 +1319,7 @@ def run_agent_task(topic: str, user_id: str, db) -> Optional[str]:
     """
     Long-running agent: generates a strategy/implementation paper on a user-specified topic.
     Saves to /data/outputs/solution_designs/ and returns the markdown content.
-    Called as a background task — delivers result via _sto<RESEND_API_KEY>().
+    Called as a background task — delivers result via _store_and_broadcast_briefing().
     """
     import os, re as _re
     logger.info(f"[agent] Starting research paper for topic: {topic[:80]}")

@@ -207,7 +207,7 @@ def _gather_context(seed: Seed, tenant_id: str) -> tuple[list[dict], list[dict]]
     return chunks, related
 
 
-def sco<RESEND_API_KEY>(seed: Seed, related: list[dict], user: User) -> int:
+def score_paper_relevance(seed: Seed, related: list[dict], user: User) -> int:
     """0-10: how strongly does this paper connect to what the user is building?"""
     from app.briefings import _call_llm
     interests = ", ".join(user.interests or []) or "technology, AI, product building"
@@ -478,7 +478,7 @@ def auto_prd_for_paper(seed_id: str, tenant_id: str, db: Session, force: bool = 
     chunks, related = _gather_context(seed, tenant_id)
 
     if not force:
-        score = sco<RESEND_API_KEY>(seed, related, user)
+        score = score_paper_relevance(seed, related, user)
         # Sparse gardens can't score high — there's little to relate a paper to yet.
         # Lower the bar for early users so the digest→PRD magic happens before the
         # garden is dense; it tightens automatically as they accumulate seeds.

@@ -150,7 +150,7 @@ Personal context: This is for a knowledge management system used by a technical 
 8. Write at least 800 words of substantive content"""
 
 
-def prepa<RESEND_API_KEY>(links: list, seeds: list) -> tuple[str, str]:
+def prepare_sources_for_llm(links: list, seeds: list) -> tuple[str, str]:
     """Prepare link and seed content for the LLM prompt."""
     links_parts = []
     for i, l in enumerate(links[:8], 1):
@@ -837,7 +837,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
                         "tags": s.get("tags", "")} for s in all_seeds 
                         if s.get("id") in source_seed_ids][:8]
         
-        links_content, seeds_content = prepa<RESEND_API_KEY>(links_data, seeds_data)
+        links_content, seeds_content = prepare_sources_for_llm(links_data, seeds_data)
         title = f"{domain.title()} — Insights"
         category = _detect_category(domain, group)
 
@@ -963,7 +963,7 @@ async def auto_compile(request: Request, x_api_key: str = Header(default="")):
         # Prepare seeds for LLM
         seeds_data = [{"title": s.get("title", ""), "content": s.get("content", ""),
                         "tags": s.get("tags", "")} for s in uncovered_seeds[:8]]
-        _, seeds_content = prepa<RESEND_API_KEY>([], seeds_data)
+        _, seeds_content = prepare_sources_for_llm([], seeds_data)
         
         title = f"{domain.title()} — Garden Insights"
         category = _detect_category(domain, [])

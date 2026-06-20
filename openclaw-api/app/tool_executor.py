@@ -2182,7 +2182,7 @@ async def _spec_review(spec_text: str, lens: str, _settings) -> str:
 TOOL_HANDLERS["develop_idea"] = develop_idea
 
 
-async def captu<RESEND_API_KEY>(args: dict, user: User, db: Session) -> str:
+async def capture_learnings(args: dict, user: User, db: Session) -> str:
     """Capture a learning or decision from the current session as a learning-type seed."""
     learning = args.get("learning", "")
     confidence = min(10, max(1, int(args.get("confidence", 7))))
@@ -2197,11 +2197,11 @@ async def captu<RESEND_API_KEY>(args: dict, user: User, db: Session) -> str:
             seed_metadata={
                 "seed_type": "learning",
                 "confidence": confidence,
-                "source": "captu<RESEND_API_KEY>",
+                "source": "capture_learnings",
             },
             seed_type="learning",
             created_by="agent_synthesis",
-            created_via="captu<RESEND_API_KEY>",
+            created_via="capture_learnings",
             created_at=__import__("datetime").datetime.utcnow(),
         )
         db.add(seed)
@@ -2224,7 +2224,7 @@ async def captu<RESEND_API_KEY>(args: dict, user: User, db: Session) -> str:
         return json.dumps({"status": "error", "message": str(e)})
 
 
-TOOL_HANDLERS["captu<RESEND_API_KEY>"] = captu<RESEND_API_KEY>
+TOOL_HANDLERS["capture_learnings"] = capture_learnings
 
 
 async def create_github_issue(args: dict, user: User, db: Session) -> str:

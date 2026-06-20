@@ -2065,7 +2065,7 @@ def github_oauth_callback(code: str = "", state: str = "", db: Session = Depends
     browser back to Settings to pick a repo."""
     from fastapi.responses import RedirectResponse
     from app.auth import decode_token
-    from app.github_sync import sto<RESEND_API_KEY>
+    from app.github_sync import store_pending_oauth_token
     fail = f"{settings.FRONTEND_URL}/settings?github=error"
     try:
         payload = decode_token(state)
@@ -2085,7 +2085,7 @@ def github_oauth_callback(code: str = "", state: str = "", db: Session = Depends
         if not token:
             logger.warning(f"[github-oauth] exchange failed: {resp.text[:200]}")
             return RedirectResponse(fail)
-        sto<RESEND_API_KEY>(tenant_id, token, db)
+        store_pending_oauth_token(tenant_id, token, db)
         return RedirectResponse(f"{settings.FRONTEND_URL}/settings?github=pick")
     except Exception as e:
         logger.error(f"[github-oauth] callback failed: {e}")
@@ -2738,7 +2738,7 @@ def add_comment(seed_id: str, req: CommentCreateRequest,
             if uid != current_user.id:
                 recipients.add(uid)
         for uid in recipients:
-            _sto<RESEND_API_KEY>(str(uid), f"💬 New comment on {(seed.title or 'a PRD')[:40]}",
+            _store_and_notify_simple(str(uid), f"💬 New comment on {(seed.title or 'a PRD')[:40]}",
                                      f"{c.author_name}: {body[:80]}", f"/studio?canvas={req.product_id}&prd={seed_id}")
     except Exception as e:
         logger.warning(f"[comments] notify failed: {e}")
@@ -4983,7 +4983,7 @@ class MemoryStoreRequest(BaseModel):
     user_id: Optional[str] = None
 
 @app.post("/api/v1/memory/store")
-def sto<RESEND_API_KEY>(
+def store_memories(
     req: MemoryStoreRequest,
     current_user: User = Depends(get_current_user),
 ):
@@ -5375,7 +5375,7 @@ def _job_morning_spark():
                     weather=weather or f"Check weather in {city or 'your location'}"
                 )
                 logger.info(f"✓ Briefing built with {len(briefing.get('sections', []))} sections")
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
                 logger.info(f"✅ Morning Spark sent to user {user.id}")
             except Exception as ue:
                 logger.error(f"❌ Morning Spark failed for user {user.id}: {ue}", exc_info=True)
@@ -5407,7 +5407,7 @@ def _job_daily_briefing():
                     user_id=str(user.id),
                     db=db
                 ))
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
                 if settings.RESEND_API_KEY and user.email:
                     try:
                         email_sender.send_briefing_email(user.email, briefing)
@@ -5434,7 +5434,7 @@ def _job_afternoon_reflection():
                 if not _cadence_allows('reflection', user):
                     continue
                 briefing = briefings.build_reflection(user_id=str(user.id), db=db)
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
             except Exception as ue:
                 logger.error(f"❌ Reflection failed for {user.id}: {ue}")
         logger.info("✅ Evening Reflection generated")
@@ -5460,7 +5460,7 @@ def _job_coherence_report():
                 continue
             result = build_coherence_report(user, job_db)
             if result.get("status") == "ok":
-                _sto<RESEND_API_KEY>(
+                _store_and_notify_simple(
                     str(user.id),
                     "🧭 Weekly Coherence Report",
                     "Contradictions, gaps and the story so far — your portfolio, digested.",
@@ -5483,7 +5483,7 @@ def _job_garden_story():
                 continue
             try:
                 briefing = briefings.build_garden_story(str(user.id), db)
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
             except Exception as ue:
                 logger.error(f"❌ Garden Story failed for {user.id}: {ue}")
         logger.info("✅ Garden Story generated")
@@ -5524,7 +5524,7 @@ def _job_garden_signals():
                     if not src or not tgt or not src.title or not tgt.title:
                         continue
                     rel = {"contradicts": "challenges", "builds_on": "builds on"}.get(link.link_type, "connects to")
-                    _sto<RESEND_API_KEY>(
+                    _store_and_notify_simple(
                         str(user.id),
                         "🔗 Two ideas just linked up",
                         f"“{src.title[:48]}” {rel} “{tgt.title[:48]}” — see how they fit.",
@@ -5547,7 +5547,7 @@ def _job_garden_signals():
                     meta = dict(seed.seed_metadata or {})
                     if meta.get("theme_notified_at"):
                         continue
-                    _sto<RESEND_API_KEY>(
+                    _store_and_notify_simple(
                         str(user.id),
                         f"🌱 A theme is forming around “{seed.title[:40]}”",
                         f"{c} of your ideas now connect here — want a wiki article that ties them together?",
@@ -5577,7 +5577,7 @@ def _job_weekly_eval():
                 continue
             try:
                 briefing = briefings.build_weekly_eval(user_id=str(user.id), db=db)
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
                 if settings.RESEND_API_KEY and user.email:
                     try:
                         email_sender.send_briefing_email(user.email, briefing)
@@ -5604,7 +5604,7 @@ def _job_biweekly_challenge():
                 continue
             try:
                 briefing = briefings.build_biweekly_challenge(user_id=str(user.id), db=db)
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
             except Exception as ue:
                 logger.error(f"❌ Biweekly challenge failed for {user.id}: {ue}")
         logger.info("✅ Biweekly Challenge generated")
@@ -5630,7 +5630,7 @@ def _job_academic_digest(evening: bool = False):
                     user_id=str(user.id), db=db))
                 if evening:
                     briefing = {**briefing, "type": "academic_digest_evening"}
-                _sto<RESEND_API_KEY>(briefing, user)
+                _store_and_notify_user(briefing, user)
                 if settings.RESEND_API_KEY and user.email:
                     try:
                         attachments = email_sender.collect_arxiv_pdfs(briefing)
@@ -5646,7 +5646,7 @@ def _job_academic_digest(evening: bool = False):
         db.close()
 
 
-def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
+def _store_and_broadcast(title: str, body: str, url: str, prompt: str = ""):
     """Persist notification + push to all subscribers."""
     try:
         notifs = _load_notifs()
@@ -5665,7 +5665,7 @@ def _sto<RESEND_API_KEY>(title: str, body: str, url: str, prompt: str = ""):
         logger.error(f"❌ Scheduled push failed: {e}")
 
 
-def _sto<RESEND_API_KEY>(briefing: dict):
+def _store_and_broadcast_briefing(briefing: dict):
     """
     Persist multi-section briefing + push to all subscribers.
     Briefing structure: { type, title, subtitle, sections: [{title, icon, color, content, sources}], prompt }
@@ -5796,8 +5796,8 @@ def _push_to_user(user_id: str, title: str, body: str, url: str = "/chat", promp
     return sent
 
 
-def _sto<RESEND_API_KEY>(briefing: dict, user) -> None:
-    """Per-user variant of _sto<RESEND_API_KEY>: the notification is
+def _store_and_notify_user(briefing: dict, user) -> None:
+    """Per-user variant of _store_and_broadcast_briefing: the notification is
     stored with the owner's user_id and pushed only to their devices."""
     from datetime import timedelta
     user_id = str(user.id)
@@ -5835,7 +5835,7 @@ def _sto<RESEND_API_KEY>(briefing: dict, user) -> None:
         logger.error(f"❌ Per-user briefing storage failed: {e}", exc_info=True)
 
 
-def _sto<RESEND_API_KEY>(user_id: str, title: str, body: str, url: str, prompt: str = "") -> None:
+def _store_and_notify_simple(user_id: str, title: str, body: str, url: str, prompt: str = "") -> None:
     """Per-user simple notification (no briefing payload)."""
     try:
         notifs = _load_notifs()
@@ -6423,9 +6423,9 @@ def _run_agent_job_bg(topic: str, user_id: str, db_gen):
 
         paper_user = db.query(User).filter(User.id == uuid.UUID(str(user_id))).first()
         if paper_user:
-            _sto<RESEND_API_KEY>(briefing, paper_user)
+            _store_and_notify_user(briefing, paper_user)
         else:
-            _sto<RESEND_API_KEY>(briefing)  # fallback if user vanished
+            _store_and_broadcast_briefing(briefing)  # fallback if user vanished
         logger.info(f"[agent] Strategy paper delivered to Inbox for user {str(user_id)[:8]}: {topic[:60]}")
     except Exception as e:
         logger.error(f"[agent] Background job failed: {e}", exc_info=True)

@@ -303,7 +303,7 @@ class LinkCache(Base):
     """
     Postgres shadow store for Weaviate Link objects.
     Written on every link creation so a Weaviate data loss can be recovered via
-    scripts/resto<RESEND_API_KEY> using this table as source of truth.
+    scripts/restore_weaviate.py using this table as source of truth.
     """
     __tablename__ = 'link_cache'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

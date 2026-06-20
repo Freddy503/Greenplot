@@ -1,10 +1,10 @@
 """
-resto<RESEND_API_KEY>
+restore_links_from_postgres.py
 Re-populate Weaviate Link class from the Postgres link_cache table.
 Run this after a Weaviate data loss to recover all saved links.
 
 Usage (on server):
-    docker exec openclaw-api python3 /app/scripts/resto<RESEND_API_KEY>
+    docker exec openclaw-api python3 /app/scripts/restore_links_from_postgres.py
 """
 from app.database import SessionLocal
 from app.models import LinkCache

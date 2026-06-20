@@ -356,13 +356,13 @@ class SeedifyAgent:
 
                         # Pre-tool hook (can deny execution)
                         if self.hook_runner:
-                            pre_result = await self.hook_runner.run_p<RESEND_API_KEY>(tool_name, args)
-                            for msg in p<RESEND_API_KEY>:
+                            pre_result = await self.hook_runner.run_pre_tool_use(tool_name, args)
+                            for msg in pre_result.messages:
                                 yield AgentEvent.status(f"Hook: {msg}")
-                            if p<RESEND_API_KEY>:
+                            if pre_result.denied:
                                 result = json.dumps({
                                     "status": "error",
-                                    "message": p<RESEND_API_KEY>[0] if p<RESEND_API_KEY> else f"Tool '{tool_name}' denied by hook",
+                                    "message": pre_result.messages[0] if pre_result.messages else f"Tool '{tool_name}' denied by hook",
                                 })
                                 yield AgentEvent.tool_result(tool_id, result, tool_name)
                                 session.add(Message.tool_result(tool_id, tool_name, result, True))
