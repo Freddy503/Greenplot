@@ -3,13 +3,13 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # App
-    SECRET_KEY: str = "<SECRET_KEY>"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
 
     # Database
-    DATABASE_URL: str = "postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw"
-    SYNC_DATABASE_URL: str = "postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw"
+    DATABASE_URL: str
+    SYNC_DATABASE_URL: str
 
     # Weaviate
     WEAVIATE_URL: str = "http://weaviate:8080"
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # academic digest also pulls OpenAlex (published research incl. journals),
     # Hacker News (industry pulse) and curated RSS feeds — all keyless.
     RESEARCH_SOURCES_ENABLED: bool = True
-    OPENALEX_MAILTO: str = "contact@example.com"  # polite-pool contact
+    OPENALEX_MAILTO: str = ""  # polite-pool contact, set to an email you monitor
     # Override the default RSS feed list: comma-separated "Name|url" entries.
     RSS_FEEDS: str = ""
 
@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     APP_URL: str = "https://seedify-six.vercel.app"
     APP_NAME: str = "Seedify"
+    CONTACT_EMAIL: str = ""
+    DEFAULT_CITY: str = "Munich"
 
     # Attachments
     MAX_ATTACHMENT_SIZE_MB: int = 10
@@ -108,11 +110,11 @@ class Settings(BaseSettings):
     HARVEST_API_KEY: Optional[str] = None
 
     # Comma-separated list of emails allowed to call /api/v1/admin/* endpoints
-    ADMIN_EMAILS: str = "contact@example.com"
+    ADMIN_EMAILS: str = ""
 
     # Private beta: 6-character invite codes (comma-separated, case-insensitive).
     # INVITE_REQUIRED=true makes register reject signups without a valid code.
-    INVITE_CODES: str = "GARDEN"
+    INVITE_CODES: str = ""
     INVITE_REQUIRED: bool = False
 
     # Auto-PRD pipeline (docs/specs/auto-prd-pipeline.md)
@@ -126,7 +128,7 @@ class Settings(BaseSettings):
 
     # GitHub integration (for Spec → Issue export)
     GITHUB_TOKEN: Optional[str] = None
-    GITHUB_REPO: str = "Freddy503/Seedify"  # default repo for issue filing
+    GITHUB_REPO: str = ""  # optional default repo for issue filing
     # One-click GitHub connect (OAuth app; callback must be
     # https://api.greenplot.ink/api/v1/github/oauth/callback). When unset,
     # the Settings UI falls back to the manual PAT flow.
@@ -137,4 +139,3 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
-

@@ -11,8 +11,9 @@ services:
       weaviate:
         condition: service_started
     environment:
-    - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
-    - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+    - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in .env}
+    - DATABASE_URL=${DATABASE_URL:?set DATABASE_URL in .env}
+    - SYNC_DATABASE_URL=${SYNC_DATABASE_URL:?set SYNC_DATABASE_URL in .env}
     - WEAVIATE_URL=http://weaviate:8080
     - REDIS_URL=redis://redis:6379/0
     - FRONTEND_URL=https://www.greenplot.ink
@@ -38,7 +39,7 @@ services:
     container_name: openclaw-db
     environment:
       POSTGRES_DB: openclaw
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_USER: postgres
     healthcheck:
       interval: 10s
@@ -64,8 +65,9 @@ services:
       weaviate:
         condition: service_started
     environment:
-    - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
-    - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/openclaw
+    - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in .env}
+    - DATABASE_URL=${DATABASE_URL:?set DATABASE_URL in .env}
+    - SYNC_DATABASE_URL=${SYNC_DATABASE_URL:?set SYNC_DATABASE_URL in .env}
     - WEAVIATE_URL=http://weaviate:8080
     - REDIS_URL=redis://redis:6379/0
     - EXA_API_KEY=${EXA_API_KEY}

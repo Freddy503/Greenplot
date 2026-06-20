@@ -4,6 +4,8 @@
 // business address is fine, a PO box is not). Fill it in before launch.
 
 export default function ImpressumPage() {
+  const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'contact@example.com'
+
   return (
     <main className="min-h-screen bg-background px-6 py-16 max-w-2xl mx-auto">
       <h1 className="text-3xl font-normal tracking-tight text-on-surface mb-2">Impressum</h1>
@@ -23,8 +25,8 @@ export default function ImpressumPage() {
         <h2 className="text-lg font-semibold text-on-surface mb-3">Kontakt</h2>
         <p className="text-sm text-on-surface-variant leading-relaxed">
           E-Mail:{' '}
-          <a href="mailto:contact@example.com" className="text-primary underline underline-offset-2">
-            contact@example.com
+          <a href={`mailto:${contactEmail}`} className="text-primary underline underline-offset-2">
+            {contactEmail}
           </a>
         </p>
       </section>

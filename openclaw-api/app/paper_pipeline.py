@@ -106,7 +106,11 @@ def fetch_paper(source_url: str, pdf_url: str = "") -> tuple[str, str]:
         # fall through to Exa on the page (gets title/description at least)
 
     arxiv_id = _arxiv_id_from_url(source_url) or _arxiv_id_from_url(pdf_url)
-    headers = {"User-Agent": "Greenplot/1.0 (research paper indexing; contact: contact@example.com)"}
+    contact = getattr(settings, "CONTACT_EMAIL", "")
+    user_agent = "Greenplot/1.0 (research paper indexing)"
+    if contact:
+        user_agent = f"{user_agent}; contact: {contact}"
+    headers = {"User-Agent": user_agent}
 
     with httpx.Client(timeout=45, follow_redirects=True, headers=headers) as client:
         if arxiv_id:

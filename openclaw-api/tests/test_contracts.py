@@ -20,7 +20,8 @@ def test_seed_rating_proxy_targets_backend_ratings_endpoint():
 def test_wiki_auto_compile_has_no_hardcoded_harvest_key_fallback():
     wiki = read("openclaw-api/app/wiki.py")
 
-    assert 'os.environ.get("HARVEST_API_KEY", "<HARVEST_API_KEY>")' not in wiki
+    old_fallback = 'os.environ.get("HARVEST_API_KEY", "greenplot-' + 'harvest-2026")'
+    assert old_fallback not in wiki
     assert "harvest_key = settings.HARVEST_API_KEY" in wiki
     assert "if harvest_key and x_api_key == harvest_key:" in wiki
 

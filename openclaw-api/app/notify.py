@@ -70,7 +70,9 @@ def _web_push(uid: str, title: str, body: str, url: str) -> None:
         if not info.get("endpoint"):
             continue
         try:
+            contact = os.environ.get("CONTACT_EMAIL", "")
+            claims = {"sub": f"mailto:{contact}"} if contact else {}
             webpush(subscription_info=info, data=payload, vapid_private_key=vapid_key,
-                    vapid_claims={"sub": "mailto:contact@example.com"})
+                    vapid_claims=claims)
         except Exception:
             pass

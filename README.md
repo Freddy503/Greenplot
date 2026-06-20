@@ -297,11 +297,11 @@ npm run dev
 ### Environment Variables
 ```bash
 # Backend (.env)
-OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_API_KEY=<OPENROUTER_API_KEY>
 WEAVIATE_URL=http://weaviate:8080
 REDIS_URL=redis://redis:6379/0
 VAPID_PRIVATE_KEY_PATH=/app/.vapid_private.pem
-RESEND_API_KEY=re_...              # Email digests (optional — disables email if unset)
+RESEND_API_KEY=<RESEND_API_KEY>              # Email digests (optional — disables email if unset)
 EMAIL_FROM=Greenplot <digest@greenplot.ink>   # Verified Resend sender (SPF/DKIM/DMARC)
 EXA_API_KEY=...                    # Web search + full-page contents (Deep Research / digest)
 GITHUB_TOKEN=ghp_...               # GitHub research source (higher rate limit; also Spec→Issue)
@@ -422,4 +422,3 @@ Notifications are **artifacts, not prompts** — each delivers something you can
 🟢 **Working:** Chat thinking partner (modes, corrective retrieval, citations, persistent history), **Deep Research agents** (7-source fan-out, full-text reading, 1M-context synthesis, cited briefs with embedded + PDF-attached papers, Garden launcher + Deep/Lite modes + brief→PRD + go-deeper + weekly opt-in + onboarding kick-off + live agent feed), Capture from anywhere (PDF drop + link/YouTube ingest in chat & Studio), Studio (Spec → PRD → Build pipeline, Product view, Design Vision, PRD comments), Canvas sharing (view-only), Multi-source Research Digest + full-text paper pipeline + Autopilot PRDs, MCP server (per-user keys, full-text paper reads), Garden + Intelligence + Knowledge graph + Visualization, Notifications suite (Today's Thread, Loose Threads, Garden Signals, Garden Story), Wiki (auto-compile, D3 maps), Web Push (+ auto-prune), Email (Resend, DMARC), invite links, password reset, GitHub repo sync, Calendar, Voice memos
 🟡 **Partial:** Canvas **editor** role (write access) — view-only shipped; **Deep Research Phase 2** (self-hosted Temporal) scaffolded + built behind `RESEARCH_ENGINE=temporal`, Phase 1 (Redis worker) is the default; YouTube without captions falls back to thin Exa text
 🔴 **Pending:** Sentry DSN (error monitoring wired, DSN unset), off-site backups (rclone), Impressum legal address; see `docs/IMPROVEMENTS.md` + `docs/POST-LAUNCH.md` for the full backlog
-

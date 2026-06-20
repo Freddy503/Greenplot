@@ -120,6 +120,23 @@ type TimelineEvent = {
   tags: string[]
 }
 
+const EMPTY_OUTCOMES: OutcomesResponse = { stages: [], workflows: [], active_research: [], summary: {} }
+const EMPTY_RELATIONSHIPS = { suggestions: [] as RelationshipSuggestion[], summary: {} as Record<string, unknown> }
+const EMPTY_INBOX = { items: [] as InboxItem[], summary: {} as Record<string, unknown> }
+const EMPTY_WIKI = { topics: [] as WikiTopic[], summary: {} as Record<string, unknown> }
+const EMPTY_SPACES = {
+  spaces: [] as ProjectSpace[],
+  orphan_specs: [] as GardenObject[],
+  suggestions: [] as Array<{ seed: GardenObject; space: { id: string; name: string }; reason: string; confidence: number }>,
+  summary: {} as Record<string, unknown>,
+}
+const EMPTY_TIMELINE = {
+  events: [] as TimelineEvent[],
+  rising_topics: [] as Array<{ label: string; count: number }>,
+  activity: [] as Array<{ week: string; count: number }>,
+  summary: {} as Record<string, unknown>,
+}
+
 const FEATURE_ORDER = [
   'Seed To Outcome Pipeline',
   'Relationship Suggestions',
@@ -143,6 +160,10 @@ async function getJson<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
+function arrayOrEmpty<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : []
+}
+
 function timeLabel(value?: string) {
   if (!value) return ''
   const date = new Date(value)
@@ -153,11 +174,11 @@ function timeLabel(value?: string) {
 export default function WorkflowsPage() {
   const router = useRouter()
   const [outcomes, setOutcomes] = useState<OutcomesResponse | null>(null)
-  const [relationships, setRelationships] = useState<{ suggestions: RelationshipSuggestion[]; summary: Record<string, unknown> }>({ suggestions: [], summary: {} })
-  const [inbox, setInbox] = useState<{ items: InboxItem[]; summary: Record<string, unknown> }>({ items: [], summary: {} })
-  const [wiki, setWiki] = useState<{ topics: WikiTopic[]; summary: Record<string, unknown> }>({ topics: [], summary: {} })
-  const [spaces, setSpaces] = useState<{ spaces: ProjectSpace[]; orphan_specs: GardenObject[]; suggestions: Array<{ seed: GardenObject; space: { id: string; name: string }; reason: string; confidence: number }>; summary: Record<string, unknown> }>({ spaces: [], orphan_specs: [], suggestions: [], summary: {} })
-  const [timeline, setTimeline] = useState<{ events: TimelineEvent[]; rising_topics: Array<{ label: string; count: number }>; activity: Array<{ week: string; count: number }>; summary: Record<string, unknown> }>({ events: [], rising_topics: [], activity: [], summary: {} })
+  const [relationships, setRelationships] = useState<{ suggestions?: RelationshipSuggestion[]; summary?: Record<string, unknown>; error?: string }>(EMPTY_RELATIONSHIPS)
+  const [inbox, setInbox] = useState<{ items?: InboxItem[]; summary?: Record<string, unknown>; error?: string }>(EMPTY_INBOX)
+  const [wiki, setWiki] = useState<{ topics?: WikiTopic[]; summary?: Record<string, unknown>; error?: string }>(EMPTY_WIKI)
+  const [spaces, setSpaces] = useState<{ spaces?: ProjectSpace[]; orphan_specs?: GardenObject[]; suggestions?: Array<{ seed: GardenObject; space: { id: string; name: string }; reason: string; confidence: number }>; summary?: Record<string, unknown>; error?: string }>(EMPTY_SPACES)
+  const [timeline, setTimeline] = useState<{ events?: TimelineEvent[]; rising_topics?: Array<{ label: string; count: number }>; activity?: Array<{ week: string; count: number }>; summary?: Record<string, unknown>; error?: string }>(EMPTY_TIMELINE)
   const [loading, setLoading] = useState(true)
   const [activeStage, setActiveStage] = useState<string>('all')
   const [draft, setDraft] = useState<WikiDraft | null>(null)
@@ -167,12 +188,12 @@ export default function WorkflowsPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     const [outcomesData, relationshipData, inboxData, wikiData, spacesData, timelineData] = await Promise.all([
-      getJson<OutcomesResponse>('/api/outcomes', { stages: [], workflows: [], active_research: [], summary: {}, error: 'Could not load workflows' }),
-      getJson<{ suggestions: RelationshipSuggestion[]; summary: Record<string, unknown> }>('/api/relationships/suggestions', { suggestions: [], summary: {} }),
-      getJson<{ items: InboxItem[]; summary: Record<string, unknown> }>('/api/research/inbox', { items: [], summary: {} }),
-      getJson<{ topics: WikiTopic[]; summary: Record<string, unknown> }>('/api/wiki/from-garden', { topics: [], summary: {} }),
-      getJson<{ spaces: ProjectSpace[]; orphan_specs: GardenObject[]; suggestions: Array<{ seed: GardenObject; space: { id: string; name: string }; reason: string; confidence: number }>; summary: Record<string, unknown> }>('/api/spaces', { spaces: [], orphan_specs: [], suggestions: [], summary: {} }),
-      getJson<{ events: TimelineEvent[]; rising_topics: Array<{ label: string; count: number }>; activity: Array<{ week: string; count: number }>; summary: Record<string, unknown> }>('/api/insights/timeline', { events: [], rising_topics: [], activity: [], summary: {} }),
+      getJson<OutcomesResponse>('/api/outcomes', { ...EMPTY_OUTCOMES, error: 'Could not load workflows' }),
+      getJson<typeof EMPTY_RELATIONSHIPS & { error?: string }>('/api/relationships/suggestions', EMPTY_RELATIONSHIPS),
+      getJson<typeof EMPTY_INBOX & { error?: string }>('/api/research/inbox', EMPTY_INBOX),
+      getJson<typeof EMPTY_WIKI & { error?: string }>('/api/wiki/from-garden', EMPTY_WIKI),
+      getJson<typeof EMPTY_SPACES & { error?: string }>('/api/spaces', EMPTY_SPACES),
+      getJson<typeof EMPTY_TIMELINE & { error?: string }>('/api/insights/timeline', EMPTY_TIMELINE),
     ])
     setOutcomes(outcomesData)
     setRelationships(relationshipData)
@@ -185,20 +206,26 @@ export default function WorkflowsPage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  const workflows = outcomes?.workflows || []
+  const workflows = arrayOrEmpty(outcomes?.workflows)
   const filtered = activeStage === 'all' ? workflows : workflows.filter(w => w.current_stage === activeStage)
-  const topRelationships = relationships.suggestions.slice(0, 8)
-  const inboxPreview = inbox.items.slice(0, 8)
+  const relationshipSuggestions = arrayOrEmpty(relationships.suggestions)
+  const inboxItems = arrayOrEmpty(inbox.items)
+  const wikiTopics = arrayOrEmpty(wiki.topics)
+  const projectSpaces = arrayOrEmpty(spaces.spaces)
+  const timelineEvents = arrayOrEmpty(timeline.events)
+  const risingTopics = arrayOrEmpty(timeline.rising_topics)
+  const topRelationships = relationshipSuggestions.slice(0, 8)
+  const inboxPreview = inboxItems.slice(0, 8)
 
-  const activeResearchCount = outcomes?.active_research?.length || 0
+  const activeResearchCount = arrayOrEmpty(outcomes?.active_research).length
   const totals = useMemo(() => ([
     workflows.length,
-    relationships.suggestions.length,
-    inbox.items.length,
-    wiki.topics.length,
-    spaces.spaces.length,
-    timeline.events.length,
-  ]), [workflows.length, relationships.suggestions.length, inbox.items.length, wiki.topics.length, spaces.spaces.length, timeline.events.length])
+    relationshipSuggestions.length,
+    inboxItems.length,
+    wikiTopics.length,
+    projectSpaces.length,
+    timelineEvents.length,
+  ]), [workflows.length, relationshipSuggestions.length, inboxItems.length, wikiTopics.length, projectSpaces.length, timelineEvents.length])
 
   async function previewWiki(topic: WikiTopic) {
     setDraftingTopic(topic.topic)
@@ -284,7 +311,7 @@ export default function WorkflowsPage() {
         {activeResearchCount > 0 && (
           <div className="v2-card" style={{ borderRadius: 18, padding: 14, marginBottom: 16, display: 'grid', gap: 8 }}>
             <InlineTitle icon={<Loader2 size={15} className="animate-spin" color="var(--green-700)" />} title="Active research" />
-            {outcomes?.active_research.map(run => (
+            {arrayOrEmpty(outcomes?.active_research).map(run => (
               <button key={run.id} onClick={() => router.push('/garden')} className="tap" style={{ border: 'none', background: 'var(--surface-sunk)', borderRadius: 12, padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left' }}>
                 <GitBranch size={14} color="var(--green-700)" />
                 <span className="ui" style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{run.theme || 'Untitled research run'}</span>
@@ -327,7 +354,7 @@ export default function WorkflowsPage() {
         <SectionHeader>Wiki From Garden</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 9 }}>
-            {wiki.topics.slice(0, 7).map(topic => (
+          {wikiTopics.slice(0, 7).map(topic => (
               <button key={topic.topic} onClick={() => previewWiki(topic)} className="tap" style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 13, padding: 11, textAlign: 'left', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <LibraryBig size={15} color="var(--green-700)" />
@@ -337,7 +364,7 @@ export default function WorkflowsPage() {
                 <p className="body-text" style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-2)' }}>{topic.reason}</p>
               </button>
             ))}
-            {wiki.topics.length === 0 && <CompactEmpty icon={<LibraryBig size={28} color="var(--ink-3)" />} title="No wiki candidates yet" />}
+            {wikiTopics.length === 0 && <CompactEmpty icon={<LibraryBig size={28} color="var(--ink-3)" />} title="No wiki candidates yet" />}
           </div>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, minHeight: 260 }}>
             <InlineTitle icon={<LibraryBig size={15} color="var(--green-700)" />} title="Draft preview" />
@@ -363,8 +390,8 @@ export default function WorkflowsPage() {
 
         <SectionHeader>Product/Project Spaces</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
-          {spaces.spaces.slice(0, 8).map(space => <SpaceCard key={space.id} space={space} />)}
-          {spaces.spaces.length === 0 && <EmptyState icon={<Boxes size={32} color="var(--ink-3)" strokeWidth={1.35} />} title="No project spaces yet" text="Product seeds will become spaces once related specs and build tasks appear." />}
+          {projectSpaces.slice(0, 8).map(space => <SpaceCard key={space.id} space={space} />)}
+          {projectSpaces.length === 0 && <EmptyState icon={<Boxes size={32} color="var(--ink-3)" strokeWidth={1.35} />} title="No project spaces yet" text="Product seeds will become spaces once related specs and build tasks appear." />}
         </div>
 
         <SectionHeader>Insight Timeline</SectionHeader>
@@ -372,13 +399,13 @@ export default function WorkflowsPage() {
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, alignSelf: 'start' }}>
             <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Rising topics" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
-              {timeline.rising_topics.slice(0, 12).map(topic => <Pill key={topic.label} tone="soft" size="xs">{topic.label} {topic.count}</Pill>)}
-              {timeline.rising_topics.length === 0 && <span className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)' }}>No repeated themes yet.</span>}
+              {risingTopics.slice(0, 12).map(topic => <Pill key={topic.label} tone="soft" size="xs">{topic.label} {topic.count}</Pill>)}
+              {risingTopics.length === 0 && <span className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)' }}>No repeated themes yet.</span>}
             </div>
           </div>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 8 }}>
-            {timeline.events.slice(0, 14).map(event => <TimelineRow key={event.id} event={event} />)}
-            {timeline.events.length === 0 && <CompactEmpty icon={<Activity size={28} color="var(--ink-3)" />} title="Timeline is quiet" />}
+            {timelineEvents.slice(0, 14).map(event => <TimelineRow key={event.id} event={event} />)}
+            {timelineEvents.length === 0 && <CompactEmpty icon={<Activity size={28} color="var(--ink-3)" />} title="Timeline is quiet" />}
           </div>
         </div>
       </main>
