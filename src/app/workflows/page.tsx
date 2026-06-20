@@ -164,8 +164,12 @@ async function getJson<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-function arrayOrEmpty<T>(value: T[] | undefined): T[] {
+function arrayOrEmpty<T>(value: T[] | null | undefined): T[] {
   return Array.isArray(value) ? value : []
+}
+
+function sliceSafe<T>(value: T[] | null | undefined, start: number, end?: number): T[] {
+  return arrayOrEmpty(value).slice(start, end)
 }
 
 function timeLabel(value?: string) {
@@ -218,8 +222,8 @@ export default function WorkflowsPage() {
   const projectSpaces = arrayOrEmpty(spaces.spaces)
   const timelineEvents = arrayOrEmpty(timeline.events)
   const risingTopics = arrayOrEmpty(timeline.rising_topics)
-  const topRelationships = relationshipSuggestions.slice(0, 8)
-  const inboxPreview = inboxItems.slice(0, 8)
+  const topRelationships = sliceSafe(relationshipSuggestions, 0, 8)
+  const inboxPreview = sliceSafe(inboxItems, 0, 8)
 
   const activeResearchCount = arrayOrEmpty(outcomes?.active_research).length
   const totals = useMemo(() => ([
@@ -332,7 +336,7 @@ export default function WorkflowsPage() {
           <EmptyState icon={<Rocket size={34} color="var(--ink-3)" strokeWidth={1.35} />} title="No workflows in this stage yet" text="Plant a seed, run research, or draft a spec to start the pipeline." />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
-            {filtered.slice(0, 12).map(workflow => (
+            {sliceSafe(filtered, 0, 12).map(workflow => (
               <OutcomeCard key={workflow.id} workflow={workflow} onOpen={(href) => router.push(href)} />
             ))}
           </div>
@@ -359,7 +363,7 @@ export default function WorkflowsPage() {
         <SectionHeader>Wiki From Garden</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 9 }}>
-          {wikiTopics.slice(0, 7).map(topic => (
+          {sliceSafe(wikiTopics, 0, 7).map(topic => (
               <button key={topic.topic} onClick={() => previewWiki(topic)} className="tap" style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 13, padding: 11, textAlign: 'left', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <LibraryBig size={15} color="var(--green-700)" />
@@ -395,7 +399,7 @@ export default function WorkflowsPage() {
 
         <SectionHeader>Product/Project Spaces</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
-          {projectSpaces.slice(0, 8).map(space => <SpaceCard key={space.id} space={space} />)}
+          {sliceSafe(projectSpaces, 0, 8).map(space => <SpaceCard key={space.id} space={space} />)}
           {projectSpaces.length === 0 && <EmptyState icon={<Boxes size={32} color="var(--ink-3)" strokeWidth={1.35} />} title="No project spaces yet" text="Product seeds will become spaces once related specs and build tasks appear." />}
         </div>
 
@@ -404,12 +408,12 @@ export default function WorkflowsPage() {
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, alignSelf: 'start' }}>
             <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Rising topics" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
-              {risingTopics.slice(0, 12).map(topic => <Pill key={topic.label} tone="soft" size="xs">{topic.label} {topic.count}</Pill>)}
+              {sliceSafe(risingTopics, 0, 12).map(topic => <Pill key={topic.label} tone="soft" size="xs">{topic.label} {topic.count}</Pill>)}
               {risingTopics.length === 0 && <span className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)' }}>No repeated themes yet.</span>}
             </div>
           </div>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 8 }}>
-            {timelineEvents.slice(0, 14).map(event => <TimelineRow key={event.id} event={event} />)}
+            {sliceSafe(timelineEvents, 0, 14).map(event => <TimelineRow key={event.id} event={event} />)}
             {timelineEvents.length === 0 && <CompactEmpty icon={<Activity size={28} color="var(--ink-3)" />} title="Timeline is quiet" />}
           </div>
         </div>
@@ -467,7 +471,7 @@ function OutcomeCard({ workflow, onOpen }: { workflow: OutcomeWorkflow; onOpen: 
 
       {history.length > 0 && (
         <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 12, paddingTop: 10, display: 'grid', gap: 6 }}>
-          {history.slice(-3).map((event, index) => (
+          {sliceSafe(history, -3).map((event, index) => (
             <div key={`${workflow.id}-history-${index}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <History size={12} color="var(--ink-3)" strokeWidth={1.75} />
               <span className="ui" style={{ fontSize: 10.5, fontWeight: 750, color: 'var(--ink)' }}>{event.title}</span>
@@ -498,7 +502,7 @@ function SuggestionCard({ suggestion }: { suggestion: RelationshipSuggestion }) 
       </div>
       {evidence.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          {evidence.slice(0, 5).map(word => <Pill key={word} tone="ghost" size="xs">{word}</Pill>)}
+          {sliceSafe(evidence, 0, 5).map(word => <Pill key={word} tone="ghost" size="xs">{word}</Pill>)}
         </div>
       )}
     </div>
