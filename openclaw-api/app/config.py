@@ -1,7 +1,9 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     # App
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
@@ -10,6 +12,7 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
     SYNC_DATABASE_URL: str
+    POSTGRES_PASSWORD: Optional[str] = None  # consumed by Docker Compose
 
     # Weaviate
     WEAVIATE_URL: str = "http://weaviate:8080"
@@ -49,6 +52,7 @@ class Settings(BaseSettings):
     BRIEFING_EXCLUDE_DOMAINS: str = "test.com,example.com,test.test,localhost"
     EXA_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None  # for Whisper + vision
+    GROQ_API_KEY: Optional[str] = None  # for Groq Whisper
 
     # Research Digest sources (docs/specs/research-sources.md). When enabled, the
     # academic digest also pulls OpenAlex (published research incl. journals),
@@ -134,8 +138,5 @@ class Settings(BaseSettings):
     # the Settings UI falls back to the manual PAT flow.
     GITHUB_OAUTH_CLIENT_ID: Optional[str] = None
     GITHUB_OAUTH_CLIENT_SECRET: Optional[str] = None
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()
