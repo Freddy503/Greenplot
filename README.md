@@ -1,8 +1,8 @@
 # Greenplot — Your Living Laboratory
 
-> Product: **Greenplot** ([greenplot.ink](https://www.greenplot.ink)) · Codebase: **Seedify**
+> Product and public repository: **Greenplot** ([greenplot.ink](https://www.greenplot.ink)) · Internal lineage: **Seedify**
 
-Greenplot is an AI-powered second brain that closes the loop from *thought* to *shipped*. Capture ideas through chat, voice, notes, **PDFs, or any link** — they're enriched, connected, and indexed into your **Garden**. A **thinking partner** chat (Brainstorm · Pressure-test · Devil's advocate · Spec · **Deep Research**) reasons from what you already know — grounded, with **citations** back to your own seeds. Long-running **Deep Research agents** fan out across your garden + arXiv, OpenAlex, Hacker News, GitHub, RSS and Exa, **read the best sources in full** through a 1M-context model, and email you a **cited brief with the relevant papers attached** — fired automatically the moment you finish onboarding, so your garden is alive on day one. The **Studio** turns threads (or a research gap) into structured **PRDs** you can hand to a coding agent and track from Design → Doing → Built. A daily **Research Digest** connects fresh multi-source research to your Garden and can auto-draft PRDs. And the whole garden — including the **full machine-readable text** of every paper — is available to **Claude Code / Cursor / Claude Desktop via an MCP server**.
+Greenplot is an AI-powered second brain that closes the loop from *thought* to *shipped*. Capture ideas through chat, voice, notes, **PDFs, or any link** — they're enriched, connected, and indexed into your **Garden**. A **thinking partner** chat (Brainstorm · Pressure-test · Devil's advocate · Spec · **Deep Research**) reasons from what you already know — grounded, with **citations** back to your own seeds. Long-running **Deep Research agents** fan out across your garden + arXiv, OpenAlex, Hacker News, GitHub, RSS and Exa, **read the best sources in full** through a 1M-context model, and email you a **cited brief with the relevant papers attached** — fired automatically the moment you finish onboarding, so your garden is alive on day one. The **Workflows** page turns the garden into an operating system: Research Inbox triage, relationship suggestions, wiki drafting, project spaces, insight timelines, and a Seed → Brief → Spec → Shipped pipeline. The **Studio** turns threads (or a research gap) into structured **PRDs** you can hand to a coding agent and track from Design → Doing → Built. A daily **Research Digest** connects fresh multi-source research to your Garden and can auto-draft PRDs. And the whole garden — including the **full machine-readable text** of every paper — is available to **Claude Code / Cursor / Claude Desktop via an MCP server**.
 
 > **Vision:** The Greenplot architecture is the blueprint for **Intelligent Enterprise** systems — connecting all structured and unstructured ERP data into agentic context graphs for end-to-end processes (order-to-cash, purchase-to-pay, plan-to-produce, hire-to-retire). Inspired by Karpathy's LLM Wikis, Foundation Capital's decision lineage, and OriginTrail DKG.
 
@@ -11,13 +11,13 @@ Greenplot is an AI-powered second brain that closes the loop from *thought* to *
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        Next.js PWA (Vercel)                             │
-│  Chat · Garden · Sources · Wiki · Onboarding · Voice Memos · Push     │
+│  Chat · Garden · Workflows · Sources · Wiki · Onboarding · Push       │
 │  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  │
-│  │ Chat v2  │  │  Garden   │  │ Sources  │  │ Wiki     │  │ API    │  │
-│  │ + Tools  │  │ + Intel   │  │ + Bridge │  │ + Maps   │  │ Routes │  │
+│  │ Chat v2  │  │  Garden   │  │Workflows│  │ Wiki     │  │ API    │  │
+│  │ + Tools  │  │ + Intel   │  │ + Inbox │  │ + Maps   │  │ Routes │  │
 │  │ + Source │  │ + Decay   │  │          │  │ + Images │  │ (30+)  │  │
 │  │ Surfacing│  │ + Revisit │  │          │  │ TOC      │  │        │  │
-│  │ + History│  │ + Viz Tool│  │          │  │ Compile  │  │        │  │
+│  │ + History│  │ + Viz Tool│  │ + Spaces│  │ Compile  │  │        │  │
 │  └──────────┘  └───────────┘  └──────────┘  └──────────┘  └────────┘  │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │  Service Worker (sw.js) ← Web Push ← VAPID                      │  │
@@ -71,10 +71,26 @@ Greenplot is an AI-powered second brain that closes the loop from *thought* to *
 * seeds table includes: last_visited, visit_count (for decay scoring)
 ```
 
-![Greenplot Architecture](./public/wiki-architecture.png)
+
 
 
 ## Core Concepts
+
+### Seed → Outcome Pipeline
+
+Greenplot is not only a memory store; it is a workflow system for moving ideas toward artifacts:
+
+```
+Seed ──→ Research Brief ──→ Spec / PRD ──→ Build Task ──→ Shipped
+  │             │                 │              │             │
+  │             │                 │              │             └── learning folded back into Wiki
+  │             │                 │              └── PR / implementation progress
+  │             │                 └── Studio artifact + coding-agent handoff
+  │             └── cited evidence from Garden + web + papers
+  └── raw idea, note, link, paper, or voice capture
+```
+
+The Workflows page makes that path explicit and adds operational surfaces for review: Research Inbox, relationship suggestions, wiki candidates, product/project spaces, and an insight timeline.
 
 ### Sources → Seeds → Wiki (The Full Pipeline)
 
@@ -163,6 +179,18 @@ The Studio turns thinking into shippable specs:
 - **Build pipeline:** drag PRDs across **Design → Doing → Built**; connected coding agents (via the MCP server / GitHub sync) report progress and PRs back.
 - **Product view:** one screen anchoring every PRD to the problem it serves, with an auto-refreshed **Design Vision** when canvas PRDs change.
 - **Drop a PDF** onto the canvas to ingest it; **PRD comments**; and **Canvas sharing** — invite collaborators by email (view-only in v1) with a cross-tenant access gate (`resolve_canvas_access`).
+
+### 🧭 Workflows — turn garden material into outcomes
+The Workflows page is the command center for moving raw material toward concrete decisions:
+
+- **Seed To Outcome Pipeline:** every seed is placed on a path from Seed → Research Brief → Spec/PRD → Build Task → Shipped, with next actions and history.
+- **Research Inbox:** pending thoughts, links, cached sources, and papers land in one review queue before entering the garden. Each item shows classification, suggested tags, duplicate signals, likely connections, and decision buttons: Keep, Connect, Seed, Wiki, Project, Discard.
+- **Relationship Suggestions:** AI-assisted "these belong together" recommendations across seeds, links, papers, wiki articles, and products, with actionable verbs like merge, link, cite, expand, archive.
+- **Wiki From Garden:** pick a topic, assemble supporting seeds/links, preview a cited article draft, then approve it into the wiki.
+- **Product/Project Spaces:** product seeds gather related specs, build work, shipped artifacts, and orphan PRDs into context-specific spaces without losing global search.
+- **Insight Timeline:** chronological signals for meaningful garden movement: research runs, shipped work, wiki candidates, connections, and rising topics.
+
+Review decisions are persisted through the existing `UserEvent` ledger, so the inbox can hide resolved items without adding a migration. Source data stays intact unless the action has a safe, explicit model change, such as marking a thought processed or archiving a discarded paper seed.
 
 ### 🔭 Deep Research agents (long-running, multi-source, durable)
 A background research system that connects the dots across your garden and the live literature, then hands you a cited brief — spec: [`docs/specs/deep-research-agents.md`](openclaw-api/docs/specs/deep-research-agents.md).
@@ -304,13 +332,13 @@ VAPID_PRIVATE_KEY_PATH=/app/.vapid_private.pem
 RESEND_API_KEY=<RESEND_API_KEY>              # Email digests (optional — disables email if unset)
 EMAIL_FROM=Greenplot <digest@greenplot.ink>   # Verified Resend sender (SPF/DKIM/DMARC)
 EXA_API_KEY=...                    # Web search + full-page contents (Deep Research / digest)
-GITHUB_TOKEN=ghp_...               # GitHub research source (higher rate limit; also Spec→Issue)
+GITHUB_TOKEN=<GITHUB_TOKEN>        # GitHub research source (higher rate limit; also Spec→Issue)
 DEEP_RESEARCH_MODEL=minimax/minimax-m3   # ≥1M-context synthesis model (override as needed)
 RESEARCH_DAILY_CAP=5               # Per-user deep-research runs/day (cost guard)
 RESEARCH_ENGINE=worker             # 'worker' (Redis) | 'temporal' (self-hosted, Phase 2)
 
 # Frontend (.env.local)
-NEXT_PUBLIC_VAPID_KEY=BMvL3eG7...
+NEXT_PUBLIC_VAPID_KEY=<NEXT_PUBLIC_VAPID_KEY>
 NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 ```
 
@@ -320,6 +348,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   ├── app/
 │   │   ├── chat/               # Chat page with source surfacing + activity summary
 │   │   ├── garden/             # Garden grid/list + intelligence + graph
+│   │   ├── workflows/          # Seed→Outcome, Research Inbox, relationships, wiki, spaces
 │   │   ├── links/              # Sources page + create seed bridge
 │   │   ├── settings/           # Push notifications, calendar, profile
 │   │   ├── wiki/               # Wiki browser + article view + concept maps
@@ -327,6 +356,11 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   │   └── api/
 │   │       ├── chat/           # AI streaming proxy (v1/v2)
 │   │       ├── seeds/          # Seed CRUD + search + graph + garden intel
+│   │       ├── research/inbox/ # Workflow inbox proxy + review actions
+│   │       ├── outcomes/       # Seed→Outcome workflow proxy
+│   │       ├── relationships/  # Relationship suggestion proxy
+│   │       ├── spaces/         # Product/project spaces proxy
+│   │       ├── insights/       # Insight timeline proxy
 │   │       ├── links/          # Source CRUD + enrichment
 │   │       ├── wiki/           # Wiki CRUD + auto-compile + image gen + concept maps
 │   │       ├── push/           # Web Push subscribe/send/notifications
@@ -359,6 +393,7 @@ NEXT_PUBLIC_API_URL=https://api.greenplot.ink
 │   │   ├── cache.py            # Redis cache layer
 │   │   ├── activity.py         # Activity feed (Redis sorted set)
 │   │   ├── links.py            # Source link CRUD + enrichment
+│   │   ├── workflows.py        # Outcome pipeline, inbox, relationships, wiki, spaces, timeline
 │   │   ├── database.py         # SQLAlchemy + PostgreSQL
 │   │   ├── models.py           # Seed, User, ChatSession, etc.
 │   │   ├── garden_health.py    # Decay scoring + health monitoring
@@ -419,6 +454,6 @@ Notifications are **artifacts, not prompts** — each delivers something you can
 - **Dark mode:** opt-in toggle via `.dark` class
 
 ## Status
-🟢 **Working:** Chat thinking partner (modes, corrective retrieval, citations, persistent history), **Deep Research agents** (7-source fan-out, full-text reading, 1M-context synthesis, cited briefs with embedded + PDF-attached papers, Garden launcher + Deep/Lite modes + brief→PRD + go-deeper + weekly opt-in + onboarding kick-off + live agent feed), Capture from anywhere (PDF drop + link/YouTube ingest in chat & Studio), Studio (Spec → PRD → Build pipeline, Product view, Design Vision, PRD comments), Canvas sharing (view-only), Multi-source Research Digest + full-text paper pipeline + Autopilot PRDs, MCP server (per-user keys, full-text paper reads), Garden + Intelligence + Knowledge graph + Visualization, Notifications suite (Today's Thread, Loose Threads, Garden Signals, Garden Story), Wiki (auto-compile, D3 maps), Web Push (+ auto-prune), Email (Resend, DMARC), invite links, password reset, GitHub repo sync, Calendar, Voice memos
+🟢 **Working:** Chat thinking partner (modes, corrective retrieval, citations, persistent history), **Workflows** (Seed→Outcome pipeline, Research Inbox review queue, relationship suggestions, Wiki From Garden, product/project spaces, insight timeline), **Deep Research agents** (7-source fan-out, full-text reading, 1M-context synthesis, cited briefs with embedded + PDF-attached papers, Garden launcher + Deep/Lite modes + brief→PRD + go-deeper + weekly opt-in + onboarding kick-off + live agent feed), Capture from anywhere (PDF drop + link/YouTube ingest in chat & Studio), Studio (Spec → PRD → Build pipeline, Product view, Design Vision, PRD comments), Canvas sharing (view-only), Multi-source Research Digest + full-text paper pipeline + Autopilot PRDs, MCP server (per-user keys, full-text paper reads), Garden + Intelligence + Knowledge graph + Visualization, Notifications suite (Today's Thread, Loose Threads, Garden Signals, Garden Story), Wiki (auto-compile, D3 maps), Web Push (+ auto-prune), Email (Resend, DMARC), invite links, password reset, GitHub repo sync, Calendar, Voice memos
 🟡 **Partial:** Canvas **editor** role (write access) — view-only shipped; **Deep Research Phase 2** (self-hosted Temporal) scaffolded + built behind `RESEARCH_ENGINE=temporal`, Phase 1 (Redis worker) is the default; YouTube without captions falls back to thin Exa text
 🔴 **Pending:** Sentry DSN (error monitoring wired, DSN unset), off-site backups (rclone), Impressum legal address; see `docs/IMPROVEMENTS.md` + `docs/POST-LAUNCH.md` for the full backlog
