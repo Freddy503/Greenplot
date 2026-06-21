@@ -122,6 +122,7 @@ def test_workflows_expose_ordered_product_surfaces():
         '@router.get("/outcomes")',
         '@router.get("/relationships/suggestions")',
         '@router.get("/research/inbox")',
+        '@router.post("/research/inbox/action")',
         '@router.get("/wiki/from-garden")',
         '@router.post("/wiki/from-garden/preview")',
         '@router.post("/wiki/from-garden/approve")',

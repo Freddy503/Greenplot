@@ -6,8 +6,11 @@ import { useRouter } from 'next/navigation'
 import {
   Activity,
   ArrowRight,
+  BookOpen,
   Boxes,
   CheckCircle2,
+  ExternalLink,
+  Filter,
   GitBranch,
   History,
   Inbox,
@@ -15,7 +18,10 @@ import {
   Link2,
   Loader2,
   Rocket,
+  Search,
   Sparkles,
+  Target,
+  Trash2,
 } from 'lucide-react'
 
 import Header from '@/components/layout/header'
@@ -77,6 +83,8 @@ type InboxItem = {
   classification: string
   suggested_tags: string[]
   duplicate_count: number
+  suggested_action?: string
+  priority?: string
   created_at?: string
   actions: string[]
   url?: string
@@ -136,6 +144,26 @@ const EMPTY_TIMELINE = {
   activity: [] as Array<{ week: string; count: number }>,
   summary: {} as Record<string, unknown>,
 }
+
+type InboxFilter = 'all' | 'thought' | 'link' | 'paper' | 'duplicates'
+type InboxDecision = 'keep' | 'connect' | 'turn_into_seed' | 'draft_wiki' | 'attach_to_project' | 'discard'
+
+const INBOX_FILTERS: Array<{ key: InboxFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'thought', label: 'Notes' },
+  { key: 'link', label: 'Links' },
+  { key: 'paper', label: 'Papers' },
+  { key: 'duplicates', label: 'Duplicates' },
+]
+
+const INBOX_ACTIONS: Array<{ key: InboxDecision; label: string; icon: ReactNode; tone: 'green' | 'neutral' | 'danger' }> = [
+  { key: 'keep', label: 'Keep', icon: <CheckCircle2 size={14} />, tone: 'green' },
+  { key: 'connect', label: 'Connect', icon: <Link2 size={14} />, tone: 'neutral' },
+  { key: 'turn_into_seed', label: 'Seed', icon: <Sparkles size={14} />, tone: 'green' },
+  { key: 'draft_wiki', label: 'Wiki', icon: <BookOpen size={14} />, tone: 'neutral' },
+  { key: 'attach_to_project', label: 'Project', icon: <Target size={14} />, tone: 'neutral' },
+  { key: 'discard', label: 'Discard', icon: <Trash2 size={14} />, tone: 'danger' },
+]
 
 const FEATURE_CARDS = [
   {
@@ -209,6 +237,23 @@ function timeLabel(value?: string) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+function inboxItemKey(item: InboxItem) {
+  return `${item.kind}:${item.id}`
+}
+
+function normalizeAction(action: string): InboxDecision | null {
+  const normalized = action.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  if (['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'discard'].includes(normalized)) {
+    return normalized as InboxDecision
+  }
+  return null
+}
+
+function inboxActionLabel(action?: string) {
+  const normalized = action ? normalizeAction(action) : null
+  return INBOX_ACTIONS.find(item => item.key === normalized)?.label || 'Review'
+}
+
 export default function WorkflowsPage() {
   const router = useRouter()
   const [outcomes, setOutcomes] = useState<OutcomesResponse | null>(null)
@@ -219,6 +264,10 @@ export default function WorkflowsPage() {
   const [timeline, setTimeline] = useState<{ events?: TimelineEvent[]; rising_topics?: Array<{ label: string; count: number }>; activity?: Array<{ week: string; count: number }>; summary?: Record<string, unknown>; error?: string }>(EMPTY_TIMELINE)
   const [loading, setLoading] = useState(true)
   const [activeStage, setActiveStage] = useState<string>('all')
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all')
+  const [selectedInboxKey, setSelectedInboxKey] = useState<string>('')
+  const [reviewedInbox, setReviewedInbox] = useState<Record<string, string>>({})
+  const [actingInboxKey, setActingInboxKey] = useState<string>('')
   const [draft, setDraft] = useState<WikiDraft | null>(null)
   const [draftingTopic, setDraftingTopic] = useState<string>('')
   const [publishing, setPublishing] = useState(false)
@@ -253,20 +302,67 @@ export default function WorkflowsPage() {
   const timelineEvents = arrayOrEmpty(timeline.events)
   const risingTopics = arrayOrEmpty(timeline.rising_topics)
   const topRelationships = sliceSafe(relationshipSuggestions, 0, 8)
-  const inboxPreview = sliceSafe(inboxItems, 0, 8)
+  const activeInboxItems = useMemo(() => inboxItems.filter(item => !reviewedInbox[inboxItemKey(item)]), [inboxItems, reviewedInbox])
+  const filteredInboxItems = useMemo(() => {
+    if (inboxFilter === 'all') return activeInboxItems
+    if (inboxFilter === 'duplicates') return activeInboxItems.filter(item => item.duplicate_count > 0)
+    if (inboxFilter === 'link') return activeInboxItems.filter(item => item.kind === 'link' || item.kind === 'link-cache')
+    return activeInboxItems.filter(item => item.kind === inboxFilter)
+  }, [activeInboxItems, inboxFilter])
+  const selectedInboxItem = filteredInboxItems.find(item => inboxItemKey(item) === selectedInboxKey) || filteredInboxItems[0] || null
+  const inboxStats = useMemo(() => ({
+    all: activeInboxItems.length,
+    thought: activeInboxItems.filter(item => item.kind === 'thought').length,
+    link: activeInboxItems.filter(item => item.kind === 'link' || item.kind === 'link-cache').length,
+    paper: activeInboxItems.filter(item => item.kind === 'paper').length,
+    duplicates: activeInboxItems.filter(item => item.duplicate_count > 0).length,
+  }), [activeInboxItems])
 
   const activeResearchCount = arrayOrEmpty(outcomes?.active_research).length
   const totals = useMemo(() => ([
     workflows.length,
     relationshipSuggestions.length,
-    inboxItems.length,
+    activeInboxItems.length,
     wikiTopics.length,
     projectSpaces.length,
     timelineEvents.length,
-  ]), [workflows.length, relationshipSuggestions.length, inboxItems.length, wikiTopics.length, projectSpaces.length, timelineEvents.length])
+  ]), [workflows.length, relationshipSuggestions.length, activeInboxItems.length, wikiTopics.length, projectSpaces.length, timelineEvents.length])
 
   function jumpToSection(sectionId: string) {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function routeAfterInboxAction(action: InboxDecision, seedId?: string) {
+    if (action === 'connect') jumpToSection('relationship-suggestions')
+    if (action === 'draft_wiki') jumpToSection('wiki-from-garden')
+    if (action === 'attach_to_project') jumpToSection('project-spaces')
+    if (action === 'turn_into_seed' && seedId) router.push(`/garden?seed=${seedId}`)
+  }
+
+  async function handleInboxAction(item: InboxItem, action: InboxDecision) {
+    const key = inboxItemKey(item)
+    setActingInboxKey(`${key}:${action}`)
+    try {
+      const res = await fetch('/api/research/inbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({
+          item_id: item.id,
+          kind: item.kind,
+          action,
+          title: item.title,
+          summary: item.summary || '',
+          url: item.url || '',
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setReviewedInbox(prev => ({ ...prev, [key]: action }))
+        routeAfterInboxAction(action, typeof json.seed_id === 'string' ? json.seed_id : undefined)
+      }
+    } finally {
+      setActingInboxKey('')
+    }
   }
 
   async function previewWiki(topic: WikiTopic) {
@@ -411,14 +507,19 @@ export default function WorkflowsPage() {
         </SectionBlock>
 
         <SectionBlock id="research-inbox">
-        <SectionHeader>Research Inbox</SectionHeader>
-        <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 8 }}>
-          {inboxPreview.length === 0 ? (
-            <CompactEmpty icon={<Inbox size={28} color="var(--ink-3)" />} title="Inbox is clear" />
-          ) : inboxPreview.map(item => (
-            <InboxRow key={`${item.kind}-${item.id}`} item={item} />
-          ))}
-        </div>
+        <SectionHeader action="Links" onAction={() => router.push('/links')}>Research Inbox</SectionHeader>
+        <InboxWorkbench
+          items={filteredInboxItems}
+          selectedItem={selectedInboxItem}
+          filter={inboxFilter}
+          stats={inboxStats}
+          relationships={relationshipSuggestions}
+          actingKey={actingInboxKey}
+          loading={loading}
+          onFilter={setInboxFilter}
+          onSelect={(item) => setSelectedInboxKey(inboxItemKey(item))}
+          onAction={handleInboxAction}
+        />
         </SectionBlock>
 
         <SectionBlock id="wiki-from-garden">
@@ -584,23 +685,222 @@ function SuggestionCard({ suggestion }: { suggestion: RelationshipSuggestion }) 
   )
 }
 
-function InboxRow({ item }: { item: InboxItem }) {
+function InboxWorkbench({
+  items,
+  selectedItem,
+  filter,
+  stats,
+  relationships,
+  actingKey,
+  loading,
+  onFilter,
+  onSelect,
+  onAction,
+}: {
+  items: InboxItem[]
+  selectedItem: InboxItem | null
+  filter: InboxFilter
+  stats: Record<InboxFilter, number>
+  relationships: RelationshipSuggestion[]
+  actingKey: string
+  loading: boolean
+  onFilter: (filter: InboxFilter) => void
+  onSelect: (item: InboxItem) => void
+  onAction: (item: InboxItem, action: InboxDecision) => void
+}) {
+  const related = selectedItem ? relatedSuggestionsForInbox(selectedItem, relationships) : []
   return (
-    <div style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 13, padding: 11 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-        <Inbox size={15} color="var(--green-700)" style={{ marginTop: 2, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 4 }}>
-            <Pill tone="neutral" size="xs">{item.kind}</Pill>
-            <Pill tone={item.duplicate_count > 0 ? 'amber' : 'green'} size="xs">{item.duplicate_count} dupes</Pill>
-            <Pill tone="ghost" size="xs">{item.status}</Pill>
+    <div className="v2-card" style={{ borderRadius: 20, padding: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Filter size={15} color="var(--green-700)" />
+            <span className="ui" style={{ fontSize: 12.5, fontWeight: 850, color: 'var(--ink)' }}>Review queue</span>
+            <Pill tone="neutral" size="xs">{stats.all} waiting</Pill>
           </div>
-          <h3 className="ui" style={{ margin: 0, fontSize: 12.5, fontWeight: 850, color: 'var(--ink)' }}>{item.title}</h3>
-          {item.summary && <ClampText>{item.summary}</ClampText>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(86px, 1fr))', gap: 7, marginBottom: 10 }}>
+            {INBOX_FILTERS.map(option => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onFilter(option.key)}
+                className="tap"
+                style={{ border: `1px solid ${filter === option.key ? 'var(--green-700)' : 'var(--hairline)'}`, background: filter === option.key ? 'var(--green-tint)' : 'var(--surface-sunk)', borderRadius: 11, padding: '8px 9px', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <div className="ui" style={{ fontSize: 10.5, fontWeight: 850, color: filter === option.key ? 'var(--green-700)' : 'var(--ink-3)' }}>{option.label}</div>
+                <div className="ui" style={{ fontSize: 16, color: 'var(--ink)', marginTop: 2 }}>{stats[option.key]}</div>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gap: 8, maxHeight: 520, overflow: 'auto', paddingRight: 2 }}>
+            {loading ? (
+              <div style={{ height: 180, borderRadius: 16, background: 'var(--surface-sunk)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+            ) : items.length === 0 ? (
+              <CompactEmpty icon={<Inbox size={28} color="var(--ink-3)" />} title="Inbox is clear" />
+            ) : items.map(item => (
+              <InboxQueueRow key={inboxItemKey(item)} item={item} active={selectedItem ? inboxItemKey(selectedItem) === inboxItemKey(item) : false} onClick={() => onSelect(item)} />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          {selectedItem ? (
+            <InboxDetail
+              item={selectedItem}
+              related={related}
+              actingKey={actingKey}
+              onAction={onAction}
+            />
+          ) : (
+            <div style={{ minHeight: 360, border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 16, padding: 20, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+              <div>
+                <Search size={30} color="var(--ink-3)" />
+                <div className="ui" style={{ marginTop: 8, fontSize: 13, fontWeight: 850, color: 'var(--ink)' }}>Nothing to review</div>
+                <p className="body-text" style={{ margin: '5px auto 0', maxWidth: 280, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45 }}>New links, papers, and raw notes will land here before they enter the garden.</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
+}
+
+function InboxQueueRow({ item, active, onClick }: { item: InboxItem; active: boolean; onClick: () => void }) {
+  const tags = arrayOrEmpty(item.suggested_tags)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={`research-inbox-item-${item.kind}-${item.id}`}
+      className="tap"
+      style={{ border: `1px solid ${active ? 'var(--green-700)' : 'var(--hairline)'}`, background: active ? 'var(--green-tint)' : 'var(--surface-sunk)', borderRadius: 13, padding: 11, textAlign: 'left', cursor: 'pointer' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Inbox size={15} color="var(--green-700)" style={{ marginTop: 2, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 4 }}>
+            <Pill tone="neutral" size="xs">{item.kind.replace('-', ' ')}</Pill>
+            <Pill tone={item.duplicate_count > 0 ? 'amber' : 'green'} size="xs">{item.duplicate_count} dupes</Pill>
+            {item.priority && <Pill tone="ghost" size="xs">{item.priority}</Pill>}
+          </div>
+          <h3 className="ui" style={{ margin: 0, fontSize: 12.5, fontWeight: 850, color: 'var(--ink)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</h3>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+            {sliceSafe(tags, 0, 3).map(tag => <Pill key={`${item.id}-${tag}`} tone="ghost" size="xs">{tag}</Pill>)}
+            {item.created_at && <span className="body-text" style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--ink-3)' }}>{timeLabel(item.created_at)}</span>}
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function InboxDetail({ item, related, actingKey, onAction }: { item: InboxItem; related: RelationshipSuggestion[]; actingKey: string; onAction: (item: InboxItem, action: InboxDecision) => void }) {
+  const tags = arrayOrEmpty(item.suggested_tags)
+  const allowedActions = new Set<InboxDecision>(arrayOrEmpty(item.actions).map(action => normalizeAction(action)).filter((action): action is InboxDecision => Boolean(action)))
+  for (const fallback of ['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'discard'] as InboxDecision[]) {
+    if (fallback === 'turn_into_seed' && item.kind === 'paper') continue
+    allowedActions.add(fallback)
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 16, padding: 14, minHeight: 360 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <IconBubble><Inbox size={18} color="var(--green-700)" /></IconBubble>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 6 }}>
+            <Pill tone="neutral" size="xs">{item.kind.replace('-', ' ')}</Pill>
+            <Pill tone="soft" size="xs">{item.classification}</Pill>
+            <Pill tone={item.duplicate_count > 0 ? 'amber' : 'green'} size="xs">{item.duplicate_count} dupes</Pill>
+            <Pill tone="ghost" size="xs">{item.status}</Pill>
+          </div>
+          <h3 className="ui" style={{ margin: 0, fontSize: 16, fontWeight: 900, color: 'var(--ink)', lineHeight: 1.25 }}>{item.title}</h3>
+          {item.summary && <p className="body-text" style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{item.summary}</p>}
+          {item.url && (
+            <a href={item.url} target="_blank" rel="noreferrer" className="ui" style={{ marginTop: 9, display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--green-700)', fontSize: 11.5, fontWeight: 800, textDecoration: 'none' }}>
+              Open source <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8, marginTop: 14 }}>
+        <DecisionMetric label="Suggested" value={inboxActionLabel(item.suggested_action)} />
+        <DecisionMetric label="Classification" value={item.classification || item.kind} />
+        <DecisionMetric label="Review age" value={timeLabel(item.created_at) || 'New'} />
+      </div>
+
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 13 }}>
+          {sliceSafe(tags, 0, 8).map(tag => <Pill key={`${item.id}-detail-${tag}`} tone="ghost" size="xs">{tag}</Pill>)}
+        </div>
+      )}
+
+      <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 15, paddingTop: 14 }}>
+        <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Decision" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: 8, marginTop: 10 }}>
+          {INBOX_ACTIONS.filter(action => allowedActions.has(action.key)).map(action => {
+            const busy = actingKey === `${inboxItemKey(item)}:${action.key}`
+            return (
+              <button
+                key={action.key}
+                type="button"
+                data-testid={`research-inbox-action-${action.key}`}
+                onClick={() => onAction(item, action.key)}
+                disabled={Boolean(actingKey)}
+                className="tap ui"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: `1px solid ${action.tone === 'green' ? 'var(--green-700)' : 'var(--hairline)'}`, background: action.tone === 'green' ? 'var(--green-tint)' : 'var(--surface)', color: action.tone === 'danger' ? '#9f1239' : 'var(--ink)', borderRadius: 12, padding: '10px 9px', fontSize: 11.5, fontWeight: 850, cursor: actingKey ? 'default' : 'pointer', opacity: actingKey && !busy ? 0.55 : 1 }}
+              >
+                {busy ? <Loader2 size={14} className="animate-spin" /> : action.icon}
+                {action.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 15, paddingTop: 14 }}>
+        <InlineTitle icon={<Link2 size={15} color="var(--green-700)" />} title="Likely connections" />
+        <div style={{ display: 'grid', gap: 7, marginTop: 10 }}>
+          {related.length === 0 ? (
+            <p className="body-text" style={{ margin: 0, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45 }}>No strong relationship suggestions yet. Keeping or seeding it will give the graph more to work with.</p>
+          ) : related.map(suggestion => (
+            <div key={`${item.id}-${suggestion.id}`} style={{ border: '1px solid var(--hairline)', background: 'var(--surface)', borderRadius: 12, padding: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                <Pill tone="green" size="xs">{suggestion.action}</Pill>
+                <span className="ui" style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--ink)' }}>{suggestion.source?.title || suggestion.target?.title}</span>
+              </div>
+              <p className="body-text" style={{ margin: '5px 0 0', fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>{suggestion.reason}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DecisionMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ border: '1px solid var(--hairline)', background: 'var(--surface)', borderRadius: 12, padding: 10, minHeight: 64 }}>
+      <div className="ui" style={{ fontSize: 10.5, fontWeight: 850, color: 'var(--ink-3)' }}>{label}</div>
+      <div className="ui" style={{ marginTop: 5, fontSize: 12.5, fontWeight: 850, color: 'var(--ink)', lineHeight: 1.25 }}>{value}</div>
+    </div>
+  )
+}
+
+function relatedSuggestionsForInbox(item: InboxItem, relationships: RelationshipSuggestion[]) {
+  const itemWords = new Set(`${item.title} ${item.summary || ''} ${arrayOrEmpty(item.suggested_tags).join(' ')}`.toLowerCase().match(/[a-z0-9]{3,}/g) || [])
+  return relationships
+    .map(suggestion => {
+      const haystack = `${suggestion.source?.title || ''} ${suggestion.target?.title || ''} ${suggestion.reason || ''} ${arrayOrEmpty(suggestion.evidence).join(' ')}`.toLowerCase()
+      const score = Array.from(itemWords).reduce((sum, word) => sum + (haystack.includes(word) ? 1 : 0), 0)
+      return { suggestion, score }
+    })
+    .filter(item => item.score >= 2)
+    .sort((a, b) => b.score - a.score || b.suggestion.confidence - a.suggestion.confidence)
+    .slice(0, 3)
+    .map(item => item.suggestion)
 }
 
 function SpaceCard({ space }: { space: ProjectSpace }) {
