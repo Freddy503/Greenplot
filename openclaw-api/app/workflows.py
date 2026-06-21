@@ -42,8 +42,48 @@ class WikiApproveRequest(WikiDraftRequest):
     content: str = Field(..., min_length=20)
 
 
+class ResearchInboxActionRequest(BaseModel):
+    item_id: str = Field(..., min_length=1, max_length=200)
+    kind: str = Field(..., min_length=1, max_length=40)
+    action: str = Field(..., min_length=2, max_length=40)
+    title: str | None = Field(default=None, max_length=500)
+    summary: str | None = Field(default=None, max_length=4000)
+    url: str | None = Field(default=None, max_length=2000)
+
+
+RESOLVED_INBOX_ACTIONS = {
+    "keep",
+    "turn_into_seed",
+    "draft_wiki",
+    "attach_to_project",
+    "discard",
+}
+
+
 def _iso(dt):
     return dt.isoformat() if dt else None
+
+
+def _normalize_inbox_action(action: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", (action or "").strip().lower()).strip("_")
+
+
+def _inbox_key(kind: str, item_id: str) -> str:
+    return f"{kind}:{item_id}"
+
+
+def _reviewed_inbox_keys(current_user: User, db: Session) -> set[str]:
+    events = db.query(UserEvent).filter(
+        UserEvent.user_id == current_user.id,
+        UserEvent.event == "research_inbox_reviewed",
+    ).order_by(UserEvent.created_at.desc()).limit(2000).all()
+    reviewed = set()
+    for event in events:
+        meta = event.meta or {}
+        action = _normalize_inbox_action(meta.get("action", ""))
+        if action in RESOLVED_INBOX_ACTIONS:
+            reviewed.add(_inbox_key(str(meta.get("kind", "")), str(meta.get("item_id", ""))))
+    return reviewed
 
 
 def _clean_words(text: str) -> set[str]:
@@ -390,6 +430,7 @@ def relationship_suggestions(current_user: User = Depends(get_current_user), db:
 @router.get("/research/inbox")
 def research_inbox(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     tenant_id = str(current_user.tenant_id)
+    reviewed_keys = _reviewed_inbox_keys(current_user, db)
     thoughts = db.query(Thought).filter(
         Thought.tenant_id == current_user.tenant_id,
         Thought.status.in_(["pending", "processing", "error"]),
@@ -408,10 +449,13 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
     known_domains = Counter(_meta(seed).get("domain") for seed in seeds if _meta(seed).get("domain"))
 
     for thought in thoughts:
+        if _inbox_key("thought", str(thought.id)) in reviewed_keys:
+            continue
         words = _clean_words(thought.content)
         tags = sorted(list(words))[:5]
         classification = "voice note" if thought.source == "voice" else "raw note"
         duplicate_count = sum(1 for seed in seeds if len(words & _seed_words(seed)) >= 5)
+        suggested_action = "connect" if duplicate_count else "turn_into_seed"
         items.append({
             "id": str(thought.id),
             "kind": "thought",
@@ -421,16 +465,21 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "classification": classification,
             "suggested_tags": tags,
             "duplicate_count": duplicate_count,
+            "suggested_action": suggested_action,
+            "priority": "high" if thought.status == "error" else ("medium" if duplicate_count else "normal"),
             "created_at": _iso(thought.created_at),
-            "actions": ["keep", "connect", "turn into seed", "discard"],
+            "actions": ["keep", "connect", "turn into seed", "draft wiki", "discard"],
         })
 
     for link in links:
         status = link.get("status", "")
         if status not in {"pending", "queued", "error", "unread", ""}:
             continue
+        if _inbox_key("link", str(link.get("id"))) in reviewed_keys:
+            continue
         domain = link.get("domain") or _domain_from_url(link.get("url", ""))
         duplicate_count = int(bool(link.get("garden_seed_id"))) + known_domains.get(domain, 0)
+        suggested_action = "connect" if duplicate_count else "turn_into_seed"
         items.append({
             "id": link.get("id"),
             "kind": "link",
@@ -440,15 +489,21 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "classification": "research link",
             "suggested_tags": _tag_list(link.get("tags"))[:5] or ([domain] if domain else []),
             "duplicate_count": duplicate_count,
+            "suggested_action": suggested_action,
+            "priority": "high" if status == "error" else ("medium" if duplicate_count else "normal"),
             "created_at": link.get("addedAt") or link.get("created_at"),
-            "actions": ["keep", "connect", "turn into seed", "discard"],
+            "actions": ["keep", "connect", "turn into seed", "draft wiki", "discard"],
             "url": link.get("url", ""),
         })
 
     for cached in cached_links:
+        if _inbox_key("link-cache", str(cached.id)) in reviewed_keys:
+            continue
         title_key = re.sub(r"\W+", " ", (cached.title or cached.url or "").lower()).strip()
         if cached.summary and cached.starred:
             continue
+        duplicate_count = known_titles.get(title_key, 0)
+        suggested_action = "connect" if duplicate_count else "keep"
         items.append({
             "id": str(cached.id),
             "kind": "link-cache",
@@ -457,9 +512,11 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "status": "needs review",
             "classification": cached.domain or "saved source",
             "suggested_tags": _tag_list(cached.tags)[:5] or ([cached.domain] if cached.domain else []),
-            "duplicate_count": known_titles.get(title_key, 0),
+            "duplicate_count": duplicate_count,
+            "suggested_action": suggested_action,
+            "priority": "medium" if duplicate_count else "normal",
             "created_at": _iso(cached.created_at),
-            "actions": ["keep", "connect", "turn into seed", "discard"],
+            "actions": ["keep", "connect", "turn into seed", "draft wiki", "discard"],
             "url": cached.url,
         })
 
@@ -468,9 +525,12 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
         if (seed.seed_type == "paper" or _meta(seed).get("paper_url") or _meta(seed).get("parse_status") in {"queued", "parsing", "failed"})
     ]
     for paper in paper_seeds[:40]:
+        if _inbox_key("paper", str(paper.id)) in reviewed_keys:
+            continue
         meta = _meta(paper)
         if meta.get("parse_status") in {"parsed", "complete"} and meta.get("summary"):
             continue
+        duplicate_count = sum(1 for seed in seeds if seed.id != paper.id and len(_seed_words(seed) & _seed_words(paper)) >= 6)
         items.append({
             "id": str(paper.id),
             "kind": "paper",
@@ -479,9 +539,11 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "status": meta.get("parse_status") or "needs parse",
             "classification": "paper",
             "suggested_tags": _tag_list(meta.get("tags"))[:5] or ["paper"],
-            "duplicate_count": sum(1 for seed in seeds if seed.id != paper.id and len(_seed_words(seed) & _seed_words(paper)) >= 6),
+            "duplicate_count": duplicate_count,
+            "suggested_action": "connect" if duplicate_count else "keep",
+            "priority": "high" if meta.get("parse_status") == "failed" else ("medium" if duplicate_count else "normal"),
             "created_at": _iso(paper.created_at),
-            "actions": ["keep", "connect", "turn into seed", "discard"],
+            "actions": ["keep", "connect", "draft wiki", "discard"],
         })
 
     items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
@@ -494,6 +556,132 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "papers": sum(1 for item in items if item["kind"] == "paper"),
             "duplicates": sum(1 for item in items if item.get("duplicate_count", 0) > 0),
         },
+    }
+
+
+@router.post("/research/inbox/action")
+def research_inbox_action(payload: ResearchInboxActionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    action = _normalize_inbox_action(payload.action)
+    kind = payload.kind.strip().lower()
+    if action not in {"keep", "connect", "turn_into_seed", "draft_wiki", "attach_to_project", "discard"}:
+        raise HTTPException(status_code=400, detail="Unsupported inbox action")
+
+    seed_id = None
+    title = (payload.title or "Untitled inbox item").strip()[:500]
+    summary = (payload.summary or "").strip()
+
+    if kind == "thought":
+        try:
+            thought_id = uuid.UUID(payload.item_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid thought id") from exc
+        thought = db.query(Thought).filter(
+            Thought.id == thought_id,
+            Thought.tenant_id == current_user.tenant_id,
+        ).first()
+        if not thought:
+            raise HTTPException(status_code=404, detail="Thought not found")
+        if action == "turn_into_seed":
+            seed = Seed(
+                tenant_id=current_user.tenant_id,
+                user_id=current_user.id,
+                thought_id=thought.id,
+                title=title or thought.content[:80] or "Inbox seed",
+                content=thought.content,
+                embedding_ref="",
+                seed_type="idea",
+                created_by="human",
+                created_via="research_inbox",
+                seed_metadata={
+                    "source": "research_inbox",
+                    "summary": summary or thought.content[:220],
+                    "tags": [],
+                    "inbox_item_id": str(thought.id),
+                },
+            )
+            db.add(seed)
+            db.flush()
+            seed_id = str(seed.id)
+            thought.status = "processed"
+            thought.processed_at = datetime.utcnow()
+        elif action == "discard":
+            thought.status = "processed"
+            thought.processed_at = datetime.utcnow()
+            thought.error_message = "Dismissed from Research Inbox"
+
+    elif kind == "link-cache":
+        try:
+            link_cache_id = uuid.UUID(payload.item_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid link cache id") from exc
+        link = db.query(LinkCache).filter(
+            LinkCache.id == link_cache_id,
+            LinkCache.tenant_id == current_user.tenant_id,
+        ).first()
+        if not link:
+            raise HTTPException(status_code=404, detail="Link cache item not found")
+        if action in {"keep", "turn_into_seed"}:
+            link.starred = True
+        if action == "turn_into_seed":
+            seed = Seed(
+                tenant_id=current_user.tenant_id,
+                user_id=current_user.id,
+                title=title or link.title or link.url,
+                content=f"Source: {link.url}\n\n{summary or link.summary or ''}".strip(),
+                embedding_ref="",
+                seed_type="paper",
+                created_by="human",
+                created_via="research_inbox",
+                seed_metadata={
+                    "source": "research_inbox",
+                    "source_url": link.url,
+                    "domain": link.domain or _domain_from_url(link.url),
+                    "summary": summary or link.summary or "",
+                    "tags": _tag_list(link.tags),
+                    "inbox_item_id": str(link.id),
+                },
+            )
+            db.add(seed)
+            db.flush()
+            seed_id = str(seed.id)
+
+    elif kind == "paper":
+        try:
+            paper_id = uuid.UUID(payload.item_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid paper id") from exc
+        paper = db.query(Seed).filter(
+            Seed.id == paper_id,
+            Seed.tenant_id == current_user.tenant_id,
+        ).first()
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper seed not found")
+        meta = _meta(paper)
+        meta["research_inbox_action"] = action
+        meta["research_inbox_reviewed_at"] = datetime.utcnow().isoformat()
+        paper.seed_metadata = meta
+        if action == "discard":
+            paper.archived = True
+
+    db.add(UserEvent(
+        user_id=current_user.id,
+        event="research_inbox_reviewed",
+        meta={
+            "kind": kind,
+            "item_id": payload.item_id,
+            "action": action,
+            "title": title,
+            "url": payload.url or "",
+            "seed_id": seed_id,
+        },
+    ))
+    db.commit()
+    return {
+        "ok": True,
+        "action": action,
+        "resolved": action in RESOLVED_INBOX_ACTIONS,
+        "seed_id": seed_id,
+        "message": "Inbox decision recorded",
     }
 
 
