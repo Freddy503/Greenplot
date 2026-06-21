@@ -137,13 +137,43 @@ const EMPTY_TIMELINE = {
   summary: {} as Record<string, unknown>,
 }
 
-const FEATURE_ORDER = [
-  'Seed To Outcome Pipeline',
-  'Relationship Suggestions',
-  'Research Inbox',
-  'Wiki From Garden',
-  'Product/Project Spaces',
-  'Insight Timeline',
+const FEATURE_CARDS = [
+  {
+    id: 'workflow-pipeline',
+    label: 'Seed To Outcome Pipeline',
+    metric: 'Active paths',
+    outcome: 'Move ideas toward shipped artifacts',
+  },
+  {
+    id: 'relationship-suggestions',
+    label: 'Relationship Suggestions',
+    metric: 'Suggested links',
+    outcome: 'Connect related garden material',
+  },
+  {
+    id: 'research-inbox',
+    label: 'Research Inbox',
+    metric: 'Waiting review',
+    outcome: 'Triage links, papers, and notes',
+  },
+  {
+    id: 'wiki-from-garden',
+    label: 'Wiki From Garden',
+    metric: 'Draft candidates',
+    outcome: 'Turn clusters into cited pages',
+  },
+  {
+    id: 'project-spaces',
+    label: 'Product/Project Spaces',
+    metric: 'Spaces',
+    outcome: 'Keep product work in context',
+  },
+  {
+    id: 'insight-timeline',
+    label: 'Insight Timeline',
+    metric: 'Signals',
+    outcome: 'Track themes and repeated moves',
+  },
 ]
 
 function authHeader(): Record<string, string> {
@@ -235,6 +265,10 @@ export default function WorkflowsPage() {
     timelineEvents.length,
   ]), [workflows.length, relationshipSuggestions.length, inboxItems.length, wikiTopics.length, projectSpaces.length, timelineEvents.length])
 
+  function jumpToSection(sectionId: string) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   async function previewWiki(topic: WikiTopic) {
     setDraftingTopic(topic.topic)
     setDraft(null)
@@ -271,17 +305,26 @@ export default function WorkflowsPage() {
   }
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh', overflowX: 'hidden' }}>
+    <div style={{ background: 'var(--bg)', height: '100dvh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <Header />
 
-      <main className="desk-wrap" style={{ padding: '24px 18px 120px' }}>
+      <main data-testid="workflows-scroll" className="desk-wrap" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', padding: '24px 18px max(136px, calc(env(safe-area-inset-bottom, 0px) + 118px))', scrollBehavior: 'smooth' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
           <div style={{ minWidth: 260 }}>
             <Pill tone="green" size="xs">WORKFLOWS</Pill>
             <h1 className="serif" style={{ fontSize: 36, color: 'var(--ink)', margin: '10px 0 6px', lineHeight: 1.05 }}>From idea to artifact</h1>
             <p className="body-text" style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 620, lineHeight: 1.55 }}>
-              The ordered operating layer for Greenplot: outcomes, relationships, inbox, wiki drafting, project spaces, and the living timeline.
+              The workbench for turning garden material into decisions: move seeds through the pipeline, connect related sources, clear research intake, draft wiki pages, group product spaces, and watch repeated themes.
             </p>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>
+              <Pill tone="soft" size="xs">Seed</Pill>
+              <ArrowRight size={13} color="var(--ink-3)" style={{ marginTop: 2 }} />
+              <Pill tone="soft" size="xs">Brief</Pill>
+              <ArrowRight size={13} color="var(--ink-3)" style={{ marginTop: 2 }} />
+              <Pill tone="soft" size="xs">Spec</Pill>
+              <ArrowRight size={13} color="var(--ink-3)" style={{ marginTop: 2 }} />
+              <Pill tone="green" size="xs">Shipped</Pill>
+            </div>
           </div>
           <button
             onClick={loadAll}
@@ -294,19 +337,32 @@ export default function WorkflowsPage() {
         </div>
 
         <div className="v2-card" style={{ borderRadius: 20, padding: 14, marginBottom: 18 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8 }}>
-            {FEATURE_ORDER.map((feature, index) => (
-              <div key={feature} style={{ border: '1px solid var(--hairline)', background: index === 0 ? 'var(--green-tint)' : 'var(--surface-sunk)', borderRadius: 13, padding: '10px 9px', minHeight: 78 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 8 }}>
+            {FEATURE_CARDS.map((feature, index) => (
+              <button
+                key={feature.id}
+                type="button"
+                aria-label={`View ${feature.label}`}
+                data-testid={`workflow-kpi-${feature.id}`}
+                onClick={() => jumpToSection(feature.id)}
+                className="tap"
+                style={{ border: '1px solid var(--hairline)', background: index === 0 ? 'var(--green-tint)' : 'var(--surface-sunk)', borderRadius: 13, padding: '11px 10px', minHeight: 118, cursor: 'pointer', textAlign: 'left', display: 'grid', alignContent: 'space-between', gap: 8 }}
+              >
                 <div className="ui" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontSize: 10, fontWeight: 900, color: index === 0 ? 'var(--green-700)' : 'var(--ink-3)' }}>{String(index + 1).padStart(2, '0')}</span>
                   <span style={{ fontSize: 18, color: 'var(--ink)', lineHeight: 1 }}>{totals[index]}</span>
                 </div>
-                <div className="ui" style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--ink)', lineHeight: 1.25, marginTop: 7 }}>{feature}</div>
-              </div>
+                <div>
+                  <div className="ui" style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--ink)', lineHeight: 1.25 }}>{feature.label}</div>
+                  <div className="body-text" style={{ fontSize: 10.5, color: 'var(--green-700)', fontWeight: 700, marginTop: 4 }}>{feature.metric}</div>
+                  <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.35, marginTop: 4 }}>{feature.outcome}</div>
+                </div>
+              </button>
             ))}
           </div>
         </div>
 
+        <SectionBlock id="workflow-pipeline">
         <SectionHeader action="New spec" onAction={() => router.push('/chat?mode=spec')}>Seed To Outcome Pipeline</SectionHeader>
         <div className="v2-card" style={{ borderRadius: 20, padding: 16, marginBottom: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(98px, 1fr))', gap: 8 }}>
@@ -341,7 +397,9 @@ export default function WorkflowsPage() {
             ))}
           </div>
         )}
+        </SectionBlock>
 
+        <SectionBlock id="relationship-suggestions">
         <SectionHeader>Relationship Suggestions</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
           {topRelationships.length === 0 ? (
@@ -350,7 +408,9 @@ export default function WorkflowsPage() {
             <SuggestionCard key={suggestion.id} suggestion={suggestion} />
           ))}
         </div>
+        </SectionBlock>
 
+        <SectionBlock id="research-inbox">
         <SectionHeader>Research Inbox</SectionHeader>
         <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 8 }}>
           {inboxPreview.length === 0 ? (
@@ -359,7 +419,9 @@ export default function WorkflowsPage() {
             <InboxRow key={`${item.kind}-${item.id}`} item={item} />
           ))}
         </div>
+        </SectionBlock>
 
+        <SectionBlock id="wiki-from-garden">
         <SectionHeader>Wiki From Garden</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 9 }}>
@@ -396,13 +458,17 @@ export default function WorkflowsPage() {
             )}
           </div>
         </div>
+        </SectionBlock>
 
+        <SectionBlock id="project-spaces">
         <SectionHeader>Product/Project Spaces</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
           {sliceSafe(projectSpaces, 0, 8).map(space => <SpaceCard key={space.id} space={space} />)}
           {projectSpaces.length === 0 && <EmptyState icon={<Boxes size={32} color="var(--ink-3)" strokeWidth={1.35} />} title="No project spaces yet" text="Product seeds will become spaces once related specs and build tasks appear." />}
         </div>
+        </SectionBlock>
 
+        <SectionBlock id="insight-timeline">
         <SectionHeader>Insight Timeline</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 0.8fr) minmax(0, 1.4fr)', gap: 10 }}>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, alignSelf: 'start' }}>
@@ -417,10 +483,19 @@ export default function WorkflowsPage() {
             {timelineEvents.length === 0 && <CompactEmpty icon={<Activity size={28} color="var(--ink-3)" />} title="Timeline is quiet" />}
           </div>
         </div>
+        </SectionBlock>
       </main>
 
       <BottomNav />
     </div>
+  )
+}
+
+function SectionBlock({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <section id={id} style={{ scrollMarginTop: 18, marginBottom: 18 }}>
+      {children}
+    </section>
   )
 }
 
