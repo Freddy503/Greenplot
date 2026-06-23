@@ -6,7 +6,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Users, Sprout, FileText, Cpu, Send, Link2, Copy, Check } from 'lucide-react'
+import { Users, Sprout, FileText, Cpu, Send, Link2, Copy, Check, ShieldAlert, RefreshCw } from 'lucide-react'
 
 interface AdminUser {
   email: string
@@ -30,6 +30,13 @@ interface AdminStats {
   waitlist_count?: number
   invite_code?: string
   app_url?: string
+}
+
+type AdminAccessIssue = {
+  status: number
+  title: string
+  detail: string
+  email?: string
 }
 
 // Rough blended $/M tokens for the configured chat model — an estimate for
@@ -108,17 +115,60 @@ function InviteLinkCard({ code, appUrl }: { code?: string; appUrl?: string }) {
 export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'denied'>('loading')
+  const [accessIssue, setAccessIssue] = useState<AdminAccessIssue | null>(null)
   const [inviting, setInviting] = useState<string | null>(null) // email being invited, or 'all'
   const [activity, setActivity] = useState<{ total_users: number; active_7d: number; users: Array<{ email: string; nickname: string | null; created_at: string | null; last_active_at: string | null; active_7d: boolean; seeds: number; events: Record<string, number> }> } | null>(null)
 
   const loadStats = useCallback(async () => {
     const token = localStorage.getItem('greenplot_token') || ''
+    setAccessIssue(null)
+    if (!token) {
+      setStats(null)
+      setAccessIssue({
+        status: 401,
+        title: 'Sign in required',
+        detail: 'The operator dashboard needs an active Greenplot session.',
+      })
+      setState('denied')
+      return
+    }
     try {
       const r = await fetch('/api/admin/stats', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      if (!r.ok) { setState('denied'); return }
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}))
+        const profile = await fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } }).then(res => res.ok ? res.json() : null).catch(() => null)
+        const email = typeof profile?.email === 'string' ? profile.email : undefined
+        const detail = typeof data?.detail === 'string' ? data.detail : typeof data?.error === 'string' ? data.error : ''
+        setStats(null)
+        setAccessIssue({
+          status: r.status,
+          title: r.status === 401
+            ? 'Session expired'
+            : r.status === 503
+              ? 'Admin access is not configured'
+              : r.status === 502
+                ? 'Backend unreachable'
+                : 'Admin allow-list mismatch',
+          detail: r.status === 404
+            ? 'This signed-in account is not currently allowed by the backend admin list.'
+            : detail || 'The dashboard could not be opened.',
+          email,
+        })
+        setState('denied')
+        return
+      }
       setStats(await r.json())
+      setAccessIssue(null)
       setState('ok')
-    } catch { setState('denied') }
+    } catch {
+      setStats(null)
+      setAccessIssue({
+        status: 502,
+        title: 'Backend unreachable',
+        detail: 'The app could not reach the admin API. Try again after the backend deploy finishes.',
+      })
+      setState('denied')
+    }
     // Activity (retention) — best-effort
     fetch('/api/admin/activity', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.ok ? r.json() : null).then(d => { if (d?.users) setActivity(d) }).catch(() => {})
@@ -156,8 +206,34 @@ export default function AdminPage() {
     </div>
   }
   if (state === 'denied' || !stats) {
-    return <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span className="body-text" style={{ color: 'var(--ink-3)', fontSize: 13 }}>Nothing here.</span>
+    const issue = accessIssue || { status: 404, title: 'Admin unavailable', detail: 'The dashboard could not be opened.' }
+    return <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+      <div className="v2-card" style={{ width: 'min(100%, 520px)', borderRadius: 20, padding: 20 }}>
+        <span style={{ width: 42, height: 42, borderRadius: 14, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+          <ShieldAlert size={20} color="var(--green-700)" strokeWidth={1.8} />
+        </span>
+        <div className="ui" style={{ fontSize: 18, fontWeight: 850, color: 'var(--ink)' }}>{issue.title}</div>
+        <p className="body-text" style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--ink-2)', margin: '8px 0 0' }}>{issue.detail}</p>
+        {issue.email && (
+          <div className="body-text" style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-3)' }}>
+            Signed in as <span className="ui" style={{ fontWeight: 800, color: 'var(--ink)' }}>{issue.email}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+          <button onClick={loadStats} className="tap ui" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: '1px solid var(--green-700)', background: 'var(--green-tint)', color: 'var(--green-700)', borderRadius: 9999, padding: '9px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+            <RefreshCw size={13} strokeWidth={2} />
+            Retry
+          </button>
+          <button onClick={() => { localStorage.removeItem('greenplot_token'); window.location.href = '/login' }} className="tap ui" style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', color: 'var(--ink)', borderRadius: 9999, padding: '9px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+            Sign in again
+          </button>
+        </div>
+        {issue.status === 404 && (
+          <p className="body-text" style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+            Server fix: add this email to <span className="ui" style={{ fontWeight: 800 }}>ADMIN_EMAILS</span> in the backend environment, then rebuild.
+          </p>
+        )}
+      </div>
     </div>
   }
 

@@ -352,6 +352,7 @@ function GardenReviewPanel({ onOpenSeed }: { onOpenSeed: (seedId: string) => voi
   const [review, setReview] = useState<GardenReview | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const authHeader = useCallback((): Record<string, string> => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
@@ -393,21 +394,32 @@ function GardenReviewPanel({ onOpenSeed }: { onOpenSeed: (seedId: string) => voi
             <Sparkles size={16} color="var(--green-700)" strokeWidth={1.75} />
           </span>
           <div style={{ minWidth: 0 }}>
-            <div className="ui" style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>Garden Review</div>
+            <div className="ui" style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>Today in the garden</div>
             <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Daily tending, inbox, relationships, outcomes, wiki, spaces, and timeline
+              The next few things worth tending
             </div>
           </div>
         </div>
-        <button
-          onClick={() => loadReview(true)}
-          disabled={refreshing}
-          className="tap"
-          title="Refresh review"
-          style={{ width: 34, height: 34, borderRadius: 9999, border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: refreshing ? 'default' : 'pointer', flexShrink: 0 }}
-        >
-          <RefreshCw size={15} color="var(--ink-2)" strokeWidth={1.75} className={refreshing ? 'animate-spin' : ''} />
-        </button>
+        <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+          {hasReview && (
+            <button
+              onClick={() => setExpanded(value => !value)}
+              className="tap ui"
+              style={{ border: '1px solid var(--hairline)', background: expanded ? 'var(--green-tint)' : 'var(--surface-sunk)', color: expanded ? 'var(--green-700)' : 'var(--ink-2)', borderRadius: 9999, padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
+            >
+              {expanded ? 'Hide' : 'Details'}
+            </button>
+          )}
+          <button
+            onClick={() => loadReview(true)}
+            disabled={refreshing}
+            className="tap"
+            title="Refresh review"
+            style={{ width: 34, height: 34, borderRadius: 9999, border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: refreshing ? 'default' : 'pointer', flexShrink: 0 }}
+          >
+            <RefreshCw size={15} color="var(--ink-2)" strokeWidth={1.75} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -436,7 +448,7 @@ function GardenReviewPanel({ onOpenSeed }: { onOpenSeed: (seedId: string) => voi
 
           {review.next_actions.length > 0 && (
             <div style={{ display: 'grid', gap: 7, marginBottom: 14 }}>
-              {review.next_actions.map(action => (
+              {review.next_actions.slice(0, 2).map(action => (
                 <button
                   key={action.label}
                   onClick={() => openHref(action.href)}
@@ -454,102 +466,106 @@ function GardenReviewPanel({ onOpenSeed }: { onOpenSeed: (seedId: string) => voi
             </div>
           )}
 
-          <ReviewBlock title="Daily Tending" icon={<Leaf size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            {review.daily_tending.length === 0 ? (
-              <EmptyReviewLine text="Nothing urgent today" />
-            ) : review.daily_tending.slice(0, 5).map(item => (
-              <ReviewRow
-                key={`${item.kind}-${item.seed_id || item.title}`}
-                title={item.title}
-                body={item.body}
-                pill={item.priority || item.kind}
-                onClick={() => item.seed_id ? onOpenSeed(item.seed_id) : openHref(item.href)}
-              />
-            ))}
-          </ReviewBlock>
+          {expanded && (
+            <>
+              <ReviewBlock title="Daily Tending" icon={<Leaf size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                {review.daily_tending.length === 0 ? (
+                  <EmptyReviewLine text="Nothing urgent today" />
+                ) : review.daily_tending.slice(0, 4).map(item => (
+                  <ReviewRow
+                    key={`${item.kind}-${item.seed_id || item.title}`}
+                    title={item.title}
+                    body={item.body}
+                    pill={item.priority || item.kind}
+                    onClick={() => item.seed_id ? onOpenSeed(item.seed_id) : openHref(item.href)}
+                  />
+                ))}
+              </ReviewBlock>
 
-          <ReviewBlock title="Research Inbox" icon={<Inbox size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            <MetricRow label="Pending links" value={pendingLinks} onClick={() => router.push('/links')} />
-            <MetricRow label="Raw seeds" value={rawSeeds} onClick={() => rawSeeds && onOpenSeed(review.inbox.raw_seeds[0].id)} />
-            <MetricRow label="Pending thoughts" value={pendingThoughts} />
-          </ReviewBlock>
+              <ReviewBlock title="Research Inbox" icon={<Inbox size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                <MetricRow label="Pending links" value={pendingLinks} onClick={() => router.push('/links')} />
+                <MetricRow label="Raw seeds" value={rawSeeds} onClick={() => rawSeeds && onOpenSeed(review.inbox.raw_seeds[0].id)} />
+                <MetricRow label="Pending thoughts" value={pendingThoughts} />
+              </ReviewBlock>
 
-          <ReviewBlock title="Relationship Suggestions" icon={<GitBranch size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            {review.relationships.length === 0 ? (
-              <EmptyReviewLine text="No relationship suggestions yet" />
-            ) : review.relationships.slice(0, 4).map(rel => (
-              <ReviewRow
-                key={`${rel.source.id}-${rel.target.id}-${rel.relationship}`}
-                title={`${rel.source.title} ↔ ${rel.target.title}`}
-                body={rel.suggestion}
-                pill={rel.relationship.replace(/_/g, ' ')}
-                onClick={() => onOpenSeed(rel.source.id)}
-              />
-            ))}
-          </ReviewBlock>
+              <ReviewBlock title="Relationship Suggestions" icon={<GitBranch size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                {review.relationships.length === 0 ? (
+                  <EmptyReviewLine text="No relationship suggestions yet" />
+                ) : review.relationships.slice(0, 3).map(rel => (
+                  <ReviewRow
+                    key={`${rel.source.id}-${rel.target.id}-${rel.relationship}`}
+                    title={`${rel.source.title} ↔ ${rel.target.title}`}
+                    body={rel.suggestion}
+                    pill={rel.relationship.replace(/_/g, ' ')}
+                    onClick={() => onOpenSeed(rel.source.id)}
+                  />
+                ))}
+              </ReviewBlock>
 
-          <ReviewBlock title="Seed To Outcome" icon={<Target size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 6 }}>
-              {review.pipeline.map(stage => (
-                <button
-                  key={stage.stage}
-                  onClick={() => stage.items[0]?.id ? onOpenSeed(stage.items[0].id) : undefined}
-                  className="tap"
-                  style={{ minHeight: 54, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 11, padding: 8, cursor: stage.items[0] ? 'pointer' : 'default', textAlign: 'left' }}
-                >
-                  <div className="ui" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stage.label}</div>
-                  <div className="serif" style={{ fontSize: 20, lineHeight: 1, color: 'var(--ink)', marginTop: 4 }}>{stage.count}</div>
-                </button>
-              ))}
-            </div>
-          </ReviewBlock>
+              <ReviewBlock title="Seed To Outcome" icon={<Target size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 6 }}>
+                  {review.pipeline.map(stage => (
+                    <button
+                      key={stage.stage}
+                      onClick={() => stage.items[0]?.id ? onOpenSeed(stage.items[0].id) : undefined}
+                      className="tap"
+                      style={{ minHeight: 54, background: 'var(--surface-sunk)', border: '1px solid var(--hairline)', borderRadius: 11, padding: 8, cursor: stage.items[0] ? 'pointer' : 'default', textAlign: 'left' }}
+                    >
+                      <div className="ui" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stage.label}</div>
+                      <div className="serif" style={{ fontSize: 20, lineHeight: 1, color: 'var(--ink)', marginTop: 4 }}>{stage.count}</div>
+                    </button>
+                  ))}
+                </div>
+              </ReviewBlock>
 
-          <ReviewBlock title="Wiki From Garden" icon={<BookOpen size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            {review.wiki_candidates.length === 0 ? (
-              <EmptyReviewLine text="No obvious wiki gaps" />
-            ) : review.wiki_candidates.slice(0, 4).map(candidate => (
-              <ReviewRow
-                key={`${candidate.kind}-${candidate.title}`}
-                title={candidate.title}
-                body={candidate.body}
-                pill={candidate.action_label || candidate.kind}
-                onClick={() => router.push('/wiki')}
-              />
-            ))}
-          </ReviewBlock>
+              <ReviewBlock title="Wiki From Garden" icon={<BookOpen size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                {review.wiki_candidates.length === 0 ? (
+                  <EmptyReviewLine text="No obvious wiki gaps" />
+                ) : review.wiki_candidates.slice(0, 3).map(candidate => (
+                  <ReviewRow
+                    key={`${candidate.kind}-${candidate.title}`}
+                    title={candidate.title}
+                    body={candidate.body}
+                    pill={candidate.action_label || candidate.kind}
+                    onClick={() => router.push('/wiki')}
+                  />
+                ))}
+              </ReviewBlock>
 
-          <ReviewBlock title="Product Spaces" icon={<Target size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            {review.spaces.products.length === 0 ? (
-              <ReviewRow title="No product anchor yet" body={`${review.spaces.orphan_specs.length} specs can be attached once a product exists`} pill="Studio" onClick={() => router.push('/studio')} />
-            ) : review.spaces.products.slice(0, 4).map(product => (
-              <ReviewRow
-                key={product.id}
-                title={product.title}
-                body={`${product.prd_count} PRDs · ${product.open_prds} open`}
-                pill={product.rank}
-                onClick={() => router.push('/studio')}
-              />
-            ))}
-          </ReviewBlock>
+              <ReviewBlock title="Product Spaces" icon={<Target size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                {review.spaces.products.length === 0 ? (
+                  <ReviewRow title="No product anchor yet" body={`${review.spaces.orphan_specs.length} specs can be attached once a product exists`} pill="Studio" onClick={() => router.push('/studio')} />
+                ) : review.spaces.products.slice(0, 3).map(product => (
+                  <ReviewRow
+                    key={product.id}
+                    title={product.title}
+                    body={`${product.prd_count} PRDs · ${product.open_prds} open`}
+                    pill={product.rank}
+                    onClick={() => router.push('/studio')}
+                  />
+                ))}
+              </ReviewBlock>
 
-          <ReviewBlock title="Insight Timeline" icon={<Clock3 size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-            {review.timeline.slice(0, 5).map(event => (
-              <ReviewRow
-                key={`${event.type}-${event.created_at}-${event.title}`}
-                title={event.title}
-                body={event.created_at ? formatDate(event.created_at) : event.body}
-                pill={event.type.replace(/_/g, ' ')}
-                onClick={() => event.seed_id ? onOpenSeed(event.seed_id) : undefined}
-              />
-            ))}
-          </ReviewBlock>
+              <ReviewBlock title="Insight Timeline" icon={<Clock3 size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                {review.timeline.slice(0, 4).map(event => (
+                  <ReviewRow
+                    key={`${event.type}-${event.created_at}-${event.title}`}
+                    title={event.title}
+                    body={event.created_at ? formatDate(event.created_at) : event.body}
+                    pill={event.type.replace(/_/g, ' ')}
+                    onClick={() => event.seed_id ? onOpenSeed(event.seed_id) : undefined}
+                  />
+                ))}
+              </ReviewBlock>
 
-          {review.admin_nudges.length > 0 && (
-            <ReviewBlock title="Admin" icon={<CheckCircle2 size={14} color="var(--green-700)" strokeWidth={1.75} />}>
-              {review.admin_nudges.map(nudge => (
-                <ReviewRow key={nudge.kind} title={nudge.title} body={nudge.body} pill="Admin" onClick={() => openHref(nudge.href)} />
-              ))}
-            </ReviewBlock>
+              {review.admin_nudges.length > 0 && (
+                <ReviewBlock title="Admin" icon={<CheckCircle2 size={14} color="var(--green-700)" strokeWidth={1.75} />}>
+                  {review.admin_nudges.map(nudge => (
+                    <ReviewRow key={nudge.kind} title={nudge.title} body={nudge.body} pill="Admin" onClick={() => openHref(nudge.href)} />
+                  ))}
+                </ReviewBlock>
+              )}
+            </>
           )}
         </>
       )}

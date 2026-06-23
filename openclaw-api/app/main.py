@@ -3141,6 +3141,18 @@ class WaitlistInviteRequest(BaseModel):
     force: bool = False  # re-send even to already-invited addresses (requires explicit emails)
 
 
+def _admin_email_set() -> set[str]:
+    return {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
+
+
+def _require_admin_user(current_user: User) -> None:
+    admin_emails = _admin_email_set()
+    if not admin_emails:
+        raise HTTPException(status_code=503, detail="Admin access is not configured")
+    if (current_user.email or "").strip().lower() not in admin_emails:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
 @app.post("/api/v1/admin/waitlist/invite")
 def admin_invite_waitlist(
     req: WaitlistInviteRequest,
@@ -3150,9 +3162,7 @@ def admin_invite_waitlist(
     """Invite waitlist signups straight from the /admin dashboard (gated on
     ADMIN_EMAILS via the operator's JWT — no API key needed). With no `emails`,
     invites everyone still waiting. Sets invited_at so nobody is invited twice."""
-    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
-    if (current_user.email or "").lower() not in admin_emails:
-        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_user(current_user)
 
     from urllib.parse import quote
     from app.email_sender import send_invite_email
@@ -3197,9 +3207,7 @@ def admin_export_waitlist(
     db: Session = Depends(get_db),
 ):
     """Export the durable waitlist as CSV for operators."""
-    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
-    if (current_user.email or "").lower() not in admin_emails:
-        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_user(current_user)
 
     from app.models import WaitlistEntry
 
@@ -3224,9 +3232,7 @@ def admin_export_waitlist(
 def admin_activity(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Admin: per-user activity + a tiny activation funnel — so you can actually
     see who's active vs churned (EU-local, no third-party analytics)."""
-    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
-    if (current_user.email or "").lower() not in admin_emails:
-        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_user(current_user)
     from app.models import UserEvent
     from datetime import timedelta as _td
     now = datetime.utcnow()
@@ -3298,9 +3304,7 @@ def validate_invite(token: str):
 
 @app.get("/api/v1/admin/health")
 def admin_health(current_user: User = Depends(get_current_user)):
-    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
-    if (current_user.email or "").lower() not in admin_emails:
-        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_user(current_user)
 
     # Check Weaviate, Postgres, LLM APIs, Redis
     status = {"weaviate": "unknown", "postgres": "unknown", "openrouter": "unknown", "redis": "unknown"}
@@ -3346,9 +3350,7 @@ def admin_health(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/v1/admin/tenants", response_model=TenantsListResponse)
 def admin_list_tenants(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
-    if (current_user.email or "").lower() not in admin_emails:
-        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_user(current_user)
     tenants = db.query(User).with_entities(User.id, User.email, User.created_at, User.subscription_status).all()
     info = [TenantsListResponse.TenantInfo(id=t.id, email=t.email, created_at=t.created_at, subscription_status=t.subscription_status) for t in tenants]
     return TenantsListResponse(tenants=info, total=len(info))
@@ -3357,9 +3359,7 @@ def admin_list_tenants(current_user: User = Depends(get_current_user), db: Sessi
 @app.get("/api/v1/admin/stats")
 def admin_stats(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Operator dashboard: users, activity, token usage (ADMIN_EMAILS only)."""
-    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()}
-    if (current_user.email or "").lower() not in admin_emails:
-        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_user(current_user)
 
     from app.models import Usage as UsageModel
     cutoff = datetime.utcnow() - timedelta(days=30)

@@ -147,6 +147,7 @@ const EMPTY_TIMELINE = {
 
 type InboxFilter = 'all' | 'thought' | 'link' | 'paper' | 'duplicates'
 type InboxDecision = 'keep' | 'connect' | 'turn_into_seed' | 'draft_wiki' | 'attach_to_project' | 'discard'
+type InboxNotice = { tone: 'ok' | 'error'; message: string }
 
 const INBOX_FILTERS: Array<{ key: InboxFilter; label: string }> = [
   { key: 'all', label: 'All' },
@@ -268,6 +269,7 @@ export default function WorkflowsPage() {
   const [selectedInboxKey, setSelectedInboxKey] = useState<string>('')
   const [reviewedInbox, setReviewedInbox] = useState<Record<string, string>>({})
   const [actingInboxKey, setActingInboxKey] = useState<string>('')
+  const [inboxNotice, setInboxNotice] = useState<InboxNotice | null>(null)
   const [draft, setDraft] = useState<WikiDraft | null>(null)
   const [draftingTopic, setDraftingTopic] = useState<string>('')
   const [publishing, setPublishing] = useState(false)
@@ -301,7 +303,7 @@ export default function WorkflowsPage() {
   const projectSpaces = arrayOrEmpty(spaces.spaces)
   const timelineEvents = arrayOrEmpty(timeline.events)
   const risingTopics = arrayOrEmpty(timeline.rising_topics)
-  const topRelationships = sliceSafe(relationshipSuggestions, 0, 8)
+  const topRelationships = sliceSafe(relationshipSuggestions, 0, 4)
   const activeInboxItems = useMemo(() => inboxItems.filter(item => !reviewedInbox[inboxItemKey(item)]), [inboxItems, reviewedInbox])
   const filteredInboxItems = useMemo(() => {
     if (inboxFilter === 'all') return activeInboxItems
@@ -329,7 +331,15 @@ export default function WorkflowsPage() {
   ]), [workflows.length, relationshipSuggestions.length, activeInboxItems.length, wikiTopics.length, projectSpaces.length, timelineEvents.length])
 
   function jumpToSection(sectionId: string) {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const target = document.getElementById(sectionId)
+    const scroller = document.querySelector<HTMLElement>('[data-testid="workflows-scroll"]')
+    if (!target) return
+    if (!scroller) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    const nextTop = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 10
+    scroller.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' })
   }
 
   function routeAfterInboxAction(action: InboxDecision, seedId?: string) {
@@ -342,6 +352,7 @@ export default function WorkflowsPage() {
   async function handleInboxAction(item: InboxItem, action: InboxDecision) {
     const key = inboxItemKey(item)
     setActingInboxKey(`${key}:${action}`)
+    setInboxNotice(null)
     try {
       const res = await fetch('/api/research/inbox', {
         method: 'POST',
@@ -358,8 +369,15 @@ export default function WorkflowsPage() {
       const json = await res.json().catch(() => ({}))
       if (res.ok) {
         setReviewedInbox(prev => ({ ...prev, [key]: action }))
+        setInboxNotice({ tone: 'ok', message: json.message || `${inboxActionLabel(action)} saved` })
         routeAfterInboxAction(action, typeof json.seed_id === 'string' ? json.seed_id : undefined)
+      } else {
+        const message = typeof json.detail === 'string' ? json.detail : typeof json.error === 'string' ? json.error : 'Could not save this inbox decision'
+        setInboxNotice({ tone: 'error', message })
+        if (action === 'connect' || action === 'draft_wiki' || action === 'attach_to_project') routeAfterInboxAction(action)
       }
+    } catch {
+      setInboxNotice({ tone: 'error', message: 'Could not reach the backend. Try again after the deploy finishes.' })
     } finally {
       setActingInboxKey('')
     }
@@ -410,7 +428,7 @@ export default function WorkflowsPage() {
             <Pill tone="green" size="xs">WORKFLOWS</Pill>
             <h1 className="serif" style={{ fontSize: 36, color: 'var(--ink)', margin: '10px 0 6px', lineHeight: 1.05 }}>From idea to artifact</h1>
             <p className="body-text" style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 620, lineHeight: 1.55 }}>
-              The workbench for turning garden material into decisions: move seeds through the pipeline, connect related sources, clear research intake, draft wiki pages, group product spaces, and watch repeated themes.
+              A focused decision bench for clearing research intake, connecting material, drafting wiki pages, and moving ideas toward shipped artifacts.
             </p>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>
               <Pill tone="soft" size="xs">Seed</Pill>
@@ -442,7 +460,7 @@ export default function WorkflowsPage() {
                 data-testid={`workflow-kpi-${feature.id}`}
                 onClick={() => jumpToSection(feature.id)}
                 className="tap"
-                style={{ border: '1px solid var(--hairline)', background: index === 0 ? 'var(--green-tint)' : 'var(--surface-sunk)', borderRadius: 13, padding: '11px 10px', minHeight: 118, cursor: 'pointer', textAlign: 'left', display: 'grid', alignContent: 'space-between', gap: 8 }}
+                style={{ border: '1px solid var(--hairline)', background: index === 0 ? 'var(--green-tint)' : 'var(--surface-sunk)', borderRadius: 13, padding: '10px', minHeight: 96, cursor: 'pointer', textAlign: 'left', display: 'grid', alignContent: 'space-between', gap: 7 }}
               >
                 <div className="ui" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontSize: 10, fontWeight: 900, color: index === 0 ? 'var(--green-700)' : 'var(--ink-3)' }}>{String(index + 1).padStart(2, '0')}</span>
@@ -451,7 +469,7 @@ export default function WorkflowsPage() {
                 <div>
                   <div className="ui" style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--ink)', lineHeight: 1.25 }}>{feature.label}</div>
                   <div className="body-text" style={{ fontSize: 10.5, color: 'var(--green-700)', fontWeight: 700, marginTop: 4 }}>{feature.metric}</div>
-                  <div className="body-text" style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.35, marginTop: 4 }}>{feature.outcome}</div>
+                  <div className="body-text" style={{ fontSize: 10.5, color: 'var(--ink-3)', lineHeight: 1.3, marginTop: 3 }}>{feature.outcome}</div>
                 </div>
               </button>
             ))}
@@ -488,7 +506,7 @@ export default function WorkflowsPage() {
           <EmptyState icon={<Rocket size={34} color="var(--ink-3)" strokeWidth={1.35} />} title="No workflows in this stage yet" text="Plant a seed, run research, or draft a spec to start the pipeline." />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
-            {sliceSafe(filtered, 0, 12).map(workflow => (
+            {sliceSafe(filtered, 0, 6).map(workflow => (
               <OutcomeCard key={workflow.id} workflow={workflow} onOpen={(href) => router.push(href)} />
             ))}
           </div>
@@ -515,6 +533,7 @@ export default function WorkflowsPage() {
           stats={inboxStats}
           relationships={relationshipSuggestions}
           actingKey={actingInboxKey}
+          notice={inboxNotice}
           loading={loading}
           onFilter={setInboxFilter}
           onSelect={(item) => setSelectedInboxKey(inboxItemKey(item))}
@@ -526,7 +545,7 @@ export default function WorkflowsPage() {
         <SectionHeader>Wiki From Garden</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 9 }}>
-          {sliceSafe(wikiTopics, 0, 7).map(topic => (
+          {sliceSafe(wikiTopics, 0, 5).map(topic => (
               <button key={topic.topic} onClick={() => previewWiki(topic)} className="tap" style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 13, padding: 11, textAlign: 'left', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <LibraryBig size={15} color="var(--green-700)" />
@@ -564,7 +583,7 @@ export default function WorkflowsPage() {
         <SectionBlock id="project-spaces">
         <SectionHeader>Product/Project Spaces</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
-          {sliceSafe(projectSpaces, 0, 8).map(space => <SpaceCard key={space.id} space={space} />)}
+          {sliceSafe(projectSpaces, 0, 4).map(space => <SpaceCard key={space.id} space={space} />)}
           {projectSpaces.length === 0 && <EmptyState icon={<Boxes size={32} color="var(--ink-3)" strokeWidth={1.35} />} title="No project spaces yet" text="Product seeds will become spaces once related specs and build tasks appear." />}
         </div>
         </SectionBlock>
@@ -575,12 +594,12 @@ export default function WorkflowsPage() {
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, alignSelf: 'start' }}>
             <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Rising topics" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
-              {sliceSafe(risingTopics, 0, 12).map(topic => <Pill key={topic.label} tone="soft" size="xs">{topic.label} {topic.count}</Pill>)}
+              {sliceSafe(risingTopics, 0, 8).map(topic => <Pill key={topic.label} tone="soft" size="xs">{topic.label} {topic.count}</Pill>)}
               {risingTopics.length === 0 && <span className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)' }}>No repeated themes yet.</span>}
             </div>
           </div>
           <div className="v2-card" style={{ borderRadius: 20, padding: 14, display: 'grid', gap: 8 }}>
-            {sliceSafe(timelineEvents, 0, 14).map(event => <TimelineRow key={event.id} event={event} />)}
+            {sliceSafe(timelineEvents, 0, 8).map(event => <TimelineRow key={event.id} event={event} />)}
             {timelineEvents.length === 0 && <CompactEmpty icon={<Activity size={28} color="var(--ink-3)" />} title="Timeline is quiet" />}
           </div>
         </div>
@@ -692,6 +711,7 @@ function InboxWorkbench({
   stats,
   relationships,
   actingKey,
+  notice,
   loading,
   onFilter,
   onSelect,
@@ -703,6 +723,7 @@ function InboxWorkbench({
   stats: Record<InboxFilter, number>
   relationships: RelationshipSuggestion[]
   actingKey: string
+  notice: InboxNotice | null
   loading: boolean
   onFilter: (filter: InboxFilter) => void
   onSelect: (item: InboxItem) => void
@@ -750,6 +771,7 @@ function InboxWorkbench({
               item={selectedItem}
               related={related}
               actingKey={actingKey}
+              notice={notice}
               onAction={onAction}
             />
           ) : (
@@ -796,7 +818,7 @@ function InboxQueueRow({ item, active, onClick }: { item: InboxItem; active: boo
   )
 }
 
-function InboxDetail({ item, related, actingKey, onAction }: { item: InboxItem; related: RelationshipSuggestion[]; actingKey: string; onAction: (item: InboxItem, action: InboxDecision) => void }) {
+function InboxDetail({ item, related, actingKey, notice, onAction }: { item: InboxItem; related: RelationshipSuggestion[]; actingKey: string; notice: InboxNotice | null; onAction: (item: InboxItem, action: InboxDecision) => void }) {
   const tags = arrayOrEmpty(item.suggested_tags)
   const allowedActions = new Set<InboxDecision>(arrayOrEmpty(item.actions).map(action => normalizeAction(action)).filter((action): action is InboxDecision => Boolean(action)))
   for (const fallback of ['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'discard'] as InboxDecision[]) {
@@ -839,6 +861,11 @@ function InboxDetail({ item, related, actingKey, onAction }: { item: InboxItem; 
 
       <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 15, paddingTop: 14 }}>
         <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Decision" />
+        {notice && (
+          <div className="body-text" style={{ marginTop: 9, border: `1px solid ${notice.tone === 'ok' ? 'var(--green-700)' : '#fecdd3'}`, background: notice.tone === 'ok' ? 'var(--green-tint)' : '#fff1f2', color: notice.tone === 'ok' ? 'var(--green-700)' : '#9f1239', borderRadius: 12, padding: '8px 10px', fontSize: 11.5, lineHeight: 1.4 }}>
+            {notice.message}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: 8, marginTop: 10 }}>
           {INBOX_ACTIONS.filter(action => allowedActions.has(action.key)).map(action => {
             const busy = actingKey === `${inboxItemKey(item)}:${action.key}`
