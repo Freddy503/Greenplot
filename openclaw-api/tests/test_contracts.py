@@ -70,14 +70,17 @@ def test_link_metadata_fetchers_validate_public_urls_and_redirects():
 def test_admin_health_requires_admin_user():
     main = read("openclaw-api/app/main.py")
 
+    assert "def _require_admin_user(current_user: User) -> None:" in main
+    assert "settings.ADMIN_EMAILS" in main
+    assert 'raise HTTPException(status_code=404, detail="Not found")' in main
+
     marker = '@app.get("/api/v1/admin/health")'
     start = main.index(marker)
     end = main.index('@app.get("/api/v1/admin/tenants"', start)
     block = main[start:end]
 
     assert "current_user: User = Depends(get_current_user)" in block
-    assert "settings.ADMIN_EMAILS" in block
-    assert 'raise HTTPException(status_code=404, detail="Not found")' in block
+    assert "_require_admin_user(current_user)" in block
 
 
 def test_frontend_backend_proxy_paths_match_declared_backend_routes():
