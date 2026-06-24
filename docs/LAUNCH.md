@@ -71,11 +71,7 @@ picks it up automatically. See §3.
    - Push opt-in on the phone (installed PWA) → trigger a briefing → banner → sheet.
    - Settings: mint an MCP key → `tools/list` curl from [mcp-coding-agents.md](mcp-coding-agents.md).
    - `/admin` shows you the dashboard (and shows "Nothing here." in an incognito session).
-6. **Impressum address**: get a virtual business address (Impressum-Service /
-   virtual office, ~€10–30/mo) and replace the `[Anschrift folgt]` placeholder
-   in `src/app/impressum/page.tsx` — §5 DDG requires a real summonable
-   address; home address stays private this way.
-7. **Invite the first wave**:
+6. **Invite the first wave**:
    ```bash
    curl -X POST https://api.greenplot.ink/api/v1/admin/invite \
      -H "x-api-key: $HARVEST_API_KEY" -H "Content-Type: application/json" \
