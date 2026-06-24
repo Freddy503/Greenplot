@@ -446,6 +446,15 @@ Notifications are **artifacts, not prompts** — each delivers something you can
 - **Push:** Web Push via VAPID (pywebpush + Service Worker), auto-prunes dead subscriptions on 404/410
 - **Hosting:** Hetzner (Frankfurt, EU) via Cloudflare named tunnel; Docker Compose; Vercel (frontend)
 
+## License
+
+Greenplot is open source under the [MIT License](LICENSE).
+
+This repository contains the application source code. Do not commit private
+deployment secrets, user data, garden exports, generated memory/wiki content,
+database dumps, or production backups. Use `.env.example` for placeholders and
+keep real runtime configuration in your deployment environment.
+
 ## Design System
 - **Colors:** Warm off-white `#fafaf8` background, green `#16a34a` primary, gold `#d97706` secondary, white cards with subtle borders
 - **Font:** Plus Jakarta Sans (headings) + Be Vietnam Pro (body)
