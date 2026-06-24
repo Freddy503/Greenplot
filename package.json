@@ -1,7 +1,16 @@
 {
-  "name": "frontend",
+  "name": "greenplot",
   "version": "0.1.0",
-  "private": true,
+  "description": "AI-powered knowledge garden for turning ideas into research, specs, and shipped artifacts.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Freddy503/Greenplot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Freddy503/Greenplot/issues"
+  },
+  "homepage": "https://www.greenplot.ink",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
