@@ -17,6 +17,11 @@ services:
     - WEAVIATE_URL=http://weaviate:8080
     - REDIS_URL=redis://redis:6379/0
     - FRONTEND_URL=https://www.greenplot.ink
+    - APP_URL=https://www.greenplot.ink
+    - ADMIN_EMAILS=${ADMIN_EMAILS}
+    - INVITE_CODES=${INVITE_CODES}
+    - INVITE_REQUIRED=${INVITE_REQUIRED:-false}
+    - CONTACT_EMAIL=${CONTACT_EMAIL}
     - EXA_API_KEY=${EXA_API_KEY}
     - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
