@@ -52,6 +52,7 @@ openclaw-api/data/push_subscriptions.json
 .clawhub/
 .openclaw/
 .superset/
+.codex-greenplot-bugfix/
 logs/
 outputs/
 AGENTS.md
