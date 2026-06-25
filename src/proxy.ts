@@ -12,27 +12,71 @@ import type { NextRequest } from 'next/server'
  */
 
 const PROTECTED_PREFIXES = [
+  '/api/activity',
+  '/api/admin',
+  '/api/agents',
+  '/api/api-keys',
   '/api/seeds',
   '/api/thoughts',
   '/api/calendar',
-  '/api/images',
+  '/api/canvas',
   '/api/chat',
-  '/api/push',
+  '/api/coherence-report',
+  '/api/comments',
   '/api/debug',
+  '/api/design-vision',
+  '/api/email',
+  '/api/garden',
+  '/api/github',
+  '/api/graph',
+  '/api/ingest',
+  '/api/insights',
+  '/api/links',
+  '/api/me',
+  '/api/nodes',
+  '/api/outcomes',
+  '/api/papers',
+  '/api/products',
+  '/api/profile',
+  '/api/push',
+  '/api/relationships',
+  '/api/research',
+  '/api/schedule',
+  '/api/scheduler',
+  '/api/search',
+  '/api/sessions',
+  '/api/spaces',
+  '/api/specs',
+  '/api/wiki',
   '/chat',
   '/garden',
+  '/library',
+  '/links',
+  '/notifications',
   '/settings',
+  '/studio',
+  '/wiki',
+  '/workflows',
 ]
 
-const PUBLIC_PREFIXES = [
-  '/api/login',
-  '/api/register',
-  '/api/push/notifications',
-  '/api/push/subscribe',
+const PUBLIC_EXACT_PATHS = [
+  '/',
+  '/impressum',
+  '/invite',
   '/login',
   '/onboarding',
+  '/privacy',
+  '/reset-password',
   '/setup',
-  '/',
+]
+
+const PUBLIC_API_PREFIXES = [
+  '/api/auth',
+  '/api/feedback/feature-request',
+  '/api/login',
+  '/api/register',
+  '/api/waitlist',
+  '/api/wiki/images',
 ]
 
 export function proxy(request: NextRequest) {
@@ -50,7 +94,10 @@ export function proxy(request: NextRequest) {
   }
 
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))
+  const isPublic =
+    PUBLIC_EXACT_PATHS.includes(pathname) ||
+    PUBLIC_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    (pathname === '/api/push/subscribe' && request.method === 'GET')
 
   if (!isProtected || isPublic) {
     return NextResponse.next()

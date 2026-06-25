@@ -1,0 +1,4 @@
+interface:
+  display_name: "Greenplot Bugfix"
+  short_description: "Structured Greenplot bug hunts and fixes"
+  default_prompt: "Use $greenplot-bugfix to research, prioritize, fix, verify, and document Greenplot bugs."

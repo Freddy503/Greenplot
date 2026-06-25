@@ -6,7 +6,11 @@ const HARVEST_API_KEY = process.env.HARVEST_API_KEY || ''
 
 export async function GET(req: Request) {
   // Vercel sets this header automatically using CRON_SECRET
-  if (CRON_SECRET && req.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET) {
+    return NextResponse.json({ error: 'Cron secret is not configured' }, { status: 503 })
+  }
+
+  if (req.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

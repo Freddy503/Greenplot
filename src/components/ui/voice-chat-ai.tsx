@@ -1,6 +1,6 @@
 "use client"
 
-import { Mic, MicOff, Volume2, VolumeX, Sparkles, Loader2 } from "lucide-react"
+import { Mic, MicOff, Loader2 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
@@ -11,7 +11,8 @@ interface Particle {
   y: number
   size: number
   opacity: number
-  velocity: { x: number; y: number }
+  driftX: number
+  driftY: number
 }
 
 interface VoiceChatAIProps {
@@ -21,29 +22,30 @@ interface VoiceChatAIProps {
   className?: string
 }
 
+const PARTICLES: Particle[] = Array.from({ length: 30 }, (_, i) => {
+  const seed = i + 1
+  return {
+    id: i,
+    x: ((seed * 73) % 400),
+    y: ((seed * 151) % 400),
+    size: ((seed * 17) % 30) / 10 + 1,
+    opacity: ((seed * 23) % 30) / 100 + 0.1,
+    driftX: ((seed * 41) % 40) - 20,
+    driftY: ((seed * 59) % 40) - 20,
+  }
+})
+
 export function VoiceChatAI({ onStart, onStop, onTranscribe, className }: VoiceChatAIProps) {
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const [volume, setVolume] = useState(0)
   const [duration, setDuration] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
-  // Generate particles for ambient effect
-  const [particles, setParticles] = useState<Particle[]>(
-    Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 400,
-      y: Math.random() * 400,
-      size: Math.random() * 3 + 1,
-      opacity: Math.random() * 0.3 + 0.1,
-      velocity: {
-        x: (Math.random() - 0.5) * 0.5,
-        y: (Math.random() - 0.5) * 0.5
-      }
-    }))
-  )
+  const fallbackStart = useCallback(() => {
+    setIsListening(true)
+    onStart?.()
+  }, [onStart])
 
   const handleStart = useCallback(async () => {
     setIsProcessing(false)
@@ -63,12 +65,7 @@ export function VoiceChatAI({ onStart, onStop, onTranscribe, className }: VoiceC
       // Permission denied or no mic
       fallbackStart()
     }
-  }, [onStart])
-
-  const fallbackStart = useCallback(() => {
-    setIsListening(true)
-    onStart?.()
-  }, [onStart])
+  }, [fallbackStart, onStart])
 
   const handleStop = useCallback(async () => {
     setIsListening(false)
@@ -104,12 +101,12 @@ export function VoiceChatAI({ onStart, onStop, onTranscribe, className }: VoiceC
     <div className={cn("relative w-full aspect-square max-w-sm mx-auto", className)}>
       {/* Ambient particles */}
       <div className="absolute inset-0 overflow-hidden rounded-[2rem]">
-        {particles.map(p => (
+        {PARTICLES.map(p => (
           <motion.div
             key={p.id}
             animate={{
-              x: [p.x, p.x + (Math.random() - 0.5) * 40],
-              y: [p.y, p.y + (Math.random() - 0.5) * 40],
+              x: [p.x, p.x + p.driftX],
+              y: [p.y, p.y + p.driftY],
               opacity: [p.opacity, p.opacity * 0.5, p.opacity]
             }}
             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}

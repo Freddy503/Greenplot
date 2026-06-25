@@ -3,16 +3,15 @@ import { NextRequest, NextResponse } from 'next/server'
 const BACKEND = (process.env.BACKEND_URL || 'https://api.greenplot.ink').trim().replace(/\/+$/, '')
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const token = searchParams.get('token') || req.headers.get('authorization')?.replace('Bearer ', '') || ''
+  const authHeader = req.headers.get('authorization') || ''
 
-  if (!token) {
+  if (!authHeader.startsWith('Bearer ')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
     const res = await fetch(`${BACKEND}/api/v1/garden/export-training`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: authHeader },
       signal: AbortSignal.timeout(30000),
     })
 
