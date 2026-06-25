@@ -366,7 +366,7 @@ class ProfileUpdate(BaseModel):
     nickname: Optional[str] = None
     interests: Optional[List[str]] = None
     digest_frequency: Optional[str] = None  # twice-daily, once-daily, bi-weekly, weekly, calendar
-    consents: Optional[dict] = None  # {enrich, web, calendar, push}
+    consents: Optional[dict] = None  # {enrich, web, calendar, push, research_sources, research_blocked_terms}
 
 @app.get("/api/v1/profile")
 def get_profile(
@@ -406,6 +406,7 @@ def update_profile(
         "nickname": current_user.nickname or "",
         "interests": current_user.interests or [],
         "digest_frequency": current_user.digest_frequency,
+        "consents": current_user.consents or {},
     }
 
 # --- Thoughts ---

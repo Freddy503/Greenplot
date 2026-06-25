@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
   Bell, Sun, Sparkles, Download, LogOut, ChevronRight, Copy, Plus, X,
   Plug, Calendar, Trash2, MessageSquarePlus, Send, Loader2, Leaf,
-  Moon, BookOpen, BarChart2,
+  Moon, BookOpen, BarChart2, Newspaper, GitBranch, Rss, Flame,
 } from 'lucide-react'
 import {
   Dialog,
@@ -36,6 +36,26 @@ const PIPELINE_JOBS = [
   { id: 'academic_digest',      label: 'Research Digest',            Icon: BookOpen,  description: 'New research linked to your seeds & wiki (07:00 & 18:00 CET)', configurable: true },
   { id: 'garden_signals',       label: 'Garden Signals',             Icon: Sparkles,  description: 'Connection alerts + emerging themes, as they form', configurable: false },
   { id: 'garden_story',         label: 'Garden Story',               Icon: BarChart2, description: 'Your week of thinking, narrated (Sun 10:00 CET)', configurable: false },
+]
+
+type ResearchSourceKey = 'arxiv' | 'openalex' | 'rss' | 'hackernews' | 'github' | 'exa_news'
+
+const DEFAULT_RESEARCH_SOURCES: Record<ResearchSourceKey, boolean> = {
+  arxiv: true,
+  openalex: true,
+  rss: true,
+  hackernews: true,
+  github: true,
+  exa_news: true,
+}
+
+const RESEARCH_SOURCES: Array<{ key: ResearchSourceKey; label: string; description: string; Icon: typeof BookOpen }> = [
+  { key: 'arxiv', label: 'arXiv', description: 'Preprints and technical papers', Icon: BookOpen },
+  { key: 'openalex', label: 'Journals', description: 'OpenAlex, including publisher metadata', Icon: Newspaper },
+  { key: 'rss', label: 'Feeds', description: 'Curated feeds such as Nature and lab blogs', Icon: Rss },
+  { key: 'hackernews', label: 'Hacker News', description: 'Builder and industry pulse', Icon: Flame },
+  { key: 'github', label: 'GitHub', description: 'Tools, repos and releases', Icon: GitBranch },
+  { key: 'exa_news', label: 'Web news', description: 'Exa web search for current coverage', Icon: Sparkles },
 ]
 
 interface JobConfig {
@@ -387,6 +407,10 @@ export default function SettingsPage() {
   const [devUnlocking, setDevUnlocking] = useState(false)
   const [devError, setDevError] = useState('')
   const [sendingTestEmail, setSendingTestEmail] = useState(false)
+  const [researchSources, setResearchSources] = useState<Record<ResearchSourceKey, boolean>>(DEFAULT_RESEARCH_SOURCES)
+  const [blockedTerms, setBlockedTerms] = useState<string[]>([])
+  const [blockedInput, setBlockedInput] = useState('')
+  const [savingResearchPrefs, setSavingResearchPrefs] = useState(false)
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('greenplot_token') || '' : ''
 
@@ -407,7 +431,15 @@ export default function SettingsPage() {
           if (data.nickname) { setNickname(data.nickname); localStorage.setItem('greenplot_nickname', data.nickname) }
           if (data.email) setUserEmail(data.email)
           if (data.interests) setInterests(data.interests)
-          if (data.consents) setWeeklyResearch(!!data.consents.weekly_research)
+          if (data.consents) {
+            setWeeklyResearch(!!data.consents.weekly_research)
+            if (data.consents.research_sources) {
+              setResearchSources({ ...DEFAULT_RESEARCH_SOURCES, ...data.consents.research_sources })
+            }
+            if (Array.isArray(data.consents.research_blocked_terms)) {
+              setBlockedTerms(data.consents.research_blocked_terms.filter((term: unknown) => typeof term === 'string' && term.trim()))
+            }
+          }
         })
         .catch(() => {})
     }
@@ -485,6 +517,56 @@ export default function SettingsPage() {
         body: JSON.stringify({ consents: { weekly_research: on } }) })
       toast.success(on ? 'Weekly Deep Research on — a brief every Monday' : 'Weekly Deep Research off')
     } catch { toast.error('Could not save'); setWeeklyResearch(!on) }
+  }
+
+  const saveResearchPrefs = async (sources: Record<ResearchSourceKey, boolean>, terms: string[]) => {
+    setSavingResearchPrefs(true)
+    try {
+      const res = await fetch(`${BACKEND}/profile`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          consents: {
+            research_sources: sources,
+            research_blocked_terms: terms,
+          },
+        }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const p = JSON.parse(localStorage.getItem('greenplot_profile') || '{}')
+      p.research_sources = sources
+      p.research_blocked_terms = terms
+      localStorage.setItem('greenplot_profile', JSON.stringify(p))
+      toast.success('Research filters updated')
+    } catch {
+      toast.error('Could not save research filters')
+    } finally {
+      setSavingResearchPrefs(false)
+    }
+  }
+
+  const handleToggleResearchSource = (key: ResearchSourceKey, on: boolean) => {
+    const next = { ...researchSources, [key]: on }
+    setResearchSources(next)
+    saveResearchPrefs(next, blockedTerms)
+  }
+
+  const handleAddBlockedTerm = () => {
+    const val = blockedInput.trim().toLowerCase()
+    if (!val || blockedTerms.includes(val)) {
+      setBlockedInput('')
+      return
+    }
+    const next = [...blockedTerms, val].slice(0, 30)
+    setBlockedTerms(next)
+    setBlockedInput('')
+    saveResearchPrefs(researchSources, next)
+  }
+
+  const handleRemoveBlockedTerm = (term: string) => {
+    const next = blockedTerms.filter(t => t !== term)
+    setBlockedTerms(next)
+    saveResearchPrefs(researchSources, next)
   }
 
   const handleScheduleToggle = async (jobId: string, enabled: boolean) => {
@@ -673,6 +755,49 @@ export default function SettingsPage() {
                 style={{ flex: 1, background: 'var(--surface-sunk)', border: 'none', borderRadius: 9999, padding: '8px 14px', fontFamily: 'var(--ui)', fontSize: 13, color: 'var(--ink)', outline: 'none' }} />
               <button onClick={handleAddInterest} disabled={!interestInput.trim() || savingInterests} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 9999, padding: '8px 14px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !interestInput.trim() ? 0.5 : 1 }}>
                 <Plus size={14} color="#fff" strokeWidth={2.5} /> Add
+              </button>
+            </div>
+          </div>
+        </SettingsGroup>
+
+        <SettingsGroup label="Research filters">
+          {RESEARCH_SOURCES.map((source, idx) => {
+            const enabled = researchSources[source.key] ?? true
+            return (
+              <SettingsRow
+                key={`${source.key}-${enabled}`}
+                Icon={source.Icon}
+                title={source.label}
+                sub={source.description}
+                right={<Toggle on={enabled} onChange={on => handleToggleResearchSource(source.key, on)} />}
+                last={idx === RESEARCH_SOURCES.length - 1 && blockedTerms.length === 0}
+              />
+            )
+          })}
+          <div style={{ padding: '14px 16px', borderTop: '1px solid var(--hairline)' }}>
+            <div className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 12 }}>Terms excluded from research digests and paper discovery.</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {blockedTerms.map(term => (
+                <span key={term} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--surface-sunk)', color: 'var(--ink-2)', border: '1px solid var(--hairline)', borderRadius: 9999, padding: '5px 10px 5px 12px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 600 }}>
+                  {term}
+                  <button onClick={() => handleRemoveBlockedTerm(term)} disabled={savingResearchPrefs} style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}>
+                    <X size={12} color="var(--ink-3)" strokeWidth={2.5} />
+                  </button>
+                </span>
+              ))}
+              {blockedTerms.length === 0 && <span className="body-text" style={{ fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic' }}>No blocked terms</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={blockedInput}
+                onChange={e => setBlockedInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddBlockedTerm() } }}
+                placeholder="Block term (e.g. medicine)"
+                style={{ flex: 1, background: 'var(--surface-sunk)', border: 'none', borderRadius: 9999, padding: '8px 14px', fontFamily: 'var(--ui)', fontSize: 13, color: 'var(--ink)', outline: 'none' }}
+              />
+              <button onClick={handleAddBlockedTerm} disabled={!blockedInput.trim() || savingResearchPrefs} className="tap" style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 9999, padding: '8px 14px', fontFamily: 'var(--ui)', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !blockedInput.trim() || savingResearchPrefs ? 0.5 : 1 }}>
+                {savingResearchPrefs ? <Loader2 size={14} color="#fff" className="animate-spin" strokeWidth={2.5} /> : <Plus size={14} color="#fff" strokeWidth={2.5} />}
+                Add
               </button>
             </div>
           </div>

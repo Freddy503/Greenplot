@@ -45,19 +45,52 @@ def _dedupe(cands: list[dict], seen_urls: set[str] | None = None) -> list[dict]:
     return out
 
 
+def _enabled(enabled_sources: dict | None, key: str) -> bool:
+    if not isinstance(enabled_sources, dict):
+        return True
+    return bool(enabled_sources.get(key, True))
+
+
+def _passes_blocklist(c: dict, blocked_terms: list[str] | None = None) -> bool:
+    terms = [str(t).strip().lower() for t in (blocked_terms or []) if str(t).strip()]
+    if not terms:
+        return True
+    extra = c.get("extra") if isinstance(c.get("extra"), dict) else {}
+    haystack = " ".join(
+        str(part or "")
+        for part in (
+            c.get("title"),
+            c.get("snippet"),
+            c.get("url"),
+            c.get("source"),
+            extra.get("venue"),
+            extra.get("feed"),
+        )
+    ).lower()
+    return not any(term in haystack for term in terms)
+
+
 async def discover_all(themes: list[str], seen_urls: set[str] | None = None,
-                       paper_limit: int = 8, news_limit: int = 5) -> dict:
+                       paper_limit: int = 8, news_limit: int = 5,
+                       enabled_sources: dict | None = None,
+                       blocked_terms: list[str] | None = None) -> dict:
     """Run enabled sources concurrently → {"papers": [...], "news": [...]}."""
     if not getattr(settings, "RESEARCH_SOURCES_ENABLED", True):
         return {"papers": [], "news": []}
 
-    results = await asyncio.gather(
-        openalex.discover(themes),
-        hackernews.discover(themes),
-        rss.discover(themes),
-        github.discover(themes),
-        return_exceptions=True,
-    )
+    jobs = []
+    if _enabled(enabled_sources, "openalex"):
+        jobs.append(openalex.discover(themes))
+    if _enabled(enabled_sources, "hackernews"):
+        jobs.append(hackernews.discover(themes))
+    if _enabled(enabled_sources, "rss"):
+        jobs.append(rss.discover(themes))
+    if _enabled(enabled_sources, "github"):
+        jobs.append(github.discover(themes))
+    if not jobs:
+        return {"papers": [], "news": []}
+
+    results = await asyncio.gather(*jobs, return_exceptions=True)
     cands: list[dict] = []
     for r in results:
         if isinstance(r, list):
@@ -65,6 +98,7 @@ async def discover_all(themes: list[str], seen_urls: set[str] | None = None,
         elif isinstance(r, Exception):
             logger.warning(f"[sources] generator error: {r}")
 
+    cands = [c for c in cands if _passes_blocklist(c, blocked_terms)]
     cands = _dedupe(cands, seen_urls)
     papers = [c for c in cands if c.get("kind") == "paper"][:paper_limit]
     news = [c for c in cands if c.get("kind") == "news"][:news_limit]

@@ -215,6 +215,60 @@ def fetch_user_themes(user_id: str, db) -> List[str]:
         return ["learning", "research"]
 
 
+def fetch_research_preferences(user_id: str, db) -> Dict[str, Any]:
+    """Return per-user research controls stored in the profile consent blob."""
+    defaults = {
+        "sources": {
+            "arxiv": True,
+            "openalex": True,
+            "rss": True,
+            "hackernews": True,
+            "github": True,
+            "exa_news": True,
+        },
+        "blocked_terms": [],
+    }
+    try:
+        from app.models import User
+        user = db.query(User).filter(User.id == user_id).first()
+        consents = getattr(user, "consents", None) or {}
+        raw_sources = consents.get("research_sources") if isinstance(consents, dict) else None
+        if isinstance(raw_sources, dict):
+            defaults["sources"].update({k: bool(v) for k, v in raw_sources.items()})
+        raw_terms = consents.get("research_blocked_terms") if isinstance(consents, dict) else None
+        if isinstance(raw_terms, list):
+            defaults["blocked_terms"] = [
+                str(t).strip().lower()
+                for t in raw_terms
+                if str(t).strip()
+            ][:30]
+    except Exception as e:
+        logger.warning(f"[academic_digest] research preferences unavailable: {e}")
+    return defaults
+
+
+def _research_source_enabled(preferences: Dict[str, Any], source: str) -> bool:
+    sources = preferences.get("sources") if isinstance(preferences, dict) else {}
+    return bool((sources or {}).get(source, True))
+
+
+def _passes_research_blocklist(item: Dict[str, Any], preferences: Dict[str, Any]) -> bool:
+    terms = preferences.get("blocked_terms") if isinstance(preferences, dict) else []
+    terms = [str(t).strip().lower() for t in (terms or []) if str(t).strip()]
+    if not terms:
+        return True
+    haystack = " ".join(
+        str(part or "")
+        for part in (
+            item.get("title"),
+            item.get("snippet"),
+            item.get("url"),
+            item.get("source"),
+        )
+    ).lower()
+    return not any(term in haystack for term in terms)
+
+
 def fetch_garden_context(user_id: str, themes: List[str], db) -> List[Dict[str, str]]:
     """
     Return up to 5 seed snippets from the last 90 days that relate to the given themes.
@@ -777,7 +831,8 @@ Be specific, not abstract. 15-min experiment.
     }
 
 
-async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
+async def _fetch_arxiv_papers(themes: List[str], limit: int = 5,
+                              preferences: Dict[str, Any] | None = None) -> List[Dict]:
     """
     Search Exa for arXiv papers matching themes, returning only individual
     abstract pages (arxiv.org/abs/XXXX.XXXXX) — never category listing pages.
@@ -786,6 +841,8 @@ async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
     from app.config import settings as _settings
     query = " ".join(themes[:3]) + " 2025 2026"
     try:
+        if preferences is not None and not _research_source_enabled(preferences, "arxiv"):
+            return []
         exa_key = _settings.EXA_API_KEY or os.environ.get('EXA_API_KEY', '')
         if not exa_key:
             return []
@@ -831,6 +888,8 @@ async def _fetch_arxiv_papers(themes: List[str], limit: int = 5) -> List[Dict]:
                         if abs_re.search(r.get("url", "")) and r.get("url") not in seen:
                             filtered.append({"title": r.get("title",""), "url": r.get("url",""), "snippet": (r.get("text","") or "")[:300]})
                             seen.add(r.get("url",""))
+        if preferences is not None:
+            filtered = [p for p in filtered if _passes_research_blocklist(p, preferences)]
         return filtered[:limit]
     except Exception as e:
         logger.error(f"[academic_digest] arXiv paper search failed: {e}")
@@ -949,6 +1008,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     import re as _re
 
     themes = fetch_user_themes(user_id, db)
+    research_preferences = fetch_research_preferences(user_id, db)
     theme_str = ", ".join(themes[:3])
     city = get_user_city(user_id, db)
     today = datetime.now().strftime("%a %b %d, %Y")
@@ -959,11 +1019,14 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     weather = await fetch_weather(city)
 
     # Fetch arXiv papers (abs/ pages only) + topic news
-    paper_results = await _fetch_arxiv_papers(themes, limit=12)
+    paper_results = await _fetch_arxiv_papers(themes, limit=12, preferences=research_preferences)
     for _p in paper_results:
         _p.setdefault("source", "arxiv")
         _p.setdefault("kind", "paper")
-    news_results = await fetch_web_search(f"{theme_str} news {today}", limit=3)
+    news_results = []
+    if _research_source_enabled(research_preferences, "exa_news"):
+        news_results = await fetch_web_search(f"{theme_str} news {today}", limit=3)
+        news_results = [n for n in news_results if _passes_research_blocklist(n, research_preferences)]
 
     # Deduplicate: remove papers already saved to this user's Garden
     seen_urls = _get_seen_paper_urls(user_id, db)
@@ -974,7 +1037,12 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     extra_news: list = []
     try:
         from app.sources import discover_all
-        bundle = await discover_all(themes, seen_urls=seen_urls)
+        bundle = await discover_all(
+            themes,
+            seen_urls=seen_urls,
+            enabled_sources=research_preferences.get("sources", {}),
+            blocked_terms=research_preferences.get("blocked_terms", []),
+        )
         paper_results = paper_results + bundle.get("papers", [])
         extra_news = bundle.get("news", [])
     except Exception as e:
@@ -994,7 +1062,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
     # If all fetched papers were already seen, retry with expanded limit + broader date range
     all_papers_seen = False
     if len(paper_results) > 0 and len(unique_papers) == 0:
-        retry_results = await _fetch_arxiv_papers(themes, limit=24)
+        retry_results = await _fetch_arxiv_papers(themes, limit=24, preferences=research_preferences)
         unique_papers = _deduplicate(retry_results, seen_urls)
         if not unique_papers:
             all_papers_seen = True
