@@ -14,6 +14,7 @@ import Pill from '@/components/ui/v2/pill'
 import SectionHeader from '@/components/ui/v2/section-header'
 import { SeedDetailSheet } from '@/components/seeds/seed-detail-sheet'
 import KnowledgeGraph from '@/components/focus/knowledge-graph'
+import ContextGraph from '@/components/focus/context-graph'
 import { readCache, writeCache } from '@/lib/swr-cache'
 import ResearchActivity from '@/components/research/research-activity'
 
@@ -629,6 +630,7 @@ export default function GardenPage() {
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [graphOpen, setGraphOpen] = useState(false)
+  const [contextOpen, setContextOpen] = useState(false)
   const [totalSeeds, setTotalSeeds] = useState<number | null>(null)
 
   const fetchSeeds = useCallback((silent = false) => {
@@ -768,14 +770,24 @@ export default function GardenPage() {
               { key: 'graph', label: 'Graph', Icon: Share2 },
             ]}
           />
-          <button
-            onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
-            className="tap"
-            style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', color: 'var(--ink-2)', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '7px 13px', fontSize: 12, fontFamily: 'var(--ui)', fontWeight: 500, cursor: 'pointer' }}
-          >
-            <Filter size={14} color="var(--ink-2)" strokeWidth={1.75} />
-            {sortDir === 'desc' ? '↓ Newest' : '↑ Oldest'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setContextOpen(true)}
+              className="tap"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', color: 'var(--green-700)', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '7px 13px', fontSize: 12, fontFamily: 'var(--ui)', fontWeight: 600, cursor: 'pointer' }}
+            >
+              <Sparkles size={14} color="var(--green-700)" strokeWidth={1.75} />
+              Ask the graph
+            </button>
+            <button
+              onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+              className="tap"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', color: 'var(--ink-2)', border: '1px solid var(--border-2)', borderRadius: 9999, padding: '7px 13px', fontSize: 12, fontFamily: 'var(--ui)', fontWeight: 500, cursor: 'pointer' }}
+            >
+              <Filter size={14} color="var(--ink-2)" strokeWidth={1.75} />
+              {sortDir === 'desc' ? '↓ Newest' : '↑ Oldest'}
+            </button>
+          </div>
         </div>
 
         {/* Garden Review */}
@@ -858,6 +870,11 @@ export default function GardenPage() {
       {/* Knowledge Graph overlay */}
       {graphOpen && (
         <KnowledgeGraph onClose={() => { setGraphOpen(false); setViewMode('list') }} />
+      )}
+
+      {/* Ask the graph — query-driven context expansion (Neo4j when enabled) */}
+      {contextOpen && (
+        <ContextGraph onClose={() => setContextOpen(false)} />
       )}
 
       <style>{`
