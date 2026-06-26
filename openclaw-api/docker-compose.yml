@@ -1,8 +1,15 @@
 services:
   api:
+    # Registry image is the source of truth on the server. `build` stays so
+    # `docker compose build` still works locally, but the SERVER must deploy via
+    # `docker compose pull` (pulls this image) — never `up --build`, which would
+    # reintroduce the "running code differs from git" drift.
+    image: ghcr.io/freddy503/greenplot-api:${IMAGE_TAG:-latest}
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     container_name: openclaw-api
+    labels:
+      com.centurylinklabs.watchtower.scope: greenplot
     depends_on:
       db:
         condition: service_healthy
@@ -43,7 +50,8 @@ services:
     ports:
     - 8001:8000
     volumes:
-    - .:/app
+    # Code is baked into the image now — no `.:/app` source mount. Only durable
+    # data is mounted from the host.
     - /root/.openclaw/workspace/public/wiki-images:/app/public/wiki-images
     - /root/.openclaw/workspace:/workspace
     - /root/.openclaw/wiki:/app/../wiki
@@ -66,9 +74,13 @@ services:
     volumes:
     - postgres_data:/var/lib/postgresql/data
   enrichment-worker:
+    # Same image as `api`, different command. Deploy via `docker compose pull`.
+    image: ghcr.io/freddy503/greenplot-api:${IMAGE_TAG:-latest}
     build: .
     command: python -m app.task_worker
     container_name: openclaw-worker
+    labels:
+      com.centurylinklabs.watchtower.scope: greenplot
     depends_on:
       db:
         condition: service_healthy
@@ -96,8 +108,6 @@ services:
     - SENTRY_DSN=${SENTRY_DSN}
     - HARVEST_API_KEY=${HARVEST_API_KEY}
     restart: unless-stopped
-    volumes:
-    - .:/app
   redis:
     container_name: openclaw-redis
     image: redis:7
@@ -140,6 +150,24 @@ services:
     - graph
     volumes:
     - neo4j_data:/data
+  # Optional pull-based auto-deploy. Watches the GHCR image and recreates only
+  # the scoped (api/worker) containers when CI publishes a new build — no
+  # inbound SSH, no deploy key stored in GitHub. Opt in on the server with:
+  #   docker compose --profile autodeploy up -d watchtower
+  # Requires a one-time `docker login ghcr.io` on the host (a read:packages
+  # token), which writes the ~/.docker/config.json mounted below.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: greenplot-watchtower
+    profiles:
+    - autodeploy
+    command: --interval 120 --cleanup --scope greenplot
+    environment:
+      WATCHTOWER_SCOPE: greenplot
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /root/.docker/config.json:/config.json:ro
 volumes:
   # External volumes — immune to `docker compose down -v`.
   # These reference the volumes already on the server (openclaw-api_* prefix
