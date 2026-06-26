@@ -55,7 +55,7 @@ cat <<'CHECKLIST'
 # ── After updating .env, redeploy ──
 #  ssh server, then:
 #    cd /root/.openclaw/workspace && git pull \
-#      && cd openclaw-api && docker compose up -d --build
+#      && cd openclaw-api && docker compose up -d   # recreates with new .env; no rebuild
 #  Vercel: update NEXT_PUBLIC_VAPID_KEY env var → redeploy.
 
 # ── Side effects of rotating SECRET_KEY ──

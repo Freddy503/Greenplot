@@ -52,6 +52,12 @@ services:
     volumes:
     # Code is baked into the image now — no `.:/app` source mount. Only durable
     # data is mounted from the host.
+    # Shared runtime state the old `.:/app` mount used to provide: push
+    # notifications/subscriptions (worker writes, api serves), paper full-text,
+    # taste memory. MUST be the same dir for api + worker. Lives where the files
+    # already are on the host (./data is relative to this compose file) and is
+    # gitignored, so `git pull` never touches it.
+    - ./data:/app/data
     - /root/.openclaw/workspace/public/wiki-images:/app/public/wiki-images
     - /root/.openclaw/workspace:/workspace
     - /root/.openclaw/wiki:/app/../wiki
@@ -108,6 +114,10 @@ services:
     - SENTRY_DSN=${SENTRY_DSN}
     - HARVEST_API_KEY=${HARVEST_API_KEY}
     restart: unless-stopped
+    volumes:
+    # Shared with api — see the api service for why. The worker writes here
+    # (notifications, compiled paper full-text); the api serves it.
+    - ./data:/app/data
   redis:
     container_name: openclaw-redis
     image: redis:7

@@ -46,7 +46,7 @@ On the server:
 ssh root@<server>
 cd /root/.openclaw/workspace && git pull
 nano openclaw-api/.env        # paste the new values
-cd openclaw-api && docker compose up -d --build
+cd openclaw-api && docker compose up -d   # recreates containers with the new .env; no rebuild (code ships as an image)
 ```
 
 On Vercel: Project → Settings → Environment Variables → update
@@ -80,7 +80,8 @@ Then on the server re-clone (`git pull` will refuse after a history rewrite):
 cd /root/.openclaw && mv workspace workspace.bak \
   && git clone https://github.com/Freddy503/Seedify.git workspace \
   && cp workspace.bak/openclaw-api/.env workspace/openclaw-api/.env \
-  && cd workspace/openclaw-api && docker compose up -d --build
+  && cp -r workspace.bak/openclaw-api/data workspace/openclaw-api/data \
+  && cd workspace/openclaw-api && docker compose pull && docker compose up -d
 ```
 
 ## 6. Verify

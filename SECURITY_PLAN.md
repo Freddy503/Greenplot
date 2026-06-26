@@ -113,7 +113,14 @@ grep SECRET_KEY .env
 ---
 
 ### 5. Source Code Volume-Mounted in Docker
-**Severity**: 🟠 HIGH | **Breaking risk**: ⚠️ RISKY
+**Severity**: 🟠 HIGH | **Breaking risk**: ⚠️ RISKY | **Status**: ✅ RESOLVED
+
+> **Resolved**: the `- .:/app` source mount was removed; `api`/`enrichment-worker`
+> now run the published GHCR image (`ghcr.io/freddy503/greenplot-api`), built and
+> pushed by CI. Only the shared runtime data dir (`./data:/app/data`) is mounted.
+> Deploy is `docker compose pull && up -d` — no source on the host inside the
+> container. The override-file approach below was superseded by the single-file
+> `image:` + kept-`build:` design.
 
 **File**: `openclaw-api/docker-compose.yml` line ~28: `- .:/app`
 

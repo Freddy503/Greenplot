@@ -36,7 +36,7 @@ MAX_CHUNKS = 60
 SECTION_STOP = {"references", "bibliography", "acknowledgments", "acknowledgements", "appendix"}
 
 # Compiled full-text lives next to the uploaded PDF in the shared data volume
-# (api + worker both mount .:/app), so any process can serve it.
+# (api + worker both mount ./data:/app/data), so any process can serve it.
 PAPERS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "papers")
 
 

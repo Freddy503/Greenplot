@@ -90,7 +90,7 @@ Neo4j is optional and disabled by default:
 cd openclaw-api
 printf '\nNEO4J_ENABLED=true\nNEO4J_PASSWORD=change-this\n' >> .env
 docker compose --profile graph up -d neo4j
-docker compose up -d --build api enrichment-worker
+docker compose up -d api enrichment-worker   # recreate to pick up the new .env (no rebuild — code ships as an image)
 ```
 
 Then call `POST /api/v1/graph/neo4j/sync` once per tenant, or set `NEO4J_SYNC_ON_RETRIEVE=true` for automatic sync during retrieval. Automatic sync is convenient for development, but explicit sync is safer for production.

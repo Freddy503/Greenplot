@@ -2,8 +2,8 @@
 
 Appends a per-user notification to the shared bell store that the API serves at
 GET /api/v1/push/notifications, and best-effort fires a Web Push. The api and
-enrichment-worker containers share `.:/app`, so the JSON store + VAPID keys are
-the same files for both.
+enrichment-worker containers share the `./data:/app/data` volume, so the JSON
+store is the same files for both. (VAPID keys come from env.)
 """
 import os
 import json
