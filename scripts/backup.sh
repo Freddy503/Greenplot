@@ -74,4 +74,4 @@ echo "[backup] done"
 # Data:      tar xzf /tmp/restore/api-data.tar.gz -C /root/.openclaw/workspace/openclaw-api
 #            tar xzf /tmp/restore/wiki.tar.gz -C /root/.openclaw
 # Env:       cp /tmp/restore/env.backup /root/.openclaw/workspace/openclaw-api/.env
-# Then:      cd /root/.openclaw/workspace/openclaw-api && docker compose up -d --build
+# Then:      cd /root/.openclaw/workspace/openclaw-api && docker compose pull && docker compose up -d

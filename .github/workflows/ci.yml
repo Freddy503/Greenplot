@@ -107,3 +107,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Emails when a new image is published, so you know to run the host pull.
+      # Uses Resend (already this project's email provider). No-op if the
+      # RESEND_API_KEY repo secret is unset, so it never blocks a publish.
+      # Untrusted values (commit message) are passed via env and assembled with
+      # jq to avoid shell/JSON injection.
+      - name: Notify (email via Resend)
+        if: success()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ]; then
+            echo "RESEND_API_KEY secret not set — skipping email notification"
+            exit 0
+          fi
+          body=$(jq -n \
+            --arg sha "$COMMIT_SHA" \
+            --arg msg "$COMMIT_MSG" \
+            --arg run "$RUN_URL" \
+            '{
+              from: "Greenplot Deploys <digest@greenplot.ink>",
+              to: ["frederick.kuenstler@gmail.com"],
+              subject: ("greenplot-api image published: sha-" + $sha[0:12]),
+              text: ("A new backend image is on GHCR:\n  ghcr.io/freddy503/greenplot-api:sha-" + $sha + "\n  ghcr.io/freddy503/greenplot-api:latest\n\nDeploy on the host:\n  cd ~/Greenplot/openclaw-api && docker compose pull && docker compose up -d --remove-orphans\n\nCommit: " + $msg + "\nCI run: " + $run)
+            }')
+          curl -fsS -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$body" >/dev/null && echo "Notification email sent"

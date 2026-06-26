@@ -61,8 +61,8 @@ picks it up automatically. See §3.
    in old chats, re-keys GitHub PAT encryption, fresh invite codes.
 2. **Set the gate** in server `.env`: `INVITE_CODES=<fresh codes>` and
    `INVITE_REQUIRED=true` (default is off!).
-3. **Redeploy backend**:
-   `cd /root/.openclaw/workspace && git pull && cd openclaw-api && docker compose up -d --build`
+3. **Redeploy backend** (image-based — CI publishes the image; the server pulls it, never builds):
+   `cd /root/.openclaw/workspace && git pull && cd openclaw-api && docker compose pull && docker compose up -d`
 4. **Install the backup cron** (§3) and run it once by hand; confirm the
    archive appears and (if configured) lands off-site.
 5. **Smoke the critical paths** (10 min):
@@ -95,9 +95,11 @@ picks it up automatically. See §3.
 ### Deploy
 
 - **Frontend**: push to `main` → Vercel auto-deploys.
-- **Backend**: `cd /root/.openclaw/workspace && git pull && cd openclaw-api && docker compose up -d --build`
-  — required whenever `openclaw-api/` changes. "Feature 404s in prod" almost
-  always means this step was skipped.
+- **Backend**: push to `main` → CI builds & publishes the image to GHCR. Then on
+  the server: `cd /root/.openclaw/workspace && git pull && cd openclaw-api && docker compose pull && docker compose up -d`
+  — required whenever `openclaw-api/` changes (or enable Watchtower, `--profile
+  autodeploy`, to skip this). "Feature 404s in prod" almost always means the
+  `docker compose pull` step was skipped, so the host is still on the old image.
 - **`.env` changes**: `docker compose up -d` does NOTHING when only `.env`
   changed (compose sees no config diff). Use `docker restart openclaw-api`
   (+ `docker restart openclaw-worker` if the var matters to background jobs).
