@@ -86,12 +86,39 @@ def _reviewed_inbox_keys(current_user: User, db: Session) -> set[str]:
     return reviewed
 
 
+def _feedback_signal_words(events: list[UserEvent], actions: set[str]) -> list[dict]:
+    counts: Counter[str] = Counter()
+    for event in events:
+        meta = event.meta or {}
+        action = _normalize_inbox_action(meta.get("action", ""))
+        if action not in actions:
+            continue
+        text = f"{meta.get('title', '')} {meta.get('url', '')}"
+        for word in _clean_words(text):
+            if len(word) >= 5 and word not in {"https", "http", "greenplot", "research", "inbox"}:
+                counts[word] += 1
+    return [{"label": word, "count": count} for word, count in counts.most_common(8)]
+
+
 def _clean_words(text: str) -> set[str]:
     return {
         word
         for word in re.findall(r"[a-z0-9]{3,}", (text or "").lower())
         if word not in {"the", "and", "for", "with", "from", "that", "this", "into", "your"}
     }
+
+
+def _event_meta_sources(events: list[UserEvent], actions: set[str]) -> list[dict]:
+    counts: Counter[str] = Counter()
+    for event in events:
+        meta = event.meta or {}
+        action = _normalize_inbox_action(meta.get("action", ""))
+        if action not in actions:
+            continue
+        domain = _domain_from_url(str(meta.get("url", "")))
+        if domain:
+            counts[domain] += 1
+    return [{"label": domain, "count": count} for domain, count in counts.most_common(6)]
 
 
 def _tag_list(value) -> list[str]:
@@ -682,6 +709,82 @@ def research_inbox_action(payload: ResearchInboxActionRequest, current_user: Use
         "resolved": action in RESOLVED_INBOX_ACTIONS,
         "seed_id": seed_id,
         "message": "Inbox decision recorded",
+    }
+
+
+@router.get("/research/learning-loop")
+def research_learning_loop(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    events = db.query(UserEvent).filter(
+        UserEvent.user_id == current_user.id,
+        UserEvent.event == "research_inbox_reviewed",
+    ).order_by(UserEvent.created_at.desc()).limit(500).all()
+
+    action_counts: Counter[str] = Counter()
+    for event in events:
+        action_counts[_normalize_inbox_action((event.meta or {}).get("action", ""))] += 1
+
+    positive_actions = {"keep", "connect", "turn_into_seed", "draft_wiki", "attach_to_project"}
+    negative_actions = {"discard"}
+    positive_count = sum(action_counts[action] for action in positive_actions)
+    negative_count = sum(action_counts[action] for action in negative_actions)
+
+    chunks = [
+        {
+            "id": "capture-feedback",
+            "title": "Capture feedback",
+            "status": "live",
+            "why": "Every Research Inbox decision becomes a durable preference signal.",
+            "next": "Keep reviewing inbox items; Greenplot already logs keep, seed, wiki, project, connect, and discard.",
+        },
+        {
+            "id": "explain-relevance",
+            "title": "Explain relevance",
+            "status": "next" if events else "waiting",
+            "why": "Each research item should say why it appeared before asking for a decision.",
+            "next": "Attach source, matching seeds, matching project, and repeated-topic reasons to inbox items.",
+        },
+        {
+            "id": "rank-candidates",
+            "title": "Rank candidates",
+            "status": "planned",
+            "why": "Useful items should rise; repeated rejects should sink before they reach the garden.",
+            "next": "Apply the feedback score inside digest and inbox candidate selection.",
+        },
+        {
+            "id": "graph-expansion",
+            "title": "Expand through the graph",
+            "status": "planned",
+            "why": "Embeddings find entry points; graph links pull in seeds, papers, specs, and shipped outcomes.",
+            "next": "Create relationship edges for seed -> brief -> spec -> build -> outcome lineage.",
+        },
+        {
+            "id": "close-the-loop",
+            "title": "Close the loop",
+            "status": "planned",
+            "why": "The system should ask for correction whenever the explanation is weak.",
+            "next": "Add More like this, Less like this, Block topic/source, and Connect to project actions everywhere research appears.",
+        },
+    ]
+
+    return {
+        "loop": [
+            {"step": "Capture", "description": "Save user decisions as feedback events."},
+            {"step": "Learn", "description": "Extract preferred and rejected terms, sources, and actions."},
+            {"step": "Rank", "description": "Score incoming papers, links, and sources before display."},
+            {"step": "Explain", "description": "Show why each item is here and which graph context supports it."},
+            {"step": "Correct", "description": "Let the user steer the next cycle with one click."},
+        ],
+        "chunks": chunks,
+        "signals": {
+            "total_decisions": len(events),
+            "positive_decisions": positive_count,
+            "negative_decisions": negative_count,
+            "actions": dict(action_counts),
+            "preferred_terms": _feedback_signal_words(events, positive_actions),
+            "rejected_terms": _feedback_signal_words(events, negative_actions),
+            "preferred_sources": _event_meta_sources(events, positive_actions),
+            "rejected_sources": _event_meta_sources(events, negative_actions),
+        },
     }
 
 

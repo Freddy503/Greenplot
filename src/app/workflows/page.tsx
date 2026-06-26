@@ -128,6 +128,22 @@ type TimelineEvent = {
   tags: string[]
 }
 
+type LearningLoopResponse = {
+  loop?: Array<{ step: string; description: string }>
+  chunks?: Array<{ id: string; title: string; status: string; why: string; next: string }>
+  signals?: {
+    total_decisions?: number
+    positive_decisions?: number
+    negative_decisions?: number
+    actions?: Record<string, number>
+    preferred_terms?: Array<{ label: string; count: number }>
+    rejected_terms?: Array<{ label: string; count: number }>
+    preferred_sources?: Array<{ label: string; count: number }>
+    rejected_sources?: Array<{ label: string; count: number }>
+  }
+  error?: string
+}
+
 const EMPTY_OUTCOMES: OutcomesResponse = { stages: [], workflows: [], active_research: [], summary: {} }
 const EMPTY_RELATIONSHIPS = { suggestions: [] as RelationshipSuggestion[], summary: {} as Record<string, unknown> }
 const EMPTY_INBOX = { items: [] as InboxItem[], summary: {} as Record<string, unknown> }
@@ -144,6 +160,7 @@ const EMPTY_TIMELINE = {
   activity: [] as Array<{ week: string; count: number }>,
   summary: {} as Record<string, unknown>,
 }
+const EMPTY_LEARNING_LOOP = { loop: [], chunks: [], signals: {} } satisfies LearningLoopResponse
 
 type InboxFilter = 'all' | 'thought' | 'link' | 'paper' | 'duplicates'
 type InboxDecision = 'keep' | 'connect' | 'turn_into_seed' | 'draft_wiki' | 'attach_to_project' | 'discard'
@@ -184,6 +201,12 @@ const FEATURE_CARDS = [
     label: 'Research Inbox',
     metric: 'Waiting review',
     outcome: 'Triage links, papers, and notes',
+  },
+  {
+    id: 'learning-loop',
+    label: 'Learning Loop',
+    metric: 'Signals captured',
+    outcome: 'Improve relevance in small chunks',
   },
   {
     id: 'wiki-from-garden',
@@ -263,6 +286,7 @@ export default function WorkflowsPage() {
   const [wiki, setWiki] = useState<{ topics?: WikiTopic[]; summary?: Record<string, unknown>; error?: string }>(EMPTY_WIKI)
   const [spaces, setSpaces] = useState<{ spaces?: ProjectSpace[]; orphan_specs?: GardenObject[]; suggestions?: Array<{ seed: GardenObject; space: { id: string; name: string }; reason: string; confidence: number }>; summary?: Record<string, unknown>; error?: string }>(EMPTY_SPACES)
   const [timeline, setTimeline] = useState<{ events?: TimelineEvent[]; rising_topics?: Array<{ label: string; count: number }>; activity?: Array<{ week: string; count: number }>; summary?: Record<string, unknown>; error?: string }>(EMPTY_TIMELINE)
+  const [learningLoop, setLearningLoop] = useState<LearningLoopResponse>(EMPTY_LEARNING_LOOP)
   const [loading, setLoading] = useState(true)
   const [activeStage, setActiveStage] = useState<string>('all')
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all')
@@ -276,10 +300,11 @@ export default function WorkflowsPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [outcomesData, relationshipData, inboxData, wikiData, spacesData, timelineData] = await Promise.all([
+    const [outcomesData, relationshipData, inboxData, learningLoopData, wikiData, spacesData, timelineData] = await Promise.all([
       getJson<OutcomesResponse>('/api/outcomes', { ...EMPTY_OUTCOMES, error: 'Could not load workflows' }),
       getJson<typeof EMPTY_RELATIONSHIPS & { error?: string }>('/api/relationships/suggestions', EMPTY_RELATIONSHIPS),
       getJson<typeof EMPTY_INBOX & { error?: string }>('/api/research/inbox', EMPTY_INBOX),
+      getJson<LearningLoopResponse>('/api/research/learning-loop', EMPTY_LEARNING_LOOP),
       getJson<typeof EMPTY_WIKI & { error?: string }>('/api/wiki/from-garden', EMPTY_WIKI),
       getJson<typeof EMPTY_SPACES & { error?: string }>('/api/spaces', EMPTY_SPACES),
       getJson<typeof EMPTY_TIMELINE & { error?: string }>('/api/insights/timeline', EMPTY_TIMELINE),
@@ -287,6 +312,7 @@ export default function WorkflowsPage() {
     setOutcomes(outcomesData)
     setRelationships(relationshipData)
     setInbox(inboxData)
+    setLearningLoop(learningLoopData)
     setWiki(wikiData)
     setSpaces(spacesData)
     setTimeline(timelineData)
@@ -303,6 +329,8 @@ export default function WorkflowsPage() {
   const projectSpaces = arrayOrEmpty(spaces.spaces)
   const timelineEvents = arrayOrEmpty(timeline.events)
   const risingTopics = arrayOrEmpty(timeline.rising_topics)
+  const learningChunks = arrayOrEmpty(learningLoop.chunks)
+  const learningSignals = learningLoop.signals || {}
   const topRelationships = sliceSafe(relationshipSuggestions, 0, 4)
   const activeInboxItems = useMemo(() => inboxItems.filter(item => !reviewedInbox[inboxItemKey(item)]), [inboxItems, reviewedInbox])
   const filteredInboxItems = useMemo(() => {
@@ -325,10 +353,11 @@ export default function WorkflowsPage() {
     workflows.length,
     relationshipSuggestions.length,
     activeInboxItems.length,
+    Number(learningSignals.total_decisions || 0),
     wikiTopics.length,
     projectSpaces.length,
     timelineEvents.length,
-  ]), [workflows.length, relationshipSuggestions.length, activeInboxItems.length, wikiTopics.length, projectSpaces.length, timelineEvents.length])
+  ]), [workflows.length, relationshipSuggestions.length, activeInboxItems.length, learningSignals.total_decisions, wikiTopics.length, projectSpaces.length, timelineEvents.length])
 
   function jumpToSection(sectionId: string) {
     const target = document.getElementById(sectionId)
@@ -541,6 +570,11 @@ export default function WorkflowsPage() {
         />
         </SectionBlock>
 
+        <SectionBlock id="learning-loop">
+        <SectionHeader>Learning Loop</SectionHeader>
+        <LearningLoopPanel data={learningLoop} />
+        </SectionBlock>
+
         <SectionBlock id="wiki-from-garden">
         <SectionHeader>Wiki From Garden</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'var(--desk-cols-2)', gap: 10 }}>
@@ -616,6 +650,91 @@ function SectionBlock({ id, children }: { id: string; children: ReactNode }) {
     <section id={id} style={{ scrollMarginTop: 18, marginBottom: 18 }}>
       {children}
     </section>
+  )
+}
+
+function LearningLoopPanel({ data }: { data: LearningLoopResponse }) {
+  const loop = arrayOrEmpty(data.loop)
+  const chunks = arrayOrEmpty(data.chunks)
+  const signals = data.signals || {}
+  const preferredTerms = arrayOrEmpty(signals.preferred_terms)
+  const rejectedTerms = arrayOrEmpty(signals.rejected_terms)
+  const preferredSources = arrayOrEmpty(signals.preferred_sources)
+  const rejectedSources = arrayOrEmpty(signals.rejected_sources)
+  const nextChunk = chunks.find(chunk => chunk.status === 'next') || chunks.find(chunk => chunk.status === 'waiting') || chunks.find(chunk => chunk.status === 'planned')
+
+  return (
+    <div className="v2-card" style={{ borderRadius: 20, padding: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(260px, 0.95fr)', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))', gap: 7 }}>
+            <DecisionMetric label="Decisions" value={String(signals.total_decisions || 0)} />
+            <DecisionMetric label="Useful" value={String(signals.positive_decisions || 0)} />
+            <DecisionMetric label="Rejected" value={String(signals.negative_decisions || 0)} />
+          </div>
+
+          <div style={{ marginTop: 12, border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 16, padding: 12 }}>
+            <InlineTitle icon={<GitBranch size={15} color="var(--green-700)" />} title="Cycle" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(108px, 1fr))', gap: 8, marginTop: 10 }}>
+              {loop.map((step, index) => (
+                <div key={step.step} style={{ border: '1px solid var(--hairline)', background: index === 0 ? 'var(--green-tint)' : 'var(--surface)', borderRadius: 13, padding: 10, minHeight: 96 }}>
+                  <div className="ui" style={{ fontSize: 10, fontWeight: 900, color: index === 0 ? 'var(--green-700)' : 'var(--ink-3)' }}>{String(index + 1).padStart(2, '0')}</div>
+                  <div className="ui" style={{ fontSize: 12.5, fontWeight: 900, color: 'var(--ink)', marginTop: 6 }}>{step.step}</div>
+                  <p className="body-text" style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.35 }}>{step.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 16, padding: 12 }}>
+            <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Signals" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 10 }}>
+              <SignalCluster title="Preferred terms" items={preferredTerms} empty="Waiting for useful picks" tone="green" />
+              <SignalCluster title="Rejected terms" items={rejectedTerms} empty="No rejects yet" tone="amber" />
+              <SignalCluster title="Preferred sources" items={preferredSources} empty="Waiting for sources" tone="green" />
+              <SignalCluster title="Rejected sources" items={rejectedSources} empty="No blocked sources yet" tone="amber" />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          {nextChunk && (
+            <div style={{ border: '1px solid var(--green-700)', background: 'var(--green-tint)', borderRadius: 16, padding: 13, marginBottom: 10 }}>
+              <Pill tone="green" size="xs">{nextChunk.status}</Pill>
+              <h3 className="ui" style={{ margin: '8px 0 4px', fontSize: 15, fontWeight: 900, color: 'var(--ink)' }}>{nextChunk.title}</h3>
+              <p className="body-text" style={{ margin: 0, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.45 }}>{nextChunk.next}</p>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: 8 }}>
+            {chunks.map(chunk => (
+              <div key={chunk.id} style={{ border: '1px solid var(--hairline)', background: 'var(--surface-sunk)', borderRadius: 14, padding: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Pill tone={chunk.status === 'live' ? 'green' : chunk.status === 'next' ? 'amber' : 'neutral'} size="xs">{chunk.status}</Pill>
+                  <span className="ui" style={{ fontSize: 12.5, fontWeight: 900, color: 'var(--ink)' }}>{chunk.title}</span>
+                </div>
+                <p className="body-text" style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.42 }}>{chunk.why}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SignalCluster({ title, items, empty, tone }: { title: string; items: Array<{ label: string; count: number }>; empty: string; tone: 'green' | 'amber' }) {
+  return (
+    <div>
+      <div className="ui" style={{ fontSize: 11, fontWeight: 900, color: 'var(--ink-3)', marginBottom: 7 }}>{title}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {items.length === 0 ? (
+          <span className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{empty}</span>
+        ) : sliceSafe(items, 0, 6).map(item => (
+          <Pill key={`${title}-${item.label}`} tone={tone === 'green' ? 'soft' : 'amber'} size="xs">{item.label} {item.count}</Pill>
+        ))}
+      </div>
+    </div>
   )
 }
 
