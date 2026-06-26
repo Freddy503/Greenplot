@@ -49,6 +49,7 @@ class ResearchInboxActionRequest(BaseModel):
     title: str | None = Field(default=None, max_length=500)
     summary: str | None = Field(default=None, max_length=4000)
     url: str | None = Field(default=None, max_length=2000)
+    term: str | None = Field(default=None, max_length=120)
 
 
 RESOLVED_INBOX_ACTIONS = {
@@ -56,8 +57,15 @@ RESOLVED_INBOX_ACTIONS = {
     "turn_into_seed",
     "draft_wiki",
     "attach_to_project",
+    "more_like_this",
+    "less_like_this",
+    "block_source",
+    "block_topic",
     "discard",
 }
+
+POSITIVE_FEEDBACK_ACTIONS = {"keep", "connect", "turn_into_seed", "draft_wiki", "attach_to_project", "more_like_this"}
+NEGATIVE_FEEDBACK_ACTIONS = {"discard", "less_like_this", "block_source", "block_topic"}
 
 
 def _iso(dt):
@@ -93,7 +101,7 @@ def _feedback_signal_words(events: list[UserEvent], actions: set[str]) -> list[d
         action = _normalize_inbox_action(meta.get("action", ""))
         if action not in actions:
             continue
-        text = f"{meta.get('title', '')} {meta.get('url', '')}"
+        text = f"{meta.get('title', '')} {meta.get('url', '')} {meta.get('term', '')}"
         for word in _clean_words(text):
             if len(word) >= 5 and word not in {"https", "http", "greenplot", "research", "inbox"}:
                 counts[word] += 1
@@ -115,10 +123,146 @@ def _event_meta_sources(events: list[UserEvent], actions: set[str]) -> list[dict
         action = _normalize_inbox_action(meta.get("action", ""))
         if action not in actions:
             continue
-        domain = _domain_from_url(str(meta.get("url", "")))
+        domain = str(meta.get("source_domain") or "") or _domain_from_url(str(meta.get("url", "")))
         if domain:
             counts[domain] += 1
     return [{"label": domain, "count": count} for domain, count in counts.most_common(6)]
+
+
+def _feedback_profile(current_user: User, db: Session) -> dict:
+    events = db.query(UserEvent).filter(
+        UserEvent.user_id == current_user.id,
+        UserEvent.event == "research_inbox_reviewed",
+    ).order_by(UserEvent.created_at.desc()).limit(1000).all()
+
+    positive_terms = Counter()
+    negative_terms = Counter()
+    positive_sources = Counter()
+    negative_sources = Counter()
+    for event in events:
+        meta = event.meta or {}
+        action = _normalize_inbox_action(meta.get("action", ""))
+        term_counter = positive_terms if action in POSITIVE_FEEDBACK_ACTIONS else negative_terms if action in NEGATIVE_FEEDBACK_ACTIONS else None
+        source_counter = positive_sources if action in POSITIVE_FEEDBACK_ACTIONS else negative_sources if action in NEGATIVE_FEEDBACK_ACTIONS else None
+        if term_counter is not None:
+            for word in _clean_words(f"{meta.get('title', '')} {meta.get('term', '')}"):
+                if len(word) >= 5:
+                    term_counter[word] += 1
+        if source_counter is not None:
+            domain = _domain_from_url(str(meta.get("url", "")))
+            if domain:
+                source_counter[domain] += 1
+
+    consents = current_user.consents or {}
+    blocked_terms = {
+        str(term).strip().lower()
+        for term in (consents.get("research_blocked_terms") or [])
+        if str(term).strip()
+    } if isinstance(consents, dict) else set()
+    blocked_sources = {
+        str(source).strip().lower()
+        for source in (consents.get("research_blocked_sources") or [])
+        if str(source).strip()
+    } if isinstance(consents, dict) else set()
+
+    return {
+        "positive_terms": positive_terms,
+        "negative_terms": negative_terms,
+        "positive_sources": positive_sources,
+        "negative_sources": negative_sources,
+        "blocked_terms": blocked_terms,
+        "blocked_sources": blocked_sources,
+    }
+
+
+def _item_text(item: dict) -> str:
+    return f"{item.get('title', '')} {item.get('summary', '')} {' '.join(_tag_list(item.get('suggested_tags', [])))}".lower()
+
+
+def _score_inbox_item(item: dict, profile: dict, seeds: list[Seed]) -> dict:
+    words = _clean_words(_item_text(item))
+    domain = _domain_from_url(item.get("url", "")) or str(item.get("classification", "")).lower()
+    score = 50
+    reasons: list[str] = []
+
+    for term, weight in profile.get("positive_terms", Counter()).items():
+        if term in words:
+            score += min(18, 4 * weight)
+            reasons.append(f"Matches useful signal: {term}")
+    for term, weight in profile.get("negative_terms", Counter()).items():
+        if term in words:
+            score -= min(24, 6 * weight)
+            reasons.append(f"Similar to rejected signal: {term}")
+    for term in profile.get("blocked_terms", set()):
+        if term and term in _item_text(item):
+            score -= 35
+            reasons.append(f"Blocked topic: {term}")
+    for source, weight in profile.get("positive_sources", Counter()).items():
+        if source and source in domain:
+            score += min(16, 5 * weight)
+            reasons.append(f"Source has been useful: {source}")
+    for source, weight in profile.get("negative_sources", Counter()).items():
+        if source and source in domain:
+            score -= min(28, 8 * weight)
+            reasons.append(f"Source was rejected before: {source}")
+    for source in profile.get("blocked_sources", set()):
+        if source and source in domain:
+            score -= 40
+            reasons.append(f"Blocked source: {source}")
+
+    matches = _matching_seeds_for_item(item, seeds, limit=3)
+    if matches:
+        score += min(18, len(matches) * 6)
+        reasons.append(f"Connects to {len(matches)} garden seed{'s' if len(matches) != 1 else ''}")
+
+    if item.get("duplicate_count", 0) > 0:
+        score += 8
+        reasons.append("Potential duplicate or follow-up")
+    if item.get("priority") == "high":
+        score += 10
+
+    item["relevance_score"] = max(0, min(100, int(score)))
+    item["relevance_reasons"] = reasons[:5] or ["New item waiting for your first signal"]
+    item["graph_context"] = [
+        {"id": str(seed.id), "title": seed.title, "stage": _stage_for(seed), "overlap": len(_clean_words(_item_text(item)) & _seed_words(seed))}
+        for seed in matches
+    ]
+    return item
+
+
+def _matching_seeds_for_item(item: dict, seeds: list[Seed], limit: int = 3) -> list[Seed]:
+    words = _clean_words(_item_text(item))
+    if not words:
+        return []
+    scored: list[tuple[int, Seed]] = []
+    for seed in seeds:
+        overlap = len(words & _seed_words(seed))
+        if overlap >= 3:
+            scored.append((overlap, seed))
+    scored.sort(key=lambda pair: (pair[0], pair[1].created_at or datetime.min), reverse=True)
+    return [seed for _, seed in scored[:limit]]
+
+
+def _create_lineage_links(source_seed: Seed, candidates: list[Seed], db: Session, link_type: str = "related") -> int:
+    created = 0
+    for target in candidates[:3]:
+        if target.id == source_seed.id:
+            continue
+        exists = db.query(SeedLink.id).filter(
+            SeedLink.source_seed_id == source_seed.id,
+            SeedLink.target_seed_id == target.id,
+            SeedLink.link_type == link_type,
+        ).first()
+        if exists:
+            continue
+        db.add(SeedLink(
+            source_seed_id=source_seed.id,
+            target_seed_id=target.id,
+            link_type=link_type,
+            confidence=720,
+        ))
+        created += 1
+    return created
 
 
 def _tag_list(value) -> list[str]:
@@ -458,6 +602,7 @@ def relationship_suggestions(current_user: User = Depends(get_current_user), db:
 def research_inbox(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     tenant_id = str(current_user.tenant_id)
     reviewed_keys = _reviewed_inbox_keys(current_user, db)
+    feedback_profile = _feedback_profile(current_user, db)
     thoughts = db.query(Thought).filter(
         Thought.tenant_id == current_user.tenant_id,
         Thought.status.in_(["pending", "processing", "error"]),
@@ -495,7 +640,7 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "suggested_action": suggested_action,
             "priority": "high" if thought.status == "error" else ("medium" if duplicate_count else "normal"),
             "created_at": _iso(thought.created_at),
-            "actions": ["keep", "connect", "turn into seed", "draft wiki", "discard"],
+            "actions": ["keep", "connect", "turn into seed", "draft wiki", "more like this", "less like this", "discard"],
         })
 
     for link in links:
@@ -519,7 +664,7 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "suggested_action": suggested_action,
             "priority": "high" if status == "error" else ("medium" if duplicate_count else "normal"),
             "created_at": link.get("addedAt") or link.get("created_at"),
-            "actions": ["keep", "connect", "turn into seed", "draft wiki", "discard"],
+            "actions": ["keep", "connect", "turn into seed", "draft wiki", "more like this", "less like this", "block source", "discard"],
             "url": link.get("url", ""),
         })
 
@@ -543,7 +688,7 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "suggested_action": suggested_action,
             "priority": "medium" if duplicate_count else "normal",
             "created_at": _iso(cached.created_at),
-            "actions": ["keep", "connect", "turn into seed", "draft wiki", "discard"],
+            "actions": ["keep", "connect", "turn into seed", "draft wiki", "more like this", "less like this", "block source", "discard"],
             "url": cached.url,
         })
 
@@ -570,10 +715,11 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
             "suggested_action": "connect" if duplicate_count else "keep",
             "priority": "high" if meta.get("parse_status") == "failed" else ("medium" if duplicate_count else "normal"),
             "created_at": _iso(paper.created_at),
-            "actions": ["keep", "connect", "draft wiki", "discard"],
+            "actions": ["keep", "connect", "draft wiki", "more like this", "less like this", "block topic", "discard"],
         })
 
-    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    items = [_score_inbox_item(item, feedback_profile, seeds) for item in items]
+    items.sort(key=lambda item: (item.get("relevance_score", 0), item.get("created_at") or ""), reverse=True)
     return {
         "items": items[:120],
         "summary": {
@@ -590,12 +736,39 @@ def research_inbox(current_user: User = Depends(get_current_user), db: Session =
 def research_inbox_action(payload: ResearchInboxActionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     action = _normalize_inbox_action(payload.action)
     kind = payload.kind.strip().lower()
-    if action not in {"keep", "connect", "turn_into_seed", "draft_wiki", "attach_to_project", "discard"}:
+    if action not in {"keep", "connect", "turn_into_seed", "draft_wiki", "attach_to_project", "more_like_this", "less_like_this", "block_source", "block_topic", "discard"}:
         raise HTTPException(status_code=400, detail="Unsupported inbox action")
 
     seed_id = None
+    lineage_links = 0
     title = (payload.title or "Untitled inbox item").strip()[:500]
     summary = (payload.summary or "").strip()
+    source_domain = _domain_from_url(payload.url or "")
+    term = (payload.term or "").strip().lower()
+    existing_seeds = db.query(Seed).filter(
+        Seed.tenant_id == current_user.tenant_id,
+        (Seed.archived == False) | (Seed.archived == None),
+    ).order_by(Seed.created_at.desc()).limit(300).all()
+    candidate_item = {
+        "title": title,
+        "summary": summary,
+        "url": payload.url or "",
+        "suggested_tags": [term] if term else [],
+    }
+    matched_seeds = _matching_seeds_for_item(candidate_item, existing_seeds)
+
+    if action in {"block_source", "block_topic"}:
+        consents = dict(current_user.consents or {})
+        if action == "block_source" and source_domain:
+            blocked_sources = list(dict.fromkeys([*(consents.get("research_blocked_sources") or []), source_domain]))
+            consents["research_blocked_sources"] = blocked_sources[:50]
+        if action == "block_topic":
+            blocked_term = term or next(iter(_clean_words(f"{title} {summary}")), "")
+            if blocked_term:
+                blocked_terms = list(dict.fromkeys([*(consents.get("research_blocked_terms") or []), blocked_term]))
+                consents["research_blocked_terms"] = blocked_terms[:50]
+                term = blocked_term
+        current_user.consents = consents
 
     if kind == "thought":
         try:
@@ -629,6 +802,7 @@ def research_inbox_action(payload: ResearchInboxActionRequest, current_user: Use
             db.add(seed)
             db.flush()
             seed_id = str(seed.id)
+            lineage_links = _create_lineage_links(seed, matched_seeds, db, "related")
             thought.status = "processed"
             thought.processed_at = datetime.utcnow()
         elif action == "discard":
@@ -671,6 +845,32 @@ def research_inbox_action(payload: ResearchInboxActionRequest, current_user: Use
             db.add(seed)
             db.flush()
             seed_id = str(seed.id)
+            lineage_links = _create_lineage_links(seed, matched_seeds, db, "cites")
+
+    elif kind == "link":
+        if action in {"turn_into_seed", "keep"}:
+            seed = Seed(
+                tenant_id=current_user.tenant_id,
+                user_id=current_user.id,
+                title=title or payload.url or "Inbox source",
+                content=f"Source: {payload.url or ''}\n\n{summary}".strip(),
+                embedding_ref="",
+                seed_type="paper",
+                created_by="human",
+                created_via="research_inbox",
+                seed_metadata={
+                    "source": "research_inbox",
+                    "source_url": payload.url or "",
+                    "domain": source_domain,
+                    "summary": summary,
+                    "tags": [term] if term else [],
+                    "inbox_item_id": payload.item_id,
+                },
+            )
+            db.add(seed)
+            db.flush()
+            seed_id = str(seed.id)
+            lineage_links = _create_lineage_links(seed, matched_seeds, db, "cites")
 
     elif kind == "paper":
         try:
@@ -689,6 +889,8 @@ def research_inbox_action(payload: ResearchInboxActionRequest, current_user: Use
         paper.seed_metadata = meta
         if action == "discard":
             paper.archived = True
+        if action in {"connect", "more_like_this", "keep"}:
+            lineage_links = _create_lineage_links(paper, matched_seeds, db, "related")
 
     db.add(UserEvent(
         user_id=current_user.id,
@@ -699,7 +901,10 @@ def research_inbox_action(payload: ResearchInboxActionRequest, current_user: Use
             "action": action,
             "title": title,
             "url": payload.url or "",
+            "term": term,
+            "source_domain": source_domain,
             "seed_id": seed_id,
+            "lineage_links": lineage_links,
         },
     ))
     db.commit()
@@ -708,6 +913,7 @@ def research_inbox_action(payload: ResearchInboxActionRequest, current_user: Use
         "action": action,
         "resolved": action in RESOLVED_INBOX_ACTIONS,
         "seed_id": seed_id,
+        "lineage_links": lineage_links,
         "message": "Inbox decision recorded",
     }
 
@@ -739,30 +945,30 @@ def research_learning_loop(current_user: User = Depends(get_current_user), db: S
         {
             "id": "explain-relevance",
             "title": "Explain relevance",
-            "status": "next" if events else "waiting",
-            "why": "Each research item should say why it appeared before asking for a decision.",
-            "next": "Attach source, matching seeds, matching project, and repeated-topic reasons to inbox items.",
+            "status": "live",
+            "why": "Each research item now carries relevance reasons and nearby graph context before asking for a decision.",
+            "next": "Make the explanation visible wherever research appears, not only in Workflows.",
         },
         {
             "id": "rank-candidates",
             "title": "Rank candidates",
-            "status": "planned",
-            "why": "Useful items should rise; repeated rejects should sink before they reach the garden.",
-            "next": "Apply the feedback score inside digest and inbox candidate selection.",
+            "status": "live",
+            "why": "Research Inbox and Research Digest now use prior feedback to boost useful patterns and demote rejects.",
+            "next": "Tune the scoring weights after a week of real feedback.",
         },
         {
             "id": "graph-expansion",
             "title": "Expand through the graph",
-            "status": "planned",
-            "why": "Embeddings find entry points; graph links pull in seeds, papers, specs, and shipped outcomes.",
-            "next": "Create relationship edges for seed -> brief -> spec -> build -> outcome lineage.",
+            "status": "live",
+            "why": "Seeding or connecting inbox items now creates lightweight SeedLink lineage edges to matching garden seeds.",
+            "next": "Promote these edges into explicit seed -> brief -> spec -> build -> outcome lineage views.",
         },
         {
             "id": "close-the-loop",
             "title": "Close the loop",
-            "status": "planned",
-            "why": "The system should ask for correction whenever the explanation is weak.",
-            "next": "Add More like this, Less like this, Block topic/source, and Connect to project actions everywhere research appears.",
+            "status": "live",
+            "why": "The inbox now supports More like this, Less like this, Block topic, and Block source correction actions.",
+            "next": "Add the same controls to digest cards and paper detail pages.",
         },
     ]
 

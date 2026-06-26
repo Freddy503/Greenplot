@@ -16,6 +16,7 @@ Uses:
 """
 
 import logging
+from collections import Counter
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 import json
@@ -242,6 +243,13 @@ def fetch_research_preferences(user_id: str, db) -> Dict[str, Any]:
                 for t in raw_terms
                 if str(t).strip()
             ][:30]
+        raw_sources = consents.get("research_blocked_sources") if isinstance(consents, dict) else None
+        if isinstance(raw_sources, list):
+            defaults["blocked_sources"] = [
+                str(s).strip().lower()
+                for s in raw_sources
+                if str(s).strip()
+            ][:50]
     except Exception as e:
         logger.warning(f"[academic_digest] research preferences unavailable: {e}")
     return defaults
@@ -255,8 +263,8 @@ def _research_source_enabled(preferences: Dict[str, Any], source: str) -> bool:
 def _passes_research_blocklist(item: Dict[str, Any], preferences: Dict[str, Any]) -> bool:
     terms = preferences.get("blocked_terms") if isinstance(preferences, dict) else []
     terms = [str(t).strip().lower() for t in (terms or []) if str(t).strip()]
-    if not terms:
-        return True
+    sources = preferences.get("blocked_sources") if isinstance(preferences, dict) else []
+    sources = [str(s).strip().lower() for s in (sources or []) if str(s).strip()]
     haystack = " ".join(
         str(part or "")
         for part in (
@@ -266,7 +274,62 @@ def _passes_research_blocklist(item: Dict[str, Any], preferences: Dict[str, Any]
             item.get("source"),
         )
     ).lower()
-    return not any(term in haystack for term in terms)
+    if any(term in haystack for term in terms):
+        return False
+    return not any(source in haystack or source in str(item.get("url", "")).lower() for source in sources)
+
+
+def _digest_feedback_profile(user_id: str, db) -> Dict[str, Any]:
+    profile = {
+        "positive_terms": Counter(),
+        "negative_terms": Counter(),
+        "positive_sources": Counter(),
+        "negative_sources": Counter(),
+    }
+    try:
+        from app.models import UserEvent
+        events = db.query(UserEvent).filter(
+            UserEvent.user_id == user_id,
+            UserEvent.event == "research_inbox_reviewed",
+        ).order_by(UserEvent.created_at.desc()).limit(500).all()
+        for event in events:
+            meta = event.meta or {}
+            action = re.sub(r"[^a-z0-9]+", "_", str(meta.get("action", "")).lower()).strip("_")
+            positive = action in {"keep", "connect", "turn_into_seed", "draft_wiki", "attach_to_project", "more_like_this"}
+            negative = action in {"discard", "less_like_this", "block_source", "block_topic"}
+            if not positive and not negative:
+                continue
+            term_counter = profile["positive_terms"] if positive else profile["negative_terms"]
+            source_counter = profile["positive_sources"] if positive else profile["negative_sources"]
+            for word in re.findall(r"[a-z0-9]{5,}", f"{meta.get('title', '')} {meta.get('term', '')}".lower()):
+                if word not in {"https", "greenplot", "research", "inbox"}:
+                    term_counter[word] += 1
+            domain = str(meta.get("source_domain") or "").lower()
+            if not domain:
+                domain = re.sub(r"^https?://(www\.)?", "", str(meta.get("url", "")).lower()).split("/", 1)[0]
+            if domain:
+                source_counter[domain] += 1
+    except Exception as e:
+        logger.warning(f"[academic_digest] feedback profile unavailable: {e}")
+    return profile
+
+
+def _score_research_candidate(item: Dict[str, Any], feedback: Dict[str, Any]) -> int:
+    text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('source', '')} {item.get('url', '')}".lower()
+    score = 50
+    for term, count in (feedback.get("positive_terms") or {}).items():
+        if term in text:
+            score += min(18, 4 * int(count))
+    for term, count in (feedback.get("negative_terms") or {}).items():
+        if term in text:
+            score -= min(28, 7 * int(count))
+    for source, count in (feedback.get("positive_sources") or {}).items():
+        if source in text:
+            score += min(16, 5 * int(count))
+    for source, count in (feedback.get("negative_sources") or {}).items():
+        if source in text:
+            score -= min(32, 8 * int(count))
+    return max(0, min(100, score))
 
 
 def fetch_garden_context(user_id: str, themes: List[str], db) -> List[Dict[str, str]]:
@@ -1009,6 +1072,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
 
     themes = fetch_user_themes(user_id, db)
     research_preferences = fetch_research_preferences(user_id, db)
+    feedback_profile = _digest_feedback_profile(user_id, db)
     theme_str = ", ".join(themes[:3])
     city = get_user_city(user_id, db)
     today = datetime.now().strftime("%a %b %d, %Y")
@@ -1042,6 +1106,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
             seen_urls=seen_urls,
             enabled_sources=research_preferences.get("sources", {}),
             blocked_terms=research_preferences.get("blocked_terms", []),
+            blocked_sources=research_preferences.get("blocked_sources", []),
         )
         paper_results = paper_results + bundle.get("papers", [])
         extra_news = bundle.get("news", [])
@@ -1058,12 +1123,20 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
         return result
 
     unique_papers = _deduplicate(paper_results, seen_urls)
+    unique_papers = [p for p in unique_papers if _passes_research_blocklist(p, research_preferences)]
+    for paper in unique_papers:
+        paper["relevance_score"] = _score_research_candidate(paper, feedback_profile)
+    unique_papers.sort(key=lambda p: p.get("relevance_score", 50), reverse=True)
 
     # If all fetched papers were already seen, retry with expanded limit + broader date range
     all_papers_seen = False
     if len(paper_results) > 0 and len(unique_papers) == 0:
         retry_results = await _fetch_arxiv_papers(themes, limit=24, preferences=research_preferences)
         unique_papers = _deduplicate(retry_results, seen_urls)
+        unique_papers = [p for p in unique_papers if _passes_research_blocklist(p, research_preferences)]
+        for paper in unique_papers:
+            paper["relevance_score"] = _score_research_candidate(paper, feedback_profile)
+        unique_papers.sort(key=lambda p: p.get("relevance_score", 50), reverse=True)
         if not unique_papers:
             all_papers_seen = True
 
@@ -1083,6 +1156,7 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
                     out.append(lst.pop(0))
         return out
     unique_papers = _interleave_by_source(unique_papers)
+    unique_papers.sort(key=lambda p: p.get("relevance_score", 50), reverse=True)
 
     # URL → candidate map so the saved seeds recover source/pdf after the LLM
     # round-trip (the model only echoes title/content/url).
@@ -1114,6 +1188,11 @@ async def build_academic_digest(user_id: str, db) -> Dict[str, Any]:
             f"PAPER [{p.get('source', 'arxiv')}]: {p['title']}\nURL: {p['url']}\n{p['text']}"
             for p in paper_texts
         ) or "No papers found."
+    extra_news = [n for n in extra_news if _passes_research_blocklist(n, research_preferences)]
+    for item in extra_news:
+        item["relevance_score"] = _score_research_candidate(item, feedback_profile)
+    extra_news.sort(key=lambda n: n.get("relevance_score", 50), reverse=True)
+
     # News = Exa topic news + the industry pulse (Hacker News, RSS) from sources.
     news_lines = [f"- {n['title']} ({n['url']}): {n['snippet']}" for n in news_results[:3]]
     news_lines += [f"- [{n.get('source', 'news')}] {n['title']} ({n['url']}): {n.get('snippet', '')}" for n in extra_news]

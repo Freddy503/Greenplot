@@ -51,10 +51,10 @@ def _enabled(enabled_sources: dict | None, key: str) -> bool:
     return bool(enabled_sources.get(key, True))
 
 
-def _passes_blocklist(c: dict, blocked_terms: list[str] | None = None) -> bool:
+def _passes_blocklist(c: dict, blocked_terms: list[str] | None = None,
+                      blocked_sources: list[str] | None = None) -> bool:
     terms = [str(t).strip().lower() for t in (blocked_terms or []) if str(t).strip()]
-    if not terms:
-        return True
+    sources = [str(s).strip().lower() for s in (blocked_sources or []) if str(s).strip()]
     extra = c.get("extra") if isinstance(c.get("extra"), dict) else {}
     haystack = " ".join(
         str(part or "")
@@ -67,13 +67,17 @@ def _passes_blocklist(c: dict, blocked_terms: list[str] | None = None) -> bool:
             extra.get("feed"),
         )
     ).lower()
-    return not any(term in haystack for term in terms)
+    if any(term in haystack for term in terms):
+        return False
+    domain = _norm_url(c.get("url", ""))
+    return not any(source in domain or source in haystack for source in sources)
 
 
 async def discover_all(themes: list[str], seen_urls: set[str] | None = None,
                        paper_limit: int = 8, news_limit: int = 5,
                        enabled_sources: dict | None = None,
-                       blocked_terms: list[str] | None = None) -> dict:
+                       blocked_terms: list[str] | None = None,
+                       blocked_sources: list[str] | None = None) -> dict:
     """Run enabled sources concurrently → {"papers": [...], "news": [...]}."""
     if not getattr(settings, "RESEARCH_SOURCES_ENABLED", True):
         return {"papers": [], "news": []}
@@ -98,7 +102,7 @@ async def discover_all(themes: list[str], seen_urls: set[str] | None = None,
         elif isinstance(r, Exception):
             logger.warning(f"[sources] generator error: {r}")
 
-    cands = [c for c in cands if _passes_blocklist(c, blocked_terms)]
+    cands = [c for c in cands if _passes_blocklist(c, blocked_terms, blocked_sources)]
     cands = _dedupe(cands, seen_urls)
     papers = [c for c in cands if c.get("kind") == "paper"][:paper_limit]
     news = [c for c in cands if c.get("kind") == "news"][:news_limit]

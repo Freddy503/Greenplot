@@ -88,6 +88,9 @@ type InboxItem = {
   created_at?: string
   actions: string[]
   url?: string
+  relevance_score?: number
+  relevance_reasons?: string[]
+  graph_context?: Array<{ id: string; title: string; stage?: string; overlap?: number }>
 }
 
 type WikiTopic = {
@@ -163,7 +166,7 @@ const EMPTY_TIMELINE = {
 const EMPTY_LEARNING_LOOP = { loop: [], chunks: [], signals: {} } satisfies LearningLoopResponse
 
 type InboxFilter = 'all' | 'thought' | 'link' | 'paper' | 'duplicates'
-type InboxDecision = 'keep' | 'connect' | 'turn_into_seed' | 'draft_wiki' | 'attach_to_project' | 'discard'
+type InboxDecision = 'keep' | 'connect' | 'turn_into_seed' | 'draft_wiki' | 'attach_to_project' | 'more_like_this' | 'less_like_this' | 'block_source' | 'block_topic' | 'discard'
 type InboxNotice = { tone: 'ok' | 'error'; message: string }
 
 const INBOX_FILTERS: Array<{ key: InboxFilter; label: string }> = [
@@ -180,6 +183,10 @@ const INBOX_ACTIONS: Array<{ key: InboxDecision; label: string; icon: ReactNode;
   { key: 'turn_into_seed', label: 'Seed', icon: <Sparkles size={14} />, tone: 'green' },
   { key: 'draft_wiki', label: 'Wiki', icon: <BookOpen size={14} />, tone: 'neutral' },
   { key: 'attach_to_project', label: 'Project', icon: <Target size={14} />, tone: 'neutral' },
+  { key: 'more_like_this', label: 'More', icon: <Sparkles size={14} />, tone: 'green' },
+  { key: 'less_like_this', label: 'Less', icon: <Filter size={14} />, tone: 'neutral' },
+  { key: 'block_source', label: 'Block source', icon: <Trash2 size={14} />, tone: 'danger' },
+  { key: 'block_topic', label: 'Block topic', icon: <Trash2 size={14} />, tone: 'danger' },
   { key: 'discard', label: 'Discard', icon: <Trash2 size={14} />, tone: 'danger' },
 ]
 
@@ -267,7 +274,7 @@ function inboxItemKey(item: InboxItem) {
 
 function normalizeAction(action: string): InboxDecision | null {
   const normalized = action.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-  if (['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'discard'].includes(normalized)) {
+  if (['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'more_like_this', 'less_like_this', 'block_source', 'block_topic', 'discard'].includes(normalized)) {
     return normalized as InboxDecision
   }
   return null
@@ -393,6 +400,7 @@ export default function WorkflowsPage() {
           title: item.title,
           summary: item.summary || '',
           url: item.url || '',
+          term: arrayOrEmpty(item.suggested_tags)[0] || item.classification || '',
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -923,6 +931,7 @@ function InboxQueueRow({ item, active, onClick }: { item: InboxItem; active: boo
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 4 }}>
             <Pill tone="neutral" size="xs">{item.kind.replace('-', ' ')}</Pill>
+            {typeof item.relevance_score === 'number' && <Pill tone={item.relevance_score >= 70 ? 'green' : item.relevance_score <= 35 ? 'amber' : 'ghost'} size="xs">{item.relevance_score}% fit</Pill>}
             <Pill tone={item.duplicate_count > 0 ? 'amber' : 'green'} size="xs">{item.duplicate_count} dupes</Pill>
             {item.priority && <Pill tone="ghost" size="xs">{item.priority}</Pill>}
           </div>
@@ -939,9 +948,13 @@ function InboxQueueRow({ item, active, onClick }: { item: InboxItem; active: boo
 
 function InboxDetail({ item, related, actingKey, notice, onAction }: { item: InboxItem; related: RelationshipSuggestion[]; actingKey: string; notice: InboxNotice | null; onAction: (item: InboxItem, action: InboxDecision) => void }) {
   const tags = arrayOrEmpty(item.suggested_tags)
+  const reasons = arrayOrEmpty(item.relevance_reasons)
+  const graphContext = arrayOrEmpty(item.graph_context)
   const allowedActions = new Set<InboxDecision>(arrayOrEmpty(item.actions).map(action => normalizeAction(action)).filter((action): action is InboxDecision => Boolean(action)))
-  for (const fallback of ['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'discard'] as InboxDecision[]) {
+  for (const fallback of ['keep', 'connect', 'turn_into_seed', 'draft_wiki', 'attach_to_project', 'more_like_this', 'less_like_this', 'block_source', 'block_topic', 'discard'] as InboxDecision[]) {
     if (fallback === 'turn_into_seed' && item.kind === 'paper') continue
+    if (fallback === 'block_source' && !item.url) continue
+    if (fallback === 'block_topic' && arrayOrEmpty(item.suggested_tags).length === 0) continue
     allowedActions.add(fallback)
   }
 
@@ -952,6 +965,7 @@ function InboxDetail({ item, related, actingKey, notice, onAction }: { item: Inb
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 6 }}>
             <Pill tone="neutral" size="xs">{item.kind.replace('-', ' ')}</Pill>
+            {typeof item.relevance_score === 'number' && <Pill tone={item.relevance_score >= 70 ? 'green' : item.relevance_score <= 35 ? 'amber' : 'ghost'} size="xs">{item.relevance_score}% fit</Pill>}
             <Pill tone="soft" size="xs">{item.classification}</Pill>
             <Pill tone={item.duplicate_count > 0 ? 'amber' : 'green'} size="xs">{item.duplicate_count} dupes</Pill>
             <Pill tone="ghost" size="xs">{item.status}</Pill>
@@ -968,6 +982,7 @@ function InboxDetail({ item, related, actingKey, notice, onAction }: { item: Inb
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8, marginTop: 14 }}>
         <DecisionMetric label="Suggested" value={inboxActionLabel(item.suggested_action)} />
+        <DecisionMetric label="Relevance" value={typeof item.relevance_score === 'number' ? `${item.relevance_score}%` : 'Learning'} />
         <DecisionMetric label="Classification" value={item.classification || item.kind} />
         <DecisionMetric label="Review age" value={timeLabel(item.created_at) || 'New'} />
       </div>
@@ -977,6 +992,30 @@ function InboxDetail({ item, related, actingKey, notice, onAction }: { item: Inb
           {sliceSafe(tags, 0, 8).map(tag => <Pill key={`${item.id}-detail-${tag}`} tone="ghost" size="xs">{tag}</Pill>)}
         </div>
       )}
+
+      <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 15, paddingTop: 14 }}>
+        <InlineTitle icon={<Search size={15} color="var(--green-700)" />} title="Why this is here" />
+        <div style={{ display: 'grid', gap: 7, marginTop: 10 }}>
+          {reasons.map(reason => (
+            <div key={`${item.id}-${reason}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={12} color="var(--green-700)" strokeWidth={1.8} />
+              <span className="body-text" style={{ fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>{reason}</span>
+            </div>
+          ))}
+        </div>
+        {graphContext.length > 0 && (
+          <div style={{ display: 'grid', gap: 7, marginTop: 11 }}>
+            {sliceSafe(graphContext, 0, 3).map(node => (
+              <div key={`${item.id}-graph-${node.id}`} style={{ border: '1px solid var(--hairline)', background: 'var(--surface)', borderRadius: 12, padding: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <Pill tone="soft" size="xs">{node.stage || 'seed'}</Pill>
+                  <span className="ui" style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--ink)' }}>{node.title}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 15, paddingTop: 14 }}>
         <InlineTitle icon={<Sparkles size={15} color="var(--green-700)" />} title="Decision" />
