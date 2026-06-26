@@ -1,8 +1,11 @@
 import json
+import logging
 import weaviate
 from datetime import datetime
 from weaviate.exceptions import UnexpectedStatusCodeException
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 class WeaviateClient:
     def __init__(self):
@@ -317,15 +320,22 @@ class WeaviateClient:
         Used by backlinker for autonomous link creation.
         """
         nearVector = {"vector": embedding}
+        # `metadata` is a nested object in the live schema, so it MUST be
+        # sub-selected — requesting it as a scalar makes Weaviate reject the
+        # entire query. That used to return [] here (errors are surfaced below
+        # now), silently breaking the backlinker and context-graph retrieval.
+        # (image_url/created_at dropped — no caller reads them.)
         query = self.client.query.get(
             settings.WEAVIATE_CLASS,
-            ["title", "content", "metadata", "image_url", "created_at", "thought_id"]
+            ["title", "content", "thought_id", "metadata { summary entities tags domain seed_type }"]
         ).with_near_vector(nearVector).with_where({
             "path": ["tenant_id"],
             "operator": "Equal",
             "valueText": tenant_id
         }).with_additional(["id", "certainty"]).with_limit(limit)
         result = query.do()
+        if result.get("errors"):
+            logger.warning("Weaviate search_similar returned errors: %s", result["errors"])
         objects = result.get("data", {}).get("Get", {}).get(settings.WEAVIATE_CLASS, [])
 
         # Normalize to flat dicts

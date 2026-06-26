@@ -15,6 +15,10 @@ from app.models import Seed, SeedLink, User
 
 logger = logging.getLogger(__name__)
 
+# Minimum Weaviate certainty for a semantic edge to be projected into Neo4j.
+# Matches the dual-edge graph view's "AI brain" threshold (main.py /api/v1/graph).
+_SEMANTIC_CERTAINTY_MIN = 0.86
+
 try:
     from neo4j import GraphDatabase
 except Exception:  # pragma: no cover - dependency is optional at runtime
@@ -162,6 +166,39 @@ class Neo4jGraphService:
         node_payloads = [_seed_payload(seed) for seed in seeds]
         relationship_payloads = [_link_payload(link) for link in links]
 
+        # Semantic edges — project Weaviate nearest-neighbors so Neo4j has a graph
+        # to traverse even when explicit SeedLinks are sparse (which is the common
+        # case). Uses the stored-vector path (no re-embedding), certainty-gated,
+        # tagged source="semantic" so it stays distinct from the user's own links.
+        semantic_payloads: list[dict[str, Any]] = []
+        try:
+            from app.weaviate_client import weaviate_client
+
+            tenant_str = str(user.tenant_id)
+            ref_to_id = {s.embedding_ref: str(s.id) for s in seeds if s.embedding_ref}
+            seen_pairs: set[tuple[str, str]] = set()
+            for seed in seeds:
+                if not seed.embedding_ref:
+                    continue
+                for nb in weaviate_client.near_object_seeds(tenant_str, seed.embedding_ref, limit=4):
+                    if float(nb.get("certainty") or 0) < _SEMANTIC_CERTAINTY_MIN:
+                        continue
+                    other = ref_to_id.get(nb.get("id"))
+                    if not other or other == str(seed.id):
+                        continue
+                    pair = tuple(sorted((str(seed.id), other)))
+                    if pair in seen_pairs:
+                        continue
+                    seen_pairs.add(pair)
+                    semantic_payloads.append({
+                        "id": f"sem:{pair[0]}:{pair[1]}",
+                        "source": pair[0],
+                        "target": pair[1],
+                        "certainty": round(float(nb["certainty"]), 3),
+                    })
+        except Exception as exc:  # pragma: no cover - semantic edges are best-effort
+            logger.warning("Neo4j semantic edge projection failed: %s", exc)
+
         driver = self._get_driver()
         with driver.session(database=settings.NEO4J_DATABASE) as session:
             session.run(
@@ -200,6 +237,20 @@ class Neo4jGraphService:
             )
             session.run(
                 """
+                UNWIND $semantic AS row
+                MATCH (a:GreenplotNode {id: row.source, tenant_id: $tenant_id})
+                MATCH (b:GreenplotNode {id: row.target, tenant_id: $tenant_id})
+                MERGE (a)-[r:RELATES_TO {id: row.id}]->(b)
+                SET r.tenant_id = $tenant_id,
+                    r.link_type = "semantic",
+                    r.confidence = row.certainty,
+                    r.source = "semantic"
+                """,
+                semantic=semantic_payloads,
+                tenant_id=str(user.tenant_id),
+            )
+            session.run(
+                """
                 MATCH (n:GreenplotNode {tenant_id: $tenant_id})
                 WHERE n.product_id <> ""
                 MATCH (p:GreenplotNode {id: n.product_id, tenant_id: $tenant_id})
@@ -223,6 +274,7 @@ class Neo4jGraphService:
             "status": "ok",
             "nodes": len(node_payloads),
             "relationships": len(relationship_payloads),
+            "semantic_relationships": len(semantic_payloads),
             "limit": limit,
         }
 
