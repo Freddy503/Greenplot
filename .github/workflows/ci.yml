@@ -54,6 +54,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest
 
+      # compileall only checks syntax per-file; it never resolves imports, so a
+      # reference to a missing/renamed module (e.g. `from app.neo4j_graph import
+      # ...`) passes. The static `test_all_app_module_imports_reference_existing_files`
+      # contract test (in the pytest step below) closes that gap without needing
+      # a live Weaviate/OpenAI, which many app modules touch at import time.
       - name: Compile Python sources
         run: python -m compileall -q app *.py scripts tests
 

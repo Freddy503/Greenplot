@@ -280,3 +280,34 @@ def _route_matches(frontend_path: str, backend_path: str) -> bool:
 
 def _route_parts(path: str) -> list[str]:
     return [part for part in path.strip("/").split("/") if part]
+
+
+def test_all_app_module_imports_reference_existing_files():
+    """Every `import app.x` / `from app.x import ...` must resolve to a real
+    module file. Catches the case where code references a module that was never
+    committed (the `ModuleNotFoundError: app.neo4j_graph` class of failure),
+    including imports done lazily inside functions that a runtime smoke import
+    would not exercise.
+    """
+    backend = ROOT / "openclaw-api"
+    pattern = re.compile(r"^\s*(?:from|import)\s+(app(?:\.[A-Za-z0-9_]+)+)", re.MULTILINE)
+
+    def resolves(module: str) -> bool:
+        rel = Path(*module.split("."))
+        base = backend / rel
+        # walk back up: app.sources.github.foo may import a symbol, not a module,
+        # so accept the deepest dotted prefix that maps to a file or package.
+        candidate = base
+        while candidate != backend:
+            if candidate.with_suffix(".py").is_file() or (candidate / "__init__.py").is_file():
+                return True
+            candidate = candidate.parent
+        return False
+
+    missing = set()
+    for path in backend.rglob("*.py"):
+        for module in pattern.findall(path.read_text(encoding="utf-8")):
+            if not resolves(module):
+                missing.add(f"{module}  (referenced in {path.relative_to(ROOT)})")
+
+    assert not missing, "Unresolved app.* imports:\n  " + "\n  ".join(sorted(missing))
