@@ -68,6 +68,19 @@ Greenplot is an AI-powered second brain that closes the loop from *thought* to *
 │  push_subs   │ │  BM25 + vec  │ │  push notifs     │
 └──────────────┘ └──────────────┘ └──────────────────┘
 
+Optional graph traversal index:
+
+┌──────────────────┐
+│      Neo4j       │
+│   (profile:     │
+│     graph)       │
+│                  │
+│  GreenplotNode   │
+│  RELATES_TO      │
+│  CONTAINS        │
+│  SUPPORTS        │
+└──────────────────┘
+
 * seeds table includes: last_visited, visit_count (for decay scoring)
 ```
 
@@ -94,7 +107,15 @@ Action: brief, relationship suggestion, wiki draft, PRD, build task, shipped out
 
 This is the difference between a flat second brain and a living laboratory. A query like "how should the coding agent handle multi-file refactors?" can surface a wiki article or PRD with different wording, then follow its relationships to the papers, seeds, source links, project space, and shipped implementation that explain why it matters.
 
-Greenplot uses the existing stack for this: Weaviate provides semantic/BM25 retrieval, Postgres stores durable product and workflow state, and `SeedLink` plus workflow/event records provide the graph edges. The product is intentionally focused on research, thinking, decisions, specs, and outcomes — not email or meeting ingestion.
+Greenplot uses a dual retrieval stack for this: Weaviate provides semantic/BM25 retrieval, Postgres stores durable product and workflow state, and `SeedLink` plus workflow/event records provide the graph edges. When `NEO4J_ENABLED=true`, those durable edges are projected into Neo4j so the system can answer by finding semantically relevant starting nodes first, then traversing their connected context. The product is intentionally focused on research, thinking, decisions, specs, and outcomes — not email or meeting ingestion.
+
+Backend surfaces:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/graph/neo4j/status` | Check whether the Neo4j projection is enabled and reachable |
+| `POST /api/v1/graph/neo4j/sync` | Project current tenant seeds and `SeedLink` edges into Neo4j |
+| `POST /api/v1/context/retrieve` | Run the dual query: semantic retrieval in Weaviate, graph expansion in Neo4j, with Postgres fallback |
 
 ### Seed → Outcome Pipeline
 

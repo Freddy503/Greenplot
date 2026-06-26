@@ -155,6 +155,38 @@ def test_workflows_expose_ordered_product_surfaces():
         assert "/api/v1/" in read(proxy)
 
 
+def test_neo4j_context_graph_is_optional_projection():
+    config = read("openclaw-api/app/config.py")
+    main = read("openclaw-api/app/main.py")
+    service = read("openclaw-api/app/neo4j_graph.py")
+    compose = read("openclaw-api/docker-compose.yml")
+    spec = read("docs/specs/context-graph-retrieval.md")
+
+    for setting in [
+        "NEO4J_ENABLED",
+        "NEO4J_URI",
+        "NEO4J_PASSWORD",
+        "NEO4J_SYNC_ON_RETRIEVE",
+    ]:
+        assert setting in config
+
+    for route in [
+        '@app.get("/api/v1/graph/neo4j/status")',
+        '@app.post("/api/v1/graph/neo4j/sync")',
+        '@app.post("/api/v1/context/retrieve")',
+    ]:
+        assert route in main
+
+    assert "weaviate_client.search_similar" in main
+    assert "neo4j_graph.expand" in main
+    assert "postgres_expand" in main
+    assert "source of truth" in service
+    assert "Neo4j stores a per-tenant projection" in service
+    assert "profiles:" in compose
+    assert "- graph" in compose
+    assert "Neo4j is a projection" in spec
+
+
 def _extract_backend_routes() -> set[str]:
     routes = set()
     route_re = re.compile(

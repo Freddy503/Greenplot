@@ -15,6 +15,12 @@ services:
     - DATABASE_URL=${DATABASE_URL:?set DATABASE_URL in .env}
     - SYNC_DATABASE_URL=${SYNC_DATABASE_URL:?set SYNC_DATABASE_URL in .env}
     - WEAVIATE_URL=http://weaviate:8080
+    - NEO4J_ENABLED=${NEO4J_ENABLED:-false}
+    - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
+    - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+    - NEO4J_SYNC_ON_RETRIEVE=${NEO4J_SYNC_ON_RETRIEVE:-false}
     - REDIS_URL=redis://redis:6379/0
     - FRONTEND_URL=https://www.greenplot.ink
     - APP_URL=https://www.greenplot.ink
@@ -74,6 +80,12 @@ services:
     - DATABASE_URL=${DATABASE_URL:?set DATABASE_URL in .env}
     - SYNC_DATABASE_URL=${SYNC_DATABASE_URL:?set SYNC_DATABASE_URL in .env}
     - WEAVIATE_URL=http://weaviate:8080
+    - NEO4J_ENABLED=${NEO4J_ENABLED:-false}
+    - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
+    - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+    - NEO4J_SYNC_ON_RETRIEVE=${NEO4J_SYNC_ON_RETRIEVE:-false}
     - REDIS_URL=redis://redis:6379/0
     - EXA_API_KEY=${EXA_API_KEY}
     - NVIDIA_API_KEY=${NVIDIA_API_KEY}
@@ -111,6 +123,21 @@ services:
     # this container from ever starting.
     volumes:
     - weaviate_data:/var/lib/weaviate
+  neo4j:
+    container_name: greenplot-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-greenplot-dev-change-me}
+      NEO4J_dbms_security_auth__enabled: 'true'
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+    image: neo4j:5-community
+    ports:
+    - 127.0.0.1:7474:7474
+    - 127.0.0.1:7687:7687
+    profiles:
+    - graph
+    volumes:
+    - neo4j_data:/data
 volumes:
   # External volumes — immune to `docker compose down -v`.
   # These reference the volumes already on the server (openclaw-api_* prefix
@@ -124,3 +151,4 @@ volumes:
   weaviate_data:
     external: true
     name: openclaw-api_weaviate_data
+  neo4j_data: {}

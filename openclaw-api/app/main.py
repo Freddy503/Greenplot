@@ -1643,6 +1643,156 @@ async def ingest_paper_endpoint(
 # --- Knowledge graph v2: dual-edge payload (explicit + semantic) ---
 # Spec: docs/specs/knowledge-graph-v2.md
 
+
+class ContextRetrieveRequest(BaseModel):
+    query: str = Field(..., min_length=2, max_length=500)
+    start_limit: int = Field(default=5, ge=1, le=12)
+    graph_hops: int = Field(default=2, ge=1, le=3)
+    context_limit: int = Field(default=80, ge=10, le=200)
+    sync: bool = False
+
+
+@app.get("/api/v1/graph/neo4j/status")
+def neo4j_status(current_user: User = Depends(get_current_user)):
+    """Neo4j projection status for the current deployment."""
+    from app.neo4j_graph import neo4j_graph
+
+    return neo4j_graph.status().as_dict()
+
+
+@app.post("/api/v1/graph/neo4j/sync")
+def neo4j_sync(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Project this tenant's Greenplot graph into Neo4j.
+
+    Postgres remains the source of truth; this updates Neo4j as a traversal
+    index for context graph retrieval.
+    """
+    from app.neo4j_graph import neo4j_graph
+
+    try:
+        return neo4j_graph.sync_tenant(db, current_user)
+    except Exception as exc:
+        logger.warning("Neo4j sync failed: %s", exc)
+        raise HTTPException(status_code=503, detail=f"Neo4j sync failed: {exc}")
+
+
+@app.post("/api/v1/context/retrieve")
+def retrieve_context_graph(
+    req: ContextRetrieveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Semantic search + graph traversal in one query.
+
+    Weaviate finds starting seeds. Neo4j expands connected context when enabled;
+    otherwise Postgres SeedLink traversal provides a safe fallback.
+    """
+    from app.enricher_v2 import embed_text
+    from app.neo4j_graph import neo4j_graph, postgres_expand
+
+    tenant_id = str(current_user.tenant_id)
+    embedding = embed_text(req.query)
+    vector_hits = weaviate_client.search_similar(
+        tenant_id=tenant_id,
+        embedding=embedding,
+        limit=req.start_limit * 3,
+    )
+    embedding_refs = [hit.get("id") for hit in vector_hits if hit.get("id")]
+    title_hits = {
+        (hit.get("title") or "").strip().lower(): hit
+        for hit in vector_hits
+        if hit.get("title")
+    }
+
+    seeds = []
+    if embedding_refs:
+        seeds = (
+            db.query(Seed)
+            .filter(
+                Seed.tenant_id == current_user.tenant_id,
+                Seed.embedding_ref.in_(embedding_refs),
+            )
+            .limit(req.start_limit)
+            .all()
+        )
+    if len(seeds) < req.start_limit and title_hits:
+        existing_ids = {seed.id for seed in seeds}
+        filters = [
+            Seed.tenant_id == current_user.tenant_id,
+            func.lower(Seed.title).in_(list(title_hits.keys())),
+        ]
+        if existing_ids:
+            filters.append(~Seed.id.in_(list(existing_ids)))
+        fallback = (
+            db.query(Seed)
+            .filter(*filters)
+            .limit(req.start_limit - len(seeds))
+            .all()
+        )
+        seeds.extend(fallback)
+
+    seed_ids = [str(seed.id) for seed in seeds[:req.start_limit]]
+    hit_by_ref = {hit.get("id"): hit for hit in vector_hits}
+    starts = []
+    for seed in seeds[:req.start_limit]:
+        meta = seed.seed_metadata or {}
+        hit = hit_by_ref.get(seed.embedding_ref or "") or title_hits.get((seed.title or "").strip().lower()) or {}
+        starts.append({
+            "id": str(seed.id),
+            "title": seed.title or "Untitled",
+            "summary": meta.get("summary") or (seed.content or "")[:240],
+            "seed_type": seed.seed_type or meta.get("seed_type") or "idea",
+            "domain": meta.get("domain") or "untagged",
+            "certainty": hit.get("certainty") or 0,
+            "retrieval": "semantic",
+        })
+
+    graph_status = neo4j_graph.status()
+    graph = None
+    retrieval_mode = "postgres_fallback"
+    if graph_status.available:
+        try:
+            if req.sync or settings.NEO4J_SYNC_ON_RETRIEVE:
+                neo4j_graph.sync_tenant(db, current_user)
+            graph = neo4j_graph.expand(
+                tenant_id=tenant_id,
+                seed_ids=seed_ids,
+                hops=req.graph_hops,
+                limit=req.context_limit,
+            )
+            retrieval_mode = "weaviate_start_neo4j_expand"
+        except Exception as exc:
+            logger.warning("Neo4j expansion failed, using Postgres fallback: %s", exc)
+            graph = None
+
+    if graph is None:
+        graph = postgres_expand(
+            db=db,
+            user=current_user,
+            seed_ids=seed_ids,
+            hops=req.graph_hops,
+            limit=req.context_limit,
+        )
+
+    return {
+        "status": "ok",
+        "query": req.query,
+        "mode": retrieval_mode,
+        "starts": starts,
+        "graph": graph,
+        "neo4j": graph_status.as_dict(),
+        "next_actions": [
+            "answer_with_context",
+            "show_what_led_here",
+            "show_what_depends_on_this",
+            "draft_prd_or_wiki_from_context",
+        ],
+    }
+
+
 @app.get("/api/v1/graph")
 def get_knowledge_graph(
     current_user: User = Depends(get_current_user),
