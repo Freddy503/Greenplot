@@ -54,33 +54,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest
 
-      - name: Compile Python sources
-        run: python -m compileall -q app *.py scripts tests
-
       # compileall only checks syntax per-file; it never resolves imports, so a
       # reference to a missing/renamed module (e.g. `from app.neo4j_graph import
-      # ...`) passes. Actually import every app submodule to catch that class of
-      # break. Dummy secrets satisfy required Settings fields; create_engine is
-      # lazy, so no real DB is contacted at import time.
-      - name: Import smoke test
-        env:
-          SECRET_KEY: ci-dummy-secret
-          DATABASE_URL: postgresql+psycopg2://u:p@localhost:5432/ci
-          SYNC_DATABASE_URL: postgresql+psycopg2://u:p@localhost:5432/ci
-        run: |
-          python - <<'PY'
-          import importlib, pkgutil, sys, app
-          failed = []
-          for mod in pkgutil.walk_packages(app.__path__, "app."):
-              try:
-                  importlib.import_module(mod.name)
-              except Exception as exc:  # noqa: BLE001
-                  failed.append(f"{mod.name}: {exc!r}")
-          if failed:
-              print("Import failures:", *failed, sep="\n  ")
-              sys.exit(1)
-          print("All app submodules import cleanly")
-          PY
+      # ...`) passes. The static `test_all_app_module_imports_reference_existing_files`
+      # contract test (in the pytest step below) closes that gap without needing
+      # a live Weaviate/OpenAI, which many app modules touch at import time.
+      - name: Compile Python sources
+        run: python -m compileall -q app *.py scripts tests
 
       - name: Run tests
         run: python -m pytest -q
