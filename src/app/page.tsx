@@ -100,6 +100,8 @@ const GLOBAL_CSS = `
     .link-flow { flex-direction: column !important; align-items: stretch !important; }
     .link-flow > div { max-width: none !important; }
     .link-arrow { transform: rotate(90deg) !important; justify-content: center !important; padding: 0.25rem 0 !important; }
+    .context-grid { grid-template-columns: 1fr !important; }
+    .context-pipeline { grid-template-columns: 1fr !important; }
   }
 `
 
@@ -696,6 +698,170 @@ function MissingLink() {
 // ── Feature mockups — faithful light recreations of the real app UI ──
 const G = { bg: '#fafaf8', surface: '#ffffff', green: '#16a34a', soft: '#dcfce7',
   deep: '#06281a', ink: '#18241d', ink2: '#667068', line: '#eceae3' }
+
+// Context graph retrieval — the product differentiation
+function ContextGraphRetrieval() {
+  const [ref, inView] = useInView()
+  const [active, setActive] = useState(1)
+  const steps: { label: string; title: string; body: string; icon: IconName }[] = [
+    {
+      label: 'Find',
+      title: 'Semantic search finds the right start',
+      body: 'A query can land on a seed, paper, source, wiki page, PRD, or shipped outcome even when the words do not match.',
+      icon: 'search',
+    },
+    {
+      label: 'Expand',
+      title: 'The context graph pulls the nearby evidence',
+      body: 'Explicit links, source lineage, project spaces, workflow history, and semantic neighbors reveal what led here and what depends on it.',
+      icon: 'hub',
+    },
+    {
+      label: 'Act',
+      title: 'The next move becomes concrete',
+      body: 'Greenplot turns the connected context into a brief, decision, spec, build task, wiki draft, or research inbox action.',
+      icon: 'pr',
+    },
+  ]
+  const nodes: { label: string; type: string; icon: IconName; x: number; y: number; primary?: boolean }[] = [
+    { label: 'Coding agent refactors', type: 'query', icon: 'search', x: 50, y: 50, primary: true },
+    { label: 'Context Assembly Strategy', type: 'wiki', icon: 'auto_stories', x: 24, y: 25 },
+    { label: 'Multi-file refactor spec', type: 'prd', icon: 'file_text', x: 76, y: 24 },
+    { label: 'Tool-call reliability paper', type: 'paper', icon: 'link', x: 18, y: 70 },
+    { label: 'Agent governance project', type: 'project', icon: 'layers', x: 82, y: 70 },
+  ]
+  const edges = [[0, 1, 'semantic'], [0, 2, 'explicit'], [1, 3, 'cite'], [2, 4, 'workflow'], [3, 4, 'semantic']]
+  const activeStep = steps[active]
+
+  return (
+    <section style={{ padding: '7rem 2rem', background: '#0c1611', position: 'relative', overflow: 'hidden' }}>
+      <div ref={ref} style={{
+        maxWidth: 1180, margin: '0 auto', opacity: inView ? 1 : 0,
+        transform: inView ? 'translateY(0)' : 'translateY(28px)', transition: 'all 0.7s ease',
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto 3.25rem' }}>
+          <div className="liquid-glass" style={{ display: 'inline-flex', borderRadius: 999, padding: '5px 16px', marginBottom: '1.25rem' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>The difference</span>
+          </div>
+          <h2 style={{
+            fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,5vw,58px)', fontWeight: 400,
+            fontStyle: 'italic', color: '#fff', lineHeight: 0.98, letterSpacing: '-0.02em', marginBottom: '1.2rem',
+          }}>
+            Search finds the spark.<br />The graph carries the plot.
+          </h2>
+          <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.58)', lineHeight: 1.8, fontFamily: 'var(--font-body)', fontWeight: 300, margin: 0 }}>
+            Greenplot combines semantic retrieval with a living context graph. It does not just retrieve a note;
+            it follows the chain from seed to evidence, decision, spec, project, and shipped artifact.
+          </p>
+        </div>
+
+        <div className="context-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: '2rem', alignItems: 'stretch' }}>
+          <div className="liquid-glass" style={{ borderRadius: '1.5rem', padding: '1.5rem', minHeight: 430 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'var(--font-ui)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>Hybrid retrieval</div>
+                <div style={{ fontSize: 18, color: '#fff', fontFamily: 'var(--font-display)', fontStyle: 'italic', marginTop: 3 }}>Structure plus meaning</div>
+              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: T.green, background: 'rgba(34,197,94,0.14)', borderRadius: 999, padding: '6px 11px', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-ui)' }}>
+                <Icon name="activity" size={12} color={T.green} /> Live context
+              </span>
+            </div>
+
+            <div style={{ position: 'relative', minHeight: 290, borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', overflow: 'hidden' }}>
+              <svg viewBox="0 0 100 100" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                {edges.map(([a, b, type], i) => {
+                  const from = nodes[a as number]
+                  const to = nodes[b as number]
+                  const semantic = type === 'semantic'
+                  return (
+                    <line key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                      stroke={semantic ? 'rgba(45,212,191,0.5)' : 'rgba(34,197,94,0.75)'}
+                      strokeWidth={semantic ? 0.65 : 1.1}
+                      strokeDasharray={semantic ? '3 2' : undefined}
+                    />
+                  )
+                })}
+              </svg>
+              {nodes.map((node) => (
+                <div key={node.label} style={{
+                  position: 'absolute', left: `${node.x}%`, top: `${node.y}%`, transform: 'translate(-50%,-50%)',
+                  width: node.primary ? 132 : 118, minHeight: node.primary ? 78 : 70,
+                  borderRadius: '1rem', padding: '0.75rem 0.65rem', textAlign: 'center',
+                  background: node.primary ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)',
+                  border: node.primary ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.12)',
+                  boxShadow: node.primary ? '0 0 40px rgba(34,197,94,0.16)' : 'none',
+                }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 10, background: node.primary ? T.green : 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.45rem' }}>
+                    <Icon name={node.icon} size={14} color={node.primary ? '#fff' : T.green} />
+                  </div>
+                  <div style={{ color: '#fff', fontFamily: 'var(--font-ui)', fontSize: node.primary ? 11.5 : 10.5, fontWeight: 700, lineHeight: 1.25 }}>{node.label}</div>
+                  <div style={{ color: node.primary ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-ui)', fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{node.type}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: '1rem' }}>
+              {[
+                ['solid', 'Explicit link'],
+                ['dashed', 'Semantic neighbor'],
+                ['workflow', 'Workflow lineage'],
+                ['cite', 'Cited evidence'],
+              ].map(([kind, label]) => (
+                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-ui)', fontSize: 11 }}>
+                  <span style={{ width: 22, borderTop: `2px ${kind === 'dashed' ? 'dashed' : 'solid'} ${kind === 'dashed' ? 'rgba(45,212,191,0.7)' : 'rgba(34,197,94,0.75)'}` }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+            {steps.map((step, i) => {
+              const on = active === i
+              return (
+                <button key={step.label} onClick={() => setActive(i)}
+                  className={on ? 'liquid-glass' : ''}
+                  style={{
+                    border: on ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                    background: on ? undefined : 'rgba(255,255,255,0.03)',
+                    borderRadius: '1rem', padding: '1rem', cursor: 'pointer', textAlign: 'left',
+                    display: 'flex', gap: '0.9rem', alignItems: 'flex-start', color: '#fff',
+                  }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '0.75rem', background: on ? 'rgba(34,197,94,0.22)' : 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon name={step.icon} size={17} color={on ? T.green : 'rgba(255,255,255,0.42)'} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: on ? T.green : 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{step.label}</div>
+                    <div style={{ fontSize: 14.5, color: on ? '#fff' : 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-ui)', fontWeight: 700, marginTop: 4, lineHeight: 1.35 }}>{step.title}</div>
+                    {on && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.52)', lineHeight: 1.65, fontFamily: 'var(--font-body)', margin: '0.45rem 0 0', fontWeight: 300 }}>{step.body}</p>}
+                  </div>
+                </button>
+              )
+            })}
+
+            <div key={active} className="liquid-glass-strong" style={{ borderRadius: '1.25rem', padding: '1.2rem', marginTop: 'auto', background: 'rgba(34,197,94,0.11)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9 }}>
+                <Icon name={activeStep.icon} size={16} color={T.green} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-ui)' }}>What Greenplot returns</span>
+              </div>
+              <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.68)', fontFamily: 'var(--font-body)', lineHeight: 1.65, margin: 0 }}>
+                A grounded answer with the starting nodes, connected context, provenance, and a recommended next action.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="context-pipeline" style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: '0.6rem', marginTop: '1rem' }}>
+          {['Seed', 'Source', 'Paper', 'Wiki', 'Spec', 'Shipped'].map((label, i) => (
+            <div key={label} style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '0.8rem', padding: '0.85rem 0.7rem', background: i === 0 || i === 5 ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.035)', textAlign: 'center' }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: i === 0 || i === 5 ? T.green : 'rgba(255,255,255,0.52)', fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
 
 // 1 — Thinking partner that cites your garden (Chat)
 function ChatPartnerMockup() {
@@ -1309,6 +1475,7 @@ export default function LandingPage() {
         <Hero onVisibilityChange={setHeroVisible} />
         <TwoPillars />
         <MissingLink />
+        <ContextGraphRetrieval />
         <Flywheel />
         <FeaturesShowcase />
         <Testimonial />

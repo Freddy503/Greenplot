@@ -76,6 +76,26 @@ Greenplot is an AI-powered second brain that closes the loop from *thought* to *
 
 ## Core Concepts
 
+### Context Graph Retrieval
+
+Greenplot's core differentiation is **context graph retrieval**: semantic search finds the best starting nodes, then the graph expands the answer into connected evidence, decisions, specs, projects, and shipped work.
+
+```
+Query
+  ↓
+Hybrid retrieval: vector similarity + BM25 + graph centrality
+  ↓
+Starting nodes: seeds, sources, papers, wiki pages, PRDs, projects
+  ↓
+Graph expansion: explicit links, citations, source lineage, workflow history
+  ↓
+Action: brief, relationship suggestion, wiki draft, PRD, build task, shipped outcome
+```
+
+This is the difference between a flat second brain and a living laboratory. A query like "how should the coding agent handle multi-file refactors?" can surface a wiki article or PRD with different wording, then follow its relationships to the papers, seeds, source links, project space, and shipped implementation that explain why it matters.
+
+Greenplot uses the existing stack for this: Weaviate provides semantic/BM25 retrieval, Postgres stores durable product and workflow state, and `SeedLink` plus workflow/event records provide the graph edges. The product is intentionally focused on research, thinking, decisions, specs, and outcomes — not email or meeting ingestion.
+
 ### Seed → Outcome Pipeline
 
 Greenplot is not only a memory store; it is a workflow system for moving ideas toward artifacts:
