@@ -15,10 +15,6 @@ from app.models import Seed, SeedLink, User
 
 logger = logging.getLogger(__name__)
 
-# Minimum Weaviate certainty for a semantic edge to be projected into Neo4j.
-# Matches the dual-edge graph view's "AI brain" threshold (main.py /api/v1/graph).
-_SEMANTIC_CERTAINTY_MIN = 0.86
-
 try:
     from neo4j import GraphDatabase
 except Exception:  # pragma: no cover - dependency is optional at runtime
@@ -177,11 +173,12 @@ class Neo4jGraphService:
             tenant_str = str(user.tenant_id)
             ref_to_id = {s.embedding_ref: str(s.id) for s in seeds if s.embedding_ref}
             seen_pairs: set[tuple[str, str]] = set()
+            certainty_min = settings.NEO4J_SEMANTIC_CERTAINTY_MIN
             for seed in seeds:
                 if not seed.embedding_ref:
                     continue
                 for nb in weaviate_client.near_object_seeds(tenant_str, seed.embedding_ref, limit=4):
-                    if float(nb.get("certainty") or 0) < _SEMANTIC_CERTAINTY_MIN:
+                    if float(nb.get("certainty") or 0) < certainty_min:
                         continue
                     other = ref_to_id.get(nb.get("id"))
                     if not other or other == str(seed.id):
