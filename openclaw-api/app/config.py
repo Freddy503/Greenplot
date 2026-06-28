@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     NEO4J_DATABASE: str = "neo4j"
     NEO4J_SYNC_ON_RETRIEVE: bool = False
     NEO4J_MAX_SYNC_SEEDS: int = 1000
+    # Minimum Weaviate certainty for a semantic edge to be projected into Neo4j.
+    # Lower = denser graph (more, weaker connections); higher = sparser/stronger.
+    NEO4J_SEMANTIC_CERTAINTY_MIN: float = 0.80
 
     # LLM & APIs
     OPENROUTER_API_KEY: Optional[str] = None
