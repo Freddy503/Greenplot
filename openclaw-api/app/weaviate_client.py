@@ -341,7 +341,9 @@ class WeaviateClient:
         # Normalize to flat dicts
         results = []
         for obj in objects:
-            metadata = obj.get("metadata", {})
+            # `or {}` — objects can have metadata explicitly set to null, where
+            # .get("metadata", {}) returns None (default only applies if absent).
+            metadata = obj.get("metadata") or {}
             if isinstance(metadata, str):
                 try:
                     metadata = json.loads(metadata)
